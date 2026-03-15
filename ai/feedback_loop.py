@@ -1,0 +1,339 @@
+"""
+AI Feedback Loop
+Tracks model predictions vs actual outcomes.
+Scores accuracy, adjusts model confidence weights, and surfaces
+a simple health score (0–100) for display in the UI.
+"""
+
+import json
+import logging
+import tempfile
+import os
+import numpy as np
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from config import HISTORY_FILE, ACCURACY_LOOKBACK_DAYS, HISTORY_MAX_RUNS, RISK_PROFILE_NAMES
+
+logger = logging.getLogger(__name__)
+
+LOOKBACK_DAYS   = ACCURACY_LOOKBACK_DAYS   # rolling window for accuracy scoring
+MIN_SAMPLES     = 3                         # need at least this many completed predictions to score
+
+
+# ─── History I/O ─────────────────────────────────────────────────────────────
+
+def load_history() -> dict:
+    if HISTORY_FILE.exists():
+        try:
+            with open(HISTORY_FILE) as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            logger.warning(f"history.json is malformed ({e}) — starting fresh")
+        except Exception as e:
+            logger.warning(f"Could not read history.json ({e}) — starting fresh")
+    return {"predictions": [], "actuals": [], "model_weights": _default_weights()}
+
+
+def save_history(history: dict) -> None:
+    """Atomic write: write to temp file then rename to prevent corruption on crash."""
+    dir_path = HISTORY_FILE.parent
+    try:
+        fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
+        with os.fdopen(fd, "w") as f:
+            json.dump(history, f, indent=2)
+        os.replace(tmp_path, HISTORY_FILE)
+    except Exception as e:
+        logger.error(f"Failed to save history.json: {e}")
+        # Clean up temp file if rename failed
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+
+def _default_weights() -> dict:
+    return {
+        "conservative": 1.0,
+        "medium":        1.0,
+        "high":          1.0,
+    }
+
+
+# ─── Record a Prediction (called at scan time) ───────────────────────────────
+
+def record_prediction(model_results: dict) -> None:
+    """
+    Save the current model recommendations as a prediction.
+    Called every time the scheduler runs a scan.
+    """
+    history = load_history()
+
+    prediction = {
+        "id":           datetime.utcnow().isoformat(),
+        "timestamp":    datetime.utcnow().isoformat(),
+        "due_date":     (datetime.utcnow() + timedelta(days=1)).isoformat(),
+        "evaluated":    False,
+        "profiles": {}
+    }
+
+    for profile in RISK_PROFILE_NAMES:
+        opps = model_results.get(profile, [])
+        top3 = opps[:3]
+        prediction["profiles"][profile] = [
+            {
+                "rank":          o.get("rank"),
+                "protocol":      o.get("protocol"),
+                "pool":          o.get("asset_or_pool"),
+                "predicted_apy": o.get("estimated_apy"),
+                "confidence":    o.get("confidence"),
+            }
+            for o in top3
+        ]
+
+    history["predictions"].append(prediction)
+
+    # Keep only last 90 days of predictions
+    cutoff = (datetime.utcnow() - timedelta(days=90)).isoformat()
+    history["predictions"] = [
+        p for p in history["predictions"] if p["timestamp"] >= cutoff
+    ]
+
+    save_history(history)
+    logger.info(f"Prediction recorded: {prediction['id']}")
+
+
+# ─── Record Actuals (called 24h later) ───────────────────────────────────────
+
+def record_actuals(scan_result: dict) -> None:
+    """
+    After 24 hours, compare the predictions made in the last scan
+    to what the pools are actually yielding now.
+    Updates the history record with actual APYs and marks as evaluated.
+    """
+    history = load_history()
+    now     = datetime.utcnow()
+
+    # Find unevaluated predictions older than 12 hours
+    for pred in history["predictions"]:
+        if pred.get("evaluated"):
+            continue
+        pred_time = datetime.fromisoformat(pred["timestamp"])
+        if (now - pred_time).total_seconds() < 12 * 3600:
+            continue
+
+        # Match current scan data to predicted pools
+        current_pools   = {p["pool_name"]: p["apr"]   for p in scan_result.get("pools", [])}
+        current_lending = {r["asset"]:     r["supply_apy"] for r in scan_result.get("lending", [])}
+        current_staking = {s["token"]:     s["apy"]    for s in scan_result.get("staking", [])}
+
+        all_actuals = {**current_pools, **current_lending, **current_staking}
+
+        for profile, picks in pred["profiles"].items():
+            for pick in picks:
+                pool_key  = pick.get("pool", "")
+                actual    = all_actuals.get(pool_key)
+                predicted = pick.get("predicted_apy", 0)
+
+                if actual is not None and predicted and predicted > 0:
+                    error_pct = abs(actual - predicted) / predicted * 100
+                    pick["actual_apy"]   = actual
+                    pick["error_pct"]    = round(error_pct, 2)
+                    pick["accurate"]     = error_pct < 20.0  # within 20% = accurate
+                else:
+                    pick["actual_apy"]   = None
+                    pick["error_pct"]    = None
+                    pick["accurate"]     = None
+
+        pred["evaluated"]   = True
+        pred["evaluated_at"] = now.isoformat()
+
+    save_history(history)
+    logger.info("Actuals recorded and predictions evaluated.")
+
+
+# ─── Compute Model Accuracy ───────────────────────────────────────────────────
+
+def compute_accuracy(profile: str, history: dict = None) -> dict:
+    """
+    Compute rolling 30-day accuracy metrics for a given risk profile.
+    Returns a dict with:
+        - accuracy_pct:   % of predictions within 20% of actual
+        - avg_error_pct:  mean absolute error %
+        - win_rate:       % of picks where actual >= predicted
+        - sample_count:   number of evaluated predictions
+        - grade:          A/B/C/D/F
+        - health_score:   0–100 for UI display
+    """
+    if history is None:
+        history = load_history()
+    cutoff   = (datetime.utcnow() - timedelta(days=LOOKBACK_DAYS)).isoformat()
+
+    evaluated = [
+        p for p in history["predictions"]
+        if p.get("evaluated") and p["timestamp"] >= cutoff
+    ]
+
+    picks = []
+    for pred in evaluated:
+        for pick in pred["profiles"].get(profile, []):
+            if pick.get("error_pct") is not None:
+                picks.append(pick)
+
+    if len(picks) < MIN_SAMPLES:
+        return {
+            "accuracy_pct":  None,
+            "avg_error_pct": None,
+            "win_rate":      None,
+            "sample_count":  len(picks),
+            "grade":         "N/A",
+            "health_score":  50,    # neutral while building history
+            "message":       f"Building accuracy history ({len(picks)}/{MIN_SAMPLES} samples). Check back after a few days.",
+        }
+
+    errors    = [p["error_pct"] for p in picks if p["error_pct"] is not None]
+    accurate  = [p for p in picks if p.get("accurate")]
+    wins      = [p for p in picks if p.get("actual_apy") is not None
+                 and p.get("predicted_apy") is not None
+                 and p["actual_apy"] >= p["predicted_apy"]]
+
+    accuracy_pct  = len(accurate) / len(picks) * 100 if picks else 0
+    avg_error     = np.mean(errors) if errors else 0
+    win_rate      = len(wins) / len(picks) * 100 if picks else 0
+
+    # Grade
+    if accuracy_pct >= 80:
+        grade = "A"
+    elif accuracy_pct >= 65:
+        grade = "B"
+    elif accuracy_pct >= 50:
+        grade = "C"
+    elif accuracy_pct >= 35:
+        grade = "D"
+    else:
+        grade = "F"
+
+    # Health score 0–100
+    health_score = min(100, int(
+        accuracy_pct * 0.5
+        + max(0, 100 - avg_error) * 0.3
+        + win_rate * 0.2
+    ))
+
+    return {
+        "accuracy_pct":  round(accuracy_pct, 1),
+        "avg_error_pct": round(avg_error, 1),
+        "win_rate":      round(win_rate, 1),
+        "sample_count":  len(picks),
+        "grade":         grade,
+        "health_score":  health_score,
+        "message":       _health_message(health_score, grade),
+    }
+
+
+def _health_message(score: int, grade: str) -> str:
+    if score >= 80:
+        return f"Model is performing well (Grade {grade}). Predictions are reliable."
+    elif score >= 60:
+        return f"Model is performing OK (Grade {grade}). Most predictions are in range."
+    elif score >= 40:
+        return f"Model accuracy is fair (Grade {grade}). Markets have been volatile."
+    else:
+        return f"Model needs more data to be reliable (Grade {grade}). Keep running daily scans."
+
+
+# ─── Adjust Model Weights ─────────────────────────────────────────────────────
+
+def update_model_weights() -> dict:
+    """
+    Adjust the model confidence multipliers based on recent accuracy.
+    Higher accuracy = higher weight (models boost their own confidence).
+    """
+    history = load_history()
+    weights = history.get("model_weights", _default_weights())
+
+    for profile in RISK_PROFILE_NAMES:
+        acc = compute_accuracy(profile, history=history)
+        if acc["accuracy_pct"] is not None:
+            # Normalise: 80% accuracy = weight 1.0, 100% = 1.25, 50% = 0.75
+            new_weight = 0.5 + (acc["accuracy_pct"] / 100) * 0.75
+            # Smooth: 70% old weight + 30% new weight (avoid big swings)
+            weights[profile] = round(0.70 * weights[profile] + 0.30 * new_weight, 4)
+
+    history["model_weights"] = weights
+    save_history(history)
+    logger.info(f"Model weights updated: {weights}")
+    return weights
+
+
+# ─── Full Dashboard Data for UI ───────────────────────────────────────────────
+
+def get_feedback_dashboard() -> dict:
+    """
+    Single call for the Streamlit UI to get all AI feedback data.
+    """
+    history = load_history()   # load once, pass to all helpers
+
+    # Historical prediction count
+    pred_count = len(history["predictions"])
+    evaluated  = len([p for p in history["predictions"] if p.get("evaluated")])
+
+    # Per-profile accuracy (reuse already-loaded history)
+    accuracy = {
+        profile: compute_accuracy(profile, history=history)
+        for profile in RISK_PROFILE_NAMES
+    }
+
+    # Overall health = average of the three health scores
+    scores = [accuracy[p]["health_score"] for p in accuracy]
+    overall_health = int(np.mean(scores))
+
+    # Trend (reuse already-loaded history)
+    trend = _compute_trend(history=history)
+
+    return {
+        "overall_health":  overall_health,
+        "total_scans":     pred_count,
+        "evaluated_scans": evaluated,
+        "per_profile":     accuracy,
+        "model_weights":   history.get("model_weights", _default_weights()),
+        "trend":           trend,
+        "last_updated":    datetime.utcnow().isoformat(),
+    }
+
+
+def _compute_trend(history: dict = None) -> str:
+    """Returns 'improving', 'stable', or 'declining' based on recent accuracy."""
+    if history is None:
+        history = load_history()
+    now     = datetime.utcnow()
+
+    recent   = (now - timedelta(days=7)).isoformat()
+    previous = (now - timedelta(days=14)).isoformat()
+
+    recent_preds   = [p for p in history["predictions"]
+                      if p.get("evaluated") and p["timestamp"] >= recent]
+    previous_preds = [p for p in history["predictions"]
+                      if p.get("evaluated") and previous <= p["timestamp"] < recent]
+
+    def avg_accuracy(preds):
+        picks = [
+            pick for p in preds
+            for profile in p["profiles"].values()
+            for pick in profile
+            if pick.get("error_pct") is not None
+        ]
+        if not picks:
+            return None
+        return np.mean([p["error_pct"] for p in picks])
+
+    recent_err   = avg_accuracy(recent_preds)
+    previous_err = avg_accuracy(previous_preds)
+
+    if recent_err is None or previous_err is None:
+        return "building"
+    if recent_err < previous_err * 0.90:
+        return "improving"
+    elif recent_err > previous_err * 1.10:
+        return "declining"
+    return "stable"
