@@ -164,6 +164,19 @@ def compute_risk_score(
     return round(score, 1)
 
 
+# Volatility priors by protocol type — used in Sharpe ratio calculation.
+# Lending rates are stable; LP/perps vol is driven by underlying price moves.
+_TYPE_STD = {
+    "Lending":              0.05,
+    "Liquid Staking":       0.08,
+    "Yield Vault":          0.10,
+    "Yield Tokenization":   0.12,
+    "DEX":                  0.25,
+    "DEX + Perps":          0.35,
+    "Leveraged Yield":      0.45,
+    "Perps (Cross-chain)":  0.50,
+}
+
 # ─── Opportunity Builder ──────────────────────────────────────────────────────
 
 def build_opportunity(
@@ -177,9 +190,10 @@ def build_opportunity(
     tvl_usd:       float,
     risk_profile:  str,
     data_source:   str,
-    is_v3:         bool = False,
-    apy_history:   list = None,
-    reward_apr:    float = 0.0,
+    is_v3:           bool = False,
+    apy_history:     list = None,
+    reward_apr:      float = 0.0,
+    profile_win_rate: float = None,
 ) -> Opportunity:
 
     profile = RISK_PROFILES[risk_profile]
@@ -203,17 +217,6 @@ def build_opportunity(
     il_exp, il_worst = estimate_il_for_pool(il_risk, is_v3)
     net_apy = max(0, apr - il_exp)
 
-    # Volatility by protocol type — lending rates change slowly; LP/perp vol is driven by price
-    _TYPE_STD = {
-        "Lending":              0.05,
-        "Liquid Staking":       0.08,
-        "Yield Vault":          0.10,
-        "Yield Tokenization":   0.12,
-        "DEX":                  0.25,
-        "DEX + Perps":          0.35,
-        "Leveraged Yield":      0.45,
-        "Perps (Cross-chain)":  0.50,
-    }
     # Use observed APY std dev when enough history exists; fall back to protocol-type prior
     std = _TYPE_STD.get(protocol_type, 0.20)
     if apy_history and len(apy_history) >= 5:
@@ -241,9 +244,9 @@ def build_opportunity(
 
     # APY range: use historical std dev if 3+ data points available, else ±20%
     if apy_history and len(apy_history) >= 3:
-        std      = float(np.std(apy_history))
-        apy_low  = round(max(0.0, apr - 1.5 * std), 1)
-        apy_high = round(apr + 1.5 * std, 1)
+        apy_std  = float(np.std(apy_history))
+        apy_low  = round(max(0.0, apr - 1.5 * apy_std), 1)
+        apy_high = round(apr + 1.5 * apy_std, 1)
     else:
         apy_low  = round(apr * 0.80, 1)
         apy_high = round(apr * 1.20, 1)

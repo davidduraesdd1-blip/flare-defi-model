@@ -5,8 +5,6 @@ Falls back to baseline research data when live APIs are unavailable.
 """
 
 import re
-import requests
-import json
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -17,6 +15,7 @@ from typing import Optional
 from web3 import Web3
 
 from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS, FALLBACK_PRICES
+from utils.http import http_get as _get, http_post as _post
 
 logger = logging.getLogger(__name__)
 
@@ -106,15 +105,22 @@ _KTOKEN_ABI = [
     {"inputs": [], "name": "totalSupply",         "outputs": [{"type": "uint256"}], "stateMutability": "view",      "type": "function"},
 ]
 
+_w3_cache: Optional[Web3] = None
+
 def _get_web3() -> Optional[Web3]:
-    """Return a connected Web3 instance, trying each RPC URL in order."""
+    """Return a connected Web3 instance, trying each RPC URL in order. Result is cached."""
+    global _w3_cache
+    if _w3_cache is not None and _w3_cache.is_connected():
+        return _w3_cache
     for url in FLARE_RPC_URLS:
         try:
             w3 = Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": 8}))
             if w3.is_connected():
+                _w3_cache = w3
                 return w3
         except Exception:
             continue
+    _w3_cache = None
     return None
 
 def _rate_to_apy(rate_per_block: int) -> float:
@@ -177,36 +183,6 @@ class ScanResult:
     staking:       list
     scan_duration: float        # seconds
     warnings:      list = field(default_factory=list)
-
-# ─── HTTP Helper ──────────────────────────────────────────────────────────────
-
-def _get(url: str, params: dict = None, timeout: int = 10, retries: int = 1, headers: dict = None) -> Optional[dict]:
-    """Safe GET with timeout, error swallowing, and one automatic retry."""
-    for attempt in range(retries + 1):
-        try:
-            r = requests.get(url, params=params, timeout=timeout, headers=headers)
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:
-            if attempt < retries:
-                time.sleep(1)
-                continue
-            logger.debug(f"GET {url} failed after {retries + 1} attempt(s): {e}")
-            return None
-
-def _post(url: str, payload: dict, timeout: int = 10, retries: int = 1) -> Optional[dict]:
-    """Safe POST for GraphQL queries with one automatic retry."""
-    for attempt in range(retries + 1):
-        try:
-            r = requests.post(url, json=payload, timeout=timeout)
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:
-            if attempt < retries:
-                time.sleep(1)
-                continue
-            logger.debug(f"POST {url} failed after {retries + 1} attempt(s): {e}")
-            return None
 
 # ─── Price Fetcher ────────────────────────────────────────────────────────────
 
@@ -530,7 +506,7 @@ def _fetch_gt_dex_pools(dex_id: str, protocol: str,
         pair_part = name_gt[:fee_match.start()].strip() if fee_match else name_gt
         tokens    = [_GT_TOKEN_NORM.get(t.strip(), t.strip())
                      for t in pair_part.split("/")]
-        t0 = tokens[0] if len(tokens) > 0 else "?"
+        t0 = tokens[0]
         t1 = tokens[1] if len(tokens) > 1 else "?"
         pool_name = f"{t0}-{t1}"
 

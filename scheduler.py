@@ -244,11 +244,9 @@ def run_quick_check() -> None:
         # Feed it into record_actuals + update_model_weights so weights
         # converge every 3h instead of waiting for the 2×/day full scan.
         try:
-            from dataclasses import asdict as _asdict
-            from ai.feedback_loop import record_actuals, update_model_weights
             _quick_scan = {
-                "pools":   [_asdict(p) for p in blaze_pools + spark_pools],
-                "lending": [_asdict(r) for r in kinetic_list],
+                "pools":   [asdict(p) for p in blaze_pools + spark_pools],
+                "lending": [asdict(r) for r in kinetic_list],
                 "staking": [],
             }
             record_actuals(_quick_scan)
