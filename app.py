@@ -142,7 +142,7 @@ if warnings:
             st.markdown(f"- {w}")
 
 st.markdown(
-    "<div style='color:#1e293b; font-size:0.72rem; text-align:center; padding-top:8px;'>"
+    "<div style='color:#334155; font-size:0.72rem; text-align:center; padding-top:8px;'>"
     "Flare DeFi Model · Blazeswap · SparkDEX · Ēnosys · Kinetic · Clearpool · Spectra · Upshift · Mystic · Hyperliquid"
     "</div>",
     unsafe_allow_html=True,

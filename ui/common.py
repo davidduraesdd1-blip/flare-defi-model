@@ -42,23 +42,42 @@ def _inject_css() -> None:
     st.markdown("""
 <style>
     /* ── Base ─────────────────────────────────────────────────────────── */
-    .main { background-color: #080c18; }
+    .main { background-color: #060b16; }
     .block-container {
         padding-top: 1.8rem; padding-bottom: 3rem;
-        max-width: 1180px;
+        max-width: 1200px;
     }
-    h1 { font-size: 1.75rem !important; font-weight: 700 !important; letter-spacing: -0.4px; }
-    h2 { font-size: 1.25rem !important; font-weight: 600 !important; color: #cbd5e1 !important; }
-    h3 { font-size: 1.05rem !important; font-weight: 600 !important; color: #94a3b8 !important; }
+    h1 {
+        font-size: 1.75rem !important; font-weight: 800 !important;
+        letter-spacing: -0.5px; color: #f8fafc !important;
+    }
+    h2 {
+        font-size: 1.2rem !important; font-weight: 600 !important;
+        color: #cbd5e1 !important; letter-spacing: -0.2px;
+    }
+    h3 {
+        font-size: 1.0rem !important; font-weight: 600 !important;
+        color: #94a3b8 !important; text-transform: uppercase;
+        letter-spacing: 0.8px;
+    }
 
-    /* ── Metric Cards ─────────────────────────────────────────────────── */
+    /* ── Glassmorphism Metric Cards ───────────────────────────────────── */
     .metric-card {
-        background: linear-gradient(145deg, #111827 0%, #0d1321 100%);
-        border-radius: 14px;
-        padding: 20px 24px;
+        background: linear-gradient(145deg,
+            rgba(17,24,39,0.85) 0%,
+            rgba(10,15,28,0.90) 100%);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 16px;
+        padding: 22px 26px;
         margin-bottom: 14px;
-        border: 1px solid rgba(255,255,255,0.06);
-        border-left: 3px solid #334155;
+        border: 1px solid rgba(255,255,255,0.07);
+        border-left: 3px solid #1e3a5f;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .metric-card:hover {
+        border-color: rgba(255,255,255,0.12);
+        box-shadow: 0 4px 24px rgba(0,0,0,0.4);
     }
     .card-green  { border-left-color: #10b981; }
     .card-blue   { border-left-color: #3b82f6; }
@@ -66,85 +85,171 @@ def _inject_css() -> None:
     .card-red    { border-left-color: #ef4444; }
 
     .big-number {
-        font-size: 2rem; font-weight: 700;
-        letter-spacing: -0.5px; line-height: 1.2;
+        font-size: 2.1rem; font-weight: 800;
+        letter-spacing: -0.8px; line-height: 1.1;
+        color: #f1f5f9;
     }
     .label {
-        font-size: 0.7rem; color: #64748b;
-        text-transform: uppercase; letter-spacing: 1.3px;
-        margin-bottom: 6px;
+        font-size: 0.68rem; color: #475569;
+        text-transform: uppercase; letter-spacing: 1.5px;
+        margin-bottom: 8px;
     }
 
-    /* ── Opportunity / Arb Cards ──────────────────────────────────────── */
+    /* ── Opportunity Cards ────────────────────────────────────────────── */
     .opp-card {
-        background: linear-gradient(145deg, #111827 0%, #0d1321 100%);
-        border-radius: 14px;
-        padding: 18px 22px;
+        background: linear-gradient(145deg,
+            rgba(15,20,35,0.92) 0%,
+            rgba(10,14,26,0.95) 100%);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 16px;
+        padding: 20px 24px;
         margin-bottom: 12px;
         border: 1px solid rgba(255,255,255,0.06);
+        transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
     }
+    .opp-card:hover {
+        border-color: rgba(255,255,255,0.11);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 28px rgba(0,0,0,0.45);
+    }
+
+    /* ── Arbitrage Tag ────────────────────────────────────────────────── */
     .arb-tag {
-        background: rgba(16,185,129,0.04);
-        border-radius: 12px;
-        padding: 14px 18px;
+        background: linear-gradient(145deg,
+            rgba(16,185,129,0.05) 0%,
+            rgba(5,150,105,0.03) 100%);
+        border-radius: 14px;
+        padding: 16px 20px;
         margin-bottom: 10px;
-        border: 1px solid rgba(16,185,129,0.18);
+        border: 1px solid rgba(16,185,129,0.15);
+        transition: border-color 0.2s;
     }
+    .arb-tag:hover { border-color: rgba(16,185,129,0.28); }
+
+    /* ── Warning Box ──────────────────────────────────────────────────── */
     .warn-box {
-        background: rgba(245,158,11,0.05);
-        border-radius: 12px;
+        background: linear-gradient(145deg,
+            rgba(245,158,11,0.06) 0%,
+            rgba(217,119,6,0.04) 100%);
+        border-radius: 14px;
         padding: 14px 18px;
-        border: 1px solid rgba(245,158,11,0.2);
+        border: 1px solid rgba(245,158,11,0.18);
         margin-bottom: 14px;
     }
+
+    /* ── Grade Badge ──────────────────────────────────────────────────── */
     .grade-badge {
-        font-weight: 700; font-size: 0.78rem;
-        padding: 3px 10px; border-radius: 6px; color: #000;
+        font-weight: 800; font-size: 0.75rem;
+        padding: 3px 10px; border-radius: 7px; color: #000;
+        letter-spacing: 0.5px;
+    }
+
+    /* ── Live / Estimated Badges ──────────────────────────────────────── */
+    .badge-live {
+        font-size: 0.62rem; font-weight: 700; color: #10b981;
+        background: rgba(16,185,129,0.10);
+        border: 1px solid rgba(16,185,129,0.22);
+        border-radius: 5px; padding: 1px 6px;
+        letter-spacing: 0.6px; text-transform: uppercase;
+        vertical-align: middle; margin-left: 4px;
+    }
+    .badge-est {
+        font-size: 0.62rem; font-weight: 700; color: #f59e0b;
+        background: rgba(245,158,11,0.10);
+        border: 1px solid rgba(245,158,11,0.22);
+        border-radius: 5px; padding: 1px 6px;
+        letter-spacing: 0.6px; text-transform: uppercase;
+        vertical-align: middle; margin-left: 4px;
     }
 
     /* ── Dividers ─────────────────────────────────────────────────────── */
-    .divider { border-top: 1px solid rgba(255,255,255,0.05); margin: 22px 0; }
+    .divider {
+        border: none;
+        border-top: 1px solid rgba(255,255,255,0.05);
+        margin: 24px 0;
+    }
 
     /* ── Sidebar ──────────────────────────────────────────────────────── */
     [data-testid="stSidebar"] {
-        background: #0d1117;
+        background: linear-gradient(180deg, #0a0f1e 0%, #060b16 100%);
         border-right: 1px solid rgba(255,255,255,0.05);
     }
     [data-testid="stSidebar"] .block-container { padding-top: 1.2rem; }
 
     /* ── Buttons ──────────────────────────────────────────────────────── */
     div[data-testid="stButton"] > button {
-        border-radius: 9px;
-        border: 1px solid rgba(255,255,255,0.09);
-        font-weight: 600;
-        transition: background 0.15s, border-color 0.15s;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.10);
+        font-weight: 700;
+        font-size: 0.82rem;
+        letter-spacing: 0.3px;
+        transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    div[data-testid="stButton"] > button:hover {
+        border-color: rgba(245,158,11,0.35);
+        box-shadow: 0 0 12px rgba(245,158,11,0.12);
     }
 
     /* ── Dataframes ───────────────────────────────────────────────────── */
-    [data-testid="stDataFrame"] { border-radius: 10px; overflow: hidden; }
+    [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
 
-    /* ── Price chip ───────────────────────────────────────────────────── */
+    /* ── Price Chip ───────────────────────────────────────────────────── */
     .price-chip {
         text-align: center;
-        padding: 12px 10px;
-        background: linear-gradient(145deg, #111827, #0d1321);
-        border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.06);
+        padding: 14px 12px;
+        background: linear-gradient(145deg,
+            rgba(17,24,39,0.90) 0%,
+            rgba(10,15,28,0.92) 100%);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.07);
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .price-chip:hover {
+        border-color: rgba(255,255,255,0.13);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.35);
     }
 
-    /* ── Section label ────────────────────────────────────────────────── */
+    /* ── Section Label ────────────────────────────────────────────────── */
     .section-label {
-        font-size: 0.7rem; color: #475569;
-        text-transform: uppercase; letter-spacing: 1.4px;
-        margin-bottom: 12px; margin-top: 6px;
+        font-size: 0.65rem; color: #334155;
+        text-transform: uppercase; letter-spacing: 1.6px;
+        margin-bottom: 10px; margin-top: 6px;
+    }
+
+    /* ── Tabs ─────────────────────────────────────────────────────────── */
+    [data-testid="stTabs"] [role="tab"] {
+        font-size: 0.82rem; font-weight: 600;
+        color: #475569;
+    }
+    [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+        color: #f59e0b;
+    }
+
+    /* ── Inputs ───────────────────────────────────────────────────────── */
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextInput"] input {
+        background: rgba(17,24,39,0.8) !important;
+        border: 1px solid rgba(255,255,255,0.09) !important;
+        border-radius: 9px !important;
+    }
+
+    /* ── Expanders ────────────────────────────────────────────────────── */
+    [data-testid="stExpander"] {
+        border: 1px solid rgba(255,255,255,0.06) !important;
+        border-radius: 12px !important;
+        background: rgba(10,14,26,0.6) !important;
     }
 
     /* ── Mobile ───────────────────────────────────────────────────────── */
     @media (max-width: 768px) {
-        .big-number { font-size: 1.5rem !important; }
-        h1 { font-size: 1.35rem !important; }
+        .big-number { font-size: 1.55rem !important; }
+        h1 { font-size: 1.4rem !important; }
         .metric-card, .opp-card { padding: 14px 16px; }
         .block-container { padding-left: 0.5rem; padding-right: 0.5rem; }
+        .price-chip { padding: 10px 8px; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -382,7 +487,8 @@ def _next_scan() -> str:
     future = [t for t in scan_times if t > now_local]
     if not future:
         tmrw   = today + timedelta(days=1)
-        next_t = datetime(tmrw.year, tmrw.month, tmrw.day, 6, 0, tzinfo=tz)
+        h0, m0 = map(int, SCHEDULER["run_times"][0].split(":"))
+        next_t = datetime(tmrw.year, tmrw.month, tmrw.day, h0, m0, tzinfo=tz)
     else:
         next_t = min(future)
     next_utc = next_t.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
@@ -536,7 +642,7 @@ def render_opportunity_card(
 
     grade, grade_color = risk_score_to_grade(rs)
     il_color = {"none": "#10b981", "low": "#10b981", "medium": "#f59e0b", "high": "#ef4444"}.get(il, "#f59e0b")
-    est_tag  = " <span style='color:#475569; font-size:0.75rem;'>est.</span>" if src in ("baseline", "estimate") else ""
+    est_tag  = " <span class='badge-est'>EST</span>" if src in ("baseline", "estimate") else " <span class='badge-live'>LIVE</span>"
     medal    = ["🥇", "🥈", "🥉", "4", "5", "6"][min(idx, 5)]
     proto    = _html.escape(str(proto))
     pool     = _html.escape(str(pool))

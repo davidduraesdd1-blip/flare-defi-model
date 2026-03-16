@@ -34,8 +34,8 @@ APIS = {
     "flaremetrics":      "https://flaremetrics.io",
     "coingecko":         "https://api.coingecko.com/api/v3",
     "blazeswap_graph":   "https://subgraph.blazeswap.xyz/subgraphs/name/blazeswap/exchange",
-    "sparkdex_graph":    "https://api.goldsky.com/api/public/project_clvkm8xwn000a01wge4gdhpn6/subgraphs/sparkdex-v3/1.0.0/gn",
-    "enosys_graph":      "https://api.goldsky.com/api/public/project_clvkm8xwn000a01wge4gdhpn6/subgraphs/enosys-dex/1.0.0/gn",
+    # sparkdex_graph and enosys_graph (Goldsky) are no longer active — removed.
+    # SparkDEX and Enosys data now comes from GeckoTerminal (live) only.
     "hyperliquid_info":  "https://api.hyperliquid.xyz/info",
     "ftso_data":         "https://flr-data-availability.flare.network",
 }
