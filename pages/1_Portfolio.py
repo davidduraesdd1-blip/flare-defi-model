@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import html as _html
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -148,9 +149,9 @@ if positions:
 
     for idx, pos in enumerate(positions):
         pnl      = compute_position_pnl(pos, prices)
-        proto    = pos.get("protocol", "?").capitalize()
-        pool     = pos.get("pool", "?")
-        ptype    = pos.get("position_type", "lp").upper()
+        proto    = _html.escape(pos.get("protocol", "?").capitalize())
+        pool     = _html.escape(pos.get("pool", "?"))
+        ptype    = _html.escape(pos.get("position_type", "lp").upper())
         vc       = pnl["value_change"]
         vc_pct   = pnl["value_change_pct"]
         vc_color = "#10b981" if vc >= 0 else "#ef4444"
@@ -163,7 +164,7 @@ if positions:
         fees_html = f" · Est. fees earned: <span style='color:#10b981'>${fees_est:,.2f}</span>" if fees_est > 0 else ""
         il_html   = f" · IL est: <span style='color:#f59e0b'>{il_pct:.1f}%</span>" if il_pct > 0.1 else ""
         hodl_html = f" · HODL: <span style='color:#64748b'>${hodl:,.0f}</span>" if hodl > 0 else ""
-        bal_str   = " ".join(filter(None, [pos.get("token0_balance",""), pos.get("token1_balance","")]))
+        bal_str   = _html.escape(" ".join(filter(None, [pos.get("token0_balance",""), pos.get("token1_balance","")])))
 
         col_card, col_del = st.columns([14, 1])
         with col_card:
@@ -331,7 +332,7 @@ with tab_timeline:
                 "Position":     f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
                 "Type":         pos.get("position_type", "lp").upper(),
                 "Days Held":    days_held,
-                "Entry APY":    f"{pos.get('entry_apy',0):.1f}%",
+                "Entry APY":    f"{(pos.get('entry_apy') or 0):.1f}%",
                 "P&L":          f"{pnl['value_change_pct']:+.1f}%" if pnl["deposit_usd"] > 0 else "—",
                 "Incentive":    "⚠️ YES" if is_incentive else "✅ Low",
                 "Exit By":      "Jun 2026" if is_incentive else "Flexible",

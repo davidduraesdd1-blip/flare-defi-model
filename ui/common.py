@@ -5,6 +5,8 @@ Imported by every page in the Flare DeFi Model multi-page app.
 
 import sys
 import json
+import html as _html
+import time
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -154,6 +156,15 @@ def render_sidebar() -> dict:
     Persistent sidebar: scan status, portfolio size, risk profile, refresh.
     Returns dict with keys: profile, profile_cfg, color, weight, feedback, portfolio_size.
     """
+    # ─── 5-minute auto-refresh to keep data live ─────────────────────────────
+    _now = time.time()
+    if "last_auto_refresh" not in st.session_state:
+        st.session_state.last_auto_refresh = _now
+    elif _now - st.session_state.last_auto_refresh > 300:
+        st.session_state.last_auto_refresh = _now
+        st.cache_data.clear()
+        st.rerun()
+
     with st.sidebar:
         st.markdown(
             "<div style='font-size:1.2rem; font-weight:700; color:#f8fafc; "
@@ -178,7 +189,7 @@ def render_sidebar() -> dict:
                 st.rerun()
         with col_s:
             if st.button("▶ Scan", key="sidebar_scan_now", use_container_width=True,
-                         help="Run a fresh scan now (~30 seconds). Click Reload when done."):
+                         help="Run a fresh scan now (~30 seconds). Auto-reloads when done."):
                 import subprocess, sys as _sys
                 try:
                     scheduler_path = str(Path(__file__).parent.parent / "scheduler.py")
@@ -186,9 +197,32 @@ def render_sidebar() -> dict:
                         [_sys.executable, scheduler_path, "--now"],
                         creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
                     )
-                    st.info("Scan started (~30s). Click **↺ Reload** when complete.")
+                    st.session_state._scanning = True
+                    st.session_state._scan_deadline = time.time() + 120
+                    st.session_state._scan_baseline = (
+                        latest.get("completed_at") or latest.get("run_id") or ""
+                    )
                 except Exception as _e:
                     st.error(f"Could not start scan: {_e}")
+
+        # ─── Scan completion polling ───────────────────────────────────────────
+        if st.session_state.get("_scanning"):
+            try:
+                with open(HISTORY_FILE) as _f:
+                    _hist_ts = json.load(_f).get("latest", {}).get("completed_at") or ""
+            except Exception:
+                _hist_ts = ""
+            if _hist_ts and _hist_ts != st.session_state.get("_scan_baseline", ""):
+                st.session_state._scanning = False
+                st.cache_data.clear()
+                st.rerun()
+            elif time.time() < st.session_state.get("_scan_deadline", 0):
+                st.caption("⏳ Scanning… auto-reloading when done.")
+                time.sleep(4)
+                st.rerun()
+            else:
+                st.session_state._scanning = False
+                st.caption("Scan timed out — click ↺ Reload.")
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -372,7 +406,7 @@ def compute_position_pnl(pos: dict, current_prices: list) -> dict:
 
     deposit_usd    = float(pos.get("deposit_usd") or pos.get("entry_value") or 0)
     current_value  = float(pos.get("current_value") or 0)
-    entry_apy      = float(pos.get("entry_apy", 0))
+    entry_apy      = float(pos.get("entry_apy") or 0)
     unclaimed_fees = float(pos.get("unclaimed_fees", 0))
 
     days_active    = 0
@@ -431,7 +465,7 @@ def render_price_strip(prices: list) -> None:
         return
     cols = st.columns(len(prices))
     for i, p in enumerate(prices):
-        sym   = p.get("symbol", "?")
+        sym   = _html.escape(str(p.get("symbol", "?")))
         price = p.get("price_usd", 0)
         chg   = p.get("change_24h", 0)
         color = "#10b981" if chg >= 0 else "#ef4444"
@@ -504,6 +538,9 @@ def render_opportunity_card(
     il_color = {"none": "#10b981", "low": "#10b981", "medium": "#f59e0b", "high": "#ef4444"}.get(il, "#f59e0b")
     est_tag  = " <span style='color:#475569; font-size:0.75rem;'>est.</span>" if src in ("baseline", "estimate") else ""
     medal    = ["🥇", "🥈", "🥉", "4", "5", "6"][min(idx, 5)]
+    proto    = _html.escape(str(proto))
+    pool     = _html.escape(str(pool))
+    action   = _html.escape(str(action))
 
     alloc_str = (
         f"${kf * portfolio_size:,.0f} <span style='color:#475569'>({kf*100:.0f}%)</span>"
