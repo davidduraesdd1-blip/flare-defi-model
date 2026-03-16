@@ -128,13 +128,14 @@ def _rate_to_apy(rate_per_block: int) -> float:
 class PoolData:
     protocol:    str
     pool_name:   str
-    apr:         float          # annualised yield %
+    apr:         float          # annualised yield % (fee_apr + reward_apr)
     tvl_usd:     float
     token0:      str
     token1:      str
     il_risk:     str            # low / medium / high
     reward_token: str
     data_source: str            # "live" or "baseline"
+    reward_apr:  float = 0.0   # incentive-only portion (RFLR/SPRK); subject to decay
     fetched_at:  str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 @dataclass
@@ -340,7 +341,8 @@ def _baseline_pools(protocol_key: str) -> list:
     for name, cfg in PROTOCOLS[protocol_key]["pools"].items():
         t0, t1 = name.split("-", 1)
         # Support both key names: old DEXes use "baseline_apr", new GT-based DEXes use "reward_apr"
-        fallback_apr = cfg.get("baseline_apr", cfg.get("reward_apr", 0))
+        rwd_apr      = cfg.get("reward_apr", 0)
+        fallback_apr = cfg.get("baseline_apr", rwd_apr)
         pools.append(PoolData(
             protocol=protocol_key,
             pool_name=name,
@@ -351,6 +353,7 @@ def _baseline_pools(protocol_key: str) -> list:
             il_risk=cfg["il_risk"],
             reward_token=cfg.get("reward_token", ""),
             data_source="baseline",
+            reward_apr=rwd_apr,
         ))
     return pools
 
@@ -411,6 +414,7 @@ def fetch_blazeswap_pools() -> list:
                 il_risk=baseline.get("il_risk", "medium"),
                 reward_token=baseline.get("reward_token", "RFLR"),
                 data_source="live",
+                reward_apr=round(reward_apr, 2),
             ))
 
     # 3 — Hardcoded baseline if both live sources fail
@@ -550,6 +554,7 @@ def _fetch_gt_dex_pools(dex_id: str, protocol: str,
             il_risk=baseline.get("il_risk", _gt_il_risk(t0, t1)),
             reward_token=baseline.get("reward_token", reward_tok),
             data_source="live",
+            reward_apr=round(reward_apr, 2),
         ))
 
     return results

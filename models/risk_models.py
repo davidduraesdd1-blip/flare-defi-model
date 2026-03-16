@@ -179,6 +179,7 @@ def build_opportunity(
     data_source:   str,
     is_v3:         bool = False,
     apy_history:   list = None,
+    reward_apr:    float = 0.0,
 ) -> Opportunity:
 
     profile = RISK_PROFILES[risk_profile]
@@ -187,11 +188,15 @@ def build_opportunity(
     apr = max(0.0, apr)  # guard: negative APY is not a valid yield opportunity
 
     # Incentive decay: RFLR/SPRK reward APY declines linearly to 0 by July 2026.
-    # Conservatively assume 60% of DEX pool APR is reward-driven, 40% is fee-driven.
+    # Use the actual known reward_apr split when available; fall back to 40/60 estimate.
     if reward_token in ("RFLR", "rFLR", "SPRK"):
-        decay      = _incentive_decay_factor()
-        fee_part   = apr * 0.40
-        incentive_part = apr * 0.60
+        decay          = _incentive_decay_factor()
+        if reward_apr > 0 and reward_apr <= apr:
+            fee_part       = apr - reward_apr
+            incentive_part = reward_apr
+        else:
+            fee_part       = apr * 0.40
+            incentive_part = apr * 0.60
         apr = max(0.0, fee_part + incentive_part * decay)
 
     # IL calculation (V3 concentrated positions amplify IL)
@@ -389,6 +394,7 @@ def _build_candidate_list(scan_result: dict, apy_history_map: dict = None) -> li
             data_source=pool.get("data_source", "estimate"),
             is_v3=is_v3,
             apy_history=apy_history_map.get((proto_name, pool_name), []),
+            reward_apr=pool.get("reward_apr", 0.0),
         ))
         rank += 1
 
