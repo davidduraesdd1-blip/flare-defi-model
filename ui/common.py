@@ -25,6 +25,29 @@ from config import (
 from utils.file_io import atomic_json_write
 
 
+# ─── Live Price Loader (bypasses stale scan data) ─────────────────────────────
+
+@st.cache_data(ttl=120)
+def load_live_prices() -> list:
+    """
+    Fetch current token prices directly from CoinGecko.
+    Cached for 2 minutes so the price strip stays fresh without hammering the API.
+    Falls back to scan-cached prices if CoinGecko is unavailable.
+    """
+    try:
+        from scanners.flare_scanner import fetch_prices
+        results = fetch_prices()
+        if results:
+            return [
+                {"symbol": p.symbol, "price_usd": p.price_usd,
+                 "change_24h": p.change_24h, "data_source": p.data_source}
+                for p in results
+            ]
+    except Exception:
+        pass
+    return []
+
+
 # ─── Page Bootstrap ───────────────────────────────────────────────────────────
 
 def page_setup(title: str = "Flare DeFi Model") -> None:

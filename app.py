@@ -12,7 +12,7 @@ from ui.common import (
     page_setup, render_sidebar, load_latest, load_positions,
     render_price_strip, render_incentive_warning,
     render_yield_hero_cards, render_opportunity_card,
-    render_urgency_badge, _ts_fmt,
+    render_urgency_badge, _ts_fmt, load_live_prices,
 )
 import streamlit as st
 
@@ -39,9 +39,9 @@ st.markdown(
 # ── Incentive Warning ─────────────────────────────────────────────────────────
 render_incentive_warning()
 
-# ── Price Strip ───────────────────────────────────────────────────────────────
+# ── Price Strip (live — refreshed every 2 min, not from stale scan data) ──────
 flare_scan = latest.get("flare_scan", {})
-prices     = flare_scan.get("prices", [])
+prices     = load_live_prices() or flare_scan.get("prices", [])
 render_price_strip(prices)
 
 # ── Data Freshness ────────────────────────────────────────────────────────────

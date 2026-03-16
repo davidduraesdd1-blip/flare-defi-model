@@ -252,9 +252,9 @@ PROTOCOLS = {
 # ─── Fallback Prices (used when CoinGecko is unavailable) ────────────────────
 # Update these conservatively whenever prices move significantly (>20%).
 FALLBACK_PRICES = {
-    "FLR":  0.020,
-    "XRP":  2.20,
-    "FXRP": 2.195,   # XRP * 0.998 bridge discount
+    "FLR":  0.0088,
+    "XRP":  1.53,
+    "FXRP": 1.527,   # XRP * 0.998 bridge discount
     "USD0": 1.00,
 }
 
