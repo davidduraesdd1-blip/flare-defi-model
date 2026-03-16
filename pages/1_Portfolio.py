@@ -147,8 +147,11 @@ if positions:
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+    # Compute P&L once for all positions — reused in cards and exit timeline below
+    pnl_results = [compute_position_pnl(pos, prices) for pos in positions]
+
     for idx, pos in enumerate(positions):
-        pnl      = compute_position_pnl(pos, prices)
+        pnl      = pnl_results[idx]
         proto    = _html.escape(pos.get("protocol", "?").capitalize())
         pool     = _html.escape(pos.get("pool", "?"))
         ptype    = _html.escape(pos.get("position_type", "lp").upper())
@@ -318,7 +321,7 @@ with tab_timeline:
         st.info("Add positions above to see per-position exit guidance.")
     else:
         rows = []
-        for pos in positions:
+        for i, pos in enumerate(positions):
             days_held = 0
             if pos.get("entry_date"):
                 try:
@@ -327,7 +330,7 @@ with tab_timeline:
                     pass
             proto_key    = pos.get("protocol", "")
             is_incentive = proto_key in ("blazeswap", "enosys", "sparkdex")
-            pnl          = compute_position_pnl(pos, prices)
+            pnl          = pnl_results[i]
             rows.append({
                 "Position":     f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
                 "Type":         pos.get("position_type", "lp").upper(),
@@ -359,8 +362,7 @@ for run in runs[-30:]:
             pass
 
 if len(records) >= 2:
-    import pandas as pd_local
-    df  = pd_local.DataFrame(records).sort_values("date")
+    df  = pd.DataFrame(records).sort_values("date")
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df["date"], y=df["apy"],

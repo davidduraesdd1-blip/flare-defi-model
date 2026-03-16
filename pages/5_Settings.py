@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import html as _html
 import streamlit as st
 from datetime import datetime
 
@@ -136,20 +137,24 @@ else:
 
     rows_html = ""
     for opp in opps[:6]:
-        apy   = opp.get("estimated_apy", 0)
-        kf    = opp.get("kelly_fraction", 0)
-        grade, _ = risk_score_to_grade(opp.get("risk_score", 5))
+        apy       = opp.get("estimated_apy", 0)
+        kf        = opp.get("kelly_fraction", 0)
+        grade, _  = risk_score_to_grade(opp.get("risk_score", 5))
         alloc_str = f"${kf * report_portfolio:,.0f}" if report_portfolio > 0 else f"{kf*100:.0f}%"
+        proto     = _html.escape(str(opp.get("protocol", "—")))
+        pool      = _html.escape(str(opp.get("asset_or_pool", "—")))
+        action    = _html.escape(str(opp.get("action", "—")))
+        rank      = _html.escape(str(opp.get("rank", "—")))
         rows_html += f"""
         <tr>
-            <td>{opp.get('rank','—')}</td>
-            <td>{opp.get('protocol','—')}</td>
-            <td>{opp.get('asset_or_pool','—')}</td>
+            <td>{rank}</td>
+            <td>{proto}</td>
+            <td>{pool}</td>
             <td>{apy:.1f}%</td>
             <td>{opp.get('apy_low', apy*0.8):.1f}%–{opp.get('apy_high', apy*1.2):.1f}%</td>
             <td><b>{grade}</b></td>
             <td>{alloc_str}</td>
-            <td style="font-size:0.85rem;">{opp.get('action','—')}</td>
+            <td style="font-size:0.85rem;">{action}</td>
         </tr>"""
 
     html_content = f"""<!DOCTYPE html>

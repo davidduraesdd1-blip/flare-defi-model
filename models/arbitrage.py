@@ -247,29 +247,27 @@ def detect_cyclo_arb(staking_data: list) -> list:
 
     # cysFLR typically trades at a discount to sFLR (the market prices in unlock risk)
     # Estimated discount from research: 5–15%
-    estimated_discount = 8.0  # % — using research estimate
+    estimated_discount = 8.0  # % — using research estimate; replace with live price when available
 
-    if estimated_discount > 2.0:
-        return [ArbitrageOpportunity(
-            strategy="cyclo_cysflr",
-            strategy_label="Cyclo cysFLR Discount Arbitrage",
-            token_or_pair="cysFLR/sFLR",
-            buy_where="Buy cysFLR at a discount on SparkDEX",
-            sell_where="Lock/redeem for sFLR at 1:1 via Cyclo protocol",
-            estimated_profit=round(estimated_discount - 1.0, 2),
-            capital_needed=1000,
-            urgency="monitor",
-            plain_english=(
-                f"cysFLR is backed by sFLR 1-to-1, but often trades cheaper. "
-                f"Buy cysFLR at the discount (~{estimated_discount:.0f}% below sFLR), "
-                f"then convert it back to sFLR. Profit: ~{estimated_discount-1:.0f}%. "
-                f"Note: discount is a research estimate — verify live price before acting."
-            ),
-            risk_level="high",
-            applicable_profiles=["high"],
-            data_source="research",
-        )]
-    return []
+    return [ArbitrageOpportunity(
+        strategy="cyclo_cysflr",
+        strategy_label="Cyclo cysFLR Discount Arbitrage",
+        token_or_pair="cysFLR/sFLR",
+        buy_where="Buy cysFLR at a discount on SparkDEX",
+        sell_where="Lock/redeem for sFLR at 1:1 via Cyclo protocol",
+        estimated_profit=round(estimated_discount - 1.0, 2),
+        capital_needed=1000,
+        urgency="monitor",
+        plain_english=(
+            f"cysFLR is backed by sFLR 1-to-1, but often trades cheaper. "
+            f"Buy cysFLR at the discount (~{estimated_discount:.0f}% below sFLR), "
+            f"then convert it back to sFLR. Profit: ~{estimated_discount-1:.0f}%. "
+            f"Note: discount is a research estimate — verify live price before acting."
+        ),
+        risk_level="high",
+        applicable_profiles=["high"],
+        data_source="research",
+    )]
 
 
 # ─── Strategy 6: Spectra PT/YT Arbitrage ─────────────────────────────────────

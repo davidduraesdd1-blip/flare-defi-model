@@ -87,13 +87,11 @@ def _ensure_positions_file() -> None:
 # ─── Quick Check Cache ────────────────────────────────────────────────────────
 
 def _load_quick_cache() -> dict:
-    if QUICK_CACHE_FILE.exists():
-        try:
-            with open(QUICK_CACHE_FILE) as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
+    try:
+        with open(QUICK_CACHE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 def _save_quick_cache(data: dict) -> None:
@@ -136,9 +134,12 @@ def run_quick_check() -> None:
         from scanners.flare_scanner import (
             fetch_prices, fetch_kinetic_rates,
             fetch_blazeswap_pools, fetch_sparkdex_pools,
+            _prewarm_gt_cache,
         )
         from scanners.multi_scanner import fetch_hyperliquid_perps
         from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        _prewarm_gt_cache()   # warm GT cache before parallel threads to avoid rate-limit collisions
 
         with ThreadPoolExecutor(max_workers=5) as _pool:
             futures = {

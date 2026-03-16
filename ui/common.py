@@ -7,6 +7,7 @@ import sys
 import json
 import html as _html
 import time
+import subprocess
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -190,11 +191,10 @@ def render_sidebar() -> dict:
         with col_s:
             if st.button("▶ Scan", key="sidebar_scan_now", use_container_width=True,
                          help="Run a fresh scan now (~30 seconds). Auto-reloads when done."):
-                import subprocess, sys as _sys
                 try:
                     scheduler_path = str(Path(__file__).parent.parent / "scheduler.py")
                     subprocess.Popen(
-                        [_sys.executable, scheduler_path, "--now"],
+                        [sys.executable, scheduler_path, "--now"],
                         creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
                     )
                     st.session_state._scanning = True
@@ -375,10 +375,10 @@ def _next_scan() -> str:
     tz        = ZoneInfo(SCHEDULER["timezone"])
     now_local = datetime.now(tz)
     today     = now_local.date()
-    scan_times = [
-        datetime(today.year, today.month, today.day, 6,  0, tzinfo=tz),
-        datetime(today.year, today.month, today.day, 18, 0, tzinfo=tz),
-    ]
+    scan_times = []
+    for t in SCHEDULER["run_times"]:
+        h, m = map(int, t.split(":"))
+        scan_times.append(datetime(today.year, today.month, today.day, h, m, tzinfo=tz))
     future = [t for t in scan_times if t > now_local]
     if not future:
         tmrw   = today + timedelta(days=1)
