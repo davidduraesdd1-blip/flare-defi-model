@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 
 # ─── Baseline Token Prices (for TVL calculation when live prices are unavailable) ─
 # Used only in Kinetic TVL calc to convert token amounts to USD.
-# Stablecoins use $1; volatile assets use conservative research estimates.
+# FLR/WFLR/sFLR mirror FALLBACK_PRICES so both stale-data paths use the same values.
 _BASELINE_TOKEN_PRICES = {
-    "FLR":    0.020,
-    "WFLR":   0.020,
-    "sFLR":   0.020,
+    "FLR":    FALLBACK_PRICES["FLR"],
+    "WFLR":   FALLBACK_PRICES["FLR"],   # WFLR = wrapped FLR, same price
+    "sFLR":   FALLBACK_PRICES["FLR"],   # sFLR ≈ FLR (liquid staked, negligible premium)
     "wETH":   2500.0,
     "USDT0":  1.0,
     "USDC.e": 1.0,

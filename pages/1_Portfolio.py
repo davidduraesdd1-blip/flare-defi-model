@@ -15,9 +15,9 @@ from datetime import datetime, timedelta
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
     load_positions, save_positions, load_wallets, save_wallets,
-    compute_position_pnl, render_opportunity_card, _ts_fmt,
+    compute_position_pnl, render_opportunity_card, _ts_fmt, load_live_prices,
 )
-from config import PROTOCOLS, TOKENS, FLARE_RPC_URLS, INCENTIVE_PROGRAM, RISK_PROFILES
+from config import PROTOCOLS, TOKENS, FLARE_RPC_URLS, INCENTIVE_PROGRAM, RISK_PROFILES, FALLBACK_PRICES
 
 page_setup("Portfolio · Flare DeFi")
 
@@ -28,7 +28,7 @@ latest    = load_latest()
 runs      = load_history_runs()
 positions = load_positions()
 flare_scan = latest.get("flare_scan", {})
-prices     = flare_scan.get("prices", [])
+prices     = load_live_prices() or flare_scan.get("prices", [])
 
 st.markdown("# Portfolio")
 st.markdown(
@@ -289,11 +289,16 @@ tab_targets, tab_timeline = st.tabs(["Price Targets", "Exit Timeline"])
 
 with tab_targets:
     price_lookup = {p.get("symbol", ""): p.get("price_usd", 0) for p in (prices or [])}
+    _EXIT_FALLBACKS = {
+        "FLR":  FALLBACK_PRICES["FLR"],
+        "FXRP": FALLBACK_PRICES["FXRP"],
+        "sFLR": FALLBACK_PRICES["FLR"],   # sFLR ≈ FLR
+    }
     c1, c2, c3 = st.columns(3)
     with c1:
         asset_choice = st.selectbox("Asset", ["FLR", "FXRP", "sFLR", "Custom"], key="exit_asset")
     with c2:
-        default_price = price_lookup.get(asset_choice, 0.020) or 0.020
+        default_price = price_lookup.get(asset_choice) or _EXIT_FALLBACKS.get(asset_choice, FALLBACK_PRICES["FLR"])
         asset_price = st.number_input("Current price ($)", min_value=0.0001,
                                       value=float(default_price), format="%.6f", step=0.001, key="exit_price")
     with c3:

@@ -11,7 +11,7 @@ import logging.handlers
 import sys
 import time
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -138,7 +138,6 @@ def run_quick_check() -> None:
             _prewarm_gt_cache,
         )
         from scanners.multi_scanner import fetch_hyperliquid_perps
-        from concurrent.futures import ThreadPoolExecutor, as_completed
 
         _prewarm_gt_cache()   # warm GT cache before parallel threads to avoid rate-limit collisions
 

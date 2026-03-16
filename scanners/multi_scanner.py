@@ -102,8 +102,8 @@ def fetch_sparkdex_funding() -> list:
     return [PerpData(
         exchange="sparkdex",
         pair="FLR/USD",
-        mark_price=0.020,
-        index_price=0.020,
+        mark_price=FALLBACK_PRICES["FLR"],
+        index_price=FALLBACK_PRICES["FLR"],
         funding_rate=0.00005,
         funding_rate_annualised=round(0.00005 * 3 * 365 * 100, 4),
         open_interest=0,

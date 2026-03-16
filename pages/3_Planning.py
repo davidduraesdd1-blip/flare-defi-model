@@ -11,6 +11,7 @@ import pandas as pd
 from datetime import datetime
 
 from ui.common import page_setup, render_sidebar
+from config import FALLBACK_PRICES
 
 page_setup("Planning · Flare DeFi")
 
@@ -47,8 +48,8 @@ with tab1:
         monthly_flr = st.number_input("Monthly FlareDrop income (FLR/month)",
                                       min_value=0.0, value=500.0, step=50.0, key="fd_flr")
     with c2:
-        flr_price = st.number_input("FLR price ($)", min_value=0.001, value=0.020,
-                                    step=0.001, format="%.3f", key="fd_price")
+        flr_price = st.number_input("FLR price ($)", min_value=0.001, value=float(FALLBACK_PRICES["FLR"]),
+                                    step=0.001, format="%.4f", key="fd_price")
 
     if monthly_flr > 0 and flr_price > 0:
         monthly_usd = monthly_flr * flr_price

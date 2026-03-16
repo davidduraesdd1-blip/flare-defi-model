@@ -477,6 +477,7 @@ def load_wallets() -> list:
 def save_wallets(wallets: list) -> None:
     if not atomic_json_write(WALLETS_FILE, wallets):
         st.error("Could not save wallets — check logs.")
+    st.cache_data.clear()
 
 
 @st.cache_data(ttl=300)

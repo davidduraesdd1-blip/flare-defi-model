@@ -93,12 +93,18 @@ with col_save:
 
 with col_test_e:
     if st.button("Send Test Email", key="test_email_btn", use_container_width=True):
-        ok, msg = test_email(load_alerts_config())
+        # Use current form values — not stale disk config — so unsaved changes are tested
+        _test_cfg = {"email": {"enabled": enabled, "address": email_addr,
+                               "smtp_server": smtp_srv, "smtp_port": int(smtp_port),
+                               "username": smtp_user, "password": smtp_pass}}
+        ok, msg = test_email(_test_cfg)
         st.success(msg) if ok else st.error(msg)
 
 with col_test_t:
     if st.button("Send Test Telegram", key="test_tg_btn", use_container_width=True):
-        ok, msg = test_telegram(load_alerts_config())
+        # Use current form values — not stale disk config — so unsaved changes are tested
+        _test_cfg = {"telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id}}
+        ok, msg = test_telegram(_test_cfg)
         st.success(msg) if ok else st.error(msg)
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)

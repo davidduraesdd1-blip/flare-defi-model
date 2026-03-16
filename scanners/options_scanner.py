@@ -10,6 +10,7 @@ from datetime import datetime
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
+from config import FALLBACK_PRICES
 from scanners.flare_scanner import fetch_prices as _fetch_flare_prices
 from utils.http import http_get
 
@@ -125,7 +126,7 @@ def fetch_volatility_data() -> list:
     if xrp_entry:
         results.append(VolatilityData(
             token="FXRP",
-            price_usd=live_prices.get("FXRP", live_prices.get("XRP", 2.195) * 0.998),
+            price_usd=live_prices.get("FXRP", live_prices.get("XRP", FALLBACK_PRICES["XRP"]) * 0.998),
             historical_vol=xrp_entry.historical_vol,
             implied_vol=xrp_entry.implied_vol,
             vol_regime=xrp_entry.vol_regime,
