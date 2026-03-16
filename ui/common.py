@@ -19,6 +19,7 @@ from config import (
     POSITIONS_FILE, WALLETS_FILE, PROTOCOLS, TOKENS, FLARE_RPC_URLS,
     MONITOR_DIGEST_FILE, SCHEDULER,
 )
+from utils.file_io import atomic_json_write
 
 
 # ─── Page Bootstrap ───────────────────────────────────────────────────────────
@@ -169,9 +170,25 @@ def render_sidebar() -> dict:
             unsafe_allow_html=True,
         )
 
-        if st.button("↺  Refresh", key="sidebar_refresh", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
+        col_r, col_s = st.columns(2)
+        with col_r:
+            if st.button("↺ Reload", key="sidebar_refresh", use_container_width=True,
+                         help="Reload the latest saved scan data from disk"):
+                st.cache_data.clear()
+                st.rerun()
+        with col_s:
+            if st.button("▶ Scan", key="sidebar_scan_now", use_container_width=True,
+                         help="Run a fresh scan now (~30 seconds). Click Reload when done."):
+                import subprocess, sys as _sys
+                try:
+                    scheduler_path = str(Path(__file__).parent.parent / "scheduler.py")
+                    subprocess.Popen(
+                        [_sys.executable, scheduler_path, "--now"],
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+                    )
+                    st.info("Scan started (~30s). Click **↺ Reload** when complete.")
+                except Exception as _e:
+                    st.error(f"Could not start scan: {_e}")
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -241,12 +258,13 @@ def render_sidebar() -> dict:
 # ─── Data Loaders ─────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=60)
-def load_latest() -> dict:
+def _load_history_file() -> dict:
+    """Single cached read of history.json — shared by load_latest() and load_history_runs()."""
     if not HISTORY_FILE.exists():
         return {}
     try:
         with open(HISTORY_FILE) as f:
-            return json.load(f).get("latest", {})
+            return json.load(f)
     except json.JSONDecodeError:
         st.warning("⚠️ history.json is corrupted — re-run the scheduler.")
         return {}
@@ -255,15 +273,12 @@ def load_latest() -> dict:
         return {}
 
 
-@st.cache_data(ttl=60)
+def load_latest() -> dict:
+    return _load_history_file().get("latest", {})
+
+
 def load_history_runs() -> list:
-    if not HISTORY_FILE.exists():
-        return []
-    try:
-        with open(HISTORY_FILE) as f:
-            return json.load(f).get("runs", [])
-    except Exception:
-        return []
+    return _load_history_file().get("runs", [])
 
 
 @st.cache_data(ttl=60)
@@ -281,12 +296,9 @@ def load_positions() -> list:
 
 
 def save_positions(positions: list) -> None:
-    try:
-        with open(POSITIONS_FILE, "w") as f:
-            json.dump(positions, f, indent=2)
-        st.cache_data.clear()
-    except Exception as e:
-        st.error(f"Could not save positions: {e}")
+    if not atomic_json_write(POSITIONS_FILE, positions):
+        st.error("Could not save positions — check logs.")
+    st.cache_data.clear()
 
 
 def load_wallets() -> list:
@@ -300,11 +312,8 @@ def load_wallets() -> list:
 
 
 def save_wallets(wallets: list) -> None:
-    try:
-        with open(WALLETS_FILE, "w") as f:
-            json.dump(wallets, f, indent=2)
-    except Exception as e:
-        st.error(f"Could not save wallets: {e}")
+    if not atomic_json_write(WALLETS_FILE, wallets):
+        st.error("Could not save wallets — check logs.")
 
 
 @st.cache_data(ttl=300)
@@ -343,8 +352,9 @@ def _next_scan() -> str:
     else:
         next_t = min(future)
     next_utc = next_t.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-    delta    = next_utc - datetime.utcnow()
-    h, m     = divmod(int(delta.total_seconds()) // 60, 60)
+    delta       = next_utc - datetime.utcnow()
+    total_mins  = max(0, int(delta.total_seconds())) // 60
+    h, m        = divmod(total_mins, 60)
     return f"{h}h {m}m"
 
 

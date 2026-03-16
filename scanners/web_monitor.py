@@ -17,6 +17,7 @@ Called by the scheduler once daily at 8am.
 
 import json
 import logging
+import re
 import time
 import calendar
 import os
@@ -24,6 +25,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+
+from utils.file_io import atomic_json_write
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +230,6 @@ def fetch_rss_news(max_age_hours: int = 720) -> dict:  # 30-day default
 
                 summary_raw = entry.get("summary") or ""
                 # Strip basic HTML tags for clean display
-                import re
                 summary_clean = re.sub(r"<[^>]+>", "", summary_raw)[:300].strip()
 
                 result["items"].append({
@@ -406,12 +408,9 @@ def run_web_monitor() -> dict:
 
     # ── Save ──────────────────────────────────────────────────────────────────
     digest["run_duration_seconds"] = round(time.monotonic() - t0, 1)
-    try:
-        MONITOR_DIGEST_FILE.parent.mkdir(exist_ok=True)
-        with open(MONITOR_DIGEST_FILE, "w", encoding="utf-8") as f:
-            json.dump(digest, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Could not save monitor digest: {e}")
+    MONITOR_DIGEST_FILE.parent.mkdir(exist_ok=True)
+    if not atomic_json_write(MONITOR_DIGEST_FILE, digest):
+        logger.warning("Could not save monitor digest.")
 
     logger.info(
         f"Web monitor done in {digest['run_duration_seconds']}s — "

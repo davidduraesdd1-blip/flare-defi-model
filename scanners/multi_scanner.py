@@ -5,9 +5,12 @@ to detect cross-platform arbitrage and delta-neutral opportunities.
 """
 
 import logging
+import time
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
 from typing import Optional
+
+import requests
 
 from config import APIS
 from scanners.flare_scanner import fetch_prices as _fetch_flare_prices
@@ -39,19 +42,22 @@ class CrossChainPrice:
     fetched_at:     str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
-def _request(url: str, payload: dict = None, timeout: int = 10) -> Optional[dict]:
-    """HTTP helper: POST when payload is given, GET otherwise."""
-    import requests
-    try:
-        if payload:
-            r = requests.post(url, json=payload, timeout=timeout)
-        else:
-            r = requests.get(url, timeout=timeout)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        logger.debug(f"Request {url} failed: {e}")
-        return None
+def _request(url: str, payload: dict = None, timeout: int = 10, retries: int = 1) -> Optional[dict]:
+    """HTTP helper: POST when payload is given, GET otherwise. Retries once on failure."""
+    for attempt in range(retries + 1):
+        try:
+            if payload:
+                r = requests.post(url, json=payload, timeout=timeout)
+            else:
+                r = requests.get(url, timeout=timeout)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            if attempt < retries:
+                time.sleep(1)
+            else:
+                logger.debug(f"Request {url} failed: {e}")
+    return None
 
 
 # ─── Hyperliquid Perps ────────────────────────────────────────────────────────

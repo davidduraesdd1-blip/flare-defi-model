@@ -62,12 +62,15 @@ PROTOCOLS = {
         "url":      "https://app.blazeswap.xyz",
         "live":     True,
         "risk":     "medium",
+        # baseline_apr = total research estimate (fee + reward); used by subgraph fallback path.
+        # reward_apr   = RFLR incentive portion only (~80% of total); used by GeckoTerminal path
+        #                where live fee APR is computed from 24h volume and added separately.
         "pools": {
-            "WFLR-USD0":  {"baseline_apr": 133.0, "reward_token": "RFLR", "il_risk": "medium"},
-            "FXRP-USD0":  {"baseline_apr": 142.0, "reward_token": "RFLR", "il_risk": "medium"},
-            "sFLR-WFLR":  {"baseline_apr":  37.0, "reward_token": "RFLR", "il_risk": "low"},
-            "WFLR-FXRP":  {"baseline_apr": 148.0, "reward_token": "RFLR", "il_risk": "high"},
-            "HLN-FXRP":   {"baseline_apr": 168.0, "reward_token": "RFLR", "il_risk": "high"},
+            "WFLR-USD0":  {"baseline_apr": 133.0, "reward_apr": 106.0, "reward_token": "RFLR", "il_risk": "medium"},
+            "FXRP-USD0":  {"baseline_apr": 142.0, "reward_apr": 114.0, "reward_token": "RFLR", "il_risk": "medium"},
+            "sFLR-WFLR":  {"baseline_apr":  37.0, "reward_apr":  30.0, "reward_token": "RFLR", "il_risk": "low"},
+            "WFLR-FXRP":  {"baseline_apr": 148.0, "reward_apr": 118.0, "reward_token": "RFLR", "il_risk": "high"},
+            "HLN-FXRP":   {"baseline_apr": 168.0, "reward_apr": 134.0, "reward_token": "RFLR", "il_risk": "high"},
         },
     },
     "sparkdex": {
@@ -76,9 +79,21 @@ PROTOCOLS = {
         "url":      "https://sparkdex.ai",
         "live":     True,
         "risk":     "medium-high",
+        # reward_apr = SPRK incentive portion only; fee APR added live from GeckoTerminal
+        # Pools exist on V3.1 and/or V4; scanner deduplicates by highest TVL at runtime.
         "pools": {
-            "FXRP-USD0":  {"baseline_apr":  50.0, "reward_token": "SPRK", "il_risk": "medium"},
-            "WFLR-USD0":  {"baseline_apr":  50.0, "reward_token": "SPRK", "il_risk": "medium"},
+            "FXRP-USDT0":    {"reward_apr": 12.0, "reward_token": "SPRK", "il_risk": "medium"},
+            "USDT0-WFLR":    {"reward_apr": 10.0, "reward_token": "SPRK", "il_risk": "medium"},
+            "USDC.e-WFLR":   {"reward_apr": 10.0, "reward_token": "SPRK", "il_risk": "medium"},
+            "FXRP-WFLR":     {"reward_apr":  8.0, "reward_token": "SPRK", "il_risk": "medium"},
+            "USDT0-USDC.e":  {"reward_apr":  3.0, "reward_token": "SPRK", "il_risk": "none"},
+            "sFLR-WFLR":     {"reward_apr":  8.0, "reward_token": "SPRK", "il_risk": "low"},
+            "stXRP-FXRP":    {"reward_apr":  8.0, "reward_token": "SPRK", "il_risk": "low"},   # V4 rate (higher of V3.1=6, V4=8)
+            "flrETH-WETH":   {"reward_apr":  5.0, "reward_token": "SPRK", "il_risk": "low"},
+            "WETH-USDT0":    {"reward_apr":  6.0, "reward_token": "SPRK", "il_risk": "medium"},
+            "sFLR-flrETH":   {"reward_apr":  5.0, "reward_token": "SPRK", "il_risk": "low"},
+            "stFLR-WFLR":    {"reward_apr":  8.0, "reward_token": "SPRK", "il_risk": "low"},
+            "WETH-FXRP":     {"reward_apr":  5.0, "reward_token": "SPRK", "il_risk": "high"},
         },
         "perps": {
             "max_leverage": 100,
@@ -92,9 +107,19 @@ PROTOCOLS = {
         "url":      "https://v3.dex.enosys.global",
         "live":     True,
         "risk":     "low-medium",
+        # reward_apr = RFLR incentive portion only; fee APR added live from GeckoTerminal
         "pools": {
-            "sFLR-WFLR":  {"baseline_apr": 43.9,  "reward_token": "RFLR", "il_risk": "low"},
-            "FXRP-USD0":  {"baseline_apr": 50.0,  "reward_token": "RFLR", "il_risk": "medium"},
+            "FXRP-WFLR":     {"reward_apr": 12.0, "reward_token": "RFLR", "il_risk": "medium"},
+            "FXRP-USDT0":    {"reward_apr": 12.0, "reward_token": "RFLR", "il_risk": "medium"},
+            "USDT0-WFLR":    {"reward_apr": 10.0, "reward_token": "RFLR", "il_risk": "medium"},
+            "sFLR-WFLR":     {"reward_apr":  8.0, "reward_token": "RFLR", "il_risk": "low"},
+            "stXRP-FXRP":    {"reward_apr":  6.0, "reward_token": "RFLR", "il_risk": "low"},
+            "CDP-USDT0":     {"reward_apr":  5.0, "reward_token": "RFLR", "il_risk": "high"},
+            "HLN-FXRP":      {"reward_apr":  5.0, "reward_token": "RFLR", "il_risk": "high"},
+            "HLN-USDT0":     {"reward_apr":  5.0, "reward_token": "RFLR", "il_risk": "high"},
+            "HLN-WFLR":      {"reward_apr":  5.0, "reward_token": "RFLR", "il_risk": "high"},
+            "USDT0-APS":     {"reward_apr":  4.0, "reward_token": "RFLR", "il_risk": "high"},
+            "FXRP-APS":      {"reward_apr":  4.0, "reward_token": "RFLR", "il_risk": "high"},
         },
         "daily_rflr_incentives": 333333,
     },

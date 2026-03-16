@@ -9,7 +9,6 @@ import os
 import re
 import smtplib
 import ssl
-import tempfile
 import logging
 import requests
 from pathlib import Path
@@ -20,6 +19,7 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 from config import RISK_PROFILE_NAMES
+from utils.file_io import atomic_json_write
 
 ALERTS_CONFIG_FILE = Path(__file__).parent.parent / "data" / "alerts_config.json"
 # ⚠️  SECURITY: alerts_config.json contains SMTP credentials in plaintext.
@@ -69,20 +69,8 @@ def load_alerts_config() -> dict:
 
 def save_alerts_config(config: dict) -> None:
     """Atomic write: temp file then rename, same pattern as save_history()."""
-    tmp_path = None
-    try:
-        fd, tmp_path = tempfile.mkstemp(dir=ALERTS_CONFIG_FILE.parent, suffix=".tmp")
-        with os.fdopen(fd, "w") as f:
-            json.dump(config, f, indent=2)
-        os.replace(tmp_path, ALERTS_CONFIG_FILE)
+    if atomic_json_write(ALERTS_CONFIG_FILE, config):
         logger.info("Alerts config saved.")
-    except Exception as e:
-        logger.error(f"Could not save alerts config: {e}")
-        if tmp_path:
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
 
 
 # ─── Delivery ─────────────────────────────────────────────────────────────────

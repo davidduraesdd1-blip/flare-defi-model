@@ -197,8 +197,19 @@ if feedback:
     st.markdown("#### Per-Profile Accuracy")
 
     from config import RISK_PROFILE_NAMES, RISK_PROFILES
+
+    # Toggle between 24h and 7d accuracy windows (upgrade #11)
+    acc_window = st.radio(
+        "Evaluation window",
+        ["24h", "7d"],
+        horizontal=True,
+        key="acc_window",
+        help="24h: accuracy vs next-day actuals. 7d: accuracy vs 7-day actuals.",
+    )
+    profile_data = feedback["per_profile"] if acc_window == "24h" else feedback.get("per_profile_7d", feedback["per_profile"])
+
     for p in RISK_PROFILE_NAMES:
-        acc   = feedback["per_profile"].get(p, {})
+        acc   = profile_data.get(p, {})
         pcfg  = RISK_PROFILES[p]
         pcol  = pcfg["color"]
         grade = acc.get("grade", "N/A")
@@ -206,7 +217,7 @@ if feedback:
         msg   = acc.get("message", "Building history…")
         acc_pct = acc.get("accuracy_pct")
         err_pct = acc.get("avg_error_pct")
-        win_rt  = acc.get("win_rate")
+        dir_pct = acc.get("directional_pct")   # upgrade #10
         sc      = acc.get("sample_count", 0)
 
         sc_color = "#10b981" if score >= 70 else ("#f59e0b" if score >= 45 else "#ef4444")
@@ -220,7 +231,7 @@ if feedback:
             f"<span>Score: <span style='color:{sc_color}; font-weight:700;'>{score}/100</span></span>"
             f"{'<span>Accuracy: <span style=color:#94a3b8>' + str(acc_pct) + '%</span></span>' if acc_pct is not None else ''}"
             f"{'<span>Avg error: <span style=color:#94a3b8>' + str(err_pct) + '%</span></span>' if err_pct is not None else ''}"
-            f"{'<span>Win rate: <span style=color:#94a3b8>' + str(win_rt) + '%</span></span>' if win_rt is not None else ''}"
+            f"{'<span>Directional: <span style=color:#94a3b8>' + str(dir_pct) + '%</span></span>' if dir_pct is not None else ''}"
             f"<span style='color:#334155;'>{sc} samples</span>"
             f"</div></div>"
             f"<div style='color:#475569; font-size:0.82rem; margin-top:8px;'>{msg}</div>"

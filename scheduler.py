@@ -9,8 +9,6 @@ import json
 import logging
 import logging.handlers
 import sys
-import os
-import tempfile
 import time
 import threading
 from dataclasses import asdict
@@ -40,6 +38,7 @@ from ai.feedback_loop         import (
     update_model_weights, load_history, save_history
 )
 from ai.alerts                import check_and_send_alerts
+from utils.file_io            import atomic_json_write
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 _log_file = Path(__file__).parent / "data" / "scheduler.log"
@@ -98,19 +97,7 @@ def _load_quick_cache() -> dict:
 
 
 def _save_quick_cache(data: dict) -> None:
-    tmp_path = None
-    try:
-        fd, tmp_path = tempfile.mkstemp(dir=QUICK_CACHE_FILE.parent, suffix=".tmp")
-        with os.fdopen(fd, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(tmp_path, QUICK_CACHE_FILE)
-    except Exception as e:
-        logger.debug(f"Could not save quick check cache: {e}")
-        if tmp_path:
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
+    atomic_json_write(QUICK_CACHE_FILE, data)
 
 
 # ─── Lightweight Intraday Alert Check ─────────────────────────────────────────

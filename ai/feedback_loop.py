@@ -7,18 +7,19 @@ a simple health score (0–100) for display in the UI.
 
 import json
 import logging
-import tempfile
-import os
 import numpy as np
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from config import HISTORY_FILE, ACCURACY_LOOKBACK_DAYS, HISTORY_MAX_RUNS, RISK_PROFILE_NAMES
+from utils.file_io import atomic_json_write
 
 logger = logging.getLogger(__name__)
 
 LOOKBACK_DAYS   = ACCURACY_LOOKBACK_DAYS   # rolling window for accuracy scoring
 MIN_SAMPLES     = 3                         # need at least this many completed predictions to score
+EVAL_WINDOW_24H = 12 * 3600                 # evaluate prediction after 12h (captures 24h cycle)
+EVAL_WINDOW_7D  = 6 * 24 * 3600            # evaluate again after 6 days (captures 7-day window)
 
 
 # ─── History I/O ─────────────────────────────────────────────────────────────
@@ -37,19 +38,7 @@ def load_history() -> dict:
 
 def save_history(history: dict) -> None:
     """Atomic write: write to temp file then rename to prevent corruption on crash."""
-    dir_path = HISTORY_FILE.parent
-    try:
-        fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
-        with os.fdopen(fd, "w") as f:
-            json.dump(history, f, indent=2)
-        os.replace(tmp_path, HISTORY_FILE)
-    except Exception as e:
-        logger.error(f"Failed to save history.json: {e}")
-        # Clean up temp file if rename failed
-        try:
-            os.unlink(tmp_path)
-        except Exception:
-            pass
+    atomic_json_write(HISTORY_FILE, history)
 
 
 def _default_weights() -> dict:
@@ -69,11 +58,14 @@ def record_prediction(model_results: dict) -> None:
     """
     history = load_history()
 
+    now = datetime.utcnow()
     prediction = {
-        "id":           datetime.utcnow().isoformat(),
-        "timestamp":    datetime.utcnow().isoformat(),
-        "due_date":     (datetime.utcnow() + timedelta(days=1)).isoformat(),
-        "evaluated":    False,
+        "id":              now.isoformat(),
+        "timestamp":       now.isoformat(),
+        "due_date":        (now + timedelta(days=1)).isoformat(),
+        "due_date_7d":     (now + timedelta(days=7)).isoformat(),
+        "evaluated":       False,
+        "evaluated_7d":    False,
         "profiles": {}
     }
 
@@ -93,11 +85,13 @@ def record_prediction(model_results: dict) -> None:
 
     history["predictions"].append(prediction)
 
-    # Keep only last 90 days of predictions
-    cutoff = (datetime.utcnow() - timedelta(days=90)).isoformat()
-    history["predictions"] = [
-        p for p in history["predictions"] if p["timestamp"] >= cutoff
-    ]
+    # Keep only last 90 days of predictions; prune only when over-limit to avoid
+    # scanning the full list on every append (2 scans/day × 90 days = ~180 max)
+    if len(history["predictions"]) > 200:
+        cutoff = (datetime.utcnow() - timedelta(days=90)).isoformat()
+        history["predictions"] = [
+            p for p in history["predictions"] if p["timestamp"] >= cutoff
+        ]
 
     save_history(history)
     logger.info(f"Prediction recorded: {prediction['id']}")
@@ -114,92 +108,116 @@ def record_actuals(scan_result: dict) -> None:
     history = load_history()
     now     = datetime.utcnow()
 
-    # Find unevaluated predictions older than 12 hours
+    # Build lookup from current scan data
+    current_pools   = {p["pool_name"]: p["apr"]       for p in scan_result.get("pools", [])}
+    current_lending = {r["asset"]:     r["supply_apy"] for r in scan_result.get("lending", [])}
+    current_staking = {s["token"]:     s["apy"]        for s in scan_result.get("staking", [])}
+    all_actuals = {**current_pools, **current_lending, **current_staking}
+
     for pred in history["predictions"]:
-        if pred.get("evaluated"):
-            continue
         pred_time = datetime.fromisoformat(pred["timestamp"])
-        if (now - pred_time).total_seconds() < 12 * 3600:
-            continue
+        age_secs  = (now - pred_time).total_seconds()
 
-        # Match current scan data to predicted pools
-        current_pools   = {p["pool_name"]: p["apr"]   for p in scan_result.get("pools", [])}
-        current_lending = {r["asset"]:     r["supply_apy"] for r in scan_result.get("lending", [])}
-        current_staking = {s["token"]:     s["apy"]    for s in scan_result.get("staking", [])}
+        # ── 24h evaluation ────────────────────────────────────────────────────
+        if not pred.get("evaluated") and age_secs >= EVAL_WINDOW_24H:
+            _apply_actuals(pred, all_actuals, window="24h")
+            pred["evaluated"]    = True
+            pred["evaluated_at"] = now.isoformat()
 
-        all_actuals = {**current_pools, **current_lending, **current_staking}
-
-        for profile, picks in pred["profiles"].items():
-            for pick in picks:
-                pool_key  = pick.get("pool", "")
-                actual    = all_actuals.get(pool_key)
-                predicted = pick.get("predicted_apy", 0)
-
-                if actual is not None and predicted and predicted > 0:
-                    error_pct = abs(actual - predicted) / predicted * 100
-                    pick["actual_apy"]   = actual
-                    pick["error_pct"]    = round(error_pct, 2)
-                    pick["accurate"]     = error_pct < 20.0  # within 20% = accurate
-                else:
-                    pick["actual_apy"]   = None
-                    pick["error_pct"]    = None
-                    pick["accurate"]     = None
-
-        pred["evaluated"]   = True
-        pred["evaluated_at"] = now.isoformat()
+        # ── 7-day evaluation ──────────────────────────────────────────────────
+        if not pred.get("evaluated_7d") and age_secs >= EVAL_WINDOW_7D:
+            _apply_actuals(pred, all_actuals, window="7d")
+            pred["evaluated_7d"]    = True
+            pred["evaluated_7d_at"] = now.isoformat()
 
     save_history(history)
     logger.info("Actuals recorded and predictions evaluated.")
 
 
+# ─── Internal helper ─────────────────────────────────────────────────────────
+
+def _apply_actuals(pred: dict, all_actuals: dict, window: str) -> None:
+    """
+    Write actual APY and accuracy fields into each pick.
+    window="24h" writes to pick["actual_apy"] / pick["error_pct"] / pick["accurate"] / pick["directional"]
+    window="7d"  writes to pick["actual_apy_7d"] / pick["error_pct_7d"] / pick["accurate_7d"] / pick["directional_7d"]
+    """
+    suffix = "" if window == "24h" else "_7d"
+    for profile_picks in pred["profiles"].values():
+        for pick in profile_picks:
+            pool_key  = pick.get("pool", "")
+            actual    = all_actuals.get(pool_key)
+            predicted = pick.get("predicted_apy", 0)
+
+            if actual is not None and predicted and predicted > 0:
+                error_pct = abs(actual - predicted) / predicted * 100
+                pick[f"actual_apy{suffix}"]  = actual
+                pick[f"error_pct{suffix}"]   = round(error_pct, 2)
+                pick[f"accurate{suffix}"]    = error_pct < 20.0
+                pick[f"directional{suffix}"] = actual >= predicted   # upgrade #10
+            else:
+                pick[f"actual_apy{suffix}"]  = None
+                pick[f"error_pct{suffix}"]   = None
+                pick[f"accurate{suffix}"]    = None
+                pick[f"directional{suffix}"] = None
+
+
 # ─── Compute Model Accuracy ───────────────────────────────────────────────────
 
-def compute_accuracy(profile: str, history: dict = None) -> dict:
+def compute_accuracy(profile: str, history: dict = None, window: str = "24h") -> dict:
     """
-    Compute rolling 30-day accuracy metrics for a given risk profile.
+    Compute rolling accuracy metrics for a given risk profile.
+
+    window="24h"  — uses 24h evaluation fields (default, existing behaviour)
+    window="7d"   — uses 7-day evaluation fields (upgrade #11)
+
     Returns a dict with:
-        - accuracy_pct:   % of predictions within 20% of actual
-        - avg_error_pct:  mean absolute error %
-        - win_rate:       % of picks where actual >= predicted
-        - sample_count:   number of evaluated predictions
-        - grade:          A/B/C/D/F
-        - health_score:   0–100 for UI display
+        - accuracy_pct:        % of predictions within 20% of actual
+        - avg_error_pct:       mean absolute error %
+        - win_rate:            % of picks where actual >= predicted
+        - directional_pct:     % of picks where direction was correct (upgrade #10)
+        - sample_count:        number of evaluated predictions
+        - grade:               A/B/C/D/F
+        - health_score:        0–100 for UI display
     """
     if history is None:
         history = load_history()
+
+    suffix   = "" if window == "24h" else "_7d"
+    eval_key = "evaluated" if window == "24h" else "evaluated_7d"
     cutoff   = (datetime.utcnow() - timedelta(days=LOOKBACK_DAYS)).isoformat()
 
     evaluated = [
         p for p in history["predictions"]
-        if p.get("evaluated") and p["timestamp"] >= cutoff
+        if p.get(eval_key) and p["timestamp"] >= cutoff
     ]
 
     picks = []
     for pred in evaluated:
         for pick in pred["profiles"].get(profile, []):
-            if pick.get("error_pct") is not None:
+            if pick.get(f"error_pct{suffix}") is not None:
                 picks.append(pick)
 
     if len(picks) < MIN_SAMPLES:
         return {
-            "accuracy_pct":  None,
-            "avg_error_pct": None,
-            "win_rate":      None,
-            "sample_count":  len(picks),
-            "grade":         "N/A",
-            "health_score":  50,    # neutral while building history
-            "message":       f"Building accuracy history ({len(picks)}/{MIN_SAMPLES} samples). Check back after a few days.",
+            "accuracy_pct":    None,
+            "avg_error_pct":   None,
+            "win_rate":        None,
+            "directional_pct": None,
+            "sample_count":    len(picks),
+            "grade":           "N/A",
+            "health_score":    50,
+            "message":         f"Building accuracy history ({len(picks)}/{MIN_SAMPLES} samples). Check back after a few days.",
         }
 
-    errors    = [p["error_pct"] for p in picks if p["error_pct"] is not None]
-    accurate  = [p for p in picks if p.get("accurate")]
-    wins      = [p for p in picks if p.get("actual_apy") is not None
-                 and p.get("predicted_apy") is not None
-                 and p["actual_apy"] >= p["predicted_apy"]]
+    errors      = [p[f"error_pct{suffix}"]  for p in picks if p.get(f"error_pct{suffix}") is not None]
+    accurate    = [p for p in picks if p.get(f"accurate{suffix}")]
+    directional = [p for p in picks if p.get(f"directional{suffix}")]   # upgrade #10
 
-    accuracy_pct  = len(accurate) / len(picks) * 100 if picks else 0
-    avg_error     = np.mean(errors) if errors else 0
-    win_rate      = len(wins) / len(picks) * 100 if picks else 0
+    accuracy_pct     = len(accurate)    / len(picks) * 100 if picks else 0
+    directional_pct  = len(directional) / len(picks) * 100 if picks else 0   # upgrade #10
+    avg_error        = np.mean(errors)  if errors else 0
+    win_rate         = directional_pct   # win_rate = directional accuracy
 
     # Grade
     if accuracy_pct >= 80:
@@ -221,13 +239,14 @@ def compute_accuracy(profile: str, history: dict = None) -> dict:
     ))
 
     return {
-        "accuracy_pct":  round(accuracy_pct, 1),
-        "avg_error_pct": round(avg_error, 1),
-        "win_rate":      round(win_rate, 1),
-        "sample_count":  len(picks),
-        "grade":         grade,
-        "health_score":  health_score,
-        "message":       _health_message(health_score, grade),
+        "accuracy_pct":    round(accuracy_pct, 1),
+        "avg_error_pct":   round(avg_error, 1),
+        "win_rate":        round(win_rate, 1),
+        "directional_pct": round(directional_pct, 1),   # upgrade #10
+        "sample_count":    len(picks),
+        "grade":           grade,
+        "health_score":    health_score,
+        "message":         _health_message(health_score, grade),
     }
 
 
@@ -278,14 +297,18 @@ def get_feedback_dashboard() -> dict:
     pred_count = len(history["predictions"])
     evaluated  = len([p for p in history["predictions"] if p.get("evaluated")])
 
-    # Per-profile accuracy (reuse already-loaded history)
-    accuracy = {
-        profile: compute_accuracy(profile, history=history)
+    # Per-profile accuracy — 24h and 7d windows (reuse already-loaded history)
+    accuracy_24h = {
+        profile: compute_accuracy(profile, history=history, window="24h")
+        for profile in RISK_PROFILE_NAMES
+    }
+    accuracy_7d = {
+        profile: compute_accuracy(profile, history=history, window="7d")
         for profile in RISK_PROFILE_NAMES
     }
 
-    # Overall health = average of the three health scores
-    scores = [accuracy[p]["health_score"] for p in accuracy]
+    # Overall health = average of the three 24h health scores
+    scores = [accuracy_24h[p]["health_score"] for p in accuracy_24h]
     overall_health = int(np.mean(scores))
 
     # Trend (reuse already-loaded history)
@@ -295,7 +318,8 @@ def get_feedback_dashboard() -> dict:
         "overall_health":  overall_health,
         "total_scans":     pred_count,
         "evaluated_scans": evaluated,
-        "per_profile":     accuracy,
+        "per_profile":     accuracy_24h,      # default (24h) for existing UI
+        "per_profile_7d":  accuracy_7d,       # upgrade #11
         "model_weights":   history.get("model_weights", _default_weights()),
         "trend":           trend,
         "last_updated":    datetime.utcnow().isoformat(),
