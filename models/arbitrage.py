@@ -45,18 +45,18 @@ def detect_lending_rate_arb(lending_data: list) -> list:
     opps = []
     by_asset = {}
     for rate in lending_data:
-        asset = rate["asset"]
-        if asset not in by_asset:
-            by_asset[asset] = []
-        by_asset[asset].append(rate)
+        asset = rate.get("asset", "")
+        if not asset:
+            continue
+        by_asset.setdefault(asset, []).append(rate)
 
     for asset, rates in by_asset.items():
         for lender in rates:
             for borrower in rates:
-                if lender["protocol"] == borrower["protocol"]:
+                if lender.get("protocol") == borrower.get("protocol"):
                     continue
-                borrow_cost = borrower["borrow_apy"]
-                supply_earn = lender["supply_apy"]
+                borrow_cost = borrower.get("borrow_apy", 0)
+                supply_earn = lender.get("supply_apy", 0)
                 if borrow_cost == 0:
                     continue
                 net_profit = supply_earn - borrow_cost - 1.5   # 1.5% buffer: gas + smart contract risk
@@ -65,8 +65,8 @@ def detect_lending_rate_arb(lending_data: list) -> list:
                         strategy="lending_rate",
                         strategy_label="Lending Rate Arbitrage",
                         token_or_pair=asset,
-                        buy_where=f"Borrow on {borrower['protocol']} @ {borrow_cost:.1f}%",
-                        sell_where=f"Supply to {lender['protocol']} @ {supply_earn:.1f}%",
+                        buy_where=f"Borrow on {borrower.get('protocol','?')} @ {borrow_cost:.1f}%",
+                        sell_where=f"Supply to {lender.get('protocol','?')} @ {supply_earn:.1f}%",
                         estimated_profit=round(net_profit, 2),
                         capital_needed=1000,
                         urgency="monitor",
@@ -94,17 +94,19 @@ def detect_cross_dex_arb(pools_data: list) -> list:
     # Group pools by normalised pair name
     by_pair = {}
     for pool in pools_data:
-        pair = frozenset([pool["token0"], pool["token1"]])
-        if pair not in by_pair:
-            by_pair[pair] = []
-        by_pair[pair].append(pool)
+        t0 = pool.get("token0", "")
+        t1 = pool.get("token1", "")
+        if not t0 or not t1:
+            continue
+        pair = frozenset([t0, t1])
+        by_pair.setdefault(pair, []).append(pool)
 
     for pair, pools in by_pair.items():
         if len(pools) < 2:
             continue
         # Compare APRs as a proxy for price inefficiency
         # (a big APR difference on same pair = price gap creating arb)
-        aprs = [(p["protocol"], p["apr"]) for p in pools]
+        aprs = [(p.get("protocol", "?"), p.get("apr", 0)) for p in pools]
         aprs.sort(key=lambda x: x[1])
         low_p, low_apr  = aprs[0]
         high_p, high_apr = aprs[-1]

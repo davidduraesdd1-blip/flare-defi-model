@@ -5,13 +5,13 @@ data for the Black-Scholes options model.
 """
 
 import logging
-import requests
 import numpy as np
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
 from scanners.flare_scanner import fetch_prices as _fetch_flare_prices
+from utils.http import http_get
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +46,11 @@ def fetch_historical_volatility(token_id: str = "ripple", days: int = 30) -> Opt
     Calculate historical volatility from CoinGecko price history.
     Returns annualised volatility as a decimal.
     """
+    url  = f"https://api.coingecko.com/api/v3/coins/{token_id}/market_chart"
+    data = http_get(url, params={"vs_currency": "usd", "days": days}, timeout=10)
+    if not data:
+        return None
     try:
-        url  = f"https://api.coingecko.com/api/v3/coins/{token_id}/market_chart"
-        r    = requests.get(url, params={"vs_currency": "usd", "days": days}, timeout=10)
-        data = r.json()
         prices = [p[1] for p in data.get("prices", []) if p[1] > 0]
         if len(prices) < 2:
             return None
@@ -57,10 +58,9 @@ def fetch_historical_volatility(token_id: str = "ripple", days: int = 30) -> Opt
         daily_vol   = np.std(log_returns)
         if not np.isfinite(daily_vol) or daily_vol == 0:
             return None
-        annual_vol  = daily_vol * np.sqrt(365)
-        return round(float(annual_vol), 4)
+        return round(float(daily_vol * np.sqrt(365)), 4)
     except Exception as e:
-        logger.debug(f"Historical vol fetch failed: {e}")
+        logger.debug(f"Historical vol calculation failed: {e}")
         return None
 
 

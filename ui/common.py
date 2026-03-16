@@ -440,6 +440,7 @@ def save_positions(positions: list) -> None:
     st.cache_data.clear()
 
 
+@st.cache_data(ttl=300)
 def load_wallets() -> list:
     if not WALLETS_FILE.exists():
         return []
@@ -467,6 +468,21 @@ def load_monitor_digest() -> dict:
 
 
 # ─── Utility Helpers ──────────────────────────────────────────────────────────
+
+_URGENCY_COLOR = {"act_now": "#ef4444", "act_soon": "#f59e0b", "monitor": "#3b82f6"}
+_URGENCY_LABEL = {"act_now": "ACT NOW", "act_soon": "ACT SOON", "monitor": "MONITOR"}
+
+
+def render_urgency_badge(urgency: str) -> str:
+    """Return an HTML badge string for arbitrage urgency levels."""
+    color = _URGENCY_COLOR.get(urgency, "#3b82f6")
+    label = _URGENCY_LABEL.get(urgency, urgency.upper())
+    return (
+        f"<span style=\"color:{color}; font-weight:700; font-size:0.78rem; "
+        f"background:rgba(255,255,255,0.04); padding:3px 10px; border-radius:6px;\">"
+        f"{label}</span>"
+    )
+
 
 def _ts_fmt(iso: str) -> str:
     try:

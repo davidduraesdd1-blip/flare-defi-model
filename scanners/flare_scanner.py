@@ -16,7 +16,7 @@ from typing import Optional
 
 from web3 import Web3
 
-from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS
+from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS, FALLBACK_PRICES
 
 logger = logging.getLogger(__name__)
 
@@ -262,13 +262,11 @@ def fetch_prices() -> list:
                 data_source="derived",
             ))
     else:
-        # Fallback: last known reasonable estimates
+        # Fallback: last known reasonable estimates (config.FALLBACK_PRICES)
         logger.warning("CoinGecko unavailable — using price estimates")
         results = [
-            TokenPrice("FLR",  0.020, 0.0, "estimate"),
-            TokenPrice("XRP",  2.20,  0.0, "estimate"),
-            TokenPrice("FXRP", 2.195, 0.0, "estimate"),
-            TokenPrice("USD0", 1.00,  0.0, "estimate"),
+            TokenPrice(sym, price, 0.0, "estimate")
+            for sym, price in FALLBACK_PRICES.items()
         ]
 
     _price_cache    = results
@@ -436,7 +434,7 @@ _ALL_GT_DEX_IDS    = _SPARKDEX_DEX_IDS + _ENOSYS_DEX_IDS + _BLAZESWAP_DEX_IDS
 # Module-level GeckoTerminal cache (TTL 5 min) — pre-warmed before parallel threads
 _gt_cache: dict = {}           # {dex_id: [raw pool data, ...]}
 _gt_cache_ts: float = 0.0
-_GT_CACHE_TTL: int = 300
+_GT_CACHE_TTL: int = 600
 
 
 def _prewarm_gt_cache() -> None:
@@ -631,7 +629,7 @@ def fetch_kinetic_rates() -> list:
             tvl_usd = round(token_amount * token_price, 2)
 
         except Exception as e:
-            logger.debug(f"Kinetic on-chain fetch failed for {asset}: {e} — using baseline")
+            logger.warning(f"Kinetic on-chain fetch failed for {asset}: {e} — using baseline")
             supply_apy  = cfg["baseline_supply"]
             borrow_apy  = cfg["baseline_borrow"]
             utilisation = 0.0   # unknown when using baseline; do not fabricate a value
@@ -883,9 +881,13 @@ def run_flare_scan() -> ScanResult:
 
     logger.info("Starting Flare network scan (parallel fetch)...")
 
-    # Pre-warm caches so parallel threads reuse data without redundant/rate-limited fetches
-    _fetch_defillama_raw()
-    _prewarm_gt_cache()
+    # Pre-warm caches in parallel so main threads reuse data without redundant fetches.
+    # DeFiLlama (~2s) and GeckoTerminal pre-warm (~4s) are independent and can overlap.
+    with ThreadPoolExecutor(max_workers=2) as _warmup:
+        _f_dl = _warmup.submit(_fetch_defillama_raw)
+        _f_gt = _warmup.submit(_prewarm_gt_cache)
+        _f_dl.result()
+        _f_gt.result()
 
     _fetch_map = {
         "prices":    fetch_prices,

@@ -249,9 +249,18 @@ PROTOCOLS = {
     },
 }
 
+# ─── Fallback Prices (used when CoinGecko is unavailable) ────────────────────
+# Update these conservatively whenever prices move significantly (>20%).
+FALLBACK_PRICES = {
+    "FLR":  0.020,
+    "XRP":  2.20,
+    "FXRP": 2.195,   # XRP * 0.998 bridge discount
+    "USD0": 1.00,
+}
+
 # ─── Model Parameters ─────────────────────────────────────────────────────────
 RISK_FREE_RATE    = 0.045   # 4.5% risk-free (US 10-year T-bill proxy); update periodically
-HISTORY_MAX_RUNS  = 60      # maximum scan runs to retain in history.json
+HISTORY_MAX_RUNS  = 14      # keep ~7 days of history at 2 scans/day; older runs archived
 ACCURACY_LOOKBACK_DAYS = 30 # rolling window for AI accuracy scoring
 MAX_KELLY_FRACTION = 0.10   # hard cap on Kelly criterion position size (safety margin)
 

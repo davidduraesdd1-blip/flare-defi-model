@@ -12,7 +12,7 @@ from ui.common import (
     page_setup, render_sidebar, load_latest, load_positions,
     render_price_strip, render_incentive_warning,
     render_yield_hero_cards, render_opportunity_card,
-    _ts_fmt,
+    render_urgency_badge, _ts_fmt,
 )
 import streamlit as st
 
@@ -114,16 +114,11 @@ else:
         label         = arb.get("strategy_label", arb.get("strategy", "Arb"))
         desc          = arb.get("plain_english", "—")
         token         = arb.get("token_or_pair", "—")
-        urgency_color = {"act_now": "#ef4444", "act_soon": "#f59e0b", "monitor": "#3b82f6"}.get(urgency, "#3b82f6")
-        urgency_label = {"act_now": "ACT NOW", "act_soon": "ACT SOON", "monitor": "MONITOR"}.get(urgency, urgency.upper())
         st.markdown(f"""
         <div class="arb-tag">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-weight:700; color:#f1f5f9;">⚡ {label} · {token}</span>
-                <span style="color:{urgency_color}; font-weight:700; font-size:0.78rem;
-                      background:rgba(255,255,255,0.04); padding:3px 10px; border-radius:6px;">
-                    {urgency_label}
-                </span>
+                {render_urgency_badge(urgency)}
             </div>
             <div style="color:#94a3b8; font-size:0.88rem; margin-top:8px;">{desc}</div>
             <div style="color:#475569; font-size:0.8rem; margin-top:8px;">

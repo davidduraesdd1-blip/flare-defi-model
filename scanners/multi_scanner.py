@@ -5,15 +5,12 @@ to detect cross-platform arbitrage and delta-neutral opportunities.
 """
 
 import logging
-import time
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
-from typing import Optional
 
-import requests
-
-from config import APIS
+from config import APIS, FALLBACK_PRICES
 from scanners.flare_scanner import fetch_prices as _fetch_flare_prices
+from utils.http import http_get, http_post
 
 logger = logging.getLogger(__name__)
 
@@ -42,24 +39,6 @@ class CrossChainPrice:
     fetched_at:     str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
-def _request(url: str, payload: dict = None, timeout: int = 10, retries: int = 1) -> Optional[dict]:
-    """HTTP helper: POST when payload is given, GET otherwise. Retries once on failure."""
-    for attempt in range(retries + 1):
-        try:
-            if payload:
-                r = requests.post(url, json=payload, timeout=timeout)
-            else:
-                r = requests.get(url, timeout=timeout)
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:
-            if attempt < retries:
-                time.sleep(1)
-            else:
-                logger.debug(f"Request {url} failed: {e}")
-    return None
-
-
 # ─── Hyperliquid Perps ────────────────────────────────────────────────────────
 
 def fetch_hyperliquid_perps() -> list:
@@ -67,7 +46,7 @@ def fetch_hyperliquid_perps() -> list:
     Fetch FXRP/USDC perpetual data from Hyperliquid.
     Hyperliquid has a public REST API — no key needed.
     """
-    data = _request(APIS["hyperliquid_info"], payload={"type": "metaAndAssetCtxs"})
+    data = http_post(APIS["hyperliquid_info"], {"type": "metaAndAssetCtxs"})
     results = []
 
     if data and isinstance(data, list) and len(data) >= 2:
@@ -102,8 +81,8 @@ def fetch_hyperliquid_perps() -> list:
         results.append(PerpData(
             exchange="hyperliquid",
             pair="FXRP/USDC",
-            mark_price=2.20,
-            index_price=2.20,
+            mark_price=FALLBACK_PRICES["FXRP"],
+            index_price=FALLBACK_PRICES["FXRP"],
             funding_rate=0.0001,
             funding_rate_annualised=round(0.0001 * 3 * 365 * 100, 4),
             open_interest=0,
@@ -144,7 +123,7 @@ def fetch_cross_chain_prices() -> list:
     """
     prices      = _fetch_flare_prices()
     xrp_entry   = next((p for p in prices if p.symbol == "XRP"), None)
-    xrp_price   = xrp_entry.price_usd   if xrp_entry else 2.20
+    xrp_price   = xrp_entry.price_usd   if xrp_entry else FALLBACK_PRICES["XRP"]
     data_source = xrp_entry.data_source if xrp_entry else "estimate"
 
     return [

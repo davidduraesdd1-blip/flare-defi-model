@@ -11,6 +11,7 @@ import logging.handlers
 import sys
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -296,13 +297,15 @@ def run_full_scan() -> None:
     logger.info("=" * 60)
 
     try:
-        # ── Step 1: Scan protocols ────────────────────────────────────────
-        logger.info("Step 1/9 — Scanning Flare network protocols...")
-        flare_scan = run_flare_scan()
-
-        # ── Step 2: Multi-platform scan ───────────────────────────────────
-        logger.info("Step 2/9 — Scanning multi-platform data...")
-        multi_scan = run_multi_scan()
+        # ── Steps 1+2+5a: Independent data fetches — run in parallel ─────
+        logger.info("Steps 1-2 — Scanning Flare network + multi-platform + volatility data in parallel...")
+        with ThreadPoolExecutor(max_workers=3) as _data_pool:
+            _f_flare = _data_pool.submit(run_flare_scan)
+            _f_multi = _data_pool.submit(run_multi_scan)
+            _f_vol   = _data_pool.submit(fetch_volatility_data)
+            flare_scan = _f_flare.result()
+            multi_scan = _f_multi.result()
+            vol_data   = _f_vol.result()
 
         # ── Step 3: Risk models ───────────────────────────────────────────
         logger.info("Step 3/9 — Running risk models...")
@@ -315,7 +318,6 @@ def run_full_scan() -> None:
 
         # ── Step 5: Options analysis ──────────────────────────────────────
         logger.info("Step 5/9 — Running options analysis...")
-        vol_data = fetch_volatility_data()
         options_results = {}
         for profile in RISK_PROFILE_NAMES:
             options_results[profile] = run_options_analysis(vol_data, profile)
@@ -337,7 +339,7 @@ def run_full_scan() -> None:
         try:
             check_and_send_alerts(model_results, arb_results)
         except Exception as _ae:
-            logger.debug(f"Alert check skipped (non-critical): {_ae}")
+            logger.warning(f"Alert check failed: {_ae}")
 
         # ── Assemble and save full result ─────────────────────────────────
         run_end = datetime.utcnow()
