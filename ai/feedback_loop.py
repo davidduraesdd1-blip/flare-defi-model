@@ -7,6 +7,7 @@ a simple health score (0–100) for display in the UI.
 
 import json
 import logging
+import math
 import numpy as np
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -17,9 +18,10 @@ from utils.file_io import atomic_json_write
 logger = logging.getLogger(__name__)
 
 LOOKBACK_DAYS   = ACCURACY_LOOKBACK_DAYS   # rolling window for accuracy scoring
-MIN_SAMPLES     = 3                         # need at least this many completed predictions to score
-EVAL_WINDOW_24H = 12 * 3600                 # evaluate prediction after 12h (captures 24h cycle)
-EVAL_WINDOW_7D  = 6 * 24 * 3600            # evaluate again after 6 days (captures 7-day window)
+MIN_SAMPLES     = 2                         # minimum evaluated predictions before scoring activates
+EVAL_WINDOW_24H = 3 * 3600                  # first evaluation at 3h — quick checks fire this every cycle
+EVAL_WINDOW_7D  = 3 * 24 * 3600            # second evaluation at 3 days (was 6 days)
+_EXP_HALF_LIFE  = 14.0                      # exponential time-weight half-life in days: recent picks count more
 
 
 # ─── History I/O ─────────────────────────────────────────────────────────────
@@ -192,32 +194,46 @@ def compute_accuracy(profile: str, history: dict = None, window: str = "24h") ->
         if p.get(eval_key) and p["timestamp"] >= cutoff
     ]
 
-    picks = []
+    # Time-weight each pick: recent predictions count more (exponential decay by age)
+    now_ts = datetime.utcnow()
+    w_accurate    = 0.0
+    w_directional = 0.0
+    w_total       = 0.0
+    weighted_errors: list = []
+    raw_count     = 0
+
     for pred in evaluated:
+        age_days = max(0.0, (now_ts - datetime.fromisoformat(pred["timestamp"])).total_seconds() / 86400)
+        weight   = math.exp(-age_days / _EXP_HALF_LIFE)
         for pick in pred["profiles"].get(profile, []):
             if pick.get(f"error_pct{suffix}") is not None:
-                picks.append(pick)
+                raw_count  += 1
+                w_total    += weight
+                if pick.get(f"accurate{suffix}"):
+                    w_accurate += weight
+                if pick.get(f"directional{suffix}"):
+                    w_directional += weight
+                weighted_errors.append((pick[f"error_pct{suffix}"], weight))
 
-    if len(picks) < MIN_SAMPLES:
+    if raw_count < MIN_SAMPLES:
         return {
             "accuracy_pct":    None,
             "avg_error_pct":   None,
             "win_rate":        None,
             "directional_pct": None,
-            "sample_count":    len(picks),
+            "sample_count":    raw_count,
             "grade":           "N/A",
             "health_score":    50,
-            "message":         f"Building accuracy history ({len(picks)}/{MIN_SAMPLES} samples). Check back after a few days.",
+            "message":         f"Building accuracy history ({raw_count}/{MIN_SAMPLES} samples). Check back soon.",
         }
 
-    errors      = [p[f"error_pct{suffix}"]  for p in picks if p.get(f"error_pct{suffix}") is not None]
-    accurate    = [p for p in picks if p.get(f"accurate{suffix}")]
-    directional = [p for p in picks if p.get(f"directional{suffix}")]   # upgrade #10
-
-    accuracy_pct     = len(accurate)    / len(picks) * 100 if picks else 0
-    directional_pct  = len(directional) / len(picks) * 100 if picks else 0   # upgrade #10
-    avg_error        = np.mean(errors)  if errors else 0
-    win_rate         = directional_pct   # win_rate = directional accuracy
+    accuracy_pct    = w_accurate    / w_total * 100 if w_total > 0 else 0
+    directional_pct = w_directional / w_total * 100 if w_total > 0 else 0
+    avg_error       = (
+        np.average([e for e, _ in weighted_errors], weights=[w for _, w in weighted_errors])
+        if weighted_errors else 0
+    )
+    win_rate        = directional_pct   # win_rate = directional accuracy
 
     # Grade
     if accuracy_pct >= 80:
@@ -242,8 +258,8 @@ def compute_accuracy(profile: str, history: dict = None, window: str = "24h") ->
         "accuracy_pct":    round(accuracy_pct, 1),
         "avg_error_pct":   round(avg_error, 1),
         "win_rate":        round(win_rate, 1),
-        "directional_pct": round(directional_pct, 1),   # upgrade #10
-        "sample_count":    len(picks),
+        "directional_pct": round(directional_pct, 1),
+        "sample_count":    raw_count,
         "grade":           grade,
         "health_score":    health_score,
         "message":         _health_message(health_score, grade),
@@ -274,10 +290,10 @@ def update_model_weights() -> dict:
     for profile in RISK_PROFILE_NAMES:
         acc = compute_accuracy(profile, history=history)
         if acc["accuracy_pct"] is not None:
-            # Normalise: 80% accuracy = weight 1.0, 100% = 1.25, 50% = 0.75
-            new_weight = 0.5 + (acc["accuracy_pct"] / 100) * 0.75
-            # Smooth: 70% old weight + 30% new weight (avoid big swings)
-            weights[profile] = round(0.70 * weights[profile] + 0.30 * new_weight, 4)
+            # Normalise: 80% accuracy → weight 1.0, 100% → 1.35, 50% → 0.65
+            new_weight = 0.35 + (acc["accuracy_pct"] / 100) * 1.0
+            # Smooth: 55% old + 45% new — converges ~2× faster than old 70/30
+            weights[profile] = round(0.55 * weights[profile] + 0.45 * new_weight, 4)
 
     history["model_weights"] = weights
     save_history(history)
@@ -361,3 +377,20 @@ def _compute_trend(history: dict = None) -> str:
     elif recent_err > previous_err * 1.10:
         return "declining"
     return "stable"
+
+
+# ─── Win-Rate Export for Risk Models ─────────────────────────────────────────
+
+def get_profile_win_rates() -> dict:
+    """
+    Return the empirical win-rate (directional accuracy %) for each risk profile.
+    Used by risk_models to set data-driven Kelly win probabilities.
+    Returns {profile: win_rate_decimal} or {} if insufficient data.
+    """
+    history = load_history()
+    rates   = {}
+    for profile in RISK_PROFILE_NAMES:
+        acc = compute_accuracy(profile, history=history, window="24h")
+        if acc["win_rate"] is not None:
+            rates[profile] = round(acc["win_rate"] / 100, 4)   # convert % → decimal
+    return rates

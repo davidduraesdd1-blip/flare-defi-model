@@ -214,12 +214,19 @@ def build_opportunity(
         "Leveraged Yield":      0.45,
         "Perps (Cross-chain)":  0.50,
     }
+    # Use observed APY std dev when enough history exists; fall back to protocol-type prior
     std = _TYPE_STD.get(protocol_type, 0.20)
+    if apy_history and len(apy_history) >= 5:
+        hist_std = float(np.std([h / 100 for h in apy_history]))
+        if hist_std > 0:
+            std = hist_std
     sr  = sharpe_ratio(net_apy / 100, rf_rate, std)   # rf_rate already a decimal
 
-    # Kelly sizing
-    win_p  = 0.65 if il_risk in ("none", "low") else 0.55
-    win_r  = net_apy / 100
+    # Kelly sizing — use feedback-loop win rate when available, else IL-based prior
+    il_prior = 0.65 if il_risk in ("none", "low") else 0.55
+    win_p    = profile_win_rate if profile_win_rate is not None else il_prior
+    win_p    = max(0.35, min(0.80, win_p))   # clamp to sane bounds
+    win_r    = net_apy / 100
     loss_r = il_worst / 100
     kf = kelly_fraction(win_p, win_r, loss_r)
     # Per-profile position cap is applied in optimise_portfolio after normalisation
@@ -364,12 +371,21 @@ def _load_apy_history() -> dict:
         return {}
 
 
-def _build_candidate_list(scan_result: dict, apy_history_map: dict = None) -> list:
+def _build_candidate_list(
+    scan_result: dict,
+    apy_history_map: dict = None,
+    win_rate_map: dict = None,
+) -> list:
     """
     Convert raw scan data into candidate Opportunity objects.
     apy_history_map: {(protocol_name, pool_name): [apy, ...]} for dynamic APY ranges.
+    win_rate_map:    {profile: win_rate_decimal} from feedback loop (used for Kelly).
     """
     apy_history_map = apy_history_map or {}
+    win_rate_map    = win_rate_map    or {}
+    # Candidates are built at "high" profile then cloned per profile in run_all_models;
+    # use the "high" profile win rate for initial Kelly sizing (conservatively)
+    candidate_win_rate = win_rate_map.get("high")
     candidates = []
     rank = 1
 
@@ -395,6 +411,7 @@ def _build_candidate_list(scan_result: dict, apy_history_map: dict = None) -> li
             is_v3=is_v3,
             apy_history=apy_history_map.get((proto_name, pool_name), []),
             reward_apr=pool.get("reward_apr", 0.0),
+            profile_win_rate=candidate_win_rate,
         ))
         rank += 1
 
@@ -452,7 +469,17 @@ def run_all_models(scan_result: dict) -> dict:
     """
     logger.info("Running all three risk models...")
     apy_history_map = _load_apy_history()
-    base_candidates = _build_candidate_list(scan_result, apy_history_map)
+
+    # Pull empirical win rates from the feedback loop (returns {} before enough data)
+    try:
+        from ai.feedback_loop import get_profile_win_rates
+        win_rate_map = get_profile_win_rates()
+        if win_rate_map:
+            logger.debug(f"Feedback win rates: {win_rate_map}")
+    except Exception:
+        win_rate_map = {}
+
+    base_candidates = _build_candidate_list(scan_result, apy_history_map, win_rate_map)
     results = {}
     for profile in RISK_PROFILE_NAMES:
         profiled = [replace(c, risk_profile=profile) for c in base_candidates]

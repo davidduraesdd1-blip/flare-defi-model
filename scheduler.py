@@ -239,6 +239,24 @@ def run_quick_check() -> None:
             "checked_at": now.isoformat(),
         })
 
+        # ── Lightweight feedback loop update ──────────────────────────────
+        # Quick checks run 8×/day and already have fresh pool data.
+        # Feed it into record_actuals + update_model_weights so weights
+        # converge every 3h instead of waiting for the 2×/day full scan.
+        try:
+            from dataclasses import asdict as _asdict
+            from ai.feedback_loop import record_actuals, update_model_weights
+            _quick_scan = {
+                "pools":   [_asdict(p) for p in blaze_pools + spark_pools],
+                "lending": [_asdict(r) for r in kinetic_list],
+                "staking": [],
+            }
+            record_actuals(_quick_scan)
+            update_model_weights()
+            logger.debug("Quick check: feedback loop updated")
+        except Exception as _fe:
+            logger.debug(f"Quick check feedback update failed (non-critical): {_fe}")
+
         # ── Send alerts if any were triggered ────────────────────────────
         if alerts:
             lines = [
