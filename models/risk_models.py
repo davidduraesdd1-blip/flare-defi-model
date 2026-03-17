@@ -217,12 +217,14 @@ def build_opportunity(
     il_exp, il_worst = estimate_il_for_pool(il_risk, is_v3)
     net_apy = max(0, apr - il_exp)
 
-    # Use observed APY std dev when enough history exists; fall back to protocol-type prior
+    # Use observed APY std dev when enough history exists; fall back to protocol-type prior.
+    # Floor at the type prior so near-zero historical std on stable lending pools never
+    # inflates Sharpe to unrealistic levels (measurement-precision artifact).
     std = _TYPE_STD.get(protocol_type, 0.20)
     if apy_history and len(apy_history) >= 5:
         hist_std = float(np.std([h / 100 for h in apy_history]))
         if hist_std > 0:
-            std = hist_std
+            std = max(hist_std, _TYPE_STD.get(protocol_type, 0.20))
     sr  = sharpe_ratio(net_apy / 100, rf_rate, std)   # rf_rate already a decimal
 
     # Kelly sizing — use feedback-loop win rate when available, else IL-based prior
@@ -315,8 +317,15 @@ def optimise_portfolio(candidates: list, risk_profile: str) -> list:
     il_allowed = il_ok.get(profile["max_il_risk"], ["none", "low"])
     filtered   = [o for o in allowed if o.il_risk in il_allowed]
 
-    # Sort by Sharpe ratio descending
-    ranked = sorted(filtered, key=lambda x: x.sharpe_ratio, reverse=True)
+    # Sort by profile-specific metric:
+    #   High risk  → raw APY first, to surface the highest-yielding (and highest-IL) pools
+    #                that are exclusive to this profile and would otherwise never outrank
+    #                the lower-IL pools that also pass the medium filter.
+    #   All others → Sharpe ratio (risk-adjusted return).
+    if risk_profile == "high":
+        ranked = sorted(filtered, key=lambda x: x.estimated_apy, reverse=True)
+    else:
+        ranked = sorted(filtered, key=lambda x: x.sharpe_ratio, reverse=True)
 
     # Protocol concentration cap: max 2 picks from the same protocol
     proto_counts: dict = {}

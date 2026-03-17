@@ -451,8 +451,7 @@ def send_monthly_report() -> None:
 
         for profile in RISK_PROFILE_NAMES:
             opps = models.get(profile, [])
-            label_map = {"conservative": "SAFE (Conservative)", "medium": "BALANCED (Medium)", "high": "AGGRESSIVE (High)"}
-            lines.append(f"\n{label_map[profile]}:")
+            lines.append(f"\n{RISK_PROFILES[profile]['label']} ({profile.capitalize()}):")
             if opps:
                 for i, opp in enumerate(opps[:3], 1):
                     lines.append(

@@ -502,7 +502,7 @@ def render_sidebar() -> dict:
                 st.rerun()
             elif time.time() < st.session_state.get("_scan_deadline", 0):
                 st.caption("⏳ Scanning… auto-reloading when done.")
-                time.sleep(4)
+                time.sleep(2)
                 st.rerun()
             else:
                 st.session_state._scanning = False

@@ -18,7 +18,7 @@ from ui.common import (
     compute_position_pnl, render_opportunity_card, render_section_header,
     _ts_fmt, load_live_prices,
 )
-from config import PROTOCOLS, TOKENS, FLARE_RPC_URLS, INCENTIVE_PROGRAM, RISK_PROFILES, FALLBACK_PRICES
+from config import PROTOCOLS, TOKENS, INCENTIVE_PROGRAM, RISK_PROFILES, FALLBACK_PRICES
 
 page_setup("Portfolio · Flare DeFi")
 
@@ -43,15 +43,8 @@ st.markdown(
 
 def _fetch_wallet_balances(wallet: str) -> list:
     from web3 import Web3
-    w3 = None
-    for url in FLARE_RPC_URLS:
-        try:
-            candidate = Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": 8}))
-            if candidate.is_connected():
-                w3 = candidate
-                break
-        except Exception:
-            continue
+    from scanners.flare_scanner import _get_web3
+    w3 = _get_web3()
     if not w3:
         raise ConnectionError("Could not connect to Flare RPC.")
 
