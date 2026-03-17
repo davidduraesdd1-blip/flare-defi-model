@@ -542,7 +542,8 @@ def start_scheduler() -> None:
     scheduler = BlockingScheduler(timezone=tz)
 
     for t in run_times:
-        hour, minute = t.split(":")
+        parts = t.split(":")
+        hour, minute = parts[0], parts[1] if len(parts) >= 2 else "0"
         scheduler.add_job(
             run_full_scan,
             trigger=CronTrigger(hour=int(hour), minute=int(minute), timezone=tz),

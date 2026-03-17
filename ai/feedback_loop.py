@@ -17,11 +17,12 @@ from utils.file_io import atomic_json_write
 
 logger = logging.getLogger(__name__)
 
-LOOKBACK_DAYS   = ACCURACY_LOOKBACK_DAYS   # rolling window for accuracy scoring
-MIN_SAMPLES     = 2                         # minimum evaluated predictions before scoring activates
-EVAL_WINDOW_24H = 3 * 3600                  # first evaluation at 3h — quick checks fire this every cycle
-EVAL_WINDOW_7D  = 3 * 24 * 3600            # second evaluation at 3 days (was 6 days)
-_EXP_HALF_LIFE  = 14.0                      # exponential time-weight half-life in days: recent picks count more
+LOOKBACK_DAYS      = ACCURACY_LOOKBACK_DAYS  # rolling window for accuracy scoring
+MIN_SAMPLES        = 2                        # minimum evaluated predictions before scoring activates
+EVAL_WINDOW_24H    = 3 * 3600                 # first evaluation at 3h — quick checks fire this every cycle
+EVAL_WINDOW_7D     = 3 * 24 * 3600           # second evaluation at 3 days (was 6 days)
+_EXP_HALF_LIFE     = 14.0                     # exponential time-weight half-life in days: recent picks count more
+_ACCURACY_THRESHOLD = 20.0                    # within 20% of actual APY = "accurate" prediction
 
 
 # ─── History I/O ─────────────────────────────────────────────────────────────
@@ -38,9 +39,13 @@ def load_history() -> dict:
     return {"predictions": [], "actuals": [], "model_weights": _default_weights()}
 
 
-def save_history(history: dict) -> None:
-    """Atomic write: write to temp file then rename to prevent corruption on crash."""
-    atomic_json_write(HISTORY_FILE, history)
+def save_history(history: dict) -> bool:
+    """Atomic write: write to temp file then rename to prevent corruption on crash.
+    Returns True on success, False on failure (error already logged by atomic_json_write)."""
+    ok = atomic_json_write(HISTORY_FILE, history)
+    if not ok:
+        logger.warning("save_history: write failed — history not persisted this cycle")
+    return ok
 
 
 def _default_weights() -> dict:
@@ -155,7 +160,7 @@ def _apply_actuals(pred: dict, all_actuals: dict, window: str) -> None:
                 error_pct = abs(actual - predicted) / predicted * 100
                 pick[f"actual_apy{suffix}"]  = actual
                 pick[f"error_pct{suffix}"]   = round(error_pct, 2)
-                pick[f"accurate{suffix}"]    = error_pct < 20.0
+                pick[f"accurate{suffix}"]    = error_pct < _ACCURACY_THRESHOLD
                 pick[f"directional{suffix}"] = actual >= predicted   # upgrade #10
             else:
                 pick[f"actual_apy{suffix}"]  = None
