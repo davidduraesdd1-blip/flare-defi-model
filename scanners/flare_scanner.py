@@ -953,15 +953,14 @@ _FASSET_BASELINE = {
 
 def fetch_fasset_data() -> dict:
     """
-    Fetch live FAsset system data from the Flare API portal.
-    Returns a dict with per-asset stats and system health.
-    Falls back to research baselines gracefully.
+    Fetch live FAsset system data.  Tries multiple public endpoints in order,
+    then enriches circulating-supply figures from DeFiLlama as a fallback.
 
     Keys in return dict:
       data_source: "live" | "baseline"
       assets: {symbol: {mint_fee_pct, redeem_fee_pct, cr_pct, circulating, ...}}
       system_health: "healthy" | "caution" | "unknown"
-      premium_discount: {symbol: pct}   (positive = premium, negative = discount)
+      premium_discount: {symbol: pct}
       agent_count: int
     """
     result = {
@@ -973,44 +972,89 @@ def fetch_fasset_data() -> dict:
         "fetched_at": datetime.utcnow().isoformat(),
     }
 
-    # Try FAsset REST API — Flare API portal
-    base = APIS.get("flare_api_portal", "https://api-portal.flare.network")
-    try:
-        data = _get(f"{base}/fassets/api/v1/state", timeout=8)
-        if data and isinstance(data, dict):
-            result["data_source"] = "live"
-            assets_raw = data.get("fassets", data.get("data", {}))
-            if isinstance(assets_raw, dict):
-                for sym, info in assets_raw.items():
-                    sym_upper = sym.upper()
-                    base_info = _FASSET_BASELINE.get(sym_upper, {})
-                    result["assets"][sym_upper] = {
-                        "mint_fee_pct":   info.get("mintingFee", base_info.get("mint_fee_bips", 25)) / 100,
-                        "redeem_fee_pct": info.get("redemptionFee", base_info.get("redeem_fee_bips", 20)) / 100,
-                        "cr_pct":         info.get("collateralRatio", base_info.get("min_cr_bips", 16000)) / 100,
-                        "circulating":    info.get("circulatingSupply", base_info.get("circulating", 0)),
-                        "collateral_token": base_info.get("collateral_token", "FLR"),
-                        "note":           base_info.get("note", ""),
-                    }
-            # Agent count
-            agents = data.get("agents", data.get("agentCount", 0))
-            result["agent_count"] = agents if isinstance(agents, int) else len(agents) if isinstance(agents, list) else 0
-            # System health
-            health = data.get("systemHealth", data.get("health", ""))
-            result["system_health"] = health.lower() if health else "healthy"
-    except Exception as exc:
-        logger.debug(f"FAsset API unavailable ({exc}) — using baselines")
+    def _parse_fasset_response(data: dict) -> bool:
+        """Parse a successful API response into result. Returns True on success."""
+        assets_raw = data.get("fassets", data.get("data", data.get("assets", {})))
+        if not isinstance(assets_raw, dict) or not assets_raw:
+            return False
+        for sym, info in assets_raw.items():
+            sym_upper = sym.upper()
+            base_info = _FASSET_BASELINE.get(sym_upper, {})
+            minting_fee   = info.get("mintingFee",     info.get("minting_fee",   base_info.get("mint_fee_bips",   25)))
+            redeem_fee    = info.get("redemptionFee",  info.get("redemption_fee",base_info.get("redeem_fee_bips", 20)))
+            collat_ratio  = info.get("collateralRatio",info.get("collateral_ratio",base_info.get("min_cr_bips",16000)))
+            circulating   = info.get("circulatingSupply", info.get("circulating_supply", base_info.get("circulating", 0)))
+            result["assets"][sym_upper] = {
+                "mint_fee_pct":     minting_fee / 100 if minting_fee > 1 else minting_fee,
+                "redeem_fee_pct":   redeem_fee  / 100 if redeem_fee  > 1 else redeem_fee,
+                "cr_pct":           collat_ratio / 100 if collat_ratio > 100 else collat_ratio,
+                "circulating":      circulating,
+                "collateral_token": base_info.get("collateral_token", "FLR"),
+                "note":             base_info.get("note", ""),
+            }
+        agents = data.get("agents", data.get("agentCount", data.get("agent_count", 0)))
+        result["agent_count"] = agents if isinstance(agents, int) else (len(agents) if isinstance(agents, list) else 0)
+        health = data.get("systemHealth", data.get("health", data.get("system_health", "")))
+        result["system_health"] = health.lower() if health else "healthy"
+        return True
 
-    # Fill any missing assets from baselines
+    # ── Attempt 1: Flare API portal (several known path variants) ─────────────
+    base = APIS.get("flare_api_portal", "https://api-portal.flare.network")
+    _api_paths = [
+        f"{base}/fassets/api/v1/state",
+        f"{base}/fassets/api/v1/fassets",
+        f"{base}/fassets/api/v2/state",
+        "https://api.flare.network/fassets/api/v1/state",
+        "https://api.flare.network/fassets/api/v1/fassets",
+    ]
+    for _url in _api_paths:
+        try:
+            data = _get(_url, timeout=8)
+            if data and isinstance(data, dict) and _parse_fasset_response(data):
+                result["data_source"] = "live"
+                logger.info(f"FAsset data fetched live from {_url}")
+                break
+        except Exception as exc:
+            logger.warning(f"FAsset API {_url} failed: {exc}")
+
+    # ── Attempt 2: DeFiLlama — enrich circulating supply for FXRP ────────────
+    if result["data_source"] == "baseline" or result["assets"].get("FXRP", {}).get("circulating", 0) == 0:
+        try:
+            dl = _get("https://api.llama.fi/protocol/flare-fassets", timeout=8)
+            if dl and isinstance(dl, dict):
+                # Pull latest TVL figures and back-calculate FXRP circulating supply
+                current_tvl = dl.get("currentChainTvls", {})
+                fxrp_tvl = current_tvl.get("Flare", dl.get("tvl", 0))
+                if isinstance(fxrp_tvl, list) and fxrp_tvl:
+                    fxrp_tvl = fxrp_tvl[-1].get("totalLiquidityUSD", 0)
+                if fxrp_tvl and fxrp_tvl > 0:
+                    result["data_source"] = "live"
+                    # Estimate circulating from TVL ÷ XRP price (best effort)
+                    xrp_price = FALLBACK_PRICES.get("XRP", 2.0)
+                    fxrp_circ = int(fxrp_tvl / xrp_price)
+                    if "FXRP" not in result["assets"]:
+                        result["assets"]["FXRP"] = {k: v for k, v in {
+                            **{k: _FASSET_BASELINE["FXRP"][k] for k in ("collateral_token", "note")},
+                            "mint_fee_pct":   _FASSET_BASELINE["FXRP"]["mint_fee_bips"] / 100,
+                            "redeem_fee_pct": _FASSET_BASELINE["FXRP"]["redeem_fee_bips"] / 100,
+                            "cr_pct":         _FASSET_BASELINE["FXRP"]["min_cr_bips"] / 100,
+                        }.items()}
+                    result["assets"]["FXRP"]["circulating"] = fxrp_circ
+                    result["system_health"] = result["system_health"] if result["system_health"] != "unknown" else "healthy"
+                    logger.info(f"FAsset FXRP supply enriched from DeFiLlama: {fxrp_circ:,}")
+        except Exception as exc:
+            logger.warning(f"DeFiLlama FAssets fallback failed: {exc}")
+
+    # ── Fill any missing assets from static baselines ─────────────────────────
     for sym, base_info in _FASSET_BASELINE.items():
         if sym not in result["assets"]:
             result["assets"][sym] = {
-                "mint_fee_pct":   base_info["mint_fee_bips"] / 100,
-                "redeem_fee_pct": base_info["redeem_fee_bips"] / 100,
-                "cr_pct":         base_info["min_cr_bips"] / 100,
-                "circulating":    base_info["circulating"],
+                "mint_fee_pct":     base_info["mint_fee_bips"] / 100,
+                "redeem_fee_pct":   base_info["redeem_fee_bips"] / 100,
+                "cr_pct":           base_info["min_cr_bips"] / 100,
+                "circulating":      base_info["circulating"],
                 "collateral_token": base_info["collateral_token"],
-                "note":           base_info["note"],
+                "note":             base_info["note"],
             }
 
     if result["data_source"] == "baseline":

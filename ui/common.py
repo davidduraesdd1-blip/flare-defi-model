@@ -425,6 +425,117 @@ def _inject_css() -> None:
         .price-chip { padding: 10px 8px; }
         [data-testid="stTabs"] [role="tab"] { font-size: 0.75rem; }
     }
+
+    /* ── Dark-mode legibility lift ────────────────────────────────────── */
+    /* #334155 and #475569 fail WCAG AA on #0d0e14 — lift all inline uses */
+    :is(div,span,p,a)[style*="color:#334155"] { color: #64748b !important; }
+    :is(div,span,p,a)[style*="color:#475569"] { color: #94a3b8 !important; }
+    :is(div,span,p,a)[style*="color:#1e293b"] { color: #475569 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+    # ── Light mode override ────────────────────────────────────────────────────
+    if st.session_state.get("_theme") == "light":
+        st.markdown("""
+<style>
+    /* ── Light Mode Base ──────────────────────────────────────────────── */
+    .stApp, .main { background: #f1f5f9 !important; }
+    [data-testid="stSidebar"] {
+        background: #e8edf5 !important;
+        border-right: 1px solid rgba(0,0,0,0.08) !important;
+    }
+    h1 { color: #0f172a !important; }
+    h2 { color: #1e293b !important; }
+    h3 { color: #475569 !important; }
+
+    /* ── Cards ────────────────────────────────────────────────────────── */
+    .metric-card {
+        background: rgba(255,255,255,0.97) !important;
+        border-color: rgba(0,0,0,0.08) !important;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06),
+                    inset 0 1px 0 rgba(255,255,255,0.8) !important;
+    }
+    .metric-card:hover {
+        box-shadow: 0 8px 28px rgba(0,0,0,0.10),
+                    inset 0 1px 0 rgba(255,255,255,0.9) !important;
+    }
+    .big-number { color: #0f172a !important; }
+    .label { color: #64748b !important; }
+
+    .opp-card {
+        background: rgba(255,255,255,0.95) !important;
+        border-color: rgba(0,0,0,0.07) !important;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.06) !important;
+    }
+    .opp-card:hover {
+        box-shadow: 0 8px 28px rgba(0,0,0,0.10) !important;
+    }
+    .arb-tag {
+        background: rgba(16,185,129,0.07) !important;
+        border-color: rgba(16,185,129,0.22) !important;
+    }
+    .price-chip {
+        background: rgba(255,255,255,0.97) !important;
+        border-color: rgba(0,0,0,0.08) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+    }
+    .warn-box { background: rgba(245,158,11,0.08) !important; }
+
+    /* ── Typography helpers ───────────────────────────────────────────── */
+    .section-header { color: #1e293b !important; border-bottom-color: rgba(109,40,217,0.3) !important; }
+    .section-label  { color: #64748b !important; }
+    .divider { border-top-color: rgba(0,0,0,0.09) !important; }
+    ::-webkit-scrollbar-track { background: #dde3ee; }
+    ::-webkit-scrollbar-thumb { background: #b8c4d6; }
+
+    /* ── Controls ─────────────────────────────────────────────────────── */
+    div[data-testid="stButton"] > button {
+        background: rgba(241,245,249,0.90) !important;
+        color: #1e293b !important;
+        border-color: rgba(0,0,0,0.10) !important;
+    }
+    div[data-testid="stButton"] > button:hover { color: #0f172a !important; }
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextInput"] input {
+        background: rgba(255,255,255,0.97) !important;
+        color: #1e293b !important;
+        border-color: rgba(0,0,0,0.10) !important;
+    }
+    [data-testid="stExpander"] {
+        background: rgba(248,250,252,0.95) !important;
+        border-color: rgba(0,0,0,0.07) !important;
+    }
+    [data-testid="stDataFrame"] table   { background: rgba(255,255,255,0.97) !important; }
+    [data-testid="stDataFrame"] thead tr th {
+        background: rgba(241,245,249,0.98) !important;
+        color: #64748b !important;
+        border-bottom-color: rgba(0,0,0,0.06) !important;
+    }
+    [data-testid="stTabs"] [role="tab"] { color: #64748b !important; }
+    [data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: #6d28d9 !important; }
+    [data-testid="stRadio"] label span,
+    [data-testid="stRadio"] [data-testid="stMarkdownContainer"] p { color: #475569 !important; }
+
+    /* ── Flip light text → dark for light bg ─────────────────────────── */
+    :is(div,span,p,a)[style*="color:#f1f5f9"]  { color: #0f172a !important; }
+    :is(div,span,p,a)[style*="color:#e2e8f0"]  { color: #1e293b !important; }
+    :is(div,span,p,a)[style*="color:#c4cbdb"]  { color: #334155 !important; }
+    :is(div,span,p,a)[style*="color:#cbd5e1"]  { color: #334155 !important; }
+    :is(div,span,p,a)[style*="color:#94a3b8"]  { color: #475569 !important; }
+    :is(div,span,p,a)[style*="color:#64748b"]  { color: #64748b !important; }
+    /* Undo the dark-mode lift rules — #475569 is fine on white */
+    :is(div,span,p,a)[style*="color:#475569"]  { color: #475569 !important; }
+    :is(div,span,p,a)[style*="color:#334155"]  { color: #475569 !important; }
+
+    /* ── Flip dark card backgrounds → white ──────────────────────────── */
+    div[style*="background:rgba(13,14,20"],
+    div[style*="background:rgba(19,20,28"] {
+        background: rgba(255,255,255,0.92) !important;
+        border-color: rgba(0,0,0,0.07) !important;
+    }
+    div[style*="border:1px solid rgba(255,255,255"] {
+        border-color: rgba(0,0,0,0.08) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -446,15 +557,25 @@ def render_sidebar() -> dict:
         st.rerun()
 
     with st.sidebar:
-        st.markdown(
-            "<div style='font-size:1.25rem; font-weight:800; "
-            "background: linear-gradient(90deg, #a78bfa, #60a5fa); "
-            "-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
-            "background-clip: text; letter-spacing:-0.3px; margin-bottom:0px;'>⚡ Flare DeFi</div>"
-            "<div style='font-size:0.68rem; color:#334155; letter-spacing:1.2px; "
-            "text-transform:uppercase; margin-bottom:4px;'>Analytics Dashboard</div>",
-            unsafe_allow_html=True,
-        )
+        _is_light = st.session_state.get("_theme") == "light"
+        _logo_col, _theme_col = st.columns([3, 1])
+        with _logo_col:
+            st.markdown(
+                "<div style='font-size:1.25rem; font-weight:800; "
+                "background: linear-gradient(90deg, #a78bfa, #60a5fa); "
+                "-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
+                "background-clip: text; letter-spacing:-0.3px; margin-bottom:0px;'>⚡ Flare DeFi</div>"
+                "<div style='font-size:0.68rem; letter-spacing:1.2px; "
+                "text-transform:uppercase; margin-bottom:4px;'>Analytics Dashboard</div>",
+                unsafe_allow_html=True,
+            )
+        with _theme_col:
+            st.markdown("<div style='padding-top:6px;'></div>", unsafe_allow_html=True)
+            if st.button("☀" if _is_light else "🌙", key="_theme_toggle",
+                         help="Switch to light mode" if not _is_light else "Switch to dark mode",
+                         use_container_width=True):
+                st.session_state["_theme"] = "dark" if _is_light else "light"
+                st.rerun()
 
         latest    = load_latest()
         last_scan = latest.get("completed_at") or latest.get("run_id")

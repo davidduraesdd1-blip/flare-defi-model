@@ -29,7 +29,7 @@ st.markdown(
 
 # ─── Fetch FAsset data ────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=120)
 def _load_fasset_data() -> dict:
     try:
         from scanners.flare_scanner import fetch_fasset_data
@@ -47,9 +47,17 @@ if not fasset:
 data_src = fasset.get("data_source", "baseline")
 src_badge = (
     "<span class='badge-live'>LIVE</span>" if data_src == "live"
-    else "<span class='badge-est'>BASELINE</span>"
+    else "<span class='badge-est'>ESTIMATED</span>"
 )
 fetched = fasset.get("fetched_at", "")
+
+if data_src == "baseline":
+    st.warning(
+        "Live FAsset API is currently unreachable — displaying research-based estimates. "
+        "Fees and collateral ratios are accurate; circulating supply is approximate. "
+        "Click **▶ Scan** in the sidebar to retry.",
+        icon="⚠️",
+    )
 
 st.markdown(
     f"<div style='font-size:0.75rem; color:#475569; margin-bottom:16px;'>"

@@ -34,55 +34,9 @@ model_data = latest.get("models", {})
 st.markdown("# Opportunities")
 st.markdown(
     "<div style='color:#475569; font-size:0.87rem; margin-bottom:24px;'>"
-    "All ranked opportunities · starter portfolios · APY trends · options strategies</div>",
+    "Starter portfolios · APY trends · options strategies</div>",
     unsafe_allow_html=True,
 )
-
-
-# ─── All Opportunities (all 3 profiles) ──────────────────────────────────────
-
-tab_con, tab_med, tab_high = st.tabs(["🟢  Conservative", "🟡  Balanced", "🔴  Aggressive"])
-
-for tab, p in [(tab_con, "conservative"), (tab_med, "medium"), (tab_high, "high")]:
-    with tab:
-        opps  = model_data.get(p, [])
-        pcfg  = RISK_PROFILES[p]
-        pcol  = pcfg["color"]
-        w     = weight if p == profile else 1.0
-
-        st.markdown(
-            f"<div style='color:{pcol}; font-size:0.88rem; margin-bottom:14px;'>"
-            f"{pcfg['label']} · Target {pcfg['target_apy_low']:.0f}–{pcfg['target_apy_high']:.0f}% APY</div>",
-            unsafe_allow_html=True,
-        )
-
-        if not opps:
-            st.info("No scan data yet. Run `python scheduler.py --now` first.")
-            continue
-
-        view = st.radio("View as", ["Cards", "Table"], key=f"view_{p}", horizontal=True)
-
-        if view == "Cards":
-            for i, opp in enumerate(opps[:6]):
-                render_opportunity_card(opp, i, pcol, portfolio_size, w)
-        else:
-            rows = []
-            for opp in opps[:8]:
-                grade, _ = risk_score_to_grade(opp.get("risk_score", 5))
-                kf       = opp.get("kelly_fraction", 0)
-                rows.append({
-                    "Protocol":    opp.get("protocol", "—"),
-                    "Pool / Asset": opp.get("asset_or_pool", "—"),
-                    "Est. APY":    f"{opp.get('estimated_apy', 0):.1f}%",
-                    "Range":       f"{opp.get('apy_low', 0):.0f}–{opp.get('apy_high', 0):.0f}%",
-                    "Grade":       grade,
-                    "Alloc %":     f"{kf*100:.0f}%",
-                    "$ Amount":    f"${kf*portfolio_size:,.0f}" if portfolio_size > 0 else "—",
-                    "IL Risk":     opp.get("il_risk", "—").upper(),
-                })
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
 # ─── Starter Portfolios ───────────────────────────────────────────────────────
@@ -93,22 +47,30 @@ for p in RISK_PROFILE_NAMES:
     opps = model_data.get(p, [])
     pcfg = RISK_PROFILES[p]
     pcol = pcfg["color"]
+    w    = weight if p == profile else 1.0
     if not opps:
         continue
     with st.expander(f"{pcfg['label']} — {pcfg['target_apy_low']:.0f}–{pcfg['target_apy_high']:.0f}% target"):
-        rows = []
-        for opp in opps[:6]:
-            kf    = opp.get("kelly_fraction", 0)
-            grade, _ = risk_score_to_grade(opp.get("risk_score", 5))
-            rows.append({
-                "Protocol":    opp.get("protocol", "—"),
-                "Pool / Asset": opp.get("asset_or_pool", "—"),
-                "Est. APY":    f"{opp.get('estimated_apy', 0):.1f}%",
-                "Alloc %":     f"{kf*100:.0f}%",
-                "$ Amount":    f"${kf*portfolio_size:,.0f}" if portfolio_size > 0 else "—",
-                "Grade":       grade,
-            })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        view = st.radio("View as", ["Cards", "Table"], key=f"view_{p}", horizontal=True)
+        if view == "Cards":
+            for i, opp in enumerate(opps[:6]):
+                render_opportunity_card(opp, i, pcol, portfolio_size, w)
+        else:
+            rows = []
+            for opp in opps[:8]:
+                kf        = opp.get("kelly_fraction", 0)
+                grade, _  = risk_score_to_grade(opp.get("risk_score", 5))
+                rows.append({
+                    "Protocol":     opp.get("protocol", "—"),
+                    "Pool / Asset": opp.get("asset_or_pool", "—"),
+                    "Est. APY":     f"{opp.get('estimated_apy', 0):.1f}%",
+                    "Range":        f"{opp.get('apy_low', 0):.0f}–{opp.get('apy_high', 0):.0f}%",
+                    "Grade":        grade,
+                    "Alloc %":      f"{kf*100:.0f}%",
+                    "$ Amount":     f"${kf*portfolio_size:,.0f}" if portfolio_size > 0 else "—",
+                    "IL Risk":      opp.get("il_risk", "—").upper(),
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         st.caption(pcfg.get("description", ""))
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
