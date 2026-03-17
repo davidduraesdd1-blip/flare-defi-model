@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import html as _html
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ui.common import page_setup, render_sidebar, load_latest
 from config import RISK_PROFILES, INCENTIVE_PROGRAM
@@ -182,7 +182,7 @@ else:
 
     opps        = latest.get("models", {}).get(report_profile, [])
     profile_cfg = RISK_PROFILES[report_profile]
-    ts          = latest.get("completed_at", datetime.utcnow().isoformat())
+    ts          = latest.get("completed_at", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
     rows_html = ""
     for opp in opps[:6]:
@@ -257,7 +257,7 @@ else:
 </body>
 </html>"""
 
-    fname = f"flare_defi_report_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.html"
+    fname = f"flare_defi_report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.html"
     st.download_button(
         label="Download Report (HTML → Print → Save as PDF)",
         data=html_content,

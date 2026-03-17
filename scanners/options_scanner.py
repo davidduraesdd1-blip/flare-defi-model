@@ -6,7 +6,7 @@ data for the Black-Scholes options model.
 
 import logging
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
@@ -25,7 +25,7 @@ class VolatilityData:
     implied_vol:     float      # from perp funding / price spread
     vol_regime:      str        # "low" / "normal" / "high" / "extreme"
     data_source:     str
-    fetched_at:      str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    fetched_at:      str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 
 @dataclass
@@ -37,7 +37,7 @@ class OptionsOpportunity:
     risk_level:      str        # "low" / "medium" / "high"
     platform:        str
     data_source:     str
-    fetched_at:      str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    fetched_at:      str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 
 # ─── Historical Volatility from Price History ─────────────────────────────────
@@ -241,7 +241,7 @@ def run_options_scan(risk_profile: str = "medium") -> dict:
 
     logger.info(f"Options scan complete — {len(strategies)} strategies for {risk_profile} profile")
     return {
-        "timestamp":   datetime.utcnow().isoformat(),
+        "timestamp":   datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "volatility":  [asdict(v) for v in vol_data],
         "strategies":  [asdict(s) for s in strategies],
         "risk_profile": risk_profile,

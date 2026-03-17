@@ -6,7 +6,7 @@ Returns only real, actionable opportunities above minimum profit thresholds.
 
 import logging
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from config import RISK_PROFILE_NAMES, PROTOCOLS
@@ -32,7 +32,7 @@ class ArbitrageOpportunity:
     risk_level:        str
     applicable_profiles: list   # which risk profiles see this
     data_source:       str
-    found_at:          str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    found_at:          str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 
 # ─── Strategy 1: Lending Rate Arbitrage ──────────────────────────────────────

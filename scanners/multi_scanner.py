@@ -5,7 +5,7 @@ to detect cross-platform arbitrage and delta-neutral opportunities.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
 
 from config import APIS, FALLBACK_PRICES
@@ -26,7 +26,7 @@ class PerpData:
     open_interest:  float
     volume_24h:     float
     data_source:    str
-    fetched_at:     str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    fetched_at:     str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 
 @dataclass
@@ -36,7 +36,7 @@ class CrossChainPrice:
     price_usd:      float
     liquidity_usd:  float
     data_source:    str
-    fetched_at:     str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    fetched_at:     str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 
 # ─── Hyperliquid Perps ────────────────────────────────────────────────────────
@@ -141,7 +141,7 @@ def run_multi_scan() -> dict:
 
     logger.info(f"Multi-scan complete — {len(perps)} perps, {len(prices)} cross-chain prices")
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "perps":     [asdict(p) for p in perps],
         "prices":    [asdict(p) for p in prices],
     }

@@ -14,7 +14,7 @@ import requests
 from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ def test_email(config: dict) -> tuple:
     """Send a test email. Returns (success: bool, message: str)."""
     ok = send_email_alert(
         "⚡ Flare DeFi Model — Test Alert",
-        f"This is a test alert sent at {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}.\n\nIf you received this, email alerts are configured correctly.",
+        f"This is a test alert sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.\n\nIf you received this, email alerts are configured correctly.",
         config,
     )
     return (ok, "Test email sent successfully!" if ok else "Email failed — check SMTP settings and logs.")
@@ -143,7 +143,7 @@ def test_telegram(config: dict) -> tuple:
     """Send a test Telegram message. Returns (success: bool, message: str)."""
     ok = send_telegram_alert(
         f"⚡ <b>Flare DeFi Model — Test Alert</b>\n"
-        f"Sent at {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}.\n"
+        f"Sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.\n"
         f"Telegram alerts are working correctly.",
         config,
     )
@@ -163,7 +163,7 @@ def check_and_send_alerts(model_results: dict, arb_results: dict = None) -> None
     arb_alert  = thresholds.get("new_arb_alert", True)
 
     lines = [
-        f"⚡ Flare DeFi Scan — {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+        f"⚡ Flare DeFi Scan — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
         "",
     ]
     triggered = False
@@ -263,7 +263,7 @@ def calibrate_alert_thresholds() -> dict:
     new_thresh = max(_MIN_APY_FLOOR, min(_MIN_APY_CEILING, new_thresh))
 
     thresholds["min_apy_alert"]         = new_thresh
-    thresholds["_calibrated_at"]        = datetime.utcnow().isoformat()
+    thresholds["_calibrated_at"]        = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     thresholds["_calibration_samples"]  = len(accurate_apys)
     thresholds["_raw_p75_apy"]          = round(p75_apy, 1)
     save_alerts_config(config)

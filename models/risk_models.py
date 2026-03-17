@@ -63,7 +63,7 @@ class Opportunity:
     # TVL velocity (Upgrade #1)
     tvl_velocity:     float = 0.0   # 7-day TVL change %
     tvl_trend:        str  = ""     # "up" / "stable" / "down" / ""
-    generated_at:     str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    generated_at:     str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 
 # ─── Impermanent Loss Formula ─────────────────────────────────────────────────
@@ -242,7 +242,7 @@ def build_opportunity(
         valid_hist = [h / 100 for h in apy_history if h is not None and h >= 0]
         if len(valid_hist) >= 5:
             hist_std = float(np.std(valid_hist))
-            if hist_std > 0:
+            if hist_std > 1e-10:
                 std = max(hist_std, _TYPE_STD.get(protocol_type, 0.20))
     sr  = sharpe_ratio(net_apy / 100, rf_rate, std)   # rf_rate already a decimal
 
@@ -616,7 +616,7 @@ def run_all_models(scan_result: dict) -> dict:
     for profile in RISK_PROFILE_NAMES:
         profiled = [replace(c, risk_profile=profile) for c in base_candidates]
         results[profile] = [asdict(o) for o in optimise_portfolio(profiled, profile)]
-    results["generated_at"]      = datetime.utcnow().isoformat()
+    results["generated_at"]      = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     results["incentive_warning"] = INCENTIVE_PROGRAM["note"]
     logger.info(
         f"Models complete — conservative: {len(results['conservative'])} picks, "

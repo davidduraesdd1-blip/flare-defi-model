@@ -10,7 +10,7 @@ import html as _html
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
@@ -81,10 +81,15 @@ with st.expander("Connect a wallet (read-only)"):
     with cb:
         if st.button("Add", key="add_wallet_btn", use_container_width=True):
             if new_addr and len(new_addr) == 42 and new_addr.startswith("0x"):
-                label = new_label.strip() or f"{new_addr[:6]}…{new_addr[-4:]}"
-                saved_wallets.append({"label": label, "address": new_addr})
-                save_wallets(saved_wallets)
-                st.rerun()
+                try:
+                    from web3 import Web3
+                    Web3.to_checksum_address(new_addr)
+                    label = new_label.strip() or f"{new_addr[:6]}…{new_addr[-4:]}"
+                    saved_wallets.append({"label": label, "address": new_addr})
+                    save_wallets(saved_wallets)
+                    st.rerun()
+                except Exception:
+                    st.warning("Invalid address — failed checksum validation.")
             else:
                 st.warning("Enter a valid 42-character 0x address.")
 
@@ -106,8 +111,9 @@ with st.expander("Connect a wallet (read-only)"):
                         st.error(f"Error: {e}")
         with col_remove:
             if st.button("Remove", key="remove_wallet_btn", use_container_width=True):
-                saved_wallets.pop(sel_idx)
-                save_wallets(saved_wallets)
+                if sel_idx < len(saved_wallets):
+                    saved_wallets.pop(sel_idx)
+                    save_wallets(saved_wallets)
                 st.rerun()
     else:
         st.caption("Add a wallet address above to start tracking.")
@@ -190,8 +196,9 @@ if positions:
             </div>""", unsafe_allow_html=True)
         with col_del:
             if st.button("✕", key=f"del_pos_{idx}", help="Remove position"):
-                positions.pop(idx)
-                save_positions(positions)
+                if idx < len(positions):
+                    positions.pop(idx)
+                    save_positions(positions)
                 st.rerun()
 
 else:
@@ -235,7 +242,7 @@ with st.expander("➕ Track a New Position"):
                 st.error("Pool / Asset name is required.")
             else:
                 positions.append({
-                    "id":             f"pos_{int(datetime.utcnow().timestamp())}",
+                    "id":             f"pos_{int(datetime.now(timezone.utc).timestamp())}",
                     "protocol":       proto_key,
                     "pool":           pool_name,
                     "position_type":  pos_type,
@@ -265,7 +272,7 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 render_section_header("Exit Strategy", "Incentive expiry countdown · price targets · exit timeline")
 
 incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"], "%Y-%m-%d")
-days_left        = max(0, (incentive_expiry - datetime.utcnow()).days)
+days_left        = max(0, (incentive_expiry - datetime.now(timezone.utc).replace(tzinfo=None)).days)
 exp_color        = "#10b981" if days_left > 90 else ("#f59e0b" if days_left > 30 else "#ef4444")
 exp_msg          = (
     "Monitor monthly. Consider setting a reminder for May 2026."
@@ -326,7 +333,7 @@ with tab_timeline:
             days_held = 0
             if pos.get("entry_date"):
                 try:
-                    days_held = max(0, (datetime.utcnow() - datetime.fromisoformat(pos["entry_date"])).days)
+                    days_held = max(0, (datetime.now(timezone.utc).replace(tzinfo=None) - datetime.fromisoformat(pos["entry_date"])).days)
                 except Exception:
                     pass
             proto_key    = pos.get("protocol", "")

@@ -8,7 +8,7 @@ import re
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
@@ -142,7 +142,7 @@ class PoolData:
     reward_token: str
     data_source: str            # "live" or "baseline"
     reward_apr:  float = 0.0   # incentive-only portion (RFLR/SPRK); subject to decay
-    fetched_at:  str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    fetched_at:  str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 @dataclass
 class LendingRate:
@@ -153,7 +153,7 @@ class LendingRate:
     utilisation: float          # 0–1
     tvl_usd:     float
     data_source: str
-    fetched_at:  str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    fetched_at:  str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 @dataclass
 class StakingYield:
@@ -164,7 +164,7 @@ class StakingYield:
     apy_high:    float
     tvl_usd:     float
     data_source: str
-    fetched_at:  str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    fetched_at:  str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 @dataclass
 class TokenPrice:
@@ -172,7 +172,7 @@ class TokenPrice:
     price_usd:   float
     change_24h:  float          # %
     data_source: str
-    fetched_at:  str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    fetched_at:  str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 @dataclass
 class ScanResult:
@@ -969,7 +969,7 @@ def fetch_fasset_data() -> dict:
         "system_health": "unknown",
         "premium_discount": {},
         "agent_count": 0,
-        "fetched_at": datetime.utcnow().isoformat(),
+        "fetched_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     }
 
     def _parse_fasset_response(data: dict) -> bool:
@@ -1132,7 +1132,7 @@ def run_flare_scan() -> ScanResult:
                 f"{len(pools)} pools, {len(lending)} lending rates, {len(staking)} staking yields")
 
     return ScanResult(
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         prices=[asdict(p) for p in prices],
         pools=[asdict(p) for p in pools],
         lending=[asdict(p) for p in lending],

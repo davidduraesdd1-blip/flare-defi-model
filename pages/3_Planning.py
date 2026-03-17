@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ui.common import page_setup, render_sidebar, render_section_header
 from config import FALLBACK_PRICES
@@ -109,7 +109,7 @@ with tab2:
     )
 
     maturity_date    = datetime(2026, 5, 17)
-    days_to_maturity = max(0, (maturity_date - datetime.utcnow()).days)
+    days_to_maturity = max(0, (maturity_date - datetime.now(timezone.utc).replace(tzinfo=None)).days)
 
     c1, c2 = st.columns([2, 1])
     with c1:

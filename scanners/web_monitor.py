@@ -342,10 +342,10 @@ def run_web_monitor() -> dict:
     """
     t0 = time.monotonic()
     logger.info("─" * 50)
-    logger.info(f"WEB MONITOR — {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+    logger.info(f"WEB MONITOR — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
 
     digest: dict = {
-        "generated_at":         datetime.utcnow().isoformat(),
+        "generated_at":         datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "new_protocols":        [],
         "known_tvl":            {},
         "new_tokens":           [],

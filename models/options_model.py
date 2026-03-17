@@ -8,7 +8,7 @@ import numpy as np
 from scipy.stats import norm
 import logging
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class OptionPrice:
 
     def __post_init__(self):
         if self.calculated_at is None:
-            self.calculated_at = datetime.utcnow().isoformat()
+            self.calculated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
 
 def black_scholes(
@@ -275,7 +275,7 @@ def run_options_analysis(vol_data: list, risk_profile: str) -> dict:
         results[token] = token_results
 
     return {
-        "timestamp":    datetime.utcnow().isoformat(),
+        "timestamp":    datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "risk_profile": risk_profile,
         "analysis":     results,
     }

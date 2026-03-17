@@ -11,7 +11,7 @@ import subprocess
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
@@ -43,8 +43,9 @@ def load_live_prices() -> list:
                  "change_24h": p.change_24h, "data_source": p.data_source}
                 for p in results
             ]
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"load_live_prices: {e}")
     return []
 
 
@@ -601,7 +602,7 @@ def render_sidebar() -> dict:
         if last_scan:
             try:
                 scan_dt = datetime.fromisoformat(last_scan.replace("Z", "+00:00")).replace(tzinfo=None)
-                is_fresh = (datetime.utcnow() - scan_dt).total_seconds() < 3600
+                is_fresh = (datetime.now(timezone.utc).replace(tzinfo=None) - scan_dt).total_seconds() < 3600
             except Exception:
                 pass
         dot_html = "<span class='live-dot'></span>" if is_fresh else "<span class='stale-dot'></span>"
@@ -831,7 +832,7 @@ def _next_scan() -> str:
     else:
         next_t = min(future)
     next_utc = next_t.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-    delta       = next_utc - datetime.utcnow()
+    delta       = next_utc - datetime.now(timezone.utc).replace(tzinfo=None)
     total_mins  = max(0, int(delta.total_seconds())) // 60
     h, m        = divmod(total_mins, 60)
     return f"{h}h {m}m"
@@ -858,7 +859,7 @@ def compute_position_pnl(pos: dict, current_prices: list) -> dict:
     entry_date_str = pos.get("entry_date", "")
     if entry_date_str:
         try:
-            days_active = max(0, (datetime.utcnow() - datetime.fromisoformat(entry_date_str)).days)
+            days_active = max(0, (datetime.now(timezone.utc).replace(tzinfo=None) - datetime.fromisoformat(entry_date_str)).days)
         except Exception:
             pass
 
