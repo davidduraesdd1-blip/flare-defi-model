@@ -69,7 +69,7 @@ else:
             f"<span class='badge-new'>AI Summary</span>"
             f"<span style='font-size:0.72rem; color:#334155; margin-left:auto;'>Claude AI · Not financial advice</span>"
             f"</div>"
-            f"<div style='color:#c4cbdb; font-size:0.90rem; line-height:1.65;'>{ai_text}</div>"
+            f"<div style='color:#c4cbdb; font-size:0.90rem; line-height:1.65;'>{_html.escape(ai_text)}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -91,11 +91,11 @@ else:
         for proto in new_protocols:
             tvl_str  = f"${proto['tvl_usd']:,}" if proto.get("tvl_usd") else "TVL unknown"
             url_md   = f" · [Visit]({proto['url']})" if proto.get("url") else ""
-            desc     = proto.get("description", "")
+            desc     = _html.escape(str(proto.get("description", "")))
             st.markdown(
                 f"<div class='arb-tag'>"
-                f"<span style='font-weight:700; color:#f1f5f9;'>{proto['name']}</span>"
-                f"<span style='color:#475569;'> · {proto.get('category','?')} · {tvl_str}{url_md}</span>"
+                f"<span style='font-weight:700; color:#f1f5f9;'>{_html.escape(str(proto['name']))}</span>"
+                f"<span style='color:#475569;'> · {_html.escape(str(proto.get('category','?')))} · {tvl_str}{url_md}</span>"
                 f"{'<div style=color:#64748b;font-size:0.82rem;margin-top:6px>' + desc + '</div>' if desc else ''}"
                 f"</div>",
                 unsafe_allow_html=True,
@@ -111,7 +111,12 @@ else:
         with st.expander(f"Live TVL — {len(known_tvl)} tracked protocols"):
             tvl_rows = [
                 {"Protocol": name, "TVL (USD)": f"${data['tvl_usd']:,}", "Category": data.get("category", "")}
-                for name, data in sorted(known_tvl.items(), key=lambda x: x[1].get("tvl_usd", 0), reverse=True)
+                for name, data in sorted(
+                    known_tvl.items(),
+                    key=lambda x: x[1].get("tvl_usd", 0) if isinstance(x[1], dict) else 0,
+                    reverse=True,
+                )
+                if isinstance(data, dict)
             ]
             st.dataframe(pd.DataFrame(tvl_rows), use_container_width=True, hide_index=True)
 
@@ -149,7 +154,7 @@ else:
         if len(news_items) > 10:
             with st.expander(f"Show all {len(news_items)} articles"):
                 for item in news_items[10:]:
-                    link_md = f"[{item['title']}]({item['link']})" if item.get("link") else item.get("title", "")
+                    link_md = f"[{item.get('title', 'Untitled')}]({item['link']})" if item.get("link") else item.get("title", "Untitled")
                     st.markdown(f"- **{link_md}** — {item.get('source','')} · {item.get('published','')}")
     else:
         st.markdown(

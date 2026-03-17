@@ -85,7 +85,7 @@ with tab1:
                 "Strategy":       name,
                 "APY":            f"{apy:.1f}%",
                 "IL Risk":        il,
-                "Capital Needed": f"${annual_usd / (apy / 100):,.0f}",
+                "Capital Needed": f"${annual_usd / (apy / 100):,.0f}" if apy > 0 else "N/A",
                 "How To":         action,
             })
         st.markdown(

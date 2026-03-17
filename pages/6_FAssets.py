@@ -65,6 +65,15 @@ agents    = fasset.get("agent_count", 0)
 h_color   = {"healthy": "#10b981", "caution": "#f59e0b", "unknown": "#475569"}.get(health, "#475569")
 h_icon    = {"healthy": "✓", "caution": "⚠", "unknown": "?"}.get(health, "?")
 
+assets     = fasset.get("assets", {})
+latest     = load_latest()
+prices_raw = latest.get("prices", [])
+price_lkp  = {p.get("symbol", ""): p.get("price_usd", 0) for p in prices_raw}
+
+fxrp_circ  = assets.get("FXRP", {}).get("circulating", 0)
+fxrp_price = price_lkp.get("FXRP", price_lkp.get("XRP", 1.53))
+fxrp_tvl   = fxrp_circ * fxrp_price
+
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(f"""
@@ -81,14 +90,6 @@ with c2:
         <div style="color:#475569; font-size:0.82rem; margin-top:4px;">minting agents</div>
     </div>""", unsafe_allow_html=True)
 with c3:
-    # Total circulating FAssets value
-    assets     = fasset.get("assets", {})
-    fxrp_circ  = assets.get("FXRP", {}).get("circulating", 0)
-    latest     = load_latest()
-    prices_raw = latest.get("prices", [])
-    price_lkp  = {p.get("symbol", ""): p.get("price_usd", 0) for p in prices_raw}
-    fxrp_price = price_lkp.get("FXRP", price_lkp.get("XRP", 1.53))
-    fxrp_tvl   = fxrp_circ * fxrp_price
     st.markdown(f"""
     <div class="metric-card card-orange">
         <div class="label">FXRP Circulating</div>

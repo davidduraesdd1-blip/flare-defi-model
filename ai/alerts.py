@@ -250,8 +250,8 @@ def calibrate_alert_thresholds() -> dict:
 
     # 75th percentile of accurate APYs — alert on truly exceptional opportunities
     accurate_apys.sort()
-    p75_idx  = int(len(accurate_apys) * 0.75)
-    p75_apy  = accurate_apys[min(p75_idx, len(accurate_apys) - 1)]
+    p75_idx  = int(0.75 * (len(accurate_apys) - 1))
+    p75_apy  = accurate_apys[p75_idx]
     p75_apy  = max(_MIN_APY_FLOOR, min(_MIN_APY_CEILING, p75_apy))
 
     config     = load_alerts_config()

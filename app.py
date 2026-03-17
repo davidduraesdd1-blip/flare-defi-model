@@ -5,6 +5,7 @@ Run with:  streamlit run app.py
 """
 
 import sys
+import html as _html
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -77,7 +78,7 @@ if all_pts:
     )
     for warn in flare_scan.get("warnings", []):
         st.markdown(
-            f"<div class='warn-box' style='font-size:0.82rem; padding:10px 14px;'>⚠️ {warn}</div>",
+            f"<div class='warn-box' style='font-size:0.82rem; padding:10px 14px;'>⚠️ {_html.escape(str(warn))}</div>",
             unsafe_allow_html=True,
         )
 
@@ -122,9 +123,9 @@ else:
     for arb in arb_data[:5]:
         profit        = arb.get("estimated_profit", 0)
         urgency       = arb.get("urgency", "monitor")
-        label         = arb.get("strategy_label", arb.get("strategy", "Arb"))
-        desc          = arb.get("plain_english", "—")
-        token         = arb.get("token_or_pair", "—")
+        label         = _html.escape(str(arb.get("strategy_label", arb.get("strategy", "Arb"))))
+        desc          = _html.escape(str(arb.get("plain_english", "—")))
+        token         = _html.escape(str(arb.get("token_or_pair", "—")))
         st.markdown(f"""
         <div class="arb-tag">
             <div style="display:flex; justify-content:space-between; align-items:center;">

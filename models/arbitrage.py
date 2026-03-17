@@ -154,49 +154,53 @@ def detect_fassets_arb(prices_data: list) -> list:
 
     xrp_price  = xrp["price_usd"]
     fxrp_price = fxrp["price_usd"]
-    if xrp_price == 0:
+    if xrp_price <= 1e-10:
         return opps
 
     pct_diff = (fxrp_price - xrp_price) / xrp_price * 100
 
     if pct_diff > 0.5:
-        opps.append(ArbitrageOpportunity(
-            strategy="fassets_mint_redeem",
-            strategy_label="FAssets Premium Arbitrage",
-            token_or_pair="FXRP/XRP",
-            buy_where=f"Bridge XRP to Flare, mint FXRP (pay bridge fee ~0.2%)",
-            sell_where=f"Sell FXRP at {round(pct_diff,2)}% premium on DEX",
-            estimated_profit=round(pct_diff - 0.3, 2),
-            capital_needed=2000,
-            urgency="act_soon",
-            plain_english=(
-                f"FXRP is trading {round(pct_diff,1)}% above XRP right now. "
-                f"Bridge XRP to Flare, convert to FXRP, sell the FXRP at the premium. "
-                f"Net profit: ~{round(pct_diff-0.3,1)}% after bridge fees."
-            ),
-            risk_level="medium",
-            applicable_profiles=["medium", "high"],
-            data_source=fxrp["data_source"],
-        ))
+        net = round(pct_diff - 0.3, 2)
+        if net > 0:
+            opps.append(ArbitrageOpportunity(
+                strategy="fassets_mint_redeem",
+                strategy_label="FAssets Premium Arbitrage",
+                token_or_pair="FXRP/XRP",
+                buy_where=f"Bridge XRP to Flare, mint FXRP (pay bridge fee ~0.2%)",
+                sell_where=f"Sell FXRP at {round(pct_diff,2)}% premium on DEX",
+                estimated_profit=net,
+                capital_needed=2000,
+                urgency="act_soon",
+                plain_english=(
+                    f"FXRP is trading {round(pct_diff,1)}% above XRP right now. "
+                    f"Bridge XRP to Flare, convert to FXRP, sell the FXRP at the premium. "
+                    f"Net profit: ~{net}% after bridge fees."
+                ),
+                risk_level="medium",
+                applicable_profiles=["medium", "high"],
+                data_source=fxrp["data_source"],
+            ))
     elif pct_diff < -0.5:
-        opps.append(ArbitrageOpportunity(
-            strategy="fassets_mint_redeem",
-            strategy_label="FAssets Discount Arbitrage",
-            token_or_pair="FXRP/XRP",
-            buy_where=f"Buy FXRP at {abs(round(pct_diff,2))}% discount on Flare DEX",
-            sell_where="Redeem FXRP for real XRP via FAssets system",
-            estimated_profit=round(abs(pct_diff) - 0.3, 2),
-            capital_needed=2000,
-            urgency="act_soon",
-            plain_english=(
-                f"FXRP is trading {abs(round(pct_diff,1))}% below real XRP. "
-                f"Buy cheap FXRP on Flare, then redeem it for actual XRP. "
-                f"Net profit: ~{round(abs(pct_diff)-0.3,1)}% after fees."
-            ),
-            risk_level="medium",
-            applicable_profiles=["medium", "high"],
-            data_source=fxrp["data_source"],
-        ))
+        net = round(abs(pct_diff) - 0.3, 2)
+        if net > 0:
+            opps.append(ArbitrageOpportunity(
+                strategy="fassets_mint_redeem",
+                strategy_label="FAssets Discount Arbitrage",
+                token_or_pair="FXRP/XRP",
+                buy_where=f"Buy FXRP at {abs(round(pct_diff,2))}% discount on Flare DEX",
+                sell_where="Redeem FXRP for real XRP via FAssets system",
+                estimated_profit=net,
+                capital_needed=2000,
+                urgency="act_soon",
+                plain_english=(
+                    f"FXRP is trading {abs(round(pct_diff,1))}% below real XRP. "
+                    f"Buy cheap FXRP on Flare, then redeem it for actual XRP. "
+                    f"Net profit: ~{net}% after fees."
+                ),
+                risk_level="medium",
+                applicable_profiles=["medium", "high"],
+                data_source=fxrp["data_source"],
+            ))
 
     return opps
 
@@ -221,7 +225,7 @@ def detect_funding_rate_neutral(perps_data: list, prices_data: list) -> list:
                 sell_where=f"Short equal amount on {perp['exchange']} perpetuals",
                 estimated_profit=round(fr_annual, 2),
                 capital_needed=500,
-                urgency="monitor",
+                urgency="act_now" if fr_annual > 20 else ("act_soon" if fr_annual > 10 else "monitor"),
                 plain_english=(
                     f"Hold equal long and short positions on {token}. "
                     f"Price doesn't matter — you earn the funding rate paid by traders "

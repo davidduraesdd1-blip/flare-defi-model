@@ -3,6 +3,7 @@ Opportunities — Full opportunity tables, starter portfolios, sparklines, optio
 """
 
 import sys
+import html as _html
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -138,7 +139,7 @@ else:
         with col:
             st.markdown(
                 f"<div style='font-size:0.78rem; color:#64748b; text-align:center; margin-bottom:6px;'>"
-                f"{proto}<br><span style='color:#94a3b8; font-weight:600;'>{pool}</span></div>",
+                f"{_html.escape(str(proto))}<br><span style='color:#94a3b8; font-weight:600;'>{_html.escape(str(pool))}</span></div>",
                 unsafe_allow_html=True,
             )
             if len(history_apy) >= 2:

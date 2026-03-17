@@ -35,7 +35,7 @@ def http_get(
             if attempt < retries:
                 time.sleep(1)
                 continue
-            logger.debug(f"GET {url} failed after {retries + 1} attempt(s): {e}")
+            logger.warning(f"GET {url} failed after {retries + 1} attempt(s): {e}")
     return None
 
 
@@ -59,5 +59,5 @@ def http_post(
             if attempt < retries:
                 time.sleep(1)
                 continue
-            logger.debug(f"POST {url} failed after {retries + 1} attempt(s): {e}")
+            logger.warning(f"POST {url} failed after {retries + 1} attempt(s): {e}")
     return None

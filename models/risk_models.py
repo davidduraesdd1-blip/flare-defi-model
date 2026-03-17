@@ -239,9 +239,11 @@ def build_opportunity(
     # inflates Sharpe to unrealistic levels (measurement-precision artifact).
     std = _TYPE_STD.get(protocol_type, 0.20)
     if apy_history and len(apy_history) >= 5:
-        hist_std = float(np.std([h / 100 for h in apy_history]))
-        if hist_std > 0:
-            std = max(hist_std, _TYPE_STD.get(protocol_type, 0.20))
+        valid_hist = [h / 100 for h in apy_history if h is not None and h >= 0]
+        if len(valid_hist) >= 5:
+            hist_std = float(np.std(valid_hist))
+            if hist_std > 0:
+                std = max(hist_std, _TYPE_STD.get(protocol_type, 0.20))
     sr  = sharpe_ratio(net_apy / 100, rf_rate, std)   # rf_rate already a decimal
 
     # Kelly sizing — use feedback-loop win rate when available, else IL-based prior
@@ -263,8 +265,9 @@ def build_opportunity(
     confidence  = max(0, min(100, round(tvl_score + fresh_score + (10 - rs) * 2 + ftso_signal, 1)))
 
     # APY range: use historical std dev if 3+ data points available, else ±20%
-    if apy_history and len(apy_history) >= 3:
-        apy_std  = float(np.std(apy_history))
+    valid_apy = [h for h in (apy_history or []) if h is not None and h >= 0]
+    if len(valid_apy) >= 3:
+        apy_std  = float(np.std(valid_apy))
         apy_low  = round(max(0.0, apr - 1.5 * apy_std), 1)
         apy_high = round(apr + 1.5 * apy_std, 1)
     else:

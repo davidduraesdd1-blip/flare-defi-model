@@ -49,8 +49,13 @@ def black_scholes(
     Black-Scholes pricing formula.
     Returns (price, delta, gamma, theta, vega).
     """
-    if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
+    if T <= 0 or S <= 0 or K <= 0:
         return (0.0, 0.0, 0.0, 0.0, 0.0)
+    if sigma <= 0:
+        # Zero vol: price equals intrinsic value, no time value
+        intrinsic = max(0.0, S - K) if option_type == "call" else max(0.0, K - S)
+        delta = (1.0 if S > K else 0.0) if option_type == "call" else (-1.0 if S < K else 0.0)
+        return (round(intrinsic, 6), round(delta, 4), 0.0, 0.0, 0.0)
 
     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
     d2 = d1 - sigma * np.sqrt(T)
@@ -100,12 +105,20 @@ def price_option(
         intrinsic = max(0, strike - spot)
     time_value = max(0, price - intrinsic)
 
-    if strike < spot * 0.97:
-        moneyness = "ITM"
-    elif strike > spot * 1.03:
-        moneyness = "OTM"
-    else:
-        moneyness = "ATM"
+    if option_type == "call":
+        if strike < spot * 0.97:
+            moneyness = "ITM"
+        elif strike > spot * 1.03:
+            moneyness = "OTM"
+        else:
+            moneyness = "ATM"
+    else:  # put: ITM when strike > spot
+        if strike > spot * 1.03:
+            moneyness = "ITM"
+        elif strike < spot * 0.97:
+            moneyness = "OTM"
+        else:
+            moneyness = "ATM"
 
     return OptionPrice(
         token=token, option_type=option_type,

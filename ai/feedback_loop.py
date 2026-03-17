@@ -116,9 +116,9 @@ def record_actuals(scan_result: dict) -> None:
     now     = datetime.utcnow()
 
     # Build lookup from current scan data
-    current_pools   = {p["pool_name"]: p["apr"]       for p in scan_result.get("pools", [])}
-    current_lending = {r["asset"]:     r["supply_apy"] for r in scan_result.get("lending", [])}
-    current_staking = {s["token"]:     s["apy"]        for s in scan_result.get("staking", [])}
+    current_pools   = {p["pool_name"].lower().strip(): p["apr"]       for p in scan_result.get("pools", [])   if p.get("pool_name")}
+    current_lending = {r["asset"].lower().strip():     r["supply_apy"] for r in scan_result.get("lending", []) if r.get("asset")}
+    current_staking = {s["token"].lower().strip():     s["apy"]        for s in scan_result.get("staking", []) if s.get("token")}
     all_actuals = {**current_pools, **current_lending, **current_staking}
 
     for pred in history["predictions"]:
@@ -152,7 +152,7 @@ def _apply_actuals(pred: dict, all_actuals: dict, window: str) -> None:
     suffix = "" if window == "24h" else "_7d"
     for profile_picks in pred["profiles"].values():
         for pick in profile_picks:
-            pool_key  = pick.get("pool", "")
+            pool_key  = (pick.get("pool") or "").lower().strip()
             actual    = all_actuals.get(pool_key)
             predicted = pick.get("predicted_apy", 0)
 
@@ -296,7 +296,7 @@ def update_model_weights() -> dict:
         acc = compute_accuracy(profile, history=history)
         if acc["accuracy_pct"] is not None:
             # Normalise: 80% accuracy → weight 1.0, 100% → 1.35, 50% → 0.65
-            new_weight = 0.35 + (acc["accuracy_pct"] / 100) * 1.0
+            new_weight = 0.20 + (acc["accuracy_pct"] / 100) * 1.0
             # Smooth: 55% old + 45% new — converges ~2× faster than old 70/30
             weights[profile] = round(0.55 * weights[profile] + 0.45 * new_weight, 4)
 
