@@ -931,53 +931,20 @@ def render_opportunity_card(
     conf_bar_pct = f"{conf:.0f}%"
     conf_color   = "#22c55e" if conf >= 70 else ("#f59e0b" if conf >= 45 else "#ef4444")
 
-    st.markdown(f"""
-    <div class="opp-card" style="border-left: 3px solid {color};">
-        <!-- Header row: rank + name + grade + APY -->
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
-            <div style="flex:1; min-width:0;">
-                <span style="font-size:0.82rem; color:#475569; margin-right:8px;">{medal}</span>
-                <span style="font-size:1.05rem; font-weight:700; color:#f1f5f9;">{proto}</span>
-                <span style="color:#334155; margin:0 6px;">·</span>
-                <span style="font-size:0.95rem; color:#94a3b8;">{pool}</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
-                <span class="grade-badge" style="background:{grade_color}; color:#000;">{grade}</span>
-                <span class="{glow_cls}" style="font-size:1.8rem; font-weight:800; color:{color}; letter-spacing:-1px; font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span>
-            </div>
-        </div>
-
-        <!-- APY range bar -->
-        <div style="margin-top:10px; margin-bottom:2px;">
-            <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#475569; margin-bottom:3px;">
-                <span>Low {lo:.1f}%</span>
-                <span style="color:#64748b;">APY Range</span>
-                <span>High {hi:.1f}%</span>
-            </div>
-            <div style="background:rgba(255,255,255,0.05); border-radius:4px; height:4px; position:relative;">
-                <div style="position:absolute; left:0; top:0; height:4px; width:100%; border-radius:4px;
-                    background: linear-gradient(90deg, rgba(59,130,246,0.3), {color}, rgba(245,158,11,0.4));"></div>
-            </div>
-        </div>
-
-        <!-- Action text -->
-        <div style="color:#94a3b8; font-size:0.91rem; margin-top:10px; line-height:1.55;">{action}</div>
-
-        <!-- Footer stats -->
-        <div style="display:flex; gap:20px; font-size:0.78rem; color:#475569; margin-top:12px; flex-wrap:wrap; align-items:center;">
-            <span>
-                <span style="color:{il_color}; font-weight:700;">{il_icon}</span>
-                <span style="margin-left:3px;">Price risk: <span style="color:{il_color}; font-weight:600;">{il.upper()}</span></span>
-            </span>
-            <span style="display:flex; align-items:center; gap:5px;">
-                Confidence:
-                <span style="display:inline-block; width:48px; height:5px; background:rgba(255,255,255,0.07); border-radius:3px; vertical-align:middle; margin:0 2px; overflow:hidden;">
-                    <span style="display:block; width:{conf_bar_pct}; height:100%; background:{conf_color}; border-radius:3px;"></span>
-                </span>
-                <span style="color:{conf_color}; font-weight:600;">{conf:.0f}%</span>
-            </span>
-            <span>Suggested: <span style="color:#94a3b8; font-weight:600;">{alloc_str}</span></span>
-            {tvl_html}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"""<div class="opp-card" style="border-left:3px solid {color};">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+<div style="flex:1;min-width:0;"><span style="font-size:0.82rem;color:#475569;margin-right:8px;">{medal}</span><span style="font-size:1.05rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 6px;">·</span><span style="font-size:0.95rem;color:#94a3b8;">{pool}</span></div>
+<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;"><span class="grade-badge" style="background:{grade_color};color:#000;">{grade}</span><span class="{glow_cls}" style="font-size:1.8rem;font-weight:800;color:{color};letter-spacing:-1px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
+</div>
+<div style="margin-top:10px;margin-bottom:2px;">
+<div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#475569;margin-bottom:3px;"><span>Low {lo:.1f}%</span><span style="color:#64748b;">APY Range</span><span>High {hi:.1f}%</span></div>
+<div style="background:rgba(255,255,255,0.05);border-radius:4px;height:4px;position:relative;"><div style="position:absolute;left:0;top:0;height:4px;width:100%;border-radius:4px;background:linear-gradient(90deg,rgba(59,130,246,0.3),{color},rgba(245,158,11,0.4));"></div></div>
+</div>
+<div style="color:#94a3b8;font-size:0.91rem;margin-top:10px;line-height:1.55;">{action}</div>
+<div style="display:flex;gap:20px;font-size:0.78rem;color:#475569;margin-top:12px;flex-wrap:wrap;align-items:center;">
+<span><span style="color:{il_color};font-weight:700;">{il_icon}</span><span style="margin-left:3px;">Price risk: <span style="color:{il_color};font-weight:600;">{il.upper()}</span></span></span>
+<span style="display:flex;align-items:center;gap:5px;">Confidence:<span style="display:inline-block;width:48px;height:5px;background:rgba(255,255,255,0.07);border-radius:3px;vertical-align:middle;margin:0 2px;overflow:hidden;"><span style="display:block;width:{conf_bar_pct};height:100%;background:{conf_color};border-radius:3px;"></span></span><span style="color:{conf_color};font-weight:600;">{conf:.0f}%</span></span>
+<span>Suggested: <span style="color:#94a3b8;font-weight:600;">{alloc_str}</span></span>
+{tvl_html}
+</div>
+</div>""", unsafe_allow_html=True)
