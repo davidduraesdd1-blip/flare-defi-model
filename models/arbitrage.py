@@ -57,7 +57,7 @@ def detect_lending_rate_arb(lending_data: list) -> list:
                     continue
                 borrow_cost = borrower.get("borrow_apy", 0)
                 supply_earn = lender.get("supply_apy", 0)
-                if borrow_cost == 0:
+                if borrow_cost < 0:
                     continue
                 net_profit = supply_earn - borrow_cost - 1.5   # 1.5% buffer: gas + smart contract risk
                 if net_profit >= MIN_PROFIT_PCT:
@@ -71,9 +71,9 @@ def detect_lending_rate_arb(lending_data: list) -> list:
                         capital_needed=1000,
                         urgency="monitor",
                         plain_english=(
-                            f"Borrow {asset} at {borrow_cost:.1f}% APY on {borrower['protocol']}, "
-                            f"then lend it at {supply_earn:.1f}% APY on {lender['protocol']}. "
-                            f"Net gain: ~{round(net_profit,1)}% per year with near-zero risk."
+                            f"Borrow {asset} at {borrow_cost:.1f}% APY on {borrower.get('protocol', '?')}, "
+                            f"then lend it at {supply_earn:.1f}% APY on {lender.get('protocol', '?')}. "
+                            f"Net gain: ~{round(net_profit,1)}% per year. Low risk but carries liquidation + smart contract risk."
                         ),
                         risk_level="low",
                         applicable_profiles=["conservative", "medium", "high"],
@@ -146,15 +146,15 @@ def detect_fassets_arb(prices_data: list) -> list:
     If FXRP < XRP by > 0.5%: buy FXRP and redeem for XRP.
     """
     opps = []
-    fxrp = next((p for p in prices_data if p["symbol"] == "FXRP"), None)
-    xrp  = next((p for p in prices_data if p["symbol"] == "XRP"),  None)
+    fxrp = next((p for p in prices_data if p.get("symbol") == "FXRP"), None)
+    xrp  = next((p for p in prices_data if p.get("symbol") == "XRP"),  None)
 
     if not fxrp or not xrp:
         return opps
 
-    xrp_price  = xrp["price_usd"]
-    fxrp_price = fxrp["price_usd"]
-    if xrp_price <= 1e-10:
+    xrp_price  = xrp.get("price_usd", 0)
+    fxrp_price = fxrp.get("price_usd", 0)
+    if xrp_price <= 0 or fxrp_price <= 0:
         return opps
 
     pct_diff = (fxrp_price - xrp_price) / xrp_price * 100
@@ -216,7 +216,8 @@ def detect_funding_rate_neutral(perps_data: list, prices_data: list) -> list:
     for perp in perps_data:
         fr_annual = perp.get("funding_rate_annualised", 0)
         if fr_annual > MIN_PROFIT_PCT:
-            token = perp["pair"].split("/")[0]
+            pair  = perp.get("pair", "")
+            token = pair.split("/")[0] if "/" in pair else pair
             opps.append(ArbitrageOpportunity(
                 strategy="funding_rate_neutral",
                 strategy_label="Delta-Neutral Funding Rate",
@@ -291,8 +292,8 @@ def detect_spectra_arb(staking_data: list) -> list:
     # PT fixed rate 10.79% vs variable sFLR — pull live sFLR rate if available
     pt_apy   = pt.get("apy", 0.0)
     sflr_entry = next((s for s in staking_data if s.get("token") == "sFLR"), None)
-    _sflr_cfg = PROTOCOLS["sceptre"]["tokens"]["sFLR"]
-    _sflr_fallback = (_sflr_cfg["base_apy_low"] + _sflr_cfg["base_apy_high"]) / 2
+    _sflr_cfg = PROTOCOLS.get("sceptre", {}).get("tokens", {}).get("sFLR", {})
+    _sflr_fallback = (_sflr_cfg.get("base_apy_low", 3.5) + _sflr_cfg.get("base_apy_high", 5.5)) / 2
     sflr_apy = sflr_entry.get("apy", _sflr_fallback) if sflr_entry else _sflr_fallback
 
     if pt_apy > sflr_apy + 1.0:

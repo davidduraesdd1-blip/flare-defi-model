@@ -52,11 +52,12 @@ src_badge = (
 fetched = fasset.get("fetched_at", "")
 
 if data_src == "baseline":
-    st.warning(
-        "Live FAsset API is currently unreachable — displaying research-based estimates. "
+    st.markdown(
+        "<div class='warn-box' style='font-size:0.86rem; line-height:1.55;'>"
+        "⚠️ Live FAsset API is currently unreachable — displaying research-based estimates. "
         "Fees and collateral ratios are accurate; circulating supply is approximate. "
-        "Click **▶ Scan** in the sidebar to retry.",
-        icon="⚠️",
+        "Click <b>▶ Scan</b> in the sidebar to retry.</div>",
+        unsafe_allow_html=True,
     )
 
 st.markdown(

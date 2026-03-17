@@ -156,7 +156,7 @@ def _apply_actuals(pred: dict, all_actuals: dict, window: str) -> None:
             actual    = all_actuals.get(pool_key)
             predicted = pick.get("predicted_apy", 0)
 
-            if actual is not None and predicted and predicted > 0:
+            if actual is not None and predicted is not None and predicted > 0:
                 error_pct = abs(actual - predicted) / predicted * 100
                 pick[f"actual_apy{suffix}"]  = actual
                 pick[f"error_pct{suffix}"]   = round(error_pct, 2)
@@ -295,7 +295,7 @@ def update_model_weights() -> dict:
     for profile in RISK_PROFILE_NAMES:
         acc = compute_accuracy(profile, history=history)
         if acc["accuracy_pct"] is not None:
-            # Normalise: 80% accuracy → weight 1.0, 100% → 1.35, 50% → 0.65
+            # Normalise: 50% accuracy → weight 0.70, 80% → 1.0, 100% → 1.20
             new_weight = 0.20 + (acc["accuracy_pct"] / 100) * 1.0
             # Smooth: 55% old + 45% new — converges ~2× faster than old 70/30
             weights[profile] = round(0.55 * weights[profile] + 0.45 * new_weight, 4)

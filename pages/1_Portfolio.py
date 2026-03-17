@@ -169,7 +169,17 @@ if positions:
         fees_html = f" · Est. fees earned: <span style='color:#10b981'>${fees_est:,.2f}</span>" if fees_est > 0 else ""
         il_html   = f" · IL est: <span style='color:#f59e0b'>{il_pct:.1f}%</span>" if il_pct > 0.1 else ""
         hodl_html = f" · HODL: <span style='color:#64748b'>${hodl:,.0f}</span>" if hodl > 0 else ""
-        bal_str   = _html.escape(" ".join(filter(None, [pos.get("token0_balance",""), pos.get("token1_balance","")])))
+        # Build balance string — support both new format (token_a/token_b) and legacy (token0_balance/token1_balance)
+        bal_parts = []
+        if pos.get("token_a") and pos.get("token_a_amount", 0) > 0:
+            bal_parts.append(f"{pos['token_a_amount']:,.4f} {pos['token_a']}")
+        elif pos.get("token0_balance"):
+            bal_parts.append(pos["token0_balance"])
+        if pos.get("token_b") and pos.get("token_b_amount", 0) > 0:
+            bal_parts.append(f"{pos['token_b_amount']:,.4f} {pos['token_b']}")
+        elif pos.get("token1_balance"):
+            bal_parts.append(pos["token1_balance"])
+        bal_str = _html.escape(" · ".join(bal_parts))
 
         col_card, col_del = st.columns([14, 1])
         with col_card:

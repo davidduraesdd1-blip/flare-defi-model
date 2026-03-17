@@ -216,7 +216,7 @@ def run_quick_check() -> None:
         current_prices = {p.symbol: p.price_usd for p in prices_list}
         for symbol, price in current_prices.items():
             last = last_prices.get(symbol)
-            if last and last > 0:
+            if last is not None and last > 0:
                 change_pct = (price - last) / last * 100
                 if abs(change_pct) >= price_move_limit:
                     direction = "UP" if change_pct > 0 else "DOWN"

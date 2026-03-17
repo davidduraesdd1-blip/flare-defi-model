@@ -119,10 +119,10 @@ def send_telegram_alert(message: str, config: dict) -> bool:
             json={"chat_id": cfg["chat_id"], "text": message, "parse_mode": "HTML"},
             timeout=10,
         )
-        if r.status_code == 200:
+        if r.ok:
             logger.info("Telegram alert sent.")
             return True
-        logger.warning(f"Telegram alert failed: {r.status_code} — {r.text[:100]}")
+        logger.warning(f"Telegram alert failed: {r.status_code} — {r.text[:200]}")
         return False
     except Exception as e:
         logger.warning(f"Telegram alert failed: {e}")

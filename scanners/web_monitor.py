@@ -323,6 +323,9 @@ def claude_digest(
             max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
         )
+        if not msg.content:
+            logger.warning("Claude API returned empty content")
+            return ""
         digest_text = msg.content[0].text.strip()
         logger.info("Claude AI digest generated.")
         return digest_text

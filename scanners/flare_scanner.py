@@ -783,14 +783,14 @@ def fetch_staking_yields() -> list:
         """Return best matching DeFiLlama pool for a protocol+symbol hint."""
         pools = dl.get(proto_key, [])
         hint  = symbol_hint.lower()
-        return next((p for p in pools if hint in p["symbol"].lower() and p["apy"] > 0), None)
+        return next((p for p in pools if p.get("symbol") and hint in p["symbol"].lower() and p.get("apy", 0) > 0), None)
 
     # ─── sFLR via Sceptre — on-chain → DeFiLlama → baseline ─────────────────
     # Upgrade #12: try on-chain exchange-rate diff first
     onchain_apy = fetch_sceptre_onchain_rate()
     if onchain_apy is not None:
         sp = _dl_pick("sceptre", "sflr")
-        tvl = sp["tvl_usd"] if sp else 0
+        tvl = sp.get("tvl_usd", 0) if sp else 0
         yields.append(StakingYield(
             protocol="sceptre", token="sFLR",
             apy=onchain_apy,
@@ -835,8 +835,8 @@ def fetch_staking_yields() -> list:
     # ─── Spectra sFLR markets (PT fixed-rate + LP) ───────────────────────────
     # DeFiLlama uses "SW-SFLR" for both; lower APY = fixed-rate PT, higher = LP.
     spectra_sflr = sorted(
-        [p for p in dl.get("spectra", []) if "sflr" in p["symbol"].lower() and p["apy"] > 0],
-        key=lambda x: x["apy"],
+        [p for p in dl.get("spectra", []) if p.get("symbol") and "sflr" in p["symbol"].lower() and p.get("apy", 0) > 0],
+        key=lambda x: x.get("apy", 0),
     )
     if len(spectra_sflr) >= 1:
         pt_pool = spectra_sflr[0]   # lowest APY = fixed-rate PT
@@ -893,7 +893,7 @@ def fetch_cyclo_rates() -> list:
     Tries DeFiLlama first; falls back to research baseline.
     """
     dl = _fetch_defillama_raw()
-    cyclo_pools = [p for p in dl.get("cyclo", []) if p["apy"] > 0]
+    cyclo_pools = [p for p in dl.get("cyclo", []) if p.get("apy", 0) > 0]
     if cyclo_pools:
         return [StakingYield(
             protocol="cyclo",

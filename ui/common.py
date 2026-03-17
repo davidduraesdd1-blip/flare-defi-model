@@ -70,7 +70,7 @@ def _inject_css() -> None:
 
     /* ── Base / App Shell ─────────────────────────────────────────────── */
     /* 5-layer depth system: 0=page  1=container  2=card  3=elevated  4=hover */
-    .stApp, .main { background: #0d0e14 !important; }
+    .stApp, .main { background: #0d0e14 !important; color: #e2e8f0 !important; }
     .block-container {
         padding-top: 1.6rem; padding-bottom: 3rem;
         max-width: 1200px;
@@ -401,9 +401,15 @@ def _inject_css() -> None:
     }
 
     /* ── Alert Boxes ──────────────────────────────────────────────────── */
+    /* Force dark bg so Streamlit's olive/teal/muted defaults don't bleed through */
     [data-testid="stAlert"] {
+        background: rgba(19,20,28,0.92) !important;
         border-radius: 12px !important;
         border-left-width: 3px !important;
+    }
+    [data-testid="stAlert"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stAlert"] [data-testid="stMarkdownContainer"] li {
+        color: #94a3b8 !important;
     }
 
     /* ── Mono / Tabular Numbers ───────────────────────────────────────── */
@@ -495,12 +501,14 @@ def _inject_css() -> None:
     ::-webkit-scrollbar-thumb { background: #b8c4d6; }
 
     /* ── Controls ─────────────────────────────────────────────────────── */
-    div[data-testid="stButton"] > button {
+    div[data-testid="stButton"] > button,
+    [data-testid="stSidebar"] div[data-testid="stButton"] > button {
         background: rgba(241,245,249,0.90) !important;
         color: #1e293b !important;
         border-color: rgba(0,0,0,0.10) !important;
     }
-    div[data-testid="stButton"] > button:hover { color: #0f172a !important; }
+    div[data-testid="stButton"] > button:hover,
+    [data-testid="stSidebar"] div[data-testid="stButton"] > button:hover { color: #0f172a !important; }
     [data-testid="stNumberInput"] input,
     [data-testid="stTextInput"] input {
         background: rgba(255,255,255,0.97) !important;
@@ -554,6 +562,25 @@ def _inject_css() -> None:
     div[style*="border:1px solid rgba(255,255,255"] {
         border-color: rgba(0,0,0,0.08) !important;
     }
+
+    /* ── Fix near-transparent white bars (APY range / confidence) ─────── */
+    div[style*="background:rgba(255,255,255,0.05"],
+    div[style*="background:rgba(255,255,255,0.07"] {
+        background: rgba(0,0,0,0.09) !important;
+    }
+
+    /* ── Alert boxes — light bg ───────────────────────────────────────── */
+    [data-testid="stAlert"] {
+        background: rgba(255,255,255,0.92) !important;
+        border-color: rgba(0,0,0,0.08) !important;
+    }
+    [data-testid="stAlert"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stAlert"] [data-testid="stMarkdownContainer"] li {
+        color: #1e293b !important;
+    }
+
+    /* ── App default text color for light bg ─────────────────────────── */
+    .stApp, .main { color: #1e293b !important; }
 </style>
 """, unsafe_allow_html=True)
 
