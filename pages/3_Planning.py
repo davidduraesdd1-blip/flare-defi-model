@@ -10,7 +10,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-from ui.common import page_setup, render_sidebar
+from ui.common import page_setup, render_sidebar, render_section_header
 from config import FALLBACK_PRICES
 
 page_setup("Planning · Flare DeFi")
@@ -35,11 +35,11 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ─── Tab 1: FlareDrop Income Planner ─────────────────────────────────────────
 
 with tab1:
-    st.markdown("### FlareDrop Income Replacement")
+    render_section_header("FlareDrop Income Replacement", "How much capital you need to replace lost FlareDrop income")
     st.markdown(
         "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
-        "Flare's 2.2B FLR distribution ends July 2026. Find out how much capital "
-        "you need in each strategy to replace that income.</div>",
+        "Flare's 2.2B FLR distribution <b>ended January 30, 2026</b>. "
+        "Find out how much capital you need in each DeFi strategy to replace that lost income.</div>",
         unsafe_allow_html=True,
     )
 
@@ -69,11 +69,13 @@ with tab1:
                 </div>""", unsafe_allow_html=True)
 
         strategies = [
-            ("sFLR Staking (Sceptre)",       9.0,  "None",   "Stake FLR → earn sFLR + FTSO rewards"),
+            ("sFLR Staking (Sceptre)",       4.5,  "None",   "Stake FLR → earn sFLR + FTSO rewards (reduced post-FlareDrop)"),
             ("FTSO Delegation",              4.3,  "None",   "Delegate vote power, keep your FLR"),
             ("Kinetic Lending (USDT0)",      8.0,  "None",   "Lend stablecoins, no price risk"),
             ("Clearpool X-Pool (USD0)",     11.5,  "None",   "Institutional lending, higher yield"),
-            ("Blazeswap LP (sFLR-WFLR)",    37.0,  "Low",    "Provide liquidity, earn fees + rewards"),
+            ("Clearpool USDX T-Pool",        9.1,  "None",   "T-bill backed, ~$38M TVL, new March 2026"),
+            ("earnXRP Vault (Upshift)",      7.0,  "None",   "Deposit FXRP → earn 4–10% via conc. liquidity"),
+            ("Blazeswap LP (sFLR-WFLR)",    37.0,  "Low",    "Provide liquidity, earn fees + RFLR rewards"),
             ("Mystic Finance (USD0)",        9.0,  "None",   "Morpho-style optimised lending"),
         ]
 
@@ -98,11 +100,11 @@ with tab1:
 # ─── Tab 2: Spectra Fixed-Rate ────────────────────────────────────────────────
 
 with tab2:
-    st.markdown("### Spectra Fixed-Rate Lock")
+    render_section_header("Spectra Fixed-Rate Lock", "Lock sFLR at fixed APY vs variable staking vs LP")
     st.markdown(
         "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
-        "Lock sFLR at 10.79% fixed until May 17, 2026 via Spectra Finance. "
-        "Compare against variable staking (7–11%) and LP (~36.74%).</div>",
+        "Lock sFLR at ~18.6% fixed until May 17, 2026 via Spectra Finance. "
+        "Compare against variable staking (4–5%) and LP (~36.74%).</div>",
         unsafe_allow_html=True,
     )
 
@@ -120,9 +122,9 @@ with tab2:
         )
 
     if sflr_amount > 0 and days_to_maturity > 0:
-        fixed_yield = sflr_amount * 0.1079 * days_to_maturity / 365
-        var_low     = sflr_amount * 0.07   * days_to_maturity / 365
-        var_high    = sflr_amount * 0.11   * days_to_maturity / 365
+        fixed_yield = sflr_amount * 0.186  * days_to_maturity / 365
+        var_low     = sflr_amount * 0.04   * days_to_maturity / 365
+        var_high    = sflr_amount * 0.05   * days_to_maturity / 365
         lp_yield    = sflr_amount * 0.3674 * days_to_maturity / 365
 
         c1, c2, c3 = st.columns(3)
@@ -131,14 +133,14 @@ with tab2:
             <div class="metric-card card-green">
                 <div class="label">Fixed Rate (PT-sFLR)</div>
                 <div class="big-number" style="color:#10b981;">+{fixed_yield:.2f} sFLR</div>
-                <div style="color:#475569; font-size:0.82rem; margin-top:6px;">10.79% · Zero IL risk</div>
+                <div style="color:#475569; font-size:0.82rem; margin-top:6px;">~18.6% · Zero IL risk</div>
             </div>""", unsafe_allow_html=True)
         with c2:
             st.markdown(f"""
             <div class="metric-card card-orange">
                 <div class="label">Variable Staking</div>
                 <div class="big-number" style="color:#f59e0b;">+{var_low:.2f}–{var_high:.2f}</div>
-                <div style="color:#475569; font-size:0.82rem; margin-top:6px;">7–11% variable</div>
+                <div style="color:#475569; font-size:0.82rem; margin-top:6px;">4–5% variable (post-FlareDrop)</div>
             </div>""", unsafe_allow_html=True)
         with c3:
             st.markdown(f"""
@@ -159,7 +161,7 @@ with tab2:
 # ─── Tab 3: FTSO Delegation ───────────────────────────────────────────────────
 
 with tab3:
-    st.markdown("### FTSO Delegation Optimizer")
+    render_section_header("FTSO Delegation Optimizer", "Earn FTSO rewards without locking or transferring FLR")
     st.markdown(
         "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
         "Delegate FLR vote power to earn FTSO rewards every ~3.5 days. "
@@ -196,7 +198,7 @@ with tab3:
 # ─── Tab 4: FAssets ───────────────────────────────────────────────────────────
 
 with tab4:
-    st.markdown("### FAssets Yield Tracker")
+    render_section_header("FAssets Yield Tracker", "BTC · XRP · DOGE on-chain without selling")
     st.markdown(
         "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
         "FAssets bring BTC, XRP, and other assets on-chain to earn DeFi yields without selling.</div>",
@@ -224,6 +226,17 @@ with tab4:
                 Status: <span style="color:#f59e0b; font-weight:600;">IN DEVELOPMENT</span>
             </div>
         </div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="metric-card" style="border-left:3px solid #a78bfa;">
+        <div class="label">FDOGE — Beta</div>
+        <div style="font-size:1.3rem; font-weight:700; color:#a78bfa;">Est. 2–5% APY</div>
+        <div style="color:#475569; font-size:0.83rem; margin-top:8px;">
+            Bring Dogecoin on-chain to Flare · Earn DeFi yield on DOGE without selling<br>
+            Status: <span style="color:#a78bfa; font-weight:600;">BETA — Limited minting</span>
+        </div>
+    </div>""", unsafe_allow_html=True)
 
     st.markdown("""
 **FTSO Collateral Agent Income**

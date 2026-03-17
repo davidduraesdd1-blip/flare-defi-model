@@ -13,7 +13,7 @@ from datetime import datetime
 
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
-    render_opportunity_card, risk_score_to_grade,
+    render_opportunity_card, render_section_header, risk_score_to_grade,
 )
 from config import RISK_PROFILES, RISK_PROFILE_NAMES
 
@@ -32,7 +32,7 @@ model_data = latest.get("models", {})
 
 st.markdown("# Opportunities")
 st.markdown(
-    "<div style='color:#475569; font-size:0.88rem; margin-bottom:24px;'>"
+    "<div style='color:#475569; font-size:0.87rem; margin-bottom:24px;'>"
     "All ranked opportunities · starter portfolios · APY trends · options strategies</div>",
     unsafe_allow_html=True,
 )
@@ -86,12 +86,7 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ─── Starter Portfolios ───────────────────────────────────────────────────────
 
-st.markdown("### Starter Portfolios")
-st.markdown(
-    "<div style='color:#475569; font-size:0.85rem; margin-bottom:14px;'>"
-    "Pre-built Kelly-sized allocations for each risk profile.</div>",
-    unsafe_allow_html=True,
-)
+render_section_header("Starter Portfolios", "Pre-built Kelly-sized allocations for each risk profile")
 
 for p in RISK_PROFILE_NAMES:
     opps = model_data.get(p, [])
@@ -120,7 +115,7 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ─── APY Sparklines ───────────────────────────────────────────────────────────
 
-st.markdown("### APY Trend — Last 14 Scans")
+render_section_header("APY Trend", "Top 3 pools — last 14 scans")
 
 opps = model_data.get(profile, [])
 if not opps or len(runs) < 3:
@@ -147,24 +142,38 @@ else:
                 unsafe_allow_html=True,
             )
             if len(history_apy) >= 2:
+                latest_apy = history_apy[-1]
+                prev_apy   = history_apy[-2]
+                trend_color = "#22c55e" if latest_apy >= prev_apy else "#ef4444"
+                fill_color  = "rgba(34,197,94,0.08)" if latest_apy >= prev_apy else "rgba(239,68,68,0.08)"
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
                     y=history_apy, mode="lines",
-                    line=dict(color=color, width=2),
-                    fill="tozeroy", fillcolor=f"rgba(59,130,246,0.07)",
+                    line=dict(color=trend_color, width=2),
+                    fill="tozeroy", fillcolor=fill_color,
                 ))
                 fig.update_layout(
-                    plot_bgcolor="#0d1321", paper_bgcolor="#0d1321",
+                    plot_bgcolor="rgba(13,14,20,0)", paper_bgcolor="rgba(13,14,20,0)",
                     xaxis=dict(visible=False),
-                    yaxis=dict(gridcolor="#1e293b", tickfont=dict(size=9, color="#475569")),
-                    margin=dict(l=28, r=8, t=4, b=4),
-                    height=100,
+                    yaxis=dict(
+                        gridcolor="rgba(255,255,255,0.04)",
+                        tickfont=dict(size=9, color="#475569"),
+                        ticksuffix="%",
+                    ),
+                    margin=dict(l=32, r=6, t=4, b=4),
+                    height=90,
                     showlegend=False,
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.markdown(
+                    f"<div style='text-align:center; font-size:0.75rem; color:{trend_color}; margin-top:-8px;'>"
+                    f"{'▲' if latest_apy >= prev_apy else '▼'} {latest_apy:.1f}%</div>",
+                    unsafe_allow_html=True,
+                )
             else:
                 st.markdown(
-                    "<div style='color:#334155; font-size:0.78rem; text-align:center; padding:20px 0;'>Building…</div>",
+                    "<div class='skeleton' style='height:90px; margin:4px 0;'></div>"
+                    "<div style='color:#334155; font-size:0.72rem; text-align:center; margin-top:6px;'>Building history…</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -173,7 +182,7 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ─── Options & Derivatives ────────────────────────────────────────────────────
 
-st.markdown("### Options & Derivatives Strategies")
+render_section_header("Options & Derivatives Strategies")
 
 opts_data = latest.get("options", {}).get(profile, {})
 analysis  = opts_data.get("analysis", {}) if opts_data else {}

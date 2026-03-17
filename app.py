@@ -12,7 +12,7 @@ from ui.common import (
     page_setup, render_sidebar, load_latest, load_positions,
     render_price_strip, render_incentive_warning,
     render_yield_hero_cards, render_opportunity_card,
-    render_urgency_badge, _ts_fmt, load_live_prices,
+    render_urgency_badge, render_section_header, _ts_fmt, load_live_prices,
 )
 import streamlit as st
 
@@ -29,10 +29,16 @@ latest    = load_latest()
 positions = load_positions()
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# Dashboard")
 st.markdown(
-    "<div style='color:#475569; font-size:0.88rem; margin-bottom:20px;'>"
-    "Live prices · top opportunities · arbitrage alerts</div>",
+    "<h1 style='margin-bottom:4px;'>Dashboard</h1>"
+    "<div style='color:#475569; font-size:0.87rem; margin-bottom:20px; "
+    "display:flex; align-items:center; gap:12px; flex-wrap:wrap;'>"
+    "<span>Live prices</span>"
+    "<span style='color:#1e293b;'>·</span>"
+    "<span>Top opportunities</span>"
+    "<span style='color:#1e293b;'>·</span>"
+    "<span>Arbitrage alerts</span>"
+    "</div>",
     unsafe_allow_html=True,
 )
 
@@ -50,13 +56,20 @@ if all_pts:
     total     = len(all_pts)
     live      = sum(1 for p in all_pts if p.get("data_source") == "live")
     estimated = sum(1 for p in all_pts if p.get("data_source") in ("baseline", "estimate"))
-    dot_color = "#10b981" if live / total >= 0.7 else ("#f59e0b" if live > 0 else "#ef4444")
-    parts     = [f"<span style='color:{dot_color}'>● {live} live</span>"]
-    if estimated:
-        parts.append(f"<span style='color:#ef4444'>{estimated} estimated</span>")
+    live_pct  = live / total if total else 0
+    pill_bg   = "rgba(34,197,94,0.10)"  if live_pct >= 0.7 else ("rgba(245,158,11,0.10)" if live > 0 else "rgba(239,68,68,0.10)")
+    pill_border = "rgba(34,197,94,0.25)" if live_pct >= 0.7 else ("rgba(245,158,11,0.25)" if live > 0 else "rgba(239,68,68,0.25)")
+    pill_color  = "#22c55e"  if live_pct >= 0.7 else ("#f59e0b" if live > 0 else "#ef4444")
+    dot_cls     = "live-dot" if live_pct >= 0.7 else "stale-dot"
+    fresh_label = f"{live}/{total} live" + (f" · {estimated} estimated" if estimated else "")
     st.markdown(
-        f"<div style='font-size:0.75rem; color:#475569; margin:8px 0 16px;'>"
-        f"Data freshness: {' · '.join(parts)} of {total}</div>",
+        f"<div style='display:inline-flex; align-items:center; gap:6px; "
+        f"background:{pill_bg}; border:1px solid {pill_border}; "
+        f"border-radius:20px; padding:3px 12px; margin:6px 0 16px; font-size:0.74rem;'>"
+        f"<span class='{dot_cls}'></span>"
+        f"<span style='color:{pill_color}; font-weight:600;'>{fresh_label}</span>"
+        f"<span style='color:#334155;'>data points</span>"
+        f"</div>",
         unsafe_allow_html=True,
     )
     for warn in flare_scan.get("warnings", []):
@@ -71,13 +84,13 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 model_data = latest.get("models", {})
 opps       = model_data.get(profile, [])
 
-st.markdown("### Estimated Yield")
+render_section_header("Estimated Yield", "Projected returns based on your top-3 ranked opportunities")
 render_yield_hero_cards(positions, opps, portfolio_size)
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ── Top Opportunities ─────────────────────────────────────────────────────────
-st.markdown(f"### Top Opportunities — {profile_cfg['label']}")
+render_section_header(f"Top Opportunities", f"{profile_cfg['label']} · {profile_cfg['target_apy_low']:.0f}–{profile_cfg['target_apy_high']:.0f}% target APY")
 
 if not opps:
     st.info("No scan data yet. Run `python scheduler.py --now` to generate your first scan.")
@@ -93,12 +106,7 @@ else:
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ── Arbitrage Alerts ──────────────────────────────────────────────────────────
-st.markdown("### Arbitrage Alerts")
-st.markdown(
-    "<div style='color:#475569; font-size:0.85rem; margin-bottom:14px;'>"
-    "Real-time profit opportunities from price differences across platforms.</div>",
-    unsafe_allow_html=True,
-)
+render_section_header("Arbitrage Alerts", "Real-time profit opportunities from price differences across platforms")
 
 arb_data = latest.get("arbitrage", {}).get(profile, [])
 if not arb_data:
@@ -137,8 +145,9 @@ if warnings:
             st.markdown(f"- {w}")
 
 st.markdown(
-    "<div style='color:#334155; font-size:0.72rem; text-align:center; padding-top:8px;'>"
-    "Flare DeFi Model · Blazeswap · SparkDEX · Ēnosys · Kinetic · Clearpool · Spectra · Upshift · Mystic · Hyperliquid"
+    "<div style='color:#1e293b; font-size:0.70rem; text-align:center; padding-top:4px; line-height:1.7;'>"
+    "Flare DeFi Model · Blazeswap · SparkDEX · Ēnosys · Kinetic · Clearpool · Spectra · Upshift · Mystic · Hyperliquid<br>"
+    "<span style='color:#0f172a;'>Not financial advice · Always DYOR</span>"
     "</div>",
     unsafe_allow_html=True,
 )

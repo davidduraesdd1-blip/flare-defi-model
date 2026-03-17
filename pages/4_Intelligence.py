@@ -3,6 +3,7 @@ Intelligence — Ecosystem monitor (What's New) and AI model health / accuracy.
 """
 
 import sys
+import html as _html
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -10,7 +11,7 @@ import streamlit as st
 import pandas as pd
 
 from ui.common import (
-    page_setup, render_sidebar, load_monitor_digest, _ts_fmt,
+    page_setup, render_sidebar, load_monitor_digest, render_section_header, _ts_fmt,
 )
 
 page_setup("Intelligence · Flare DeFi")
@@ -28,7 +29,7 @@ st.markdown(
 
 # ─── What's New ───────────────────────────────────────────────────────────────
 
-st.markdown("### Ecosystem Monitor")
+render_section_header("Ecosystem Monitor", "New protocols · recent news · on-chain activity")
 
 digest = load_monitor_digest()
 if not digest:
@@ -61,18 +62,23 @@ else:
     ai_text = digest.get("ai_digest", "").strip()
     if ai_text:
         st.markdown(
-            f"<div class='opp-card' style='border-left:3px solid #3b82f6;'>"
-            f"<div style='font-size:0.7rem; color:#475569; letter-spacing:1px; "
-            f"text-transform:uppercase; margin-bottom:8px;'>AI Summary</div>"
-            f"<div style='color:#94a3b8; font-size:0.9rem; line-height:1.65;'>{ai_text}</div>"
-            f"<div style='color:#334155; font-size:0.72rem; margin-top:10px;'>Claude AI · Not financial advice</div>"
+            f"<div class='opp-card' style='border-left:3px solid #8b5cf6; "
+            f"background:rgba(139,92,246,0.04);'>"
+            f"<div style='display:flex; align-items:center; gap:8px; margin-bottom:10px;'>"
+            f"<span style='font-size:1rem;'>🤖</span>"
+            f"<span class='badge-new'>AI Summary</span>"
+            f"<span style='font-size:0.72rem; color:#334155; margin-left:auto;'>Claude AI · Not financial advice</span>"
+            f"</div>"
+            f"<div style='color:#c4cbdb; font-size:0.90rem; line-height:1.65;'>{ai_text}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
-            "<div style='color:#334155; font-size:0.82rem;'>"
-            "Set ANTHROPIC_API_KEY to enable AI-generated summaries.</div>",
+            "<div style='background:rgba(139,92,246,0.04); border:1px solid rgba(139,92,246,0.12); "
+            "border-radius:10px; padding:12px 16px; font-size:0.83rem; color:#475569;'>"
+            "🤖 Set <code style='background:rgba(255,255,255,0.06); padding:1px 6px; border-radius:4px;'>"
+            "ANTHROPIC_API_KEY</code> to enable AI-generated ecosystem summaries.</div>",
             unsafe_allow_html=True,
         )
 
@@ -112,17 +118,30 @@ else:
     # News
     news_items = digest.get("news_items", [])
     if news_items:
-        st.markdown(f"#### Recent News ({len(news_items)} articles)")
+        st.markdown(
+            f"<div style='font-size:0.78rem; font-weight:700; color:#94a3b8; "
+            f"text-transform:uppercase; letter-spacing:1.2px; margin:16px 0 10px;'>"
+            f"Recent News <span style='color:#334155; font-weight:400;'>({len(news_items)} articles)</span></div>",
+            unsafe_allow_html=True,
+        )
         for item in news_items[:10]:
-            link_md  = f"[{item['title']}]({item['link']})" if item.get("link") else item.get("title", "")
-            summary  = item.get("summary", "")
-            sum_html = f"<div style='color:#64748b; font-size:0.82rem; margin-top:4px;'>{summary}</div>" if summary else ""
+            title    = _html.escape(str(item.get("title", "Untitled")))
+            link     = item.get("link", "")
+            title_md = f"<a href='{link}' target='_blank' style='color:#c4cbdb; font-weight:600; text-decoration:none;'>{title} ↗</a>" if link else f"<span style='color:#94a3b8; font-weight:600;'>{title}</span>"
+            summary  = _html.escape(str(item.get("summary", "")))
+            src      = _html.escape(str(item.get("source", "")))
+            pub      = _html.escape(str(item.get("published", "")))
+            sum_html = f"<div style='color:#64748b; font-size:0.81rem; margin-top:5px; line-height:1.5;'>{summary}</div>" if summary else ""
             st.markdown(
-                f"<div style='background:#0d1321; border-radius:10px; padding:12px 16px; "
-                f"margin-bottom:8px; border:1px solid rgba(255,255,255,0.05);'>"
-                f"<div style='color:#94a3b8; font-weight:600;'>{link_md}</div>"
-                f"<div style='color:#334155; font-size:0.75rem; margin-top:4px;'>"
-                f"{item.get('source','')} · {item.get('published','')}</div>"
+                f"<div style='background:rgba(13,14,20,0.8); border-radius:12px; padding:13px 16px; "
+                f"margin-bottom:8px; border:1px solid rgba(255,255,255,0.06); "
+                f"transition: border-color 0.2s;'>"
+                f"<div>{title_md}</div>"
+                f"<div style='color:#334155; font-size:0.72rem; margin-top:4px; display:flex; gap:8px;'>"
+                f"<span style='color:#475569;'>{src}</span>"
+                f"{'<span style=color:#1e293b>·</span>' if src and pub else ''}"
+                f"<span>{pub}</span>"
+                f"</div>"
                 f"{sum_html}"
                 f"</div>",
                 unsafe_allow_html=True,
@@ -149,12 +168,7 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ─── AI Model Health ──────────────────────────────────────────────────────────
 
-st.markdown("### AI Model Health")
-st.markdown(
-    "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
-    "How accurately has the model predicted real yields? Updates after each scan.</div>",
-    unsafe_allow_html=True,
-)
+render_section_header("AI Model Health", "How accurately has the model predicted real yields? Updates after each scan")
 
 try:
     from ai.feedback_loop import get_feedback_dashboard

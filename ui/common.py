@@ -64,15 +64,21 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
 def _inject_css() -> None:
     st.markdown("""
 <style>
-    /* ── Base ─────────────────────────────────────────────────────────── */
-    .main { background-color: #060b16; }
+    /* ── Chrome Reset ─────────────────────────────────────────────────── */
+    #MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden; }
+
+    /* ── Base / App Shell ─────────────────────────────────────────────── */
+    /* 5-layer depth system: 0=page  1=container  2=card  3=elevated  4=hover */
+    .stApp, .main { background: #0d0e14 !important; }
     .block-container {
-        padding-top: 1.8rem; padding-bottom: 3rem;
+        padding-top: 1.6rem; padding-bottom: 3rem;
         max-width: 1200px;
     }
+
+    /* ── Typography ───────────────────────────────────────────────────── */
     h1 {
         font-size: 1.75rem !important; font-weight: 800 !important;
-        letter-spacing: -0.5px; color: #f8fafc !important;
+        letter-spacing: -0.5px; color: #e2e8f0 !important;
     }
     h2 {
         font-size: 1.2rem !important; font-weight: 600 !important;
@@ -84,81 +90,96 @@ def _inject_css() -> None:
         letter-spacing: 0.8px;
     }
 
+    /* ── Custom Scrollbar ─────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #13141c; }
+    ::-webkit-scrollbar-thumb { background: #2d2e45; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3d3e5a; }
+
     /* ── Glassmorphism Metric Cards ───────────────────────────────────── */
     .metric-card {
-        background: linear-gradient(145deg,
-            rgba(17,24,39,0.85) 0%,
-            rgba(10,15,28,0.90) 100%);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        background: rgba(19,20,28,0.95);
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
         border-radius: 16px;
         padding: 22px 26px;
         margin-bottom: 14px;
-        border: 1px solid rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.08);
         border-left: 3px solid #1e3a5f;
-        transition: border-color 0.2s, box-shadow 0.2s;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.4),
+                    inset 0 1px 0 rgba(255,255,255,0.05);
+        transition: border-color 0.22s cubic-bezier(0.4,0,0.2,1),
+                    box-shadow 0.22s cubic-bezier(0.4,0,0.2,1),
+                    transform 0.22s cubic-bezier(0.4,0,0.2,1);
     }
     .metric-card:hover {
-        border-color: rgba(255,255,255,0.12);
-        box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+        border-color: rgba(255,255,255,0.14);
+        box-shadow: 0 10px 36px rgba(0,0,0,0.55),
+                    inset 0 1px 0 rgba(255,255,255,0.08);
+        transform: translateY(-2px);
     }
-    .card-green  { border-left-color: #10b981; }
+    .card-green  { border-left-color: #22c55e; }
     .card-blue   { border-left-color: #3b82f6; }
     .card-orange { border-left-color: #f59e0b; }
     .card-red    { border-left-color: #ef4444; }
+    .card-violet { border-left-color: #8b5cf6; }
 
     .big-number {
         font-size: 2.1rem; font-weight: 800;
         letter-spacing: -0.8px; line-height: 1.1;
         color: #f1f5f9;
+        font-variant-numeric: tabular-nums;
     }
     .label {
-        font-size: 0.68rem; color: #475569;
+        font-size: 0.68rem; color: #64748b;
         text-transform: uppercase; letter-spacing: 1.5px;
         margin-bottom: 8px;
     }
 
     /* ── Opportunity Cards ────────────────────────────────────────────── */
     .opp-card {
-        background: linear-gradient(145deg,
-            rgba(15,20,35,0.92) 0%,
-            rgba(10,14,26,0.95) 100%);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        background: rgba(19,20,28,0.92);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         border-radius: 16px;
         padding: 20px 24px;
         margin-bottom: 12px;
-        border: 1px solid rgba(255,255,255,0.06);
-        transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+        border: 1px solid rgba(255,255,255,0.07);
+        box-shadow: 0 2px 16px rgba(0,0,0,0.35),
+                    inset 0 1px 0 rgba(255,255,255,0.04);
+        transition: border-color 0.22s cubic-bezier(0.4,0,0.2,1),
+                    transform 0.22s cubic-bezier(0.4,0,0.2,1),
+                    box-shadow 0.22s cubic-bezier(0.4,0,0.2,1);
     }
     .opp-card:hover {
-        border-color: rgba(255,255,255,0.11);
-        transform: translateY(-1px);
-        box-shadow: 0 6px 28px rgba(0,0,0,0.45);
+        border-color: rgba(255,255,255,0.13);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 36px rgba(0,0,0,0.55),
+                    inset 0 1px 0 rgba(255,255,255,0.07);
     }
 
     /* ── Arbitrage Tag ────────────────────────────────────────────────── */
     .arb-tag {
-        background: linear-gradient(145deg,
-            rgba(16,185,129,0.05) 0%,
-            rgba(5,150,105,0.03) 100%);
+        background: rgba(16,185,129,0.04);
         border-radius: 14px;
         padding: 16px 20px;
         margin-bottom: 10px;
-        border: 1px solid rgba(16,185,129,0.15);
-        transition: border-color 0.2s;
+        border: 1px solid rgba(16,185,129,0.13);
+        transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .arb-tag:hover { border-color: rgba(16,185,129,0.28); }
+    .arb-tag:hover {
+        border-color: rgba(16,185,129,0.26);
+        box-shadow: 0 4px 20px rgba(16,185,129,0.07);
+    }
 
     /* ── Warning Box ──────────────────────────────────────────────────── */
     .warn-box {
-        background: linear-gradient(145deg,
-            rgba(245,158,11,0.06) 0%,
-            rgba(217,119,6,0.04) 100%);
-        border-radius: 14px;
+        background: rgba(245,158,11,0.05);
+        border-radius: 12px;
         padding: 14px 18px;
-        border: 1px solid rgba(245,158,11,0.18);
+        border: 1px solid rgba(245,158,11,0.15);
         margin-bottom: 14px;
+        box-shadow: 0 2px 12px rgba(245,158,11,0.05);
     }
 
     /* ── Grade Badge ──────────────────────────────────────────────────── */
@@ -168,35 +189,100 @@ def _inject_css() -> None:
         letter-spacing: 0.5px;
     }
 
-    /* ── Live / Estimated Badges ──────────────────────────────────────── */
+    /* ── Live / Estimated / New Badges ───────────────────────────────── */
     .badge-live {
-        font-size: 0.62rem; font-weight: 700; color: #10b981;
-        background: rgba(16,185,129,0.10);
-        border: 1px solid rgba(16,185,129,0.22);
-        border-radius: 5px; padding: 1px 6px;
+        font-size: 0.62rem; font-weight: 700; color: #22c55e;
+        background: rgba(34,197,94,0.12);
+        border: 1px solid rgba(34,197,94,0.28);
+        border-radius: 5px; padding: 1px 7px;
         letter-spacing: 0.6px; text-transform: uppercase;
         vertical-align: middle; margin-left: 4px;
     }
     .badge-est {
         font-size: 0.62rem; font-weight: 700; color: #f59e0b;
-        background: rgba(245,158,11,0.10);
-        border: 1px solid rgba(245,158,11,0.22);
-        border-radius: 5px; padding: 1px 6px;
+        background: rgba(245,158,11,0.12);
+        border: 1px solid rgba(245,158,11,0.28);
+        border-radius: 5px; padding: 1px 7px;
         letter-spacing: 0.6px; text-transform: uppercase;
         vertical-align: middle; margin-left: 4px;
+    }
+    .badge-new {
+        font-size: 0.60rem; font-weight: 700; color: #a78bfa;
+        background: rgba(139,92,246,0.14);
+        border: 1px solid rgba(139,92,246,0.30);
+        border-radius: 5px; padding: 1px 7px;
+        letter-spacing: 0.6px; text-transform: uppercase;
+        vertical-align: middle; margin-left: 4px;
+    }
+
+    /* ── Pulsing Live Dot ─────────────────────────────────────────────── */
+    @keyframes pulse-dot {
+        0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.55); }
+        70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+        100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+    }
+    .live-dot {
+        display: inline-block;
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #22c55e;
+        animation: pulse-dot 2.2s infinite;
+        vertical-align: middle; margin-right: 5px;
+    }
+    .stale-dot {
+        display: inline-block;
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #f59e0b;
+        vertical-align: middle; margin-right: 5px;
+    }
+
+    /* ── Skeleton Loading Shimmer ─────────────────────────────────────── */
+    @keyframes skeleton-shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+    .skeleton {
+        background: linear-gradient(
+            90deg,
+            rgba(255,255,255,0.04) 25%,
+            rgba(255,255,255,0.09) 50%,
+            rgba(255,255,255,0.04) 75%
+        );
+        background-size: 200% 100%;
+        animation: skeleton-shimmer 1.6s ease-in-out infinite;
+        border-radius: 8px; min-height: 20px;
+    }
+
+    /* ── APY Glow Effects ─────────────────────────────────────────────── */
+    .apy-glow {
+        text-shadow: 0 0 18px rgba(34,197,94,0.45);
+    }
+    .apy-glow-high {
+        text-shadow: 0 0 24px rgba(245,158,11,0.55);
+    }
+    .apy-glow-extreme {
+        text-shadow: 0 0 28px rgba(139,92,246,0.60);
     }
 
     /* ── Dividers ─────────────────────────────────────────────────────── */
     .divider {
         border: none;
         border-top: 1px solid rgba(255,255,255,0.05);
-        margin: 24px 0;
+        margin: 28px 0;
+    }
+
+    /* ── Section Header (gradient underline) ─────────────────────────── */
+    .section-header {
+        font-size: 0.78rem; font-weight: 700; color: #e2e8f0;
+        text-transform: uppercase; letter-spacing: 1.4px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(139,92,246,0.35);
+        margin-bottom: 16px; margin-top: 8px;
     }
 
     /* ── Sidebar ──────────────────────────────────────────────────────── */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0a0f1e 0%, #060b16 100%);
-        border-right: 1px solid rgba(255,255,255,0.05);
+        background: #0f1019 !important;
+        border-right: 1px solid rgba(255,255,255,0.06);
     }
     [data-testid="stSidebar"] .block-container { padding-top: 1.2rem; }
 
@@ -204,40 +290,59 @@ def _inject_css() -> None:
     div[data-testid="stButton"] > button {
         border-radius: 10px;
         border: 1px solid rgba(255,255,255,0.10);
-        font-weight: 700;
-        font-size: 0.82rem;
-        letter-spacing: 0.3px;
-        transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+        font-weight: 700; font-size: 0.82rem; letter-spacing: 0.3px;
+        background: rgba(19,20,28,0.85);
+        color: #cbd5e1;
+        transition: background 0.15s, border-color 0.15s,
+                    box-shadow 0.15s, transform 0.1s;
     }
     div[data-testid="stButton"] > button:hover {
-        border-color: rgba(245,158,11,0.35);
-        box-shadow: 0 0 12px rgba(245,158,11,0.12);
+        border-color: rgba(139,92,246,0.45);
+        box-shadow: 0 0 16px rgba(139,92,246,0.18);
+        transform: translateY(-1px);
+        color: #f1f5f9;
     }
+    div[data-testid="stButton"] > button:active { transform: translateY(0); }
 
     /* ── Dataframes ───────────────────────────────────────────────────── */
     [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
+    [data-testid="stDataFrame"] table {
+        background: rgba(13,14,20,0.96) !important;
+    }
+    [data-testid="stDataFrame"] thead tr th {
+        background: rgba(19,20,28,0.98) !important;
+        color: #94a3b8 !important;
+        font-size: 0.72rem !important;
+        letter-spacing: 0.9px !important;
+        text-transform: uppercase !important;
+        border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+    }
+    [data-testid="stDataFrame"] tbody tr:hover td {
+        background: rgba(139,92,246,0.06) !important;
+    }
 
     /* ── Price Chip ───────────────────────────────────────────────────── */
     .price-chip {
         text-align: center;
         padding: 14px 12px;
-        background: linear-gradient(145deg,
-            rgba(17,24,39,0.90) 0%,
-            rgba(10,15,28,0.92) 100%);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        background: rgba(19,20,28,0.94);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         border-radius: 14px;
         border: 1px solid rgba(255,255,255,0.07);
-        transition: border-color 0.2s, box-shadow 0.2s;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.3),
+                    inset 0 1px 0 rgba(255,255,255,0.04);
+        transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
     }
     .price-chip:hover {
         border-color: rgba(255,255,255,0.13);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+        box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+        transform: translateY(-1px);
     }
 
     /* ── Section Label ────────────────────────────────────────────────── */
     .section-label {
-        font-size: 0.65rem; color: #334155;
+        font-size: 0.65rem; color: #475569;
         text-transform: uppercase; letter-spacing: 1.6px;
         margin-bottom: 10px; margin-top: 6px;
     }
@@ -245,26 +350,63 @@ def _inject_css() -> None:
     /* ── Tabs ─────────────────────────────────────────────────────────── */
     [data-testid="stTabs"] [role="tab"] {
         font-size: 0.82rem; font-weight: 600;
-        color: #475569;
+        color: #64748b;
+        transition: color 0.15s;
     }
+    [data-testid="stTabs"] [role="tab"]:hover { color: #94a3b8; }
     [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
-        color: #f59e0b;
+        color: #a78bfa;
     }
+    [data-testid="stTabs"] [role="tabpanel"] { padding-top: 16px; }
 
     /* ── Inputs ───────────────────────────────────────────────────────── */
     [data-testid="stNumberInput"] input,
     [data-testid="stTextInput"] input {
-        background: rgba(17,24,39,0.8) !important;
+        background: rgba(19,20,28,0.88) !important;
         border: 1px solid rgba(255,255,255,0.09) !important;
         border-radius: 9px !important;
+        color: #e2e8f0 !important;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    [data-testid="stNumberInput"] input:focus,
+    [data-testid="stTextInput"] input:focus {
+        border-color: rgba(139,92,246,0.45) !important;
+        box-shadow: 0 0 0 3px rgba(139,92,246,0.12) !important;
     }
 
     /* ── Expanders ────────────────────────────────────────────────────── */
     [data-testid="stExpander"] {
-        border: 1px solid rgba(255,255,255,0.06) !important;
+        border: 1px solid rgba(255,255,255,0.07) !important;
         border-radius: 12px !important;
-        background: rgba(10,14,26,0.6) !important;
+        background: rgba(13,14,20,0.72) !important;
+        transition: border-color 0.2s;
     }
+    [data-testid="stExpander"]:hover {
+        border-color: rgba(255,255,255,0.11) !important;
+    }
+
+    /* ── Select / Radio / Slider ──────────────────────────────────────── */
+    [data-testid="stRadio"] label span { color: #94a3b8 !important; }
+    [data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {
+        color: #94a3b8 !important;
+    }
+
+    /* ── Alert Boxes ──────────────────────────────────────────────────── */
+    [data-testid="stAlert"] {
+        border-radius: 12px !important;
+        border-left-width: 3px !important;
+    }
+
+    /* ── Mono / Tabular Numbers ───────────────────────────────────────── */
+    .mono-number {
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: "tnum";
+    }
+
+    /* ── Rank Medals ──────────────────────────────────────────────────── */
+    .rank-1 { color: #fbbf24 !important; }
+    .rank-2 { color: #94a3b8 !important; }
+    .rank-3 { color: #b45309 !important; }
 
     /* ── Mobile ───────────────────────────────────────────────────────── */
     @media (max-width: 768px) {
@@ -273,6 +415,7 @@ def _inject_css() -> None:
         .metric-card, .opp-card { padding: 14px 16px; }
         .block-container { padding-left: 0.5rem; padding-right: 0.5rem; }
         .price-chip { padding: 10px 8px; }
+        [data-testid="stTabs"] [role="tab"] { font-size: 0.75rem; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -296,17 +439,30 @@ def render_sidebar() -> dict:
 
     with st.sidebar:
         st.markdown(
-            "<div style='font-size:1.2rem; font-weight:700; color:#f8fafc; "
-            "letter-spacing:-0.3px; margin-bottom:4px;'>⚡ Flare DeFi</div>",
+            "<div style='font-size:1.25rem; font-weight:800; "
+            "background: linear-gradient(90deg, #a78bfa, #60a5fa); "
+            "-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
+            "background-clip: text; letter-spacing:-0.3px; margin-bottom:2px;'>⚡ Flare DeFi</div>"
+            "<div style='font-size:0.68rem; color:#334155; letter-spacing:1.2px; "
+            "text-transform:uppercase; margin-bottom:10px;'>Analytics Dashboard</div>",
             unsafe_allow_html=True,
         )
 
         latest    = load_latest()
         last_scan = latest.get("completed_at") or latest.get("run_id")
+        # Determine data freshness
+        is_fresh = False
+        if last_scan:
+            try:
+                scan_dt = datetime.fromisoformat(last_scan.replace("Z", "+00:00")).replace(tzinfo=None)
+                is_fresh = (datetime.utcnow() - scan_dt).total_seconds() < 3600
+            except Exception:
+                pass
+        dot_html = "<span class='live-dot'></span>" if is_fresh else "<span class='stale-dot'></span>"
         st.markdown(
-            f"<div style='font-size:0.75rem; color:#475569; line-height:1.6;'>"
-            f"Last scan: <span style='color:#64748b'>{_ts_fmt(last_scan) if last_scan else 'None yet'}</span><br>"
-            f"Next: <span style='color:#64748b'>{_next_scan()}</span></div>",
+            f"<div style='font-size:0.74rem; color:#475569; line-height:1.7;'>"
+            f"{dot_html}<span>Last scan: <span style='color:#94a3b8'>{_ts_fmt(last_scan) if last_scan else 'None yet'}</span></span><br>"
+            f"<span style='margin-left:13px;'>Next: <span style='color:#64748b'>{_next_scan()}</span></span></div>",
             unsafe_allow_html=True,
         )
 
@@ -391,8 +547,9 @@ def render_sidebar() -> dict:
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
         st.markdown(
-            "<div style='font-size:0.68rem; color:#334155; line-height:1.5;'>"
-            "Not financial advice.<br>Always do your own research.</div>",
+            "<div style='font-size:0.67rem; color:#334155; line-height:1.6; padding:8px 0;'>"
+            "⚠ Not financial advice.<br>"
+            "Always do your own research<br>before investing.</div>",
             unsafe_allow_html=True,
         )
 
@@ -500,7 +657,7 @@ _URGENCY_LABEL = {"act_now": "ACT NOW", "act_soon": "ACT SOON", "monitor": "MONI
 def render_urgency_badge(urgency: str) -> str:
     """Return an HTML badge string for arbitrage urgency levels."""
     color = _URGENCY_COLOR.get(urgency, "#3b82f6")
-    label = _URGENCY_LABEL.get(urgency, urgency.upper())
+    label = _URGENCY_LABEL.get(urgency, _html.escape(urgency.upper()))
     return (
         f"<span style=\"color:{color}; font-weight:700; font-size:0.78rem; "
         f"background:rgba(255,255,255,0.04); padding:3px 10px; border-radius:6px;\">"
@@ -614,24 +771,45 @@ def render_price_strip(prices: list) -> None:
         sym   = _html.escape(str(p.get("symbol", "?")))
         price = p.get("price_usd", 0)
         chg   = p.get("change_24h", 0)
-        color = "#10b981" if chg >= 0 else "#ef4444"
+        color = "#22c55e" if chg >= 0 else "#ef4444"
         arrow = "▲" if chg >= 0 else "▼"
-        src   = "*" if p.get("data_source") in ("estimate",) else ""
+        is_live = p.get("data_source") not in ("estimate", "baseline")
+        dot_html = "<span class='live-dot'></span>" if is_live else "<span class='stale-dot'></span>"
+        # Format price: use fewer decimals for higher-value tokens
+        price_str = f"${price:,.2f}" if price >= 1 else f"${price:,.4f}"
         with cols[i]:
             st.markdown(f"""
             <div class="price-chip">
-                <div style="font-size:0.7rem; color:#64748b; margin-bottom:4px;">{sym}{src}</div>
-                <div style="font-size:1.1rem; font-weight:700; letter-spacing:-0.3px;">${price:,.4f}</div>
-                <div style="font-size:0.75rem; color:{color}; margin-top:2px;">{arrow} {abs(chg):.2f}%</div>
+                <div style="font-size:0.68rem; color:#64748b; margin-bottom:5px; display:flex; align-items:center; justify-content:center; gap:4px;">
+                    {dot_html}<span style="letter-spacing:0.6px; text-transform:uppercase;">{sym}</span>
+                </div>
+                <div style="font-size:1.12rem; font-weight:700; letter-spacing:-0.3px; font-variant-numeric:tabular-nums;">{price_str}</div>
+                <div style="font-size:0.75rem; color:{color}; margin-top:3px; font-weight:600;">{arrow} {abs(chg):.2f}%</div>
             </div>""", unsafe_allow_html=True)
+
+
+def render_section_header(title: str, subtitle: str = "") -> None:
+    """Renders a section title with violet gradient underline and optional subtitle."""
+    sub_html = (
+        f"<div style='color:#475569; font-size:0.84rem; margin-top:4px; margin-bottom:16px;'>"
+        f"{_html.escape(subtitle)}</div>"
+        if subtitle else ""
+    )
+    st.markdown(
+        f"<div class='section-header'>{_html.escape(title)}</div>{sub_html}",
+        unsafe_allow_html=True,
+    )
 
 
 def render_incentive_warning() -> None:
     from config import INCENTIVE_PROGRAM
     st.markdown(f"""
-    <div class="warn-box">
-        <span style="font-weight:600; color:#f59e0b; font-size:0.9rem;">⚠️ Incentive Notice</span>
-        <div style="color:#94a3b8; font-size:0.85rem; margin-top:6px;">{INCENTIVE_PROGRAM['note']}</div>
+    <div class="warn-box" style="display:flex; align-items:flex-start; gap:12px;">
+        <span style="font-size:1.1rem; flex-shrink:0; margin-top:1px;">⚠️</span>
+        <div>
+            <div style="font-weight:700; color:#f59e0b; font-size:0.87rem; margin-bottom:4px;">Incentive Program Notice</div>
+            <div style="color:#94a3b8; font-size:0.83rem; line-height:1.55;">{INCENTIVE_PROGRAM['note']}</div>
+        </div>
     </div>""", unsafe_allow_html=True)
 
 
@@ -644,18 +822,51 @@ def render_yield_hero_cards(positions: list, opps: list, portfolio_size: float) 
     annual_yield  = total_value * (avg_apy / 100)
 
     c1, c2, c3 = st.columns(3)
-    for col, label, value, sub, cls in [
-        (c1, "Est. This Week",   f"${weekly_yield:,.2f}",  f"{avg_apy/52:.3f}% weekly",    "card-green"),
-        (c2, "Est. This Month",  f"${monthly_yield:,.2f}", f"on ${total_value:,.0f}",       "card-blue"),
-        (c3, "Est. This Year",   f"${annual_yield:,.2f}",  f"{avg_apy:.1f}% APY (top-3)",  "card-orange"),
+    for col, label, value, sub, cls, accent, uid in [
+        (c1, "Est. This Week",  f"${weekly_yield:,.2f}",  f"{avg_apy/52:.3f}% weekly",   "card-green",  "#22c55e", "yield-hero-week"),
+        (c2, "Est. This Month", f"${monthly_yield:,.2f}", f"on ${total_value:,.0f}",      "card-blue",   "#3b82f6", "yield-hero-month"),
+        (c3, "Est. This Year",  f"${annual_yield:,.2f}",  f"{avg_apy:.1f}% APY (top-3)", "card-orange", "#f59e0b", "yield-hero-year"),
     ]:
         with col:
             st.markdown(f"""
-            <div class="metric-card {cls}">
+            <div id="{uid}" class="metric-card {cls}">
                 <div class="label">{label}</div>
-                <div class="big-number">{value}</div>
-                <div style="color:#475569; font-size:0.82rem; margin-top:6px;">{sub}</div>
+                <div class="big-number" style="color:{accent};">{value}</div>
+                <div style="color:#64748b; font-size:0.82rem; margin-top:6px;">{sub}</div>
             </div>""", unsafe_allow_html=True)
+
+    # Count-up animation — targets specific hero-card IDs so it never bleeds into other metric cards
+    import streamlit.components.v1 as _components
+    _components.html(f"""
+    <script>
+    (function() {{
+        function animateCountUp(id, target, prefix, decimals, duration) {{
+            var el = window.parent.document.getElementById(id);
+            if (!el) return;
+            var numEl = el.querySelector('.big-number');
+            if (!numEl) return;
+            var start = 0, startTime = null;
+            function step(ts) {{
+                if (!startTime) startTime = ts;
+                var progress = Math.min((ts - startTime) / duration, 1);
+                var eased = 1 - Math.pow(1 - progress, 3);
+                var val = start + (target - start) * eased;
+                numEl.textContent = prefix + val.toLocaleString('en-US', {{
+                    minimumFractionDigits: decimals,
+                    maximumFractionDigits: decimals
+                }});
+                if (progress < 1) requestAnimationFrame(step);
+            }}
+            requestAnimationFrame(step);
+        }}
+        setTimeout(function() {{
+            animateCountUp('yield-hero-week',  {weekly_yield:.2f},  '$', 2, 900);
+            animateCountUp('yield-hero-month', {monthly_yield:.2f}, '$', 2, 900);
+            animateCountUp('yield-hero-year',  {annual_yield:.2f},  '$', 2, 900);
+        }}, 200);
+    }})();
+    </script>
+    """, height=0)
 
     st.markdown(
         "<div style='color:#334155; font-size:0.75rem;'>"
@@ -679,14 +890,28 @@ def render_opportunity_card(
     src    = opp.get("data_source", "baseline")
     rs     = opp.get("risk_score", 5.0)
     kf     = opp.get("kelly_fraction", 0)
+    tvl    = opp.get("tvl_usd", 0)
 
     grade, grade_color = risk_score_to_grade(rs)
-    il_color = {"none": "#10b981", "low": "#10b981", "medium": "#f59e0b", "high": "#ef4444"}.get(il, "#f59e0b")
+    il_color = {"none": "#22c55e", "low": "#22c55e", "medium": "#f59e0b", "high": "#ef4444"}.get(il, "#f59e0b")
+    il_icon  = {"none": "✓", "low": "✓", "medium": "~", "high": "!"}.get(il, "~")
+
     est_tag  = " <span class='badge-est'>EST</span>" if src in ("baseline", "estimate") else " <span class='badge-live'>LIVE</span>"
-    medal    = ["🥇", "🥈", "🥉", "4", "5", "6"][min(idx, 5)]
+    medals   = ["🥇", "🥈", "🥉", "4", "5", "6"]
+    medal    = medals[min(idx, 5)]
     proto    = _html.escape(str(proto))
     pool     = _html.escape(str(pool))
     action   = _html.escape(str(action))
+
+    # APY glow class based on magnitude
+    if apy >= 50:
+        glow_cls = "apy-glow-extreme"
+    elif apy >= 20:
+        glow_cls = "apy-glow-high"
+    elif apy >= 8:
+        glow_cls = "apy-glow"
+    else:
+        glow_cls = ""
 
     alloc_str = (
         f"${kf * portfolio_size:,.0f} <span style='color:#475569'>({kf*100:.0f}%)</span>"
@@ -694,28 +919,65 @@ def render_opportunity_card(
         else f"{kf*100:.0f}% of portfolio"
     )
 
+    tvl_html = (
+        f"<span>TVL: <span style='color:#64748b; font-weight:600;'>"
+        f"${tvl/1e6:.1f}M</span></span>"
+        if tvl >= 1_000_000
+        else (f"<span>TVL: <span style='color:#64748b; font-weight:600;'>"
+              f"${tvl:,.0f}</span></span>" if tvl > 0 else "")
+    )
+
+    # Confidence bar visual (0–100)
+    conf_bar_pct = f"{conf:.0f}%"
+    conf_color   = "#22c55e" if conf >= 70 else ("#f59e0b" if conf >= 45 else "#ef4444")
+
     st.markdown(f"""
     <div class="opp-card" style="border-left: 3px solid {color};">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-            <div>
-                <span style="font-size:0.8rem; color:#475569; margin-right:6px;">{medal}</span>
+        <!-- Header row: rank + name + grade + APY -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+            <div style="flex:1; min-width:0;">
+                <span style="font-size:0.82rem; color:#475569; margin-right:8px;">{medal}</span>
                 <span style="font-size:1.05rem; font-weight:700; color:#f1f5f9;">{proto}</span>
-                <span style="color:#475569; margin:0 6px;">·</span>
+                <span style="color:#334155; margin:0 6px;">·</span>
                 <span style="font-size:0.95rem; color:#94a3b8;">{pool}</span>
             </div>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <span class="grade-badge" style="background:{grade_color};">{grade}</span>
-                <span style="font-size:1.7rem; font-weight:800; color:{color}; letter-spacing:-1px;">{apy:.1f}%{est_tag}</span>
+            <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+                <span class="grade-badge" style="background:{grade_color}; color:#000;">{grade}</span>
+                <span class="{glow_cls}" style="font-size:1.8rem; font-weight:800; color:{color}; letter-spacing:-1px; font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span>
             </div>
         </div>
-        <div style="color:#475569; font-size:0.8rem; margin-top:8px;">
-            Range: <span style="color:#64748b">{lo:.1f}% – {hi:.1f}%</span>
+
+        <!-- APY range bar -->
+        <div style="margin-top:10px; margin-bottom:2px;">
+            <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#475569; margin-bottom:3px;">
+                <span>Low {lo:.1f}%</span>
+                <span style="color:#64748b;">APY Range</span>
+                <span>High {hi:.1f}%</span>
+            </div>
+            <div style="background:rgba(255,255,255,0.05); border-radius:4px; height:4px; position:relative;">
+                <div style="position:absolute; left:0; top:0; height:4px; width:100%; border-radius:4px;
+                    background: linear-gradient(90deg, rgba(59,130,246,0.3), {color}, rgba(245,158,11,0.4));"></div>
+            </div>
         </div>
-        <div style="color:#94a3b8; font-size:0.92rem; margin-top:10px; line-height:1.5;">{action}</div>
-        <div style="display:flex; gap:24px; font-size:0.8rem; color:#475569; margin-top:12px; flex-wrap:wrap;">
-            <span>Price risk: <span style="color:{il_color}; font-weight:600;">{il.upper()}</span></span>
-            <span>Confidence: <span style="color:#64748b; font-weight:600;">{conf:.0f}%</span></span>
+
+        <!-- Action text -->
+        <div style="color:#94a3b8; font-size:0.91rem; margin-top:10px; line-height:1.55;">{action}</div>
+
+        <!-- Footer stats -->
+        <div style="display:flex; gap:20px; font-size:0.78rem; color:#475569; margin-top:12px; flex-wrap:wrap; align-items:center;">
+            <span>
+                <span style="color:{il_color}; font-weight:700;">{il_icon}</span>
+                <span style="margin-left:3px;">Price risk: <span style="color:{il_color}; font-weight:600;">{il.upper()}</span></span>
+            </span>
+            <span style="display:flex; align-items:center; gap:5px;">
+                Confidence:
+                <span style="display:inline-block; width:48px; height:5px; background:rgba(255,255,255,0.07); border-radius:3px; vertical-align:middle; margin:0 2px; overflow:hidden;">
+                    <span style="display:block; width:{conf_bar_pct}; height:100%; background:{conf_color}; border-radius:3px;"></span>
+                </span>
+                <span style="color:{conf_color}; font-weight:600;">{conf:.0f}%</span>
+            </span>
             <span>Suggested: <span style="color:#94a3b8; font-weight:600;">{alloc_str}</span></span>
+            {tvl_html}
         </div>
     </div>
     """, unsafe_allow_html=True)

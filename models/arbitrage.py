@@ -9,7 +9,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import Optional
 
-from config import RISK_PROFILE_NAMES
+from config import RISK_PROFILE_NAMES, PROTOCOLS
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +287,9 @@ def detect_spectra_arb(staking_data: list) -> list:
     # PT fixed rate 10.79% vs variable sFLR — pull live sFLR rate if available
     pt_apy   = pt.get("apy", 0.0)
     sflr_entry = next((s for s in staking_data if s.get("token") == "sFLR"), None)
-    sflr_apy = sflr_entry.get("apy", 9.0) if sflr_entry else 9.0
+    _sflr_cfg = PROTOCOLS["sceptre"]["tokens"]["sFLR"]
+    _sflr_fallback = (_sflr_cfg["base_apy_low"] + _sflr_cfg["base_apy_high"]) / 2
+    sflr_apy = sflr_entry.get("apy", _sflr_fallback) if sflr_entry else _sflr_fallback
 
     if pt_apy > sflr_apy + 1.0:
         spread = pt_apy - sflr_apy
@@ -323,24 +325,29 @@ def detect_lp_intrinsic_arb(pools_data: list) -> list:
     """
     opps = []
     for pool in pools_data:
-        if pool["apr"] > 100 and pool["tvl_usd"] > 50000:
+        apr      = pool.get("apr", 0)
+        tvl      = pool.get("tvl_usd", 0)
+        pname    = pool.get("pool_name", "?")
+        protocol = pool.get("protocol", "?")
+        dsource  = pool.get("data_source", "baseline")
+        if apr > 100 and tvl > 50000:
             opps.append(ArbitrageOpportunity(
                 strategy="lp_intrinsic",
                 strategy_label="High-APR LP Value Opportunity",
-                token_or_pair=pool["pool_name"],
-                buy_where=f"Add liquidity directly to {pool['pool_name']} on {pool['protocol']}",
+                token_or_pair=pname,
+                buy_where=f"Add liquidity directly to {pname} on {protocol}",
                 sell_where="Earn outsized fees + rewards vs holding tokens",
-                estimated_profit=round(pool["apr"] * 0.05, 1),  # 5% of APR is "excess"
+                estimated_profit=round(apr * 0.05, 1),  # 5% of APR is "excess"
                 capital_needed=1000,
                 urgency="monitor",
                 plain_english=(
-                    f"The {pool['pool_name']} pool on {pool['protocol']} is paying "
-                    f"{pool['apr']:.0f}% APY. Compare to simply holding the tokens. "
+                    f"The {pname} pool on {protocol} is paying "
+                    f"{apr:.0f}% APY. Compare to simply holding the tokens. "
                     f"Providing liquidity earns significant extra yield right now."
                 ),
                 risk_level="high",
                 applicable_profiles=["high"],
-                data_source=pool["data_source"],
+                data_source=dsource,
             ))
     return opps
 
@@ -357,9 +364,9 @@ def detect_sflr_borrow_arb(staking_data: list, lending_data: list) -> list:
     if not sflr:
         return opps
 
-    sflr_apy = sflr["apy"]
+    sflr_apy = sflr.get("apy", 0)
     for rate in lending_data:
-        if rate["asset"] in ("WFLR", "FLR") and rate["borrow_apy"] > 0:
+        if rate.get("asset") in ("WFLR", "FLR") and rate.get("borrow_apy", 0) > 0:
             spread = sflr_apy - rate["borrow_apy"] - 1.5   # 1.5% buffer: gas + liquidation risk
             if spread >= MIN_PROFIT_PCT:
                 opps.append(ArbitrageOpportunity(

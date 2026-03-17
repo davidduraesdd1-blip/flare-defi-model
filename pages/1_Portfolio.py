@@ -15,7 +15,8 @@ from datetime import datetime, timedelta
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
     load_positions, save_positions, load_wallets, save_wallets,
-    compute_position_pnl, render_opportunity_card, _ts_fmt, load_live_prices,
+    compute_position_pnl, render_opportunity_card, render_section_header,
+    _ts_fmt, load_live_prices,
 )
 from config import PROTOCOLS, TOKENS, FLARE_RPC_URLS, INCENTIVE_PROGRAM, RISK_PROFILES, FALLBACK_PRICES
 
@@ -74,7 +75,7 @@ def _fetch_wallet_balances(wallet: str) -> list:
     return [{"Token": k, "Balance": f"{v:,.4f}"} for k, v in token_balances.items() if v >= 0.0001]
 
 
-st.markdown("### Wallet Tracker")
+render_section_header("Wallet Tracker", "Read-only on-chain balance lookup")
 with st.expander("Connect a wallet (read-only)"):
     saved_wallets = load_wallets()
     ca, cl, cb = st.columns([4, 2, 1])
@@ -121,7 +122,7 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ─── Positions Overview ───────────────────────────────────────────────────────
 
-st.markdown("### Your Positions")
+render_section_header("Your Positions", "P&L · fees earned · impermanent loss estimate")
 
 if positions:
     total_value   = sum(p.get("current_value", 0) for p in positions)
@@ -133,7 +134,7 @@ if positions:
     c1, c2, c3, c4 = st.columns(4)
     for col, label, val, sub, cls in [
         (c1, "Portfolio Value",   f"${total_value:,.0f}",             "",                       "card-blue"),
-        (c2, "Total P&L",         f"{total_pnl:+,.0f}",               f"vs ${total_deposit:,.0f} in", "card-green" if total_pnl >= 0 else "card-red"),
+        (c2, "Total P&L",         f"${total_pnl:+,.0f}",              f"vs ${total_deposit:,.0f} in", "card-green" if total_pnl >= 0 else "card-red"),
         (c3, "Unclaimed Fees",    f"${total_fees:,.2f}",              "",                       "card-green"),
         (c4, "Open Positions",    str(len(positions)),                 "",                       "card-blue"),
     ]:
@@ -266,7 +267,7 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ─── Exit Strategy ────────────────────────────────────────────────────────────
 
-st.markdown("### Exit Strategy")
+render_section_header("Exit Strategy", "Incentive expiry countdown · price targets · exit timeline")
 
 incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"], "%Y-%m-%d")
 days_left        = max(0, (incentive_expiry - datetime.utcnow()).days)
@@ -346,14 +347,14 @@ with tab_timeline:
                 "Exit By":      "Jun 2026" if is_incentive else "Flexible",
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-        st.caption("DEX LP pools depend on RFLR incentives expiring July 2026. Lending/staking have lower dependency.")
+        st.caption("DEX LP pools depend on RFLR incentives expiring ~July 2026. FlareDrop ended Jan 30 2026 — sFLR staking yields reduced. Lending positions have low incentive dependency.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
 # ─── Historical APY Chart ─────────────────────────────────────────────────────
 
-st.markdown("### Historical APY Trend")
+render_section_header("Historical APY Trend", "Top opportunity APY — last 30 scans")
 
 profile = ctx["profile"]
 records = []

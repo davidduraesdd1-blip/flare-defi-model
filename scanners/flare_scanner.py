@@ -745,9 +745,13 @@ def fetch_staking_yields() -> list:
                 tvl_usd=sp["tvl_usd"], data_source="live",
             ))
         else:
+            _sflr_cfg = PROTOCOLS["sceptre"]["tokens"]["sFLR"]
+            _sflr_mid = (_sflr_cfg["base_apy_low"] + _sflr_cfg["base_apy_high"]) / 2
             yields.append(StakingYield(
                 protocol="sceptre", token="sFLR",
-                apy=9.0, apy_low=7.0, apy_high=11.0,
+                apy=_sflr_mid,
+                apy_low=_sflr_cfg["base_apy_low"],
+                apy_high=_sflr_cfg["base_apy_high"],
                 tvl_usd=0, data_source="baseline",
             ))
 

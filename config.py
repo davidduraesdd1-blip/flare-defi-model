@@ -47,7 +47,9 @@ TOKENS = {
     "FXRP":  "0x1502FA4be69d526124D453619276FacCab275d3D",
     "USD0":  "0x4A771CA9f10fEf2F73f5dC99339e01FEE1dAF09e",  # USDT0 on Flare
     "sFLR":  "0x12e605bc104e93B45e1aD99F9e555f659051c2BB",
+    "stFLR": "0x1a77D13B87B8e5F58cf9bCDaCae6d3CDdA4f4344",  # SparkDEX V4 stFLR (verify addr)
     "stXRP": "0xFcB23FA1d5b4652D0A0B48F0E42697D7Bca07A0c",  # Firelight stXRP
+    "FDOGE": "",  # FAssets FDOGE — address TBD (beta, limited minting as of Mar 2026)
     "HLN":   "0x7D3c9C6566375d6F11D9B00b06A14eaF5a2f4e75",
 }
 
@@ -150,8 +152,9 @@ PROTOCOLS = {
         "live":     True,
         "risk":     "low",
         "pools": {
-            "T-Pool":  {"apr": 3.5,  "asset": "USD0",  "strategy": "treasury"},
-            "X-Pool":  {"apr": 11.5, "asset": "USD0",  "strategy": "arb+tbill"},
+            "T-Pool":    {"apr": 3.5,  "asset": "USD0",  "strategy": "treasury"},
+            "X-Pool":    {"apr": 11.5, "asset": "USD0",  "strategy": "arb+tbill"},
+            "USDX-Pool": {"apr": 9.1,  "asset": "USDX",  "strategy": "t-bill",   "tvl_usd": 38_000_000},
         },
         "tvl_usd": 41_000_000,
     },
@@ -163,7 +166,7 @@ PROTOCOLS = {
         "risk":     "low-medium",
         "markets": {
             "sFLR-MAY2026": {
-                "fixed_apy":    10.79,
+                "fixed_apy":    18.6,    # Updated Mar 2026 — was 10.79, now ~18.6–19.59% Max APY
                 "lp_apy":       36.74,
                 "lp_fees_apy":   0.75,
                 "lp_rewards_apy": 8.43,
@@ -210,6 +213,15 @@ PROTOCOLS = {
         "yield_sources": ["FTSO delegation", "FLR staking", "rFLR incentives"],
         "liquidation_free": True,
     },
+    "enosys_loans": {
+        "name":     "Enosys Loans",
+        "type":     "CDP / Stablecoin",
+        "url":      "https://loans.enosys.global",
+        "live":     False,   # No subgraph available yet; monitor manually
+        "risk":     "medium",
+        "mechanism": "Deposit FXRP as collateral → mint CDP stablecoin at low borrow rate",
+        "note":     "First XRP-backed CDP stablecoin on Flare. Launched early 2026.",
+    },
     "firelight": {
         "name":     "Firelight Finance",
         "type":     "Liquid Staking",
@@ -233,8 +245,8 @@ PROTOCOLS = {
         "risk":     "low",
         "tokens": {
             "sFLR": {
-                "base_apy_low":  7.0,
-                "base_apy_high": 11.0,
+                "base_apy_low":  4.0,    # Reduced post-FlareDrop (ended Jan 30 2026); was 7–11%
+                "base_apy_high": 5.0,
                 "sources":       ["FTSO delegation", "FLR staking"],
             },
         },
@@ -353,15 +365,17 @@ RISK_PROFILES = {
 }
 
 # ─── Critical Alert: Incentive Program Expiry ─────────────────────────────────
-# The 2.2 billion FLR incentive program expires July 2026.
-# All elevated APRs are partly driven by this. Model must flag this to users.
+# The FlareDrop (2.2B FLR airdrop to wFLR holders) ended January 30, 2026.
+# DEX LP incentives (RFLR rewards) are a separate program still running until ~July 2026.
+# sFLR staking yields have dropped significantly post-FlareDrop.
 INCENTIVE_PROGRAM = {
-    "total_flr":    2_200_000_000,
-    "expires":      "2026-07-01",
+    "total_flr":       2_200_000_000,
+    "flaredrop_ended": "2026-01-30",   # FlareDrop monthly airdrop ended
+    "expires":         "2026-07-01",   # DEX LP incentive (RFLR) program expected end
     "note": (
-        "WARNING: Flare's 2.2B FLR incentive program expires July 2026. "
-        "Current elevated APRs will likely drop after this date. "
-        "Plan your exit or rebalancing strategy before June 2026."
+        "NOTE: The FlareDrop (monthly FLR airdrop) ended January 30, 2026 — sFLR staking yields have dropped. "
+        "DEX LP incentives (RFLR rewards) continue until ~July 2026. "
+        "Plan to rebalance LP positions before June 2026 as RFLR incentives wind down."
     ),
 }
 
