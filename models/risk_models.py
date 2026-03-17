@@ -10,7 +10,7 @@ Mathematical portfolio optimiser using:
 import numpy as np
 import logging
 from dataclasses import dataclass, field, asdict, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from config import RISK_PROFILES, RISK_PROFILE_NAMES, PROTOCOLS, INCENTIVE_PROGRAM, RISK_FREE_RATE, MAX_KELLY_FRACTION
@@ -28,7 +28,7 @@ def _incentive_decay_factor() -> float:
     """
     expiry        = datetime(2026, 7, 1)
     program_start = datetime(2024, 1, 1)
-    now           = datetime.utcnow()
+    now           = datetime.now(timezone.utc).replace(tzinfo=None)
     if now >= expiry:
         return 0.0
     total_days     = max(1, (expiry - program_start).days)

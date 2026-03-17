@@ -58,6 +58,8 @@ def _fetch_wallet_balances(wallet: str) -> list:
     token_balances  = {"FLR (native)": flr_balance}
     token_decimals  = {"USD0": 6, "USDT": 6, "USDC.e": 6}
     for sym, addr in TOKENS.items():
+        if not addr:
+            continue
         try:
             contract = w3.eth.contract(address=Web3.to_checksum_address(addr), abi=ERC20_ABI)
             dec = token_decimals.get(sym, 18)

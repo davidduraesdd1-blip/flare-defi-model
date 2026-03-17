@@ -431,6 +431,7 @@ def _inject_css() -> None:
     :is(div,span,p,a)[style*="color:#334155"] { color: #64748b !important; }
     :is(div,span,p,a)[style*="color:#475569"] { color: #94a3b8 !important; }
     :is(div,span,p,a)[style*="color:#1e293b"] { color: #475569 !important; }
+    :is(div,span,p,a)[style*="color:#0f172a"] { color: #64748b !important; }
 </style>
 """, unsafe_allow_html=True)
 

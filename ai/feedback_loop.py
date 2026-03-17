@@ -9,7 +9,7 @@ import json
 import logging
 import math
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from config import HISTORY_FILE, ACCURACY_LOOKBACK_DAYS, HISTORY_MAX_RUNS, RISK_PROFILE_NAMES
@@ -65,7 +65,7 @@ def record_prediction(model_results: dict) -> None:
     """
     history = load_history()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     prediction = {
         "id":              now.isoformat(),
         "timestamp":       now.isoformat(),
@@ -95,7 +95,7 @@ def record_prediction(model_results: dict) -> None:
     # Keep only last 90 days of predictions; prune only when over-limit to avoid
     # scanning the full list on every append (2 scans/day × 90 days = ~180 max)
     if len(history["predictions"]) > 200:
-        cutoff = (datetime.utcnow() - timedelta(days=90)).isoformat()
+        cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=90)).isoformat()
         history["predictions"] = [
             p for p in history["predictions"] if p["timestamp"] >= cutoff
         ]
@@ -113,7 +113,7 @@ def record_actuals(scan_result: dict) -> None:
     Updates the history record with actual APYs and marks as evaluated.
     """
     history = load_history()
-    now     = datetime.utcnow()
+    now     = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Build lookup from current scan data
     current_pools   = {p["pool_name"].lower().strip(): p["apr"]       for p in scan_result.get("pools", [])   if p.get("pool_name")}
@@ -192,7 +192,7 @@ def compute_accuracy(profile: str, history: dict = None, window: str = "24h") ->
 
     suffix   = "" if window == "24h" else "_7d"
     eval_key = "evaluated" if window == "24h" else "evaluated_7d"
-    cutoff   = (datetime.utcnow() - timedelta(days=LOOKBACK_DAYS)).isoformat()
+    cutoff   = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=LOOKBACK_DAYS)).isoformat()
 
     evaluated = [
         p for p in history["predictions"]
@@ -200,7 +200,7 @@ def compute_accuracy(profile: str, history: dict = None, window: str = "24h") ->
     ]
 
     # Time-weight each pick: recent predictions count more (exponential decay by age)
-    now_ts = datetime.utcnow()
+    now_ts = datetime.now(timezone.utc).replace(tzinfo=None)
     w_accurate    = 0.0
     w_directional = 0.0
     w_total       = 0.0
@@ -343,7 +343,7 @@ def get_feedback_dashboard() -> dict:
         "per_profile_7d":  accuracy_7d,       # upgrade #11
         "model_weights":   history.get("model_weights", _default_weights()),
         "trend":           trend,
-        "last_updated":    datetime.utcnow().isoformat(),
+        "last_updated":    datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     }
 
 
@@ -351,7 +351,7 @@ def _compute_trend(history: dict = None) -> str:
     """Returns 'improving', 'stable', or 'declining' based on recent accuracy."""
     if history is None:
         history = load_history()
-    now     = datetime.utcnow()
+    now     = datetime.now(timezone.utc).replace(tzinfo=None)
 
     recent   = (now - timedelta(days=7)).isoformat()
     previous = (now - timedelta(days=14)).isoformat()

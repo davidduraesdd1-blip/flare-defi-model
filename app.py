@@ -151,7 +151,7 @@ if warnings:
 st.markdown(
     "<div style='color:#1e293b; font-size:0.70rem; text-align:center; padding-top:4px; line-height:1.7;'>"
     "Flare DeFi Model · Blazeswap · SparkDEX · Ēnosys · Kinetic · Clearpool · Spectra · Upshift · Mystic · Hyperliquid<br>"
-    "<span style='color:#0f172a;'>Not financial advice · Always DYOR</span>"
+    "<span style='color:#64748b;'>Not financial advice · Always DYOR</span>"
     "</div>",
     unsafe_allow_html=True,
 )

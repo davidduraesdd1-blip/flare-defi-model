@@ -16,7 +16,7 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -121,7 +121,7 @@ def run_quick_check() -> None:
         logger.debug("Quick check skipped — full scan in progress.")
         return
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     logger.info("─" * 40)
     logger.info(f"QUICK CHECK — {now.strftime('%Y-%m-%d %H:%M UTC')}")
 
@@ -309,7 +309,7 @@ def run_full_scan() -> None:
         logger.warning("Previous scan still running — skipping this trigger to prevent overlap.")
         return
 
-    run_start = datetime.utcnow()
+    run_start = datetime.now(timezone.utc).replace(tzinfo=None)
     logger.info("=" * 60)
     logger.info(f"SCAN STARTED — {run_start.strftime('%Y-%m-%d %H:%M UTC')}")
     logger.info("=" * 60)
@@ -366,7 +366,7 @@ def run_full_scan() -> None:
             logger.debug(f"Smart alert calibration skipped: {_ce}")
 
         # ── Assemble and save full result ─────────────────────────────────
-        run_end = datetime.utcnow()
+        run_end = datetime.now(timezone.utc).replace(tzinfo=None)
         result = {
             "run_id":          run_start.isoformat(),
             "completed_at":    run_end.isoformat(),
@@ -444,12 +444,12 @@ def send_monthly_report() -> None:
         history  = load_history()
         latest   = history.get("latest", {})
         models   = latest.get("models", {})
-        ts       = latest.get("completed_at", datetime.utcnow().isoformat())
+        ts       = latest.get("completed_at", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
         runs     = history.get("runs", [])
 
         lines = [
             f"Flare DeFi Model — Monthly Summary Report",
-            f"Generated: {datetime.utcnow().strftime('%B %Y')}",
+            f"Generated: {datetime.now(timezone.utc).replace(tzinfo=None).strftime('%B %Y')}",
             f"Based on latest scan: {ts[:19].replace('T', ' ')} UTC",
             f"Total scans this period: {len(runs)}",
             "",
@@ -488,7 +488,7 @@ def send_monthly_report() -> None:
             ]
 
         incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"], "%Y-%m-%d")
-        days_left = max(0, (incentive_expiry - datetime.utcnow()).days)
+        days_left = max(0, (incentive_expiry - datetime.now(timezone.utc).replace(tzinfo=None)).days)
         lines += [
             "",
             "═" * 50,
@@ -504,7 +504,7 @@ def send_monthly_report() -> None:
         ]
 
         body    = "\n".join(lines)
-        subject = f"⚡ Flare DeFi Monthly Report — {datetime.utcnow().strftime('%B %Y')}"
+        subject = f"⚡ Flare DeFi Monthly Report — {datetime.now(timezone.utc).replace(tzinfo=None).strftime('%B %Y')}"
         ok = send_email_alert(subject, body, config)
         if ok:
             logger.info("Monthly report email sent successfully.")

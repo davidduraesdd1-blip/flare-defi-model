@@ -89,14 +89,14 @@ else:
     if new_protocols:
         st.markdown(f"#### New Protocols on Flare ({len(new_protocols)})")
         for proto in new_protocols:
-            tvl_str  = f"${proto['tvl_usd']:,}" if proto.get("tvl_usd") else "TVL unknown"
+            tvl_str  = f"${proto['tvl_usd']:,.0f}" if proto.get("tvl_usd") else "TVL unknown"
             url_md   = f" · [Visit]({proto['url']})" if proto.get("url") else ""
             desc     = _html.escape(str(proto.get("description", "")))
             st.markdown(
                 f"<div class='arb-tag'>"
                 f"<span style='font-weight:700; color:#f1f5f9;'>{_html.escape(str(proto['name']))}</span>"
                 f"<span style='color:#475569;'> · {_html.escape(str(proto.get('category','?')))} · {tvl_str}{url_md}</span>"
-                f"{'<div style=color:#64748b;font-size:0.82rem;margin-top:6px>' + desc + '</div>' if desc else ''}"
+                f"{'<div style=\"color:#64748b;font-size:0.82rem;margin-top:6px\">' + desc + '</div>' if desc else ''}"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -110,7 +110,7 @@ else:
     if known_tvl:
         with st.expander(f"Live TVL — {len(known_tvl)} tracked protocols"):
             tvl_rows = [
-                {"Protocol": name, "TVL (USD)": f"${data['tvl_usd']:,}", "Category": data.get("category", "")}
+                {"Protocol": name, "TVL (USD)": f"${data['tvl_usd']:,.0f}", "Category": data.get("category", "")}
                 for name, data in sorted(
                     known_tvl.items(),
                     key=lambda x: x[1].get("tvl_usd", 0) if isinstance(x[1], dict) else 0,
@@ -144,7 +144,7 @@ else:
                 f"<div>{title_md}</div>"
                 f"<div style='color:#334155; font-size:0.72rem; margin-top:4px; display:flex; gap:8px;'>"
                 f"<span style='color:#475569;'>{src}</span>"
-                f"{'<span style=color:#1e293b>·</span>' if src and pub else ''}"
+                f"{'<span style=\"color:#1e293b\">·</span>' if src and pub else ''}"
                 f"<span>{pub}</span>"
                 f"</div>"
                 f"{sum_html}"
@@ -248,9 +248,9 @@ if feedback:
             f"<div style='display:flex; gap:16px; font-size:0.85rem; color:#475569;'>"
             f"<span>Grade: <span style='color:#f1f5f9; font-weight:700;'>{grade}</span></span>"
             f"<span>Score: <span style='color:{sc_color}; font-weight:700;'>{score}/100</span></span>"
-            f"{'<span>Accuracy: <span style=color:#94a3b8>' + str(acc_pct) + '%</span></span>' if acc_pct is not None else ''}"
-            f"{'<span>Avg error: <span style=color:#94a3b8>' + str(err_pct) + '%</span></span>' if err_pct is not None else ''}"
-            f"{'<span>Directional: <span style=color:#94a3b8>' + str(dir_pct) + '%</span></span>' if dir_pct is not None else ''}"
+            f"{'<span>Accuracy: <span style=\"color:#94a3b8\">' + str(acc_pct) + '%</span></span>' if acc_pct is not None else ''}"
+            f"{'<span>Avg error: <span style=\"color:#94a3b8\">' + str(err_pct) + '%</span></span>' if err_pct is not None else ''}"
+            f"{'<span>Directional: <span style=\"color:#94a3b8\">' + str(dir_pct) + '%</span></span>' if dir_pct is not None else ''}"
             f"<span style='color:#334155;'>{sc} samples</span>"
             f"</div></div>"
             f"<div style='color:#475569; font-size:0.82rem; margin-top:8px;'>{msg}</div>"
