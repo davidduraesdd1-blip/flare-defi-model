@@ -131,7 +131,7 @@ def _inject_css() -> None:
         font-variant-numeric: tabular-nums;
     }
     .label {
-        font-size: 0.68rem; color: #64748b;
+        font-size: 0.68rem; color: #94a3b8;
         text-transform: uppercase; letter-spacing: 1.5px;
         margin-bottom: 8px;
     }
@@ -350,7 +350,7 @@ def _inject_css() -> None:
 
     /* ── Section Label ────────────────────────────────────────────────── */
     .section-label {
-        font-size: 0.65rem; color: #475569;
+        font-size: 0.65rem; color: #94a3b8;
         text-transform: uppercase; letter-spacing: 1.6px;
         margin-bottom: 10px; margin-top: 6px;
     }
@@ -427,10 +427,11 @@ def _inject_css() -> None:
     }
 
     /* ── Dark-mode legibility lift ────────────────────────────────────── */
-    /* #334155 and #475569 fail WCAG AA on #0d0e14 — lift all inline uses */
-    :is(div,span,p,a)[style*="color:#334155"] { color: #64748b !important; }
+    /* Several slate shades fail WCAG AA on #0d0e14 — lift all inline uses */
+    :is(div,span,p,a)[style*="color:#334155"] { color: #94a3b8 !important; }
     :is(div,span,p,a)[style*="color:#475569"] { color: #94a3b8 !important; }
-    :is(div,span,p,a)[style*="color:#1e293b"] { color: #475569 !important; }
+    :is(div,span,p,a)[style*="color:#64748b"] { color: #94a3b8 !important; }
+    :is(div,span,p,a)[style*="color:#1e293b"] { color: #64748b !important; }
     :is(div,span,p,a)[style*="color:#0f172a"] { color: #64748b !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -461,7 +462,10 @@ def _inject_css() -> None:
                     inset 0 1px 0 rgba(255,255,255,0.9) !important;
     }
     .big-number { color: #0f172a !important; }
-    .label { color: #64748b !important; }
+    .label { color: #475569 !important; }
+
+    /* ── Card base text — ensures inherited text is dark on white cards ── */
+    .metric-card, .opp-card, .arb-tag, .warn-box, .price-chip { color: #1e293b; }
 
     .opp-card {
         background: rgba(255,255,255,0.95) !important;
@@ -484,7 +488,7 @@ def _inject_css() -> None:
 
     /* ── Typography helpers ───────────────────────────────────────────── */
     .section-header { color: #1e293b !important; border-bottom-color: rgba(109,40,217,0.3) !important; }
-    .section-label  { color: #64748b !important; }
+    .section-label  { color: #475569 !important; }
     .divider { border-top-color: rgba(0,0,0,0.09) !important; }
     ::-webkit-scrollbar-track { background: #dde3ee; }
     ::-webkit-scrollbar-thumb { background: #b8c4d6; }
@@ -517,16 +521,28 @@ def _inject_css() -> None:
     [data-testid="stRadio"] label span,
     [data-testid="stRadio"] [data-testid="stMarkdownContainer"] p { color: #475569 !important; }
 
+    /* ── Global text reset — dark text on white bg (Streamlit dark defaults) */
+    .stApp, .main, .block-container { color: #1e293b; }
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li { color: #1e293b; }
+
     /* ── Flip light text → dark for light bg ─────────────────────────── */
     :is(div,span,p,a)[style*="color:#f1f5f9"]  { color: #0f172a !important; }
     :is(div,span,p,a)[style*="color:#e2e8f0"]  { color: #1e293b !important; }
     :is(div,span,p,a)[style*="color:#c4cbdb"]  { color: #334155 !important; }
     :is(div,span,p,a)[style*="color:#cbd5e1"]  { color: #334155 !important; }
     :is(div,span,p,a)[style*="color:#94a3b8"]  { color: #475569 !important; }
-    :is(div,span,p,a)[style*="color:#64748b"]  { color: #64748b !important; }
-    /* Undo the dark-mode lift rules — #475569 is fine on white */
+    :is(div,span,p,a)[style*="color:#64748b"]  { color: #475569 !important; }
+    /* Undo the dark-mode lift rules — these shades are fine on white */
     :is(div,span,p,a)[style*="color:#475569"]  { color: #475569 !important; }
     :is(div,span,p,a)[style*="color:#334155"]  { color: #475569 !important; }
+    /* Flip vibrant/neon colors → darker accessible equivalents on white */
+    :is(div,span,p,a)[style*="color:#f59e0b"]  { color: #92400e !important; }
+    :is(div,span,p,a)[style*="color:#a78bfa"]  { color: #5b21b6 !important; }
+    :is(div,span,p,a)[style*="color:#22c55e"]  { color: #166534 !important; }
+    :is(div,span,p,a)[style*="color:#10b981"]  { color: #065f46 !important; }
+    :is(div,span,p,a)[style*="color:#3b82f6"]  { color: #1d4ed8 !important; }
+    :is(div,span,p,a)[style*="color:#8b5cf6"]  { color: #5b21b6 !important; }
 
     /* ── Flip dark card backgrounds → white ──────────────────────────── */
     div[style*="background:rgba(13,14,20"],
@@ -909,7 +925,7 @@ def render_price_strip(prices: list) -> None:
                 <div style="font-size:0.68rem; color:#64748b; margin-bottom:5px; display:flex; align-items:center; justify-content:center; gap:4px;">
                     {dot_html}<span style="letter-spacing:0.6px; text-transform:uppercase;">{sym}</span>
                 </div>
-                <div style="font-size:1.12rem; font-weight:700; letter-spacing:-0.3px; font-variant-numeric:tabular-nums;">{price_str}</div>
+                <div style="font-size:1.12rem; font-weight:700; letter-spacing:-0.3px; font-variant-numeric:tabular-nums; color:#f1f5f9;">{price_str}</div>
                 <div style="font-size:0.75rem; color:{color}; margin-top:3px; font-weight:600;">{arrow} {abs(chg):.2f}%</div>
             </div>""", unsafe_allow_html=True)
 
