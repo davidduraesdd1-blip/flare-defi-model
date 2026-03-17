@@ -126,6 +126,12 @@ def _get_web3() -> Optional[Web3]:
 def _rate_to_apy(rate_per_block: int) -> float:
     """Convert Compound-style rate-per-block (1e18 mantissa) to annualised APY %."""
     r = rate_per_block / 1e18
+    # Guard against absurd rates from bad API data (> ~0.000002/block ≈ 250% APY)
+    # which would cause (1 + r)^15_000_000 to overflow to infinity.
+    if r <= 0:
+        return 0.0
+    if r > 2e-5:
+        r = 2e-5   # cap at ~250% APY max
     return round(((1 + r) ** _FLARE_BLOCKS_PER_YEAR - 1) * 100, 2)
 
 # ─── Data Structures ──────────────────────────────────────────────────────────

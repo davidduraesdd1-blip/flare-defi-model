@@ -271,6 +271,74 @@ def _inject_css() -> None:
     }
     div[style*="border:1px solid rgba(255,255,255"] { border-color: rgba(0,0,0,0.08) !important; }
     div[style*="background:rgba(255,255,255,0.05"], div[style*="background:rgba(255,255,255,0.07"] { background: rgba(0,0,0,0.09) !important; }
+
+    /* ── Override Streamlit CSS variables ────────────────────────────── */
+    /* These variables drive ALL widget backgrounds (expanders, selects,  */
+    /* code blocks, etc.). Without these, dark-theme vars bleed through.  */
+    :root {
+        --background-color: #f1f5f9 !important;
+        --secondary-background-color: #e8edf5 !important;
+        --text-color: #1e293b !important;
+        color-scheme: light;
+    }
+
+    /* ── Select / Dropdown widgets (data-baseweb) ─────────────────────── */
+    [data-baseweb="select"] [data-baseweb="input-container"],
+    [data-baseweb="select"] [data-baseweb="value-container"],
+    [data-baseweb="input"],
+    [data-baseweb="textarea"],
+    [data-baseweb="select"] { background-color: #ffffff !important; color: #1e293b !important; }
+    [data-baseweb="list"],
+    [data-baseweb="popover"] { background-color: #ffffff !important; color: #1e293b !important; border: 1px solid rgba(0,0,0,0.10) !important; }
+    [data-baseweb="list"] li,
+    [data-baseweb="menu-item"] { color: #1e293b !important; }
+    [data-baseweb="list"] li:hover,
+    [data-baseweb="menu-item"]:hover { background-color: rgba(109,40,217,0.07) !important; }
+
+    /* ── Select label + option text ───────────────────────────────────── */
+    [data-testid="stSelectbox"] label,
+    [data-testid="stSelectbox"] span,
+    [data-testid="stMultiSelect"] label,
+    [data-testid="stMultiSelect"] span { color: #1e293b !important; }
+
+    /* ── Slider ───────────────────────────────────────────────────────── */
+    [data-testid="stSlider"] label,
+    [data-testid="stSlider"] p { color: #1e293b !important; }
+
+    /* ── Caption / code blocks ────────────────────────────────────────── */
+    [data-testid="stCaptionContainer"] p,
+    .stCaption, caption { color: #64748b !important; }
+    [data-testid="stCodeBlock"] pre,
+    [data-testid="stCodeBlock"] code { background-color: #f8fafc !important; color: #1e293b !important; border: 1px solid rgba(0,0,0,0.07) !important; }
+
+    /* ── Column + vertical block wrappers ─────────────────────────────── */
+    /* These sometimes get a dark background from Streamlit's CSS variable */
+    [data-testid="stColumn"],
+    [data-testid="stVerticalBlock"],
+    [data-testid="stHorizontalBlock"] { background: transparent !important; }
+
+    /* ── Sidebar text / labels ────────────────────────────────────────── */
+    [data-testid="stSidebar"] * { color: #1e293b; }
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span { color: #1e293b !important; }
+    [data-testid="stSidebar"] [data-baseweb="select"] [data-baseweb="input-container"],
+    [data-testid="stSidebar"] [data-baseweb="select"] { background-color: #dde4ee !important; }
+
+    /* ── Info / success / warning / error banners ─────────────────────── */
+    [data-testid="stInfo"],
+    [data-testid="stSuccess"],
+    [data-testid="stWarning"],
+    [data-testid="stError"] { color: #1e293b !important; }
+
+    /* ── st.metric widget ─────────────────────────────────────────────── */
+    [data-testid="stMetric"] label { color: #475569 !important; }
+    [data-testid="stMetric"] [data-testid="stMetricValue"] { color: #0f172a !important; }
+    [data-testid="stMetric"] [data-testid="stMetricDelta"] { color: #475569 !important; }
+
+    /* ── Checkbox / toggle ────────────────────────────────────────────── */
+    [data-testid="stCheckbox"] label span,
+    [data-testid="stToggle"] label span { color: #1e293b !important; }
 </style>
 """, unsafe_allow_html=True)
 

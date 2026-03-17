@@ -116,10 +116,10 @@ else:
                     fill="tozeroy", fillcolor=fill_color,
                 ))
                 fig.update_layout(
-                    plot_bgcolor="rgba(13,14,20,0)", paper_bgcolor="rgba(13,14,20,0)",
+                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                     xaxis=dict(visible=False),
                     yaxis=dict(
-                        gridcolor="rgba(255,255,255,0.04)",
+                        gridcolor="rgba(148,163,184,0.15)",
                         tickfont=dict(size=9, color="#475569"),
                         ticksuffix="%",
                     ),

@@ -29,13 +29,19 @@ st.markdown(
 
 # ─── Fetch FAsset data ────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=600)
 def _load_fasset_data() -> dict:
+    # Fast path: read from the most recent scan (no network calls needed).
+    # fetch_fasset_data() is now included in the scan pipeline so this will
+    # be populated after the first scheduled scan.
+    cached = load_latest().get("fasset", {})
+    if cached and isinstance(cached.get("assets"), dict) and cached["assets"]:
+        return cached
+    # Slow path: direct API call — only runs before first scan or after cache miss.
     try:
         from scanners.flare_scanner import fetch_fasset_data
         return fetch_fasset_data()
-    except Exception as e:
-        st.warning(f"Could not load FAsset data: {e}")
+    except Exception:
         return {}
 
 

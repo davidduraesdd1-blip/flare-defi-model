@@ -31,7 +31,7 @@ from config import (
     RISK_PROFILES, RISK_PROFILE_NAMES, INITIAL_POSITIONS, HISTORY_MAX_RUNS, INCENTIVE_PROGRAM
 )
 from scanners.web_monitor import run_web_monitor
-from scanners.flare_scanner   import run_flare_scan
+from scanners.flare_scanner   import run_flare_scan, fetch_fasset_data
 from scanners.multi_scanner   import run_multi_scan
 from scanners.options_scanner import fetch_volatility_data
 from models.risk_models       import run_all_models
@@ -168,7 +168,9 @@ def run_quick_check() -> None:
 
         # ── 1. Kinetic utilization spikes ─────────────────────────────────
         for rate in kinetic_list:
-            util = rate.utilisation
+            util = getattr(rate, "utilisation", None)
+            if util is None:
+                continue
             if util >= util_limit:
                 alerts.append(
                     f"KINETIC UTILIZATION SPIKE: {rate.asset} at "
@@ -316,14 +318,16 @@ def run_full_scan() -> None:
 
     try:
         # ── Steps 1+2+5a: Independent data fetches — run in parallel ─────
-        logger.info("Steps 1-2 — Scanning Flare network + multi-platform + volatility data in parallel...")
-        with ThreadPoolExecutor(max_workers=3) as _data_pool:
-            _f_flare = _data_pool.submit(run_flare_scan)
-            _f_multi = _data_pool.submit(run_multi_scan)
-            _f_vol   = _data_pool.submit(fetch_volatility_data)
-            flare_scan = _f_flare.result()
-            multi_scan = _f_multi.result()
-            vol_data   = _f_vol.result()
+        logger.info("Steps 1-2 — Scanning Flare network + multi-platform + volatility + FAssets in parallel...")
+        with ThreadPoolExecutor(max_workers=4) as _data_pool:
+            _f_flare  = _data_pool.submit(run_flare_scan)
+            _f_multi  = _data_pool.submit(run_multi_scan)
+            _f_vol    = _data_pool.submit(fetch_volatility_data)
+            _f_fasset = _data_pool.submit(fetch_fasset_data)
+            flare_scan  = _f_flare.result()
+            multi_scan  = _f_multi.result()
+            vol_data    = _f_vol.result()
+            fasset_data = _f_fasset.result()
 
         # ── Steps 3+4+5: Independent — run in parallel ───────────────────
         logger.info("Steps 3-5 — Running models, arbitrage, and options in parallel...")
@@ -373,6 +377,7 @@ def run_full_scan() -> None:
             "duration_seconds": round((run_end - run_start).total_seconds(), 1),
             "flare_scan":      scan_dict,
             "multi_scan":      multi_scan,
+            "fasset":          fasset_data,
             "models":          model_results,
             "arbitrage":       arb_results,
             "options":         options_results,

@@ -59,7 +59,7 @@ def _fetch_wallet_balances(wallet: str) -> list:
         "stateMutability": "view", "type": "function",
     }]
     token_balances  = {"FLR (native)": flr_balance}
-    token_decimals  = {"USD0": 6, "USDT": 6, "USDC.e": 6}
+    token_decimals  = {"USD0": 6, "USDT": 6, "USDC.e": 6, "USDT0": 6, "FXRP": 6, "FDOGE": 8, "FBTC": 8}
     for sym, addr in TOKENS.items():
         if not addr:
             continue
@@ -253,6 +253,8 @@ with st.expander("➕ Track a New Position"):
         if st.form_submit_button("Add Position", use_container_width=True):
             if not pool_name:
                 st.error("Pool / Asset name is required.")
+            elif float(deposit_usd) <= 0:
+                st.error("Deposit amount must be greater than $0.")
             else:
                 positions.append({
                     "id":             f"pos_{int(datetime.now(timezone.utc).timestamp())}",
@@ -394,10 +396,10 @@ if len(records) >= 2:
         fillcolor="rgba(59,130,246,0.06)",
     ))
     fig.update_layout(
-        plot_bgcolor="#0d1321", paper_bgcolor="#0d1321",
-        font_color="#94a3b8",
-        xaxis=dict(gridcolor="#1e293b", color="#475569"),
-        yaxis=dict(title="APY %", gridcolor="#1e293b", color="#475569"),
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        font_color="#475569",
+        xaxis=dict(gridcolor="rgba(148,163,184,0.15)", color="#475569"),
+        yaxis=dict(title="APY %", gridcolor="rgba(148,163,184,0.15)", color="#475569"),
         margin=dict(l=40, r=20, t=20, b=40),
         height=260,
         showlegend=False,
@@ -514,14 +516,14 @@ else:
         zmin=0, zmax=1,
         text=[[f"{v:.2f}" for v in row] for row in corr_matrix],
         texttemplate="%{text}",
-        textfont={"size": 11, "color": "#e2e8f0"},
+        textfont={"size": 11, "color": "#1e293b"},
         hovertemplate="<b>%{y}</b> vs <b>%{x}</b><br>Correlation: %{z:.2f}<extra></extra>",
     ))
     fig_corr.update_layout(
-        plot_bgcolor="#0d0e14", paper_bgcolor="#0d0e14",
-        font_color="#94a3b8",
-        xaxis=dict(tickangle=-30, tickfont=dict(size=10, color="#64748b")),
-        yaxis=dict(tickfont=dict(size=10, color="#64748b")),
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        font_color="#475569",
+        xaxis=dict(tickangle=-30, tickfont=dict(size=10, color="#475569")),
+        yaxis=dict(tickfont=dict(size=10, color="#475569")),
         margin=dict(l=20, r=20, t=20, b=80),
         height=max(240, 80 + 60 * n),
     )
