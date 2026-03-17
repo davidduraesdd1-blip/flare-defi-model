@@ -61,9 +61,13 @@ def fetch_hyperliquid_perps() -> list:
 
             if i < len(asset_ctx):
                 ctx = asset_ctx[i]
-                funding = float(ctx.get("funding", 0))
-                mark    = float(ctx.get("markPx", 0))
-                oi      = float(ctx.get("openInterest", 0))
+                try:
+                    funding = float(ctx.get("funding", 0) or 0)
+                    mark    = float(ctx.get("markPx", 0) or 0)
+                    oi      = float(ctx.get("openInterest", 0) or 0)
+                except (TypeError, ValueError):
+                    logger.debug(f"Hyperliquid: invalid numeric data for {name}, skipping")
+                    continue
 
                 results.append(PerpData(
                     exchange="hyperliquid",

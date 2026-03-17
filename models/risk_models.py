@@ -424,7 +424,8 @@ def _load_history_data() -> tuple:
                 if proto_name and name and tvl:
                     tvl_map.setdefault((proto_name, name), []).append(float(tvl))
         return apy_map, tvl_map
-    except Exception:
+    except Exception as e:
+        logger.warning(f"_load_history_data: failed to load historical APY/TVL — {e}")
         return {}, {}
 
 

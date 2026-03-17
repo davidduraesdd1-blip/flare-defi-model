@@ -150,6 +150,7 @@ def detect_fassets_arb(prices_data: list) -> list:
     xrp  = next((p for p in prices_data if p.get("symbol") == "XRP"),  None)
 
     if not fxrp or not xrp:
+        logger.debug("FAssets arb skipped: FXRP or XRP price data unavailable")
         return opps
 
     xrp_price  = xrp.get("price_usd", 0)

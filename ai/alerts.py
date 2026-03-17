@@ -159,7 +159,11 @@ def check_and_send_alerts(model_results: dict, arb_results: dict = None) -> None
     """
     config     = load_alerts_config()
     thresholds = config.get("thresholds", {})
-    min_apy    = float(thresholds.get("min_apy_alert", 150.0))
+    try:
+        min_apy = float(thresholds.get("min_apy_alert", 150.0))
+    except (TypeError, ValueError):
+        logger.warning("Invalid min_apy_alert in config — using default 150.0")
+        min_apy = 150.0
     arb_alert  = thresholds.get("new_arb_alert", True)
 
     lines = [
@@ -183,7 +187,9 @@ def check_and_send_alerts(model_results: dict, arb_results: dict = None) -> None
 
     if arb_alert and arb_results:
         for profile, arbs in arb_results.items():
-            for arb in (arbs or [])[:1]:
+            if not isinstance(arbs, list):
+                continue
+            for arb in arbs[:1]:
                 if arb.get("urgency") == "act_now":
                     triggered = True
                     lines.append(

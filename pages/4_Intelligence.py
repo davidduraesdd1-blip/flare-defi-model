@@ -130,6 +130,8 @@ else:
             unsafe_allow_html=True,
         )
         for item in news_items[:10]:
+            if not isinstance(item, dict):
+                continue
             title    = _html.escape(str(item.get("title", "Untitled")))
             link     = item.get("link", "")
             title_md = f"<a href='{_html.escape(link)}' target='_blank' style='color:#c4cbdb; font-weight:600; text-decoration:none;'>{title} ↗</a>" if link else f"<span style='color:#94a3b8; font-weight:600;'>{title}</span>"

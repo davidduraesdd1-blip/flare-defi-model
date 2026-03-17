@@ -119,6 +119,8 @@ _ASSET_COLOR = {"FXRP": "#3b82f6", "FBTC": "#f59e0b", "FDOGE": "#22c55e"}
 _ASSET_ICON  = {"FXRP": "XRP", "FBTC": "BTC", "FDOGE": "DOGE"}
 
 for sym, info in assets.items():
+    if not isinstance(info, dict):
+        continue
     color      = _ASSET_COLOR.get(sym, "#8b5cf6")
     icon_label = _ASSET_ICON.get(sym, sym)
     mint_fee   = info.get("mint_fee_pct", 0.25)

@@ -65,8 +65,8 @@ def _fetch_wallet_balances(wallet: str) -> list:
             dec = token_decimals.get(sym, 18)
             bal = contract.functions.balanceOf(addr_cs).call()
             token_balances[sym] = bal / (10 ** dec)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to fetch {sym} balance for {addr_cs}: {e}")
     return [{"Token": k, "Balance": f"{v:,.4f}"} for k, v in token_balances.items() if v >= 0.0001]
 
 
@@ -209,7 +209,7 @@ if positions:
                 if idx < len(positions):
                     positions.pop(idx)
                     save_positions(positions)
-                st.rerun()
+                    st.rerun()
 
 else:
     st.markdown(

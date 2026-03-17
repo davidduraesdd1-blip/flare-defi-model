@@ -396,14 +396,18 @@ def run_full_scan() -> None:
         top_medium       = (model_results.get("medium")       or [{}])[0]
         top_high         = (model_results.get("high")         or [{}])[0]
 
+        def _fmt_apy(opp: dict) -> str:
+            apy = opp.get("estimated_apy")
+            return f"{apy:.1f}%" if isinstance(apy, (int, float)) else "N/A"
+
         summary = (
             f"Scan complete in {duration}s\n"
             f"Conservative: {top_conservative.get('asset_or_pool','N/A')} "
-            f"@ {top_conservative.get('estimated_apy','?')}% APY\n"
+            f"@ {_fmt_apy(top_conservative)} APY\n"
             f"Medium: {top_medium.get('asset_or_pool','N/A')} "
-            f"@ {top_medium.get('estimated_apy','?')}% APY\n"
+            f"@ {_fmt_apy(top_medium)} APY\n"
             f"High: {top_high.get('asset_or_pool','N/A')} "
-            f"@ {top_high.get('estimated_apy','?')}% APY"
+            f"@ {_fmt_apy(top_high)} APY"
         )
 
         logger.info("=" * 60)
@@ -568,7 +572,7 @@ def start_scheduler() -> None:
         trigger=IntervalTrigger(hours=interval_hours, timezone=tz),
         id="quick_check",
         name=f"Intraday Alert Check (every {interval_hours}h)",
-        misfire_grace_time=600,
+        misfire_grace_time=1800,   # match full-scan grace — laptop-friendly
     )
     logger.info(f"Scheduled intraday alert check every {interval_hours} hours")
 

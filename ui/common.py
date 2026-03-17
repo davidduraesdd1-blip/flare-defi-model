@@ -444,7 +444,15 @@ def _inject_css() -> None:
 """, unsafe_allow_html=True)
 
     # ── Light mode override ────────────────────────────────────────────────────
-    if st.session_state.get("_theme") == "light":
+    # Detect native Streamlit theme (st.context.theme.base, added in 1.37) so
+    # the override applies whether the user clicked the custom toggle OR switched
+    # via Streamlit's own Settings menu.
+    _native_light = False
+    try:
+        _native_light = st.context.theme.base == "light"
+    except Exception:
+        pass
+    if _native_light or st.session_state.get("_theme") == "light":
         st.markdown("""
 <style>
     /* ── Light Mode Base ──────────────────────────────────────────────── */
@@ -602,7 +610,12 @@ def render_sidebar() -> dict:
         st.rerun()
 
     with st.sidebar:
-        _is_light = st.session_state.get("_theme") == "light"
+        _native_light = False
+        try:
+            _native_light = st.context.theme.base == "light"
+        except Exception:
+            pass
+        _is_light = _native_light or st.session_state.get("_theme") == "light"
         _logo_col, _theme_col = st.columns([3, 1])
         with _logo_col:
             st.markdown(

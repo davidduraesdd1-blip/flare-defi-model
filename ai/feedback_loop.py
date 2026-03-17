@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 LOOKBACK_DAYS      = ACCURACY_LOOKBACK_DAYS  # rolling window for accuracy scoring
 MIN_SAMPLES        = 2                        # minimum evaluated predictions before scoring activates
 EVAL_WINDOW_24H    = 3 * 3600                 # first evaluation at 3h — quick checks fire this every cycle
-EVAL_WINDOW_7D     = 3 * 24 * 3600           # second evaluation at 3 days (was 6 days)
+EVAL_WINDOW_7D     = 3 * 24 * 3600           # second evaluation at 3 days — named 7D for legacy key compatibility
 _EXP_HALF_LIFE     = 14.0                     # exponential time-weight half-life in days: recent picks count more
 _ACCURACY_THRESHOLD = 20.0                    # within 20% of actual APY = "accurate" prediction
 
@@ -100,8 +100,10 @@ def record_prediction(model_results: dict) -> None:
             p for p in history["predictions"] if p["timestamp"] >= cutoff
         ]
 
-    save_history(history)
-    logger.info(f"Prediction recorded: {prediction['id']}")
+    if not save_history(history):
+        logger.error(f"Prediction {prediction['id']} could not be persisted — data may be lost on restart")
+    else:
+        logger.info(f"Prediction recorded: {prediction['id']}")
 
 
 # ─── Record Actuals (called 24h later) ───────────────────────────────────────
@@ -137,8 +139,10 @@ def record_actuals(scan_result: dict) -> None:
             pred["evaluated_7d"]    = True
             pred["evaluated_7d_at"] = now.isoformat()
 
-    save_history(history)
-    logger.info("Actuals recorded and predictions evaluated.")
+    if not save_history(history):
+        logger.error("Actuals could not be persisted — evaluated predictions may be lost on restart")
+    else:
+        logger.info("Actuals recorded and predictions evaluated.")
 
 
 # ─── Internal helper ─────────────────────────────────────────────────────────

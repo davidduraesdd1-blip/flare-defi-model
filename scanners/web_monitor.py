@@ -170,6 +170,8 @@ def fetch_coingecko_flare_tokens() -> dict:
         known_addresses = set()
 
     for coin in coins:
+        if not isinstance(coin, dict):
+            continue
         platforms = coin.get("platforms") or {}
         flare_address = None
         for platform_id, addr in platforms.items():
@@ -323,8 +325,8 @@ def claude_digest(
             max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
         )
-        if not msg.content:
-            logger.warning("Claude API returned empty content")
+        if not msg.content or not hasattr(msg.content[0], "text"):
+            logger.warning("Claude API returned empty or non-text content")
             return ""
         digest_text = msg.content[0].text.strip()
         logger.info("Claude AI digest generated.")

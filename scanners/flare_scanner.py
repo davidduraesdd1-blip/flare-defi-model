@@ -345,12 +345,17 @@ def _fetch_defillama_raw() -> dict:
             proto_key = _DL_PROTOCOL_MAP.get(project)
             if not proto_key:
                 continue
+            def _sf(val, default=0.0):
+                try:
+                    return float(val) if val is not None else default
+                except (TypeError, ValueError):
+                    return default
             result.setdefault(proto_key, []).append({
                 "symbol":     pool.get("symbol", ""),
-                "apy":        float(pool.get("apy") or 0),
-                "apy_base":   float(pool.get("apyBase") or 0),
-                "apy_reward": float(pool.get("apyReward") or 0),
-                "tvl_usd":    float(pool.get("tvlUsd") or 0),
+                "apy":        _sf(pool.get("apy")),
+                "apy_base":   _sf(pool.get("apyBase")),
+                "apy_reward": _sf(pool.get("apyReward")),
+                "tvl_usd":    _sf(pool.get("tvlUsd")),
                 "il_7d":      pool.get("il7d"),
             })
         _defillama_cache    = result
@@ -667,6 +672,9 @@ def fetch_kinetic_rates() -> list:
 
             # TVL: convert raw token units → USD using baseline price for non-stablecoins
             underlying_decimals = cfg["decimals"]
+            if not (0 <= underlying_decimals <= 30):
+                logger.warning(f"Kinetic: invalid decimals {underlying_decimals} for {asset} — defaulting to 18")
+                underlying_decimals = 18
             token_amount = (cash + total_borrows) / (10 ** underlying_decimals)
             token_price  = _BASELINE_TOKEN_PRICES.get(asset, 1.0)
             tvl_usd = round(token_amount * token_price, 2)
@@ -676,7 +684,7 @@ def fetch_kinetic_rates() -> list:
             supply_apy  = cfg["baseline_supply"]
             borrow_apy  = cfg["baseline_borrow"]
             utilisation = 0.0   # unknown when using baseline; do not fabricate a value
-            tvl_usd     = PROTOCOLS["kinetic"]["tvl_usd"] / len(k_tokens)
+            tvl_usd     = PROTOCOLS["kinetic"]["tvl_usd"] / max(1, len(k_tokens))
             data_source = "baseline"
 
         rates.append(LendingRate(

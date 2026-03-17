@@ -53,7 +53,11 @@ with tab_email:
         smtp_srv  = st.text_input("SMTP server", value=config["email"].get("smtp_server", "smtp.gmail.com"), key="smtp_srv")
         smtp_user = st.text_input("SMTP username", value=config["email"].get("username", ""),        key="smtp_user")
     with c2:
-        smtp_port = st.number_input("SMTP port", value=int(config["email"].get("smtp_port", 587)),
+        try:
+            _port_val = max(1, min(65535, int(config["email"].get("smtp_port", 587))))
+        except (ValueError, TypeError):
+            _port_val = 587
+        smtp_port = st.number_input("SMTP port", value=_port_val,
                                     min_value=1, max_value=65535, key="smtp_port")
         smtp_pass = st.text_input("SMTP password", value=config["email"].get("password", ""),
                                    key="smtp_pass", type="password")

@@ -158,6 +158,8 @@ if not analysis:
     )
 else:
     for token, strats in analysis.items():
+        if not isinstance(strats, dict):
+            continue
         with st.expander(f"{token} Strategies"):
             for strat_name, strat_data in strats.items():
                 if strat_name == "options_chain":
@@ -171,7 +173,7 @@ else:
                             "Delta":      f"{op.get('delta', 0):.3f}",
                             "θ/day":      f"${op.get('theta', 0):.6f}",
                             "Vega":       f"{op.get('vega', 0):.6f}",
-                        } for op in strat_data]
+                        } for op in strat_data if isinstance(op, dict)]
                         st.dataframe(pd.DataFrame(chain_rows), use_container_width=True, hide_index=True)
                     continue
                 if isinstance(strat_data, dict):
