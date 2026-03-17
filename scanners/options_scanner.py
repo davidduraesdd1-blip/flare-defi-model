@@ -81,25 +81,18 @@ def fetch_volatility_data() -> list:
     results = []
     live_prices = _fetch_current_prices()
 
-    # Fetch ripple vol once and reuse for both XRP and FXRP
     token_map = {
         "FLR":  ("flare-networks", 0.90),
         "XRP":  ("ripple",         0.65),
     }
-    ripple_vol = None
 
     for symbol, (cg_id, default_vol) in token_map.items():
-        if cg_id == "ripple" and ripple_vol is not None:
-            hv, source = ripple_vol
+        hv = fetch_historical_volatility(cg_id, days=30)
+        if hv is None:
+            hv = default_vol
+            source = "estimate"
         else:
-            hv = fetch_historical_volatility(cg_id, days=30)
-            if hv is None:
-                hv = default_vol
-                source = "estimate"
-            else:
-                source = "live"
-            if cg_id == "ripple":
-                ripple_vol = (hv, source)
+            source = "live"
 
         # Classify volatility regime
         if hv < 0.40:

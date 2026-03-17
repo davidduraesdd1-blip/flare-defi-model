@@ -113,7 +113,7 @@ else:
                 {"Protocol": name, "TVL (USD)": f"${data['tvl_usd']:,}", "Category": data.get("category", "")}
                 for name, data in sorted(known_tvl.items(), key=lambda x: x[1].get("tvl_usd", 0), reverse=True)
             ]
-            st.dataframe(tvl_rows, use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(tvl_rows), use_container_width=True, hide_index=True)
 
     # News
     news_items = digest.get("news_items", [])

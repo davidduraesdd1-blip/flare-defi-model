@@ -241,8 +241,8 @@ def build_opportunity(
 
     # Confidence: higher TVL + live data = higher confidence
     tvl_score   = min(50, tvl_usd / 2_000_000) if tvl_usd else 0
-    fresh_score = 40 if data_source == "live" else (25 if data_source == "research" else 15)
-    confidence  = min(100, round(tvl_score + fresh_score + (10 - rs) * 2, 1))
+    fresh_score = 40 if data_source in ("live", "on-chain") else (25 if data_source == "research" else 15)
+    confidence  = max(0, min(100, round(tvl_score + fresh_score + (10 - rs) * 2, 1)))
 
     # APY range: use historical std dev if 3+ data points available, else ±20%
     if apy_history and len(apy_history) >= 3:

@@ -375,9 +375,14 @@ def fetch_blazeswap_pools() -> list:
             fee_apr    = (weekly_vol * 0.003 * 52 / tvl * 100) if tvl > 0 else 0
 
             cfg_pools  = PROTOCOLS["blazeswap"]["pools"]
-            cfg_key    = f"{t0}-{t1}" if f"{t0}-{t1}" in cfg_pools else f"{t1}-{t0}"
-            baseline   = cfg_pools.get(cfg_key, {})
-            reward_apr = max(0, baseline.get("reward_apr", baseline.get("baseline_apr", fee_apr)) - fee_apr)
+            cfg_key  = f"{t0}-{t1}" if f"{t0}-{t1}" in cfg_pools else f"{t1}-{t0}"
+            baseline = cfg_pools.get(cfg_key, {})
+            # reward_apr in config is the incentive-only portion — add directly to fee APR.
+            # Only fall back to deriving from baseline_apr (total) when reward_apr is absent.
+            if "reward_apr" in baseline:
+                reward_apr = baseline["reward_apr"]
+            else:
+                reward_apr = max(0, baseline.get("baseline_apr", fee_apr) - fee_apr)
             total_apr  = fee_apr + reward_apr
 
             pools.append(PoolData(
@@ -540,10 +545,11 @@ def _dedup_pools(pools: list) -> list:
     """
     When the same token pair appears from multiple DEX versions (e.g. V3.1 + V4),
     keep only the instance with the highest TVL to avoid duplicate recommendations.
+    Uses frozenset key so "FXRP-USD0" and "USD0-FXRP" are treated as the same pair.
     """
     best: dict = {}
     for p in pools:
-        key = p.pool_name
+        key = frozenset([p.token0, p.token1])
         if key not in best or p.tvl_usd > best[key].tvl_usd:
             best[key] = p
     return list(best.values())

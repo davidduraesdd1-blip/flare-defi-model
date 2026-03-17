@@ -198,6 +198,18 @@ else:
         with st.expander(f"{token} Strategies"):
             for strat_name, strat_data in strats.items():
                 if strat_name == "options_chain":
+                    if isinstance(strat_data, list) and strat_data:
+                        st.markdown("**Options Chain** — Full strike grid (30-day expiry)")
+                        chain_rows = [{
+                            "Type":       op.get("option_type", "").upper(),
+                            "Strike":     f"${op.get('strike', 0):.4f}",
+                            "Moneyness":  op.get("moneyness", ""),
+                            "Premium":    f"${op.get('price', 0):.6f}",
+                            "Delta":      f"{op.get('delta', 0):.3f}",
+                            "θ/day":      f"${op.get('theta', 0):.6f}",
+                            "Vega":       f"{op.get('vega', 0):.6f}",
+                        } for op in strat_data]
+                        st.dataframe(pd.DataFrame(chain_rows), use_container_width=True, hide_index=True)
                     continue
                 if isinstance(strat_data, dict):
                     plain    = strat_data.get("plain_english", "")

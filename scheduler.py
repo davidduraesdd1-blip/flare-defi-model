@@ -5,6 +5,9 @@ Run this in a terminal alongside the Streamlit app:
     python scheduler.py
 """
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import json
 import logging
 import logging.handlers
@@ -322,20 +325,18 @@ def run_full_scan() -> None:
             multi_scan = _f_multi.result()
             vol_data   = _f_vol.result()
 
-        # ── Step 3: Risk models ───────────────────────────────────────────
-        logger.info("Step 3/9 — Running risk models...")
+        # ── Steps 3+4+5: Independent — run in parallel ───────────────────
+        logger.info("Steps 3-5 — Running models, arbitrage, and options in parallel...")
         scan_dict = asdict(flare_scan)   # run_flare_scan() always returns a ScanResult dataclass
-        model_results = run_all_models(scan_dict)
-
-        # ── Step 4: Arbitrage detection ───────────────────────────────────
-        logger.info("Step 4/9 — Detecting arbitrage opportunities...")
-        arb_results = detect_all_arbitrage_all_profiles(scan_dict, multi_scan)
-
-        # ── Step 5: Options analysis ──────────────────────────────────────
-        logger.info("Step 5/9 — Running options analysis...")
-        options_results = {}
-        for profile in RISK_PROFILE_NAMES:
-            options_results[profile] = run_options_analysis(vol_data, profile)
+        with ThreadPoolExecutor(max_workers=3) as _model_pool:
+            _f_models = _model_pool.submit(run_all_models, scan_dict)
+            _f_arb    = _model_pool.submit(detect_all_arbitrage_all_profiles, scan_dict, multi_scan)
+            _f_opts   = _model_pool.submit(
+                lambda: {p: run_options_analysis(vol_data, p) for p in RISK_PROFILE_NAMES}
+            )
+            model_results   = _f_models.result()
+            arb_results     = _f_arb.result()
+            options_results = _f_opts.result()
 
         # ── Step 6: Record predictions ────────────────────────────────────
         logger.info("Step 6/9 — Recording predictions for AI feedback loop...")

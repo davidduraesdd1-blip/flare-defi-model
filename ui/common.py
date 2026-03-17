@@ -284,7 +284,15 @@ def _inject_css() -> None:
         background: #0f1019 !important;
         border-right: 1px solid rgba(255,255,255,0.06);
     }
-    [data-testid="stSidebar"] .block-container { padding-top: 1.2rem; }
+    [data-testid="stSidebar"] .block-container {
+        padding-top: 0.6rem !important;
+        padding-bottom: 0.4rem !important;
+    }
+    [data-testid="stSidebar"] .divider { margin: 6px 0 !important; }
+    [data-testid="stSidebar"] .section-label {
+        margin-bottom: 3px !important;
+        margin-top: 2px !important;
+    }
 
     /* ── Buttons ──────────────────────────────────────────────────────── */
     div[data-testid="stButton"] > button {
@@ -442,9 +450,9 @@ def render_sidebar() -> dict:
             "<div style='font-size:1.25rem; font-weight:800; "
             "background: linear-gradient(90deg, #a78bfa, #60a5fa); "
             "-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
-            "background-clip: text; letter-spacing:-0.3px; margin-bottom:2px;'>⚡ Flare DeFi</div>"
+            "background-clip: text; letter-spacing:-0.3px; margin-bottom:0px;'>⚡ Flare DeFi</div>"
             "<div style='font-size:0.68rem; color:#334155; letter-spacing:1.2px; "
-            "text-transform:uppercase; margin-bottom:10px;'>Analytics Dashboard</div>",
+            "text-transform:uppercase; margin-bottom:4px;'>Analytics Dashboard</div>",
             unsafe_allow_html=True,
         )
 
@@ -460,9 +468,10 @@ def render_sidebar() -> dict:
                 pass
         dot_html = "<span class='live-dot'></span>" if is_fresh else "<span class='stale-dot'></span>"
         st.markdown(
-            f"<div style='font-size:0.74rem; color:#475569; line-height:1.7;'>"
-            f"{dot_html}<span>Last scan: <span style='color:#94a3b8'>{_ts_fmt(last_scan) if last_scan else 'None yet'}</span></span><br>"
-            f"<span style='margin-left:13px;'>Next: <span style='color:#64748b'>{_next_scan()}</span></span></div>",
+            f"<div style='font-size:0.73rem; color:#475569; line-height:1.5; margin-bottom:4px;'>"
+            f"{dot_html}"
+            f"<span style='color:#94a3b8'>{_ts_fmt(last_scan) if last_scan else 'No scan yet'}</span>"
+            f" · Next <span style='color:#64748b'>{_next_scan()}</span></div>",
             unsafe_allow_html=True,
         )
 
@@ -498,7 +507,7 @@ def render_sidebar() -> dict:
                 _hist_ts = ""
             if _hist_ts and _hist_ts != st.session_state.get("_scan_baseline", ""):
                 st.session_state._scanning = False
-                st.cache_data.clear()
+                _load_history_file.clear()
                 st.rerun()
             elif time.time() < st.session_state.get("_scan_deadline", 0):
                 st.caption("⏳ Scanning… auto-reloading when done.")
@@ -526,30 +535,25 @@ def render_sidebar() -> dict:
 
         # Risk profile
         st.markdown("<div class='section-label'>Risk Profile</div>", unsafe_allow_html=True)
+        _PROFILE_EMOJI = {"conservative": "🟢", "medium": "🟡", "high": "🔴"}
+        _PROFILE_DISPLAY = {"conservative": "Conservative", "medium": "Balanced", "high": "Aggressive"}
         profile = st.radio(
             "Risk Profile",
             options=list(RISK_PROFILE_NAMES),
-            format_func=lambda p: {
-                "conservative": "🟢  Conservative",
-                "medium":       "🟡  Balanced",
-                "high":         "🔴  Aggressive",
-            }[p],
+            format_func=lambda p: (
+                f"{_PROFILE_EMOJI[p]}  {_PROFILE_DISPLAY[p]}  "
+                f"({RISK_PROFILES[p]['target_apy_low']:.0f}–{RISK_PROFILES[p]['target_apy_high']:.0f}%)"
+            ),
             key="risk_profile",
             label_visibility="collapsed",
         )
         profile_cfg = RISK_PROFILES[profile]
         color       = profile_cfg["color"]
-        st.markdown(
-            f"<div style='font-size:0.78rem; color:#475569; margin-top:4px;'>"
-            f"{profile_cfg['target_apy_low']:.0f}–{profile_cfg['target_apy_high']:.0f}% target APY</div>",
-            unsafe_allow_html=True,
-        )
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
         st.markdown(
-            "<div style='font-size:0.67rem; color:#334155; line-height:1.6; padding:8px 0;'>"
-            "⚠ Not financial advice.<br>"
-            "Always do your own research<br>before investing.</div>",
+            "<div style='font-size:0.67rem; color:#334155; line-height:1.4; padding:4px 0;'>"
+            "⚠ Not financial advice · DYOR before investing.</div>",
             unsafe_allow_html=True,
         )
 
@@ -617,7 +621,7 @@ def load_positions() -> list:
 def save_positions(positions: list) -> None:
     if not atomic_json_write(POSITIONS_FILE, positions):
         st.error("Could not save positions — check logs.")
-    st.cache_data.clear()
+    load_positions.clear()
 
 
 @st.cache_data(ttl=300)
@@ -634,7 +638,7 @@ def load_wallets() -> list:
 def save_wallets(wallets: list) -> None:
     if not atomic_json_write(WALLETS_FILE, wallets):
         st.error("Could not save wallets — check logs.")
-    st.cache_data.clear()
+    load_wallets.clear()
 
 
 @st.cache_data(ttl=300)
