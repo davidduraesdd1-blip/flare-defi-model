@@ -224,7 +224,10 @@ def fetch_rss_news(max_age_hours: int = 720) -> dict:  # 30-day default
             for entry in feed.entries[:10]:  # cap at 10 per feed
                 pub_ts = None
                 if hasattr(entry, "published_parsed") and entry.published_parsed:
-                    pub_ts = float(calendar.timegm(entry.published_parsed))
+                    try:
+                        pub_ts = float(calendar.timegm(entry.published_parsed))
+                    except Exception:
+                        pub_ts = None
 
                 # Skip articles older than cutoff (allow None pub_ts through)
                 if pub_ts and pub_ts < cutoff_ts:
@@ -413,7 +416,7 @@ def run_web_monitor() -> dict:
 
     # ── Save ──────────────────────────────────────────────────────────────────
     digest["run_duration_seconds"] = round(time.monotonic() - t0, 1)
-    MONITOR_DIGEST_FILE.parent.mkdir(exist_ok=True)
+    MONITOR_DIGEST_FILE.parent.mkdir(parents=True, exist_ok=True)
     if not atomic_json_write(MONITOR_DIGEST_FILE, digest):
         logger.warning("Could not save monitor digest.")
 

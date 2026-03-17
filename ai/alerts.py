@@ -91,7 +91,8 @@ def send_email_alert(subject: str, body: str, config: dict) -> bool:
         msg.attach(MIMEText(body, "plain"))
         tls_context = ssl.create_default_context()
         with smtplib.SMTP(cfg.get("smtp_server", "smtp.gmail.com"),
-                          int(cfg.get("smtp_port", 587))) as server:
+                          int(cfg.get("smtp_port", 587)),
+                          timeout=30) as server:
             server.ehlo()
             server.starttls(context=tls_context)
             if cfg.get("username") and cfg.get("password"):
@@ -176,7 +177,7 @@ def check_and_send_alerts(model_results: dict, arb_results: dict = None) -> None
         opps = model_results.get(profile, [])
         if opps:
             top = opps[0]
-            apy = top.get("estimated_apy", 0)
+            apy = top.get("estimated_apy") or 0
             if apy >= min_apy:
                 triggered = True
                 lines.append(

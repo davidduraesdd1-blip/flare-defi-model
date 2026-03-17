@@ -539,7 +539,7 @@ def render_sidebar() -> dict:
                 _hist_ts = ""
             if _hist_ts and _hist_ts != st.session_state.get("_scan_baseline", ""):
                 st.session_state._scanning = False
-                _load_history_file.clear()
+                st.cache_data.clear()
                 st.rerun()
             elif time.time() < st.session_state.get("_scan_deadline", 0):
                 st.caption("⏳ Scanning… auto-reloading when done.")
@@ -806,7 +806,7 @@ def render_price_strip(prices: list) -> None:
     for i, p in enumerate(prices):
         sym   = _html.escape(str(p.get("symbol", "?")))
         price = p.get("price_usd", 0)
-        chg   = p.get("change_24h", 0)
+        chg   = float(p.get("change_24h") or 0)
         color = "#22c55e" if chg >= 0 else "#ef4444"
         arrow = "▲" if chg >= 0 else "▼"
         is_live = p.get("data_source") not in ("estimate", "baseline")

@@ -73,7 +73,7 @@ def fetch_hyperliquid_perps() -> list:
                     exchange="hyperliquid",
                     pair=f"{name}/USDC",
                     mark_price=mark,
-                    index_price=float(ctx.get("oraclePx", mark)),
+                    index_price=float(ctx.get("oraclePx", mark) or mark),
                     funding_rate=funding,
                     funding_rate_annualised=round(funding * 3 * 365 * 100, 4),  # 3x daily = annualised %
                     open_interest=oi,

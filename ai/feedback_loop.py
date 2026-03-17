@@ -360,9 +360,9 @@ def _compute_trend(history: dict = None) -> str:
     recent   = (now - timedelta(days=7)).isoformat()
     previous = (now - timedelta(days=14)).isoformat()
 
-    recent_preds   = [p for p in history["predictions"]
+    recent_preds   = [p for p in history.get("predictions", [])
                       if p.get("evaluated") and p["timestamp"] >= recent]
-    previous_preds = [p for p in history["predictions"]
+    previous_preds = [p for p in history.get("predictions", [])
                       if p.get("evaluated") and previous <= p["timestamp"] < recent]
 
     def avg_accuracy(preds):

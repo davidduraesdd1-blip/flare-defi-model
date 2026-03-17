@@ -491,8 +491,11 @@ def send_monthly_report() -> None:
                 f"  Trend: {trend}",
             ]
 
-        incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"], "%Y-%m-%d")
-        days_left = max(0, (incentive_expiry - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+        try:
+            incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"], "%Y-%m-%d")
+            days_left = max(0, (incentive_expiry - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+        except (ValueError, KeyError):
+            days_left = 0
         lines += [
             "",
             "═" * 50,

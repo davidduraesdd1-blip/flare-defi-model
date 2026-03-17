@@ -77,7 +77,7 @@ def detect_lending_rate_arb(lending_data: list) -> list:
                         ),
                         risk_level="low",
                         applicable_profiles=["conservative", "medium", "high"],
-                        data_source=lender["data_source"],
+                        data_source=lender.get("data_source", "live"),
                     ))
 
     return opps
@@ -131,7 +131,7 @@ def detect_cross_dex_arb(pools_data: list) -> list:
                 ),
                 risk_level="medium",
                 applicable_profiles=["medium", "high"],
-                data_source=pools[0]["data_source"],
+                data_source=pools[0].get("data_source", "live"),
             ))
 
     return opps
@@ -316,7 +316,7 @@ def detect_spectra_arb(staking_data: list) -> list:
             ),
             risk_level="low",
             applicable_profiles=["conservative", "medium", "high"],
-            data_source=pt["data_source"],
+            data_source=pt.get("data_source", "live"),
         )]
     return []
 

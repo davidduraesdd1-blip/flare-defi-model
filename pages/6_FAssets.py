@@ -77,9 +77,9 @@ h_icon    = {"healthy": "✓", "caution": "⚠", "unknown": "?"}.get(health, "?"
 assets     = fasset.get("assets", {})
 latest     = load_latest()
 prices_raw = latest.get("prices", [])
-price_lkp  = {p.get("symbol", ""): p.get("price_usd", 0) for p in prices_raw}
+price_lkp  = {p.get("symbol", ""): p.get("price_usd", 0) for p in prices_raw if isinstance(p, dict)}
 
-fxrp_circ  = assets.get("FXRP", {}).get("circulating", 0)
+fxrp_circ  = float(assets.get("FXRP", {}).get("circulating", 0) or 0)
 fxrp_price = price_lkp.get("FXRP", price_lkp.get("XRP", 1.53))
 fxrp_tvl   = fxrp_circ * fxrp_price
 

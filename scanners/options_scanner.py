@@ -107,7 +107,7 @@ def fetch_volatility_data() -> list:
         iv = round(hv * 1.15, 4)
         results.append(VolatilityData(
             token=symbol,
-            price_usd=live_prices.get(symbol, 1.0),
+            price_usd=live_prices.get(symbol, FALLBACK_PRICES.get(symbol, 1.0)),
             historical_vol=hv,
             implied_vol=iv,
             vol_regime=regime,

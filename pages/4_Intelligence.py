@@ -185,7 +185,7 @@ except Exception as e:
     feedback = None
 
 if feedback:
-    overall = feedback["overall_health"]
+    overall = feedback.get("overall_health", 50)
     trend   = feedback.get("trend", "building")
     trend_icon = {"improving": "📈", "stable": "➡️", "declining": "📉", "building": "🔧"}.get(trend, "➡️")
     health_color = "#10b981" if overall >= 70 else ("#f59e0b" if overall >= 45 else "#ef4444")
@@ -227,7 +227,7 @@ if feedback:
         key="acc_window",
         help="24h: accuracy vs next-day actuals. 7d: accuracy vs 7-day actuals.",
     )
-    profile_data = feedback["per_profile"] if acc_window == "24h" else feedback.get("per_profile_7d", feedback["per_profile"])
+    profile_data = feedback.get("per_profile", {}) if acc_window == "24h" else feedback.get("per_profile_7d", feedback.get("per_profile", {}))
 
     for p in RISK_PROFILE_NAMES:
         acc   = profile_data.get(p, {})

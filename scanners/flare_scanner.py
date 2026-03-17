@@ -89,7 +89,7 @@ def fetch_sceptre_onchain_rate() -> Optional[float]:
             return None
         growth_30d = (rate_now - rate_past) / rate_past
         apy = round(growth_30d * (365 / 30) * 100, 2)
-        return apy if 1.0 < apy < 50.0 else None   # sanity bounds
+        return apy if 0.5 <= apy <= 50.0 else None   # sanity bounds
     except Exception as exc:
         logger.warning(f"Sceptre on-chain rate failed: {exc}")
         return None
@@ -376,7 +376,10 @@ def _baseline_pools(protocol_key: str) -> list:
     logger.warning(f"{PROTOCOLS[protocol_key]['name']} subgraph unavailable — using baseline data")
     pools = []
     for name, cfg in PROTOCOLS[protocol_key]["pools"].items():
-        t0, t1 = name.split("-", 1)
+        try:
+            t0, t1 = name.split("-", 1)
+        except ValueError:
+            t0, t1 = name, ""
         # Support both key names: old DEXes use "baseline_apr", new GT-based DEXes use "reward_apr"
         rwd_apr      = cfg.get("reward_apr", 0)
         fallback_apr = cfg.get("baseline_apr", rwd_apr)
@@ -996,7 +999,7 @@ def fetch_fasset_data() -> dict:
                 "mint_fee_pct":     minting_fee / 100 if minting_fee > 1 else minting_fee,
                 "redeem_fee_pct":   redeem_fee  / 100 if redeem_fee  > 1 else redeem_fee,
                 "cr_pct":           collat_ratio / 100 if collat_ratio > 100 else collat_ratio,
-                "circulating":      circulating,
+                "circulating":      float(circulating or 0),
                 "collateral_token": base_info.get("collateral_token", "FLR"),
                 "note":             base_info.get("note", ""),
             }
