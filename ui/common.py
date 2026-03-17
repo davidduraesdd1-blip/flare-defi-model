@@ -923,13 +923,38 @@ def render_opportunity_card(
         else f"{kf*100:.0f}% of portfolio"
     )
 
+    # TVL display + velocity arrow (Upgrade #1)
+    tvl_trend    = opp.get("tvl_trend", "")
+    tvl_velocity = opp.get("tvl_velocity", 0.0)
+    _trend_arrow = {"up": "↑", "down": "↓", "stable": "→"}.get(tvl_trend, "")
+    _trend_color = {"up": "#22c55e", "down": "#ef4444", "stable": "#64748b"}.get(tvl_trend, "#64748b")
+    _trend_html  = (
+        f"<span style='color:{_trend_color}; font-weight:700; margin-left:3px;' "
+        f"title='7-day TVL change: {tvl_velocity:+.1f}%'>{_trend_arrow}</span>"
+        if _trend_arrow else ""
+    )
     tvl_html = (
         f"<span>TVL: <span style='color:#64748b; font-weight:600;'>"
-        f"${tvl/1e6:.1f}M</span></span>"
+        f"${tvl/1e6:.1f}M</span>{_trend_html}</span>"
         if tvl >= 1_000_000
         else (f"<span>TVL: <span style='color:#64748b; font-weight:600;'>"
-              f"${tvl:,.0f}</span></span>" if tvl > 0 else "")
+              f"${tvl:,.0f}</span>{_trend_html}</span>" if tvl > 0 else "")
     )
+
+    # APY decomposition (Upgrade #2)
+    fee_apy    = opp.get("fee_apy", 0.0)
+    reward_apy = opp.get("reward_apy", 0.0)
+    _apy_decomp_html = ""
+    if reward_apy > 0 and fee_apy > 0:
+        _apy_decomp_html = (
+            f"<div style='display:flex; gap:8px; font-size:0.72rem; margin-top:6px; flex-wrap:wrap;'>"
+            f"<span style='color:#64748b;'>Base fees: "
+            f"<span style='color:#94a3b8; font-weight:600;'>{fee_apy:.1f}%</span></span>"
+            f"<span style='color:#334155;'>·</span>"
+            f"<span style='color:#64748b;'>Token rewards: "
+            f"<span style='color:#a78bfa; font-weight:600;'>{reward_apy:.1f}%</span></span>"
+            f"</div>"
+        )
 
     # Confidence bar visual (0–100)
     conf_bar_pct = f"{conf:.0f}%"
@@ -944,6 +969,7 @@ def render_opportunity_card(
 <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#475569;margin-bottom:3px;"><span>Low {lo:.1f}%</span><span style="color:#64748b;">APY Range</span><span>High {hi:.1f}%</span></div>
 <div style="background:rgba(255,255,255,0.05);border-radius:4px;height:4px;position:relative;"><div style="position:absolute;left:0;top:0;height:4px;width:100%;border-radius:4px;background:linear-gradient(90deg,rgba(59,130,246,0.3),{color},rgba(245,158,11,0.4));"></div></div>
 </div>
+{_apy_decomp_html}
 <div style="color:#94a3b8;font-size:0.91rem;margin-top:10px;line-height:1.55;">{action}</div>
 <div style="display:flex;gap:20px;font-size:0.78rem;color:#475569;margin-top:12px;flex-wrap:wrap;align-items:center;">
 <span><span style="color:{il_color};font-weight:700;">{il_icon}</span><span style="margin-left:3px;">Price risk: <span style="color:{il_color};font-weight:600;">{il.upper()}</span></span></span>

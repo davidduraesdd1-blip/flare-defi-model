@@ -383,3 +383,154 @@ if len(records) >= 2:
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Need at least 2 scans to show the chart.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ─── Portfolio Correlation Matrix (Upgrade #5) ────────────────────────────────
+
+render_section_header("Correlation Matrix", "How correlated are your positions? Warns on concentration risk.")
+
+# Static pairwise token correlation matrix (based on known Flare ecosystem behaviour, Mar 2026).
+# FLR/sFLR highly correlated; stables uncorrelated; cross-chain crypto partially correlated.
+_TOKEN_CORR: dict = {
+    ("FLR",   "FLR"):   1.00,
+    ("FLR",   "sFLR"):  0.99,
+    ("FLR",   "WFLR"):  1.00,
+    ("FLR",   "FXRP"):  0.35,
+    ("FLR",   "XRP"):   0.35,
+    ("FLR",   "stXRP"): 0.35,
+    ("FLR",   "USD0"):  0.05,
+    ("FLR",   "USDT0"): 0.05,
+    ("FLR",   "USDC.e"):0.05,
+    ("FLR",   "wETH"):  0.55,
+    ("FLR",   "HLN"):   0.60,
+    ("sFLR",  "WFLR"):  0.99,
+    ("sFLR",  "FXRP"):  0.35,
+    ("sFLR",  "USD0"):  0.05,
+    ("FXRP",  "XRP"):   0.99,
+    ("FXRP",  "stXRP"): 0.98,
+    ("FXRP",  "USD0"):  0.05,
+    ("FXRP",  "USDT0"): 0.05,
+    ("FXRP",  "wETH"):  0.45,
+    ("FXRP",  "HLN"):   0.40,
+    ("XRP",   "stXRP"): 0.98,
+    ("wETH",  "USD0"):  0.05,
+    ("wETH",  "HLN"):   0.50,
+    ("USD0",  "USDT0"): 0.99,
+    ("USD0",  "USDC.e"):0.99,
+    ("USDT0", "USDC.e"):0.99,
+}
+
+
+def _get_corr(a: str, b: str) -> float:
+    a, b = a.upper(), b.upper()
+    if a == b:
+        return 1.0
+    return _TOKEN_CORR.get((a, b), _TOKEN_CORR.get((b, a), 0.30))  # default: weak positive
+
+
+def _position_tokens(pos: dict) -> list:
+    """Extract the token symbols a position is exposed to."""
+    tokens = []
+    tok_a = (pos.get("token_a") or "").strip().upper()
+    tok_b = (pos.get("token_b") or "").strip().upper()
+    if tok_a:
+        tokens.append(tok_a)
+    if tok_b and tok_b != tok_a:
+        tokens.append(tok_b)
+    if not tokens:
+        # Guess from pool name
+        pool = (pos.get("pool") or "").replace("-", "/").replace("_", "/")
+        for part in pool.split("/"):
+            t = part.strip().upper()
+            if t and t not in tokens:
+                tokens.append(t)
+    return tokens[:2]  # at most 2 tokens per LP
+
+
+if not positions or len(positions) < 2:
+    st.markdown(
+        "<div style='color:#334155; font-size:0.85rem;'>"
+        "Add at least 2 positions to see the correlation matrix.</div>",
+        unsafe_allow_html=True,
+    )
+else:
+    # Build position labels and compute pairwise correlation
+    pos_labels = [
+        f"{pos.get('pool', '?')} ({pos.get('protocol', '?').capitalize()})"
+        for pos in positions
+    ]
+    n = len(positions)
+    corr_matrix = [[0.0] * n for _ in range(n)]
+
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                corr_matrix[i][j] = 1.0
+                continue
+            toks_i = _position_tokens(positions[i])
+            toks_j = _position_tokens(positions[j])
+            if not toks_i or not toks_j:
+                corr_matrix[i][j] = 0.30   # unknown
+                continue
+            # Average pairwise correlation across all token combinations
+            pairs = [(a, b) for a in toks_i for b in toks_j]
+            corr_matrix[i][j] = sum(_get_corr(a, b) for a, b in pairs) / len(pairs)
+
+    # Plotly heatmap (go already imported at top of file)
+    fig_corr = go.Figure(data=go.Heatmap(
+        z=corr_matrix,
+        x=pos_labels,
+        y=pos_labels,
+        colorscale=[
+            [0.0,  "rgba(16,185,129,0.15)"],
+            [0.3,  "rgba(59,130,246,0.25)"],
+            [0.7,  "rgba(245,158,11,0.40)"],
+            [1.0,  "rgba(239,68,68,0.65)"],
+        ],
+        zmin=0, zmax=1,
+        text=[[f"{v:.2f}" for v in row] for row in corr_matrix],
+        texttemplate="%{text}",
+        textfont={"size": 11, "color": "#e2e8f0"},
+        hovertemplate="<b>%{y}</b> vs <b>%{x}</b><br>Correlation: %{z:.2f}<extra></extra>",
+    ))
+    fig_corr.update_layout(
+        plot_bgcolor="#0d0e14", paper_bgcolor="#0d0e14",
+        font_color="#94a3b8",
+        xaxis=dict(tickangle=-30, tickfont=dict(size=10, color="#64748b")),
+        yaxis=dict(tickfont=dict(size=10, color="#64748b")),
+        margin=dict(l=20, r=20, t=20, b=80),
+        height=max(240, 80 + 60 * n),
+    )
+    st.plotly_chart(fig_corr, use_container_width=True)
+
+    # Concentration risk warning
+    high_corr_pairs = [
+        (pos_labels[i], pos_labels[j], corr_matrix[i][j])
+        for i in range(n) for j in range(i + 1, n)
+        if corr_matrix[i][j] >= 0.80
+    ]
+    if high_corr_pairs:
+        warn_lines = "".join(
+            f"<li>{_html.escape(a)} ↔ {_html.escape(b)} "
+            f"(<span style='color:#ef4444; font-weight:600;'>{c:.0%}</span>)</li>"
+            for a, b, c in high_corr_pairs
+        )
+        st.markdown(
+            f"<div class='warn-box'>"
+            f"<div style='font-weight:700; color:#f59e0b; margin-bottom:6px;'>⚠ Concentration Risk</div>"
+            f"<div style='color:#94a3b8; font-size:0.83rem; line-height:1.55;'>"
+            f"These positions move together — a single market event could hit all of them:<ul style='margin:6px 0 0 0;'>"
+            f"{warn_lines}</ul>"
+            f"<div style='margin-top:8px; color:#64748b;'>Consider diversifying into uncorrelated assets (stablecoins, wETH) or reducing position sizes.</div>"
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            "<div style='color:#10b981; font-size:0.85rem; padding:4px 0;'>"
+            "✓ Portfolio is well-diversified — no highly correlated position pairs detected.</div>",
+            unsafe_allow_html=True,
+        )
+    st.caption("Correlations are estimates based on Flare ecosystem token relationships. Actual correlations vary with market conditions.")

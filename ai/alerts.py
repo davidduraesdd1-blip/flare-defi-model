@@ -201,3 +201,100 @@ def check_and_send_alerts(model_results: dict, arb_results: dict = None) -> None
 
     send_email_alert(subject, message, config)
     send_telegram_alert(message, config)
+
+
+# ─── Smart Alert Tuning (Upgrade #6) ─────────────────────────────────────────
+
+_MIN_APY_FLOOR   = 30.0    # never auto-set below this (avoids alerting on every lending rate)
+_MIN_APY_CEILING = 300.0   # never auto-set above this
+_SMOOTH_FACTOR   = 0.20    # 20% weight on new calibrated value; 80% on existing (slow convergence)
+_MIN_CALIBRATION_SAMPLES = 6   # need at least 6 evaluated predictions before adjusting
+
+
+def calibrate_alert_thresholds() -> dict:
+    """
+    Upgrade #6: Auto-calibrate alert thresholds based on historical prediction accuracy.
+
+    Strategy:
+      - Collect all accurate top-pick APYs from the feedback loop (where error_pct < 20%).
+      - Set min_apy_alert to the 75th-percentile of those APYs.
+        → Alerts fire on truly exceptional opportunities, not just average good picks.
+      - Apply 80/20 smoothing against the current threshold so calibration is gradual.
+      - Save the calibrated threshold back to alerts_config.json.
+
+    Returns a summary dict for UI display.
+    """
+    from ai.feedback_loop import load_history
+    history = load_history()
+
+    # Collect APYs of accurate top predictions across all profiles
+    accurate_apys = []
+    for pred in history.get("predictions", []):
+        if not pred.get("evaluated"):
+            continue
+        for profile_picks in pred.get("profiles", {}).values():
+            for pick in profile_picks[:1]:   # only the top-ranked pick per profile
+                if pick.get("accurate") and pick.get("predicted_apy") is not None:
+                    try:
+                        accurate_apys.append(float(pick["predicted_apy"]))
+                    except (TypeError, ValueError):
+                        pass
+
+    if len(accurate_apys) < _MIN_CALIBRATION_SAMPLES:
+        return {
+            "calibrated": False,
+            "reason": f"Need {_MIN_CALIBRATION_SAMPLES} samples, have {len(accurate_apys)}.",
+            "samples": len(accurate_apys),
+            "new_threshold": None,
+        }
+
+    # 75th percentile of accurate APYs — alert on truly exceptional opportunities
+    accurate_apys.sort()
+    p75_idx  = int(len(accurate_apys) * 0.75)
+    p75_apy  = accurate_apys[min(p75_idx, len(accurate_apys) - 1)]
+    p75_apy  = max(_MIN_APY_FLOOR, min(_MIN_APY_CEILING, p75_apy))
+
+    config     = load_alerts_config()
+    thresholds = config.setdefault("thresholds", {})
+    old_thresh = float(thresholds.get("min_apy_alert", 150.0))
+
+    # Smooth: 80% old value + 20% new calibrated value
+    new_thresh = round(old_thresh * (1 - _SMOOTH_FACTOR) + p75_apy * _SMOOTH_FACTOR, 1)
+    new_thresh = max(_MIN_APY_FLOOR, min(_MIN_APY_CEILING, new_thresh))
+
+    thresholds["min_apy_alert"]         = new_thresh
+    thresholds["_calibrated_at"]        = datetime.utcnow().isoformat()
+    thresholds["_calibration_samples"]  = len(accurate_apys)
+    thresholds["_raw_p75_apy"]          = round(p75_apy, 1)
+    save_alerts_config(config)
+
+    delta = new_thresh - old_thresh
+    direction = "raised" if delta > 0.5 else ("lowered" if delta < -0.5 else "unchanged")
+    logger.info(
+        f"Smart Alert Tuning: threshold {direction} {old_thresh:.1f}% → {new_thresh:.1f}% "
+        f"(p75={p75_apy:.1f}%, n={len(accurate_apys)})"
+    )
+    return {
+        "calibrated":     True,
+        "old_threshold":  old_thresh,
+        "new_threshold":  new_thresh,
+        "p75_apy":        round(p75_apy, 1),
+        "direction":      direction,
+        "samples":        len(accurate_apys),
+        "reason":         f"75th-percentile of {len(accurate_apys)} accurate top-pick APYs = {p75_apy:.1f}%",
+    }
+
+
+def get_calibration_report() -> dict:
+    """
+    Return the latest calibration metadata from the saved config — used by the UI.
+    """
+    config     = load_alerts_config()
+    thresholds = config.get("thresholds", {})
+    return {
+        "min_apy_alert":           thresholds.get("min_apy_alert", 150.0),
+        "calibrated_at":           thresholds.get("_calibrated_at"),
+        "calibration_samples":     thresholds.get("_calibration_samples"),
+        "raw_p75_apy":             thresholds.get("_raw_p75_apy"),
+        "new_arb_alert":           thresholds.get("new_arb_alert", True),
+    }

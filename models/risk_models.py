@@ -57,6 +57,12 @@ class Opportunity:
     risk_profile:     str
     plain_english:    str           # one-sentence beginner explanation
     data_source:      str
+    # APY decomposition (Upgrade #2)
+    fee_apy:          float = 0.0   # fee/base yield component
+    reward_apy:       float = 0.0   # token incentive component (RFLR/SPRK)
+    # TVL velocity (Upgrade #1)
+    tvl_velocity:     float = 0.0   # 7-day TVL change %
+    tvl_trend:        str  = ""     # "up" / "stable" / "down" / ""
     generated_at:     str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
@@ -190,10 +196,12 @@ def build_opportunity(
     tvl_usd:       float,
     risk_profile:  str,
     data_source:   str,
-    is_v3:           bool = False,
-    apy_history:     list = None,
-    reward_apr:      float = 0.0,
+    is_v3:            bool  = False,
+    apy_history:      list  = None,
+    reward_apr:       float = 0.0,
     profile_win_rate: float = None,
+    tvl_history:      list  = None,   # Upgrade #1: TVL velocity
+    ftso_signal:      float = 0.0,    # Upgrade #3: FTSO oracle confidence boost (0–10)
 ) -> Opportunity:
 
     profile = RISK_PROFILES[risk_profile]
@@ -203,6 +211,7 @@ def build_opportunity(
 
     # Incentive decay: RFLR/SPRK reward APY declines linearly to 0 by July 2026.
     # Use the actual known reward_apr split when available; fall back to 40/60 estimate.
+    # APY Decomposition (Upgrade #2): track fee vs reward components separately.
     if reward_token in ("RFLR", "rFLR", "SPRK"):
         decay          = _incentive_decay_factor()
         if reward_apr > 0 and reward_apr <= apr:
@@ -212,6 +221,14 @@ def build_opportunity(
             fee_part       = apr * 0.40
             incentive_part = apr * 0.60
         apr = max(0.0, fee_part + incentive_part * decay)
+        _fee_apy    = round(fee_part, 2)
+        _reward_apy = round(incentive_part * decay, 2)
+    else:
+        _fee_apy    = round(apr, 2)   # lending/staking: all base yield, no token reward
+        _reward_apy = 0.0
+
+    # TVL Velocity (Upgrade #1)
+    _tvl_velocity, _tvl_trend = _compute_tvl_velocity(tvl_history)
 
     # IL calculation (V3 concentrated positions amplify IL)
     il_exp, il_worst = estimate_il_for_pool(il_risk, is_v3)
@@ -239,10 +256,11 @@ def build_opportunity(
     # Risk score (includes TVL thin-liquidity penalty)
     rs = compute_risk_score(il_risk, protocol_type, data_source, tvl_usd)
 
-    # Confidence: higher TVL + live data = higher confidence
+    # Confidence: higher TVL + live data + FTSO oracle agreement = higher confidence
     tvl_score   = min(50, tvl_usd / 2_000_000) if tvl_usd else 0
     fresh_score = 40 if data_source in ("live", "on-chain") else (25 if data_source == "research" else 15)
-    confidence  = max(0, min(100, round(tvl_score + fresh_score + (10 - rs) * 2, 1)))
+    # Upgrade #3: FTSO oracle signal adds up to 10 points when oracle confirms price data
+    confidence  = max(0, min(100, round(tvl_score + fresh_score + (10 - rs) * 2 + ftso_signal, 1)))
 
     # APY range: use historical std dev if 3+ data points available, else ±20%
     if apy_history and len(apy_history) >= 3:
@@ -290,6 +308,10 @@ def build_opportunity(
         risk_profile=risk_profile,
         plain_english=plain,
         data_source=data_source,
+        fee_apy=_fee_apy,
+        reward_apy=_reward_apy,
+        tvl_velocity=_tvl_velocity,
+        tvl_trend=_tvl_trend,
     )
 
 
@@ -361,10 +383,12 @@ def optimise_portfolio(candidates: list, risk_profile: str) -> list:
 
 # ─── Three Risk Model Entry Points ───────────────────────────────────────────
 
-def _load_apy_history() -> dict:
+def _load_history_data() -> tuple:
     """
-    Load last 14 scans from history.json and return a dict mapping
-    (protocol_name, asset_or_pool) → [historical_apy, ...] for dynamic APY ranges.
+    Load last 14 scans from history.json.
+    Returns (apy_map, tvl_map) where:
+      apy_map: {(protocol_name, asset_or_pool): [apy, ...]}
+      tvl_map: {(protocol_name, asset_or_pool): [tvl_usd, ...]}  (Upgrade #1)
     """
     try:
         import json
@@ -373,27 +397,109 @@ def _load_apy_history() -> dict:
             history = json.load(f)
         runs = history.get("runs", [])[-14:]
         apy_map: dict = {}
+        tvl_map: dict = {}
         for run in runs:
+            # APY from model output
             for profile_key in RISK_PROFILE_NAMES:
                 for opp in run.get("models", {}).get(profile_key, []):
                     key = (opp.get("protocol", ""), opp.get("asset_or_pool", ""))
                     apy_map.setdefault(key, []).append(float(opp.get("estimated_apy", 0)))
-        return apy_map
+            # TVL from raw pool scan data
+            for pool in run.get("pools", []):
+                proto = pool.get("protocol", "")
+                proto_name = PROTOCOLS.get(proto, {}).get("name", proto)
+                pool_name  = pool.get("pool_name", "")
+                tvl        = pool.get("tvl_usd", 0.0)
+                if proto_name and pool_name and tvl:
+                    tvl_map.setdefault((proto_name, pool_name), []).append(float(tvl))
+            # TVL from lending/staking entries
+            for entry in run.get("lending", []) + run.get("staking", []):
+                proto = entry.get("protocol", "")
+                proto_name = PROTOCOLS.get(proto, {}).get("name", proto)
+                name  = entry.get("asset") or entry.get("token", "")
+                tvl   = entry.get("tvl_usd", 0.0)
+                if proto_name and name and tvl:
+                    tvl_map.setdefault((proto_name, name), []).append(float(tvl))
+        return apy_map, tvl_map
     except Exception:
-        return {}
+        return {}, {}
+
+
+def _compute_tvl_velocity(tvl_history: list) -> tuple:
+    """
+    Given a list of TVL snapshots (oldest first), compute 7-day velocity.
+    Returns (velocity_pct, trend) where trend is 'up' / 'stable' / 'down'.
+    """
+    if not tvl_history or len(tvl_history) < 2:
+        return 0.0, ""
+    oldest = tvl_history[0]
+    latest = tvl_history[-1]
+    if oldest <= 0:
+        return 0.0, ""
+    velocity = (latest - oldest) / oldest * 100
+    if velocity > 5:
+        trend = "up"
+    elif velocity < -5:
+        trend = "down"
+    else:
+        trend = "stable"
+    return round(velocity, 1), trend
+
+
+def _compute_ftso_signal(scan_result: dict) -> float:
+    """
+    Upgrade #3: Compare FTSO oracle prices to CoinGecko prices.
+    Returns a confidence boost (0–10) when FTSO data is available and agrees with CoinGecko.
+    - 0:  no FTSO data available
+    - 5:  FTSO available, prices within 1% of CoinGecko
+    - 8:  FTSO available, prices within 0.3% (very tight agreement = high-quality signal)
+    - 10: FTSO matches exactly (extremely rare — indicates fresh oracle update)
+    """
+    ftso_prices = scan_result.get("ftso_prices", {})
+    if not ftso_prices:
+        return 0.0
+
+    cg_lookup = {p.get("symbol", ""): p.get("price_usd", 0)
+                 for p in scan_result.get("prices", []) if p.get("price_usd", 0) > 0}
+    if not cg_lookup:
+        return 5.0   # FTSO available but no CoinGecko to compare — mild boost
+
+    deviations = []
+    for sym, ftso_price in ftso_prices.items():
+        cg_price = cg_lookup.get(sym, 0)
+        if cg_price > 0 and ftso_price > 0:
+            dev = abs(ftso_price - cg_price) / cg_price
+            deviations.append(dev)
+
+    if not deviations:
+        return 5.0
+    avg_dev = sum(deviations) / len(deviations)
+    if avg_dev <= 0.001:   # within 0.1%
+        return 10.0
+    elif avg_dev <= 0.003:  # within 0.3%
+        return 8.0
+    elif avg_dev <= 0.01:   # within 1%
+        return 5.0
+    else:
+        return 2.0   # FTSO available but diverging — weak signal
 
 
 def _build_candidate_list(
     scan_result: dict,
     apy_history_map: dict = None,
+    tvl_history_map: dict = None,
     win_rate_map: dict = None,
+    ftso_signal: float = 0.0,
 ) -> list:
     """
     Convert raw scan data into candidate Opportunity objects.
     apy_history_map: {(protocol_name, pool_name): [apy, ...]} for dynamic APY ranges.
+    tvl_history_map: {(protocol_name, pool_name): [tvl, ...]} for TVL velocity (Upgrade #1).
     win_rate_map:    {profile: win_rate_decimal} from feedback loop (used for Kelly).
+    ftso_signal:     confidence boost from FTSO oracle agreement (Upgrade #3).
     """
     apy_history_map = apy_history_map or {}
+    tvl_history_map = tvl_history_map or {}
     win_rate_map    = win_rate_map    or {}
     # Candidates are built at "high" profile then cloned per profile in run_all_models;
     # use the "high" profile win rate for initial Kelly sizing (conservatively)
@@ -424,6 +530,8 @@ def _build_candidate_list(
             apy_history=apy_history_map.get((proto_name, pool_name), []),
             reward_apr=pool.get("reward_apr", 0.0),
             profile_win_rate=candidate_win_rate,
+            tvl_history=tvl_history_map.get((proto_name, pool_name), []),
+            ftso_signal=ftso_signal,
         ))
         rank += 1
 
@@ -446,6 +554,8 @@ def _build_candidate_list(
             risk_profile="conservative",
             data_source=rate.get("data_source", "estimate"),
             apy_history=apy_history_map.get((proto_name, asset), []),
+            tvl_history=tvl_history_map.get((proto_name, asset), []),
+            ftso_signal=ftso_signal,
         ))
         rank += 1
 
@@ -468,6 +578,8 @@ def _build_candidate_list(
             risk_profile="conservative",
             data_source=stake.get("data_source", "estimate"),
             apy_history=apy_history_map.get((proto_name, token), []),
+            tvl_history=tvl_history_map.get((proto_name, token), []),
+            ftso_signal=ftso_signal,
         ))
         rank += 1
 
@@ -480,7 +592,7 @@ def run_all_models(scan_result: dict) -> dict:
     Candidates are built once and shared across profiles to avoid triple work.
     """
     logger.info("Running all three risk models...")
-    apy_history_map = _load_apy_history()
+    apy_history_map, tvl_history_map = _load_history_data()
 
     # Pull empirical win rates from the feedback loop (returns {} before enough data)
     try:
@@ -491,7 +603,12 @@ def run_all_models(scan_result: dict) -> dict:
     except Exception:
         win_rate_map = {}
 
-    base_candidates = _build_candidate_list(scan_result, apy_history_map, win_rate_map)
+    # Upgrade #3: compute FTSO oracle signal from scan data
+    ftso_signal = _compute_ftso_signal(scan_result)
+    if ftso_signal > 0:
+        logger.info(f"FTSO oracle signal: {ftso_signal:.1f} confidence boost")
+
+    base_candidates = _build_candidate_list(scan_result, apy_history_map, tvl_history_map, win_rate_map, ftso_signal)
     results = {}
     for profile in RISK_PROFILE_NAMES:
         profiled = [replace(c, risk_profile=profile) for c in base_candidates]

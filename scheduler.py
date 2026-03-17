@@ -350,12 +350,20 @@ def run_full_scan() -> None:
         logger.info("Step 8/9 — Updating AI model weights...")
         weights = update_model_weights()
 
-        # ── Step 9: Send alerts ───────────────────────────────────────────
+        # ── Step 9: Send alerts + smart threshold calibration ────────────
         logger.info("Step 9/9 — Checking alert thresholds...")
         try:
             check_and_send_alerts(model_results, arb_results)
         except Exception as _ae:
             logger.warning(f"Alert check failed: {_ae}")
+        # Upgrade #6: auto-calibrate thresholds based on prediction accuracy history
+        try:
+            from ai.alerts import calibrate_alert_thresholds
+            cal = calibrate_alert_thresholds()
+            if cal.get("calibrated"):
+                logger.info(f"Smart Alert Tuning: threshold {cal['direction']} → {cal['new_threshold']:.1f}%")
+        except Exception as _ce:
+            logger.debug(f"Smart alert calibration skipped: {_ce}")
 
         # ── Assemble and save full result ─────────────────────────────────
         run_end = datetime.utcnow()

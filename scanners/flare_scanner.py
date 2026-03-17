@@ -183,6 +183,7 @@ class ScanResult:
     staking:       list
     scan_duration: float        # seconds
     warnings:      list = field(default_factory=list)
+    ftso_prices:   dict = field(default_factory=dict)   # Upgrade #3: {symbol: ftso_price_usd}
 
 # ─── Price Fetcher ────────────────────────────────────────────────────────────
 
@@ -249,6 +250,61 @@ def fetch_prices() -> list:
     _price_cache    = results
     _price_cache_ts = time.time()
     return results
+
+# ─── FTSO Price Oracle Fetcher (Upgrade #3) ──────────────────────────────────
+
+# FTSOv2 feed IDs — hex-encoded "FLR/USD" and "XRP/USD"
+_FTSO_FEEDS = {
+    "FLR": "0x01464c522f555344000000000000000000000000",
+    "XRP": "0x015852502f555344000000000000000000000000",
+}
+
+def fetch_ftso_prices() -> dict:
+    """
+    Fetch current FTSO oracle prices for FLR and XRP from the Flare data availability layer.
+    Returns {symbol: price_usd} or {} on failure (non-blocking — graceful degradation).
+    Used as a conviction multiplier in risk models: if FTSO agrees with CoinGecko,
+    confidence in the data is higher; large divergence signals potential arb opportunity.
+    """
+    base = APIS.get("ftso_data", "https://flr-data-availability.flare.network")
+    results = {}
+    try:
+        # Try FTSOv2 REST API — GET /api/v0/feeds/collection returns all active feeds
+        data = _get(f"{base}/api/v0/feeds/collection", timeout=6)
+        if data and isinstance(data, dict):
+            feeds = data.get("feeds", data.get("data", []))
+            for feed in feeds:
+                name = feed.get("name", feed.get("feedId", ""))
+                price = feed.get("value", feed.get("price"))
+                if name and price is not None:
+                    # Match "FLR/USD" → "FLR", "XRP/USD" → "XRP"
+                    for sym in ("FLR", "XRP"):
+                        if sym in str(name).upper():
+                            try:
+                                results[sym] = float(price)
+                            except (TypeError, ValueError):
+                                pass
+    except Exception as exc:
+        logger.debug(f"FTSO collection endpoint failed: {exc}")
+
+    # Fallback: try individual feed endpoints if collection failed
+    if not results:
+        for sym, feed_id in _FTSO_FEEDS.items():
+            try:
+                data = _get(f"{base}/api/v0/feeds/{feed_id}", timeout=5)
+                if data and isinstance(data, dict):
+                    price = data.get("value", data.get("price"))
+                    if price is not None:
+                        results[sym] = float(price)
+            except Exception:
+                pass
+
+    if results:
+        logger.info(f"FTSO prices fetched: {results}")
+    else:
+        logger.debug("FTSO prices unavailable — continuing without oracle signal")
+    return results
+
 
 # ─── DeFiLlama Yields Integration ────────────────────────────────────────────
 
@@ -860,6 +916,109 @@ def fetch_cyclo_rates() -> list:
         data_source="baseline",
     )]
 
+# ─── FAsset System Data Fetcher (Upgrade #4) ─────────────────────────────────
+
+# Research-based FAsset baselines (updated March 2026)
+# Used when the FAsset API is unavailable.
+_FASSET_BASELINE = {
+    "FXRP": {
+        "mint_fee_bips": 25,       # 0.25% mint fee
+        "redeem_fee_bips": 20,     # 0.20% redemption fee
+        "min_cr_bips": 16000,      # 160% min collateral ratio (CCB)
+        "safety_cr_bips": 20000,   # 200% safety CR
+        "circulating": 12_500_000, # ~12.5M FXRP circulating (est)
+        "collateral_token": "FLR",
+        "note": "First FAsset live on mainnet. XRP bridged via Flare bridge.",
+    },
+    "FBTC": {
+        "mint_fee_bips": 25,
+        "redeem_fee_bips": 20,
+        "min_cr_bips": 16000,
+        "safety_cr_bips": 20000,
+        "circulating": 0,
+        "collateral_token": "FLR",
+        "note": "Beta / limited minting as of Mar 2026.",
+    },
+    "FDOGE": {
+        "mint_fee_bips": 25,
+        "redeem_fee_bips": 20,
+        "min_cr_bips": 16000,
+        "safety_cr_bips": 20000,
+        "circulating": 0,
+        "collateral_token": "FLR",
+        "note": "Beta / very limited minting as of Mar 2026.",
+    },
+}
+
+
+def fetch_fasset_data() -> dict:
+    """
+    Fetch live FAsset system data from the Flare API portal.
+    Returns a dict with per-asset stats and system health.
+    Falls back to research baselines gracefully.
+
+    Keys in return dict:
+      data_source: "live" | "baseline"
+      assets: {symbol: {mint_fee_pct, redeem_fee_pct, cr_pct, circulating, ...}}
+      system_health: "healthy" | "caution" | "unknown"
+      premium_discount: {symbol: pct}   (positive = premium, negative = discount)
+      agent_count: int
+    """
+    result = {
+        "data_source": "baseline",
+        "assets": {},
+        "system_health": "unknown",
+        "premium_discount": {},
+        "agent_count": 0,
+        "fetched_at": datetime.utcnow().isoformat(),
+    }
+
+    # Try FAsset REST API — Flare API portal
+    base = APIS.get("flare_api_portal", "https://api-portal.flare.network")
+    try:
+        data = _get(f"{base}/fassets/api/v1/state", timeout=8)
+        if data and isinstance(data, dict):
+            result["data_source"] = "live"
+            assets_raw = data.get("fassets", data.get("data", {}))
+            if isinstance(assets_raw, dict):
+                for sym, info in assets_raw.items():
+                    sym_upper = sym.upper()
+                    base_info = _FASSET_BASELINE.get(sym_upper, {})
+                    result["assets"][sym_upper] = {
+                        "mint_fee_pct":   info.get("mintingFee", base_info.get("mint_fee_bips", 25)) / 100,
+                        "redeem_fee_pct": info.get("redemptionFee", base_info.get("redeem_fee_bips", 20)) / 100,
+                        "cr_pct":         info.get("collateralRatio", base_info.get("min_cr_bips", 16000)) / 100,
+                        "circulating":    info.get("circulatingSupply", base_info.get("circulating", 0)),
+                        "collateral_token": base_info.get("collateral_token", "FLR"),
+                        "note":           base_info.get("note", ""),
+                    }
+            # Agent count
+            agents = data.get("agents", data.get("agentCount", 0))
+            result["agent_count"] = agents if isinstance(agents, int) else len(agents) if isinstance(agents, list) else 0
+            # System health
+            health = data.get("systemHealth", data.get("health", ""))
+            result["system_health"] = health.lower() if health else "healthy"
+    except Exception as exc:
+        logger.debug(f"FAsset API unavailable ({exc}) — using baselines")
+
+    # Fill any missing assets from baselines
+    for sym, base_info in _FASSET_BASELINE.items():
+        if sym not in result["assets"]:
+            result["assets"][sym] = {
+                "mint_fee_pct":   base_info["mint_fee_bips"] / 100,
+                "redeem_fee_pct": base_info["redeem_fee_bips"] / 100,
+                "cr_pct":         base_info["min_cr_bips"] / 100,
+                "circulating":    base_info["circulating"],
+                "collateral_token": base_info["collateral_token"],
+                "note":           base_info["note"],
+            }
+
+    if result["data_source"] == "baseline":
+        result["system_health"] = "unknown"
+
+    return result
+
+
 # ─── Main Scan Orchestrator ───────────────────────────────────────────────────
 
 def run_flare_scan() -> ScanResult:
@@ -882,6 +1041,7 @@ def run_flare_scan() -> ScanResult:
 
     _fetch_map = {
         "prices":    fetch_prices,
+        "ftso":      fetch_ftso_prices,   # Upgrade #3: FTSO oracle prices
         "blazeswap": fetch_blazeswap_pools,
         "sparkdex":  fetch_sparkdex_pools,
         "enosys":    fetch_enosys_pools,
@@ -902,7 +1062,8 @@ def run_flare_scan() -> ScanResult:
                 logger.error(f"Parallel fetch failed for '{key}': {_e}")
                 raw[key] = []
 
-    prices  = raw.get("prices", [])
+    prices      = raw.get("prices", [])
+    ftso_prices = raw.get("ftso", {}) if isinstance(raw.get("ftso"), dict) else {}
     pools   = raw.get("blazeswap", []) + raw.get("sparkdex", []) + raw.get("enosys", [])
     lending = raw.get("kinetic", [])   + raw.get("clearpool", []) + raw.get("mystic", [])
     staking = raw.get("staking", [])   + raw.get("cyclo", [])
@@ -934,4 +1095,5 @@ def run_flare_scan() -> ScanResult:
         staking=[asdict(p) for p in staking],
         scan_duration=duration,
         warnings=warnings,
+        ftso_prices=ftso_prices,   # Upgrade #3: {symbol: ftso_price_usd}
     )

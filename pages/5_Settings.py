@@ -71,11 +71,54 @@ with tab_tg:
     chat_id    = st.text_input("Chat ID",   value=config["telegram"].get("chat_id", ""), key="chat_id")
 
 with tab_thresh:
-    st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Alerts are only sent when these thresholds are crossed.</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>"
+        "Alerts are only sent when these thresholds are crossed. "
+        "Smart tuning auto-adjusts the APY threshold after each scan based on prediction accuracy.</div>",
+        unsafe_allow_html=True,
+    )
     min_apy   = st.slider("Alert when any APY exceeds (%)", 50, 300,
                           int(config["thresholds"].get("min_apy_alert", 150)), 10, key="min_apy_thresh")
     arb_alert = st.toggle("Alert on ACT NOW arbitrage opportunities",
                            value=config["thresholds"].get("new_arb_alert", True), key="arb_alert_cb")
+
+    # Upgrade #6: Smart Alert Tuning status display
+    try:
+        from ai.alerts import get_calibration_report, calibrate_alert_thresholds
+        report = get_calibration_report()
+        cal_at  = report.get("calibrated_at")
+        samples = report.get("calibration_samples")
+        p75     = report.get("raw_p75_apy")
+        cal_html = ""
+        if cal_at and samples:
+            from ui.common import _ts_fmt
+            cal_html = (
+                f"<span style='color:#22c55e; font-weight:600;'>Active</span> · "
+                f"Last calibrated: {_ts_fmt(cal_at)} · "
+                f"{samples} samples · "
+                f"p75 APY = {p75:.1f}%"
+            )
+        else:
+            cal_html = "<span style='color:#475569;'>Waiting for prediction history (need 6+ evaluated predictions)</span>"
+        st.markdown(
+            f"<div style='background:rgba(139,92,246,0.04); border:1px solid rgba(139,92,246,0.14); "
+            f"border-radius:10px; padding:10px 14px; margin-top:10px; font-size:0.81rem; color:#94a3b8;'>"
+            f"🤖 <span style='font-weight:600; color:#a78bfa;'>Smart Alert Tuning</span> — "
+            f"{cal_html}</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("Calibrate Now", key="calibrate_now_btn",
+                     help="Run smart threshold calibration immediately using current prediction history"):
+            result = calibrate_alert_thresholds()
+            if result.get("calibrated"):
+                st.success(
+                    f"Calibrated: {result['old_threshold']:.1f}% → {result['new_threshold']:.1f}% "
+                    f"({result['direction']}, {result['samples']} samples)"
+                )
+            else:
+                st.info(result.get("reason", "Not enough data yet."))
+    except Exception as _cex:
+        st.caption(f"Smart tuning status unavailable: {_cex}")
 
 st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
 col_save, col_test_e, col_test_t = st.columns(3)
