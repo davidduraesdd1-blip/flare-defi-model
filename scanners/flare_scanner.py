@@ -1015,24 +1015,51 @@ def fetch_fasset_data() -> dict:
         result["system_health"] = health.lower() if health else "healthy"
         return True
 
-    # ── Attempt 1: Flare API portal (several known path variants) ─────────────
-    base = APIS.get("flare_api_portal", "https://api-portal.flare.network")
-    _api_paths = [
-        f"{base}/fassets/api/v1/state",
-        f"{base}/fassets/api/v1/fassets",
-        f"{base}/fassets/api/v2/state",
-        "https://api.flare.network/fassets/api/v1/state",
-        "https://api.flare.network/fassets/api/v1/fassets",
-    ]
-    for _url in _api_paths:
-        try:
-            data = _get(_url, timeout=8)
-            if data and isinstance(data, dict) and _parse_fasset_response(data):
+    # ── Attempt 1: On-chain totalSupply() for each FAsset ERC20 ──────────────
+    # No public REST API exists for FAssets state — read circulating supply
+    # directly from the token contracts on Flare mainnet.
+    _ERC20_SUPPLY_ABI = [{
+        "inputs": [], "name": "totalSupply",
+        "outputs": [{"type": "uint256"}],
+        "stateMutability": "view", "type": "function",
+    }]
+    _FASSET_TOKEN_CFG = {
+        "FXRP":  {"address": TOKENS.get("FXRP",  ""), "decimals": 6},
+        "FDOGE": {"address": TOKENS.get("FDOGE", ""), "decimals": 8},
+        "FBTC":  {"address": TOKENS.get("FBTC",  ""), "decimals": 8},
+    }
+    try:
+        w3 = _get_web3()
+        if w3:
+            _got_any = False
+            for sym, cfg in _FASSET_TOKEN_CFG.items():
+                addr = cfg["address"]
+                if not addr:
+                    continue
+                try:
+                    contract = w3.eth.contract(
+                        address=Web3.to_checksum_address(addr),
+                        abi=_ERC20_SUPPLY_ABI,
+                    )
+                    supply = contract.functions.totalSupply().call() / (10 ** cfg["decimals"])
+                    base_info = _FASSET_BASELINE.get(sym, {})
+                    result["assets"][sym] = {
+                        "mint_fee_pct":     base_info.get("mint_fee_bips",   25) / 100,
+                        "redeem_fee_pct":   base_info.get("redeem_fee_bips", 20) / 100,
+                        "cr_pct":           base_info.get("min_cr_bips", 16000) / 100,
+                        "circulating":      supply,
+                        "collateral_token": base_info.get("collateral_token", "FLR"),
+                        "note":             base_info.get("note", ""),
+                    }
+                    _got_any = True
+                    logger.info(f"FAsset {sym} on-chain totalSupply: {supply:,.0f}")
+                except Exception as exc:
+                    logger.warning(f"On-chain totalSupply failed for {sym}: {exc}")
+            if _got_any:
                 result["data_source"] = "live"
-                logger.info(f"FAsset data fetched live from {_url}")
-                break
-        except Exception as exc:
-            logger.warning(f"FAsset API {_url} failed: {exc}")
+                result["system_health"] = "healthy"
+    except Exception as exc:
+        logger.warning(f"FAsset on-chain fetch failed: {exc}")
 
     # ── Attempt 2: DeFiLlama — enrich circulating supply for FXRP ────────────
     if result["data_source"] == "baseline" or (result["assets"].get("FXRP") or {}).get("circulating", 0) == 0:
