@@ -517,7 +517,7 @@ def send_monthly_report() -> None:
 
         body    = "\n".join(lines)
         subject = f"⚡ Flare DeFi Monthly Report — {datetime.now(timezone.utc).replace(tzinfo=None).strftime('%B %Y')}"
-        ok = send_email_alert(subject, body, config)
+        ok = send_email_alert(subject, body, config) or False
         if ok:
             logger.info("Monthly report email sent successfully.")
         else:

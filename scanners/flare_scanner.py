@@ -438,10 +438,10 @@ def fetch_blazeswap_pools() -> list:
             t0 = (pair.get("token0") or {}).get("symbol", "?")
             t1 = (pair.get("token1") or {}).get("symbol", "?")
             name = f"{t0}-{t1}"
-            tvl  = float(pair.get("reserveUSD", 0))
+            tvl  = float(pair.get("reserveUSD") or 0)
 
             day_vols   = pair.get("pairDayDatas", [])
-            weekly_vol = sum(float(d.get("dailyVolumeUSD", 0)) for d in day_vols)
+            weekly_vol = sum(float(d.get("dailyVolumeUSD") or 0) for d in day_vols)
             fee_apr    = (weekly_vol * 0.003 * 52 / tvl * 100) if tvl > 0 else 0
 
             cfg_pools  = PROTOCOLS["blazeswap"]["pools"]

@@ -279,7 +279,7 @@ MAX_KELLY_FRACTION = 0.10   # hard cap on Kelly criterion position size (safety 
 # ─── Scheduler ────────────────────────────────────────────────────────────────
 SCHEDULER = {
     "run_times": ["06:00", "18:00"],   # 6am and 6pm local time
-    "timezone":  os.environ.get("SCHEDULER_TZ", "America/Denver"),  # override via env var
+    "timezone":  (os.environ.get("SCHEDULER_TZ") or "America/Denver").strip(),  # override via env var
     "quick_check_interval_hours": 3,   # lightweight intraday alert check
     "web_monitor_hour": 8,             # daily web monitor run time (local, 24h)
     "quick_check_thresholds": {

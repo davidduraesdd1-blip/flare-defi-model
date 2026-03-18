@@ -147,8 +147,8 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 render_section_header("Options & Derivatives Strategies")
 
-opts_data = latest.get("options", {}).get(profile, {})
-analysis  = opts_data.get("analysis", {}) if opts_data else {}
+opts_data = (latest.get("options") or {}).get(profile, {})
+analysis  = (opts_data or {}).get("analysis", {})
 
 if not analysis:
     st.markdown(

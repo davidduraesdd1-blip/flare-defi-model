@@ -86,9 +86,9 @@ with st.expander("Connect a wallet (read-only)"):
             if new_addr and len(new_addr) == 42 and new_addr.startswith("0x"):
                 try:
                     from web3 import Web3
-                    Web3.to_checksum_address(new_addr)
-                    label = new_label.strip() or f"{new_addr[:6]}…{new_addr[-4:]}"
-                    saved_wallets.append({"label": label, "address": new_addr})
+                    checksum_addr = Web3.to_checksum_address(new_addr)
+                    label = new_label.strip() or f"{checksum_addr[:6]}…{checksum_addr[-4:]}"
+                    saved_wallets.append({"label": label, "address": checksum_addr})
                     save_wallets(saved_wallets)
                     st.rerun()
                 except Exception:
@@ -286,7 +286,10 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 render_section_header("Exit Strategy", "Incentive expiry countdown · price targets · exit timeline")
 
-incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"], "%Y-%m-%d")
+try:
+    incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"].strip(), "%Y-%m-%d")
+except (ValueError, KeyError):
+    incentive_expiry = datetime(2026, 7, 1)
 days_left        = max(0, (incentive_expiry - datetime.now(timezone.utc).replace(tzinfo=None)).days)
 exp_color        = "#10b981" if days_left > 90 else ("#f59e0b" if days_left > 30 else "#ef4444")
 exp_msg          = (

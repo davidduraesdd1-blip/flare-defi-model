@@ -209,10 +209,13 @@ def build_opportunity(
 
     apr = max(0.0, apr)  # guard: negative APY is not a valid yield opportunity
 
+    # Normalize reward token to uppercase for consistent comparison
+    reward_token = (reward_token or "").upper()
+
     # Incentive decay: RFLR/SPRK reward APY declines linearly to 0 by July 2026.
     # Use the actual known reward_apr split when available; fall back to 40/60 estimate.
     # APY Decomposition (Upgrade #2): track fee vs reward components separately.
-    if reward_token in ("RFLR", "rFLR", "SPRK"):
+    if reward_token in ("RFLR", "SPRK"):
         decay          = _incentive_decay_factor()
         if reward_apr > 0 and reward_apr <= apr:
             fee_part       = apr - reward_apr
