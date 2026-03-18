@@ -95,7 +95,7 @@ def _build_pdf_export(positions: list, pnl_results: list) -> bytes:
 
     # Title
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "Flare DeFi Model — Portfolio Report", ln=True)
+    pdf.cell(0, 10, "Flare DeFi Model - Portfolio Report", ln=True)
     pdf.set_font("Helvetica", "", 9)
     pdf.cell(0, 6, f"Generated: {report_date}", ln=True)
     pdf.ln(4)
