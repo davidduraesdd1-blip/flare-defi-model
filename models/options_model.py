@@ -145,7 +145,7 @@ def covered_call_analysis(spot: float, token: str, vol: float, expiry_days: int 
     call   = price_option(token, spot, strike, expiry_days, vol, "call")
 
     premium_pct    = call.price / spot * 100
-    annualised_pct = premium_pct * (365 / expiry_days)
+    annualised_pct = premium_pct * (365 / expiry_days) if expiry_days > 0 else 0.0
 
     return {
         "strategy":       "Covered Call",

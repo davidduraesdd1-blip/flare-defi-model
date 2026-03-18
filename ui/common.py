@@ -613,7 +613,7 @@ def render_sidebar() -> dict:
                 st.rerun()
             elif time.time() < st.session_state.get("_scan_deadline", 0):
                 st.caption("⏳ Scanning… auto-reloading when done.")
-                time.sleep(2)
+                time.sleep(0.5)   # short poll — avoid blocking the server thread for 2s on every rerender
                 st.rerun()
             else:
                 st.session_state._scanning = False
@@ -845,14 +845,16 @@ def compute_position_pnl(pos: dict, current_prices: list) -> dict:
         }
         token_a       = pos.get("token_a", "")
         entry_price_a = float(pos.get("entry_price_a", 0))
-        curr_price_a  = price_lookup.get(token_a, entry_price_a) or entry_price_a
+        _lkp_a        = price_lookup.get(token_a)
+        curr_price_a  = _lkp_a if _lkp_a is not None else entry_price_a
         if entry_price_a > 0 and curr_price_a > 0:
             il_pct = calculate_il(curr_price_a / entry_price_a)
         token_b        = pos.get("token_b", "")
         token_a_amount = float(pos.get("token_a_amount", 0))
         token_b_amount = float(pos.get("token_b_amount", 0))
         entry_price_b  = float(pos.get("entry_price_b", 0))
-        curr_price_b   = price_lookup.get(token_b, entry_price_b) or entry_price_b
+        _lkp_b        = price_lookup.get(token_b)
+        curr_price_b  = _lkp_b if _lkp_b is not None else entry_price_b
         if token_a_amount > 0 and curr_price_a > 0:
             hodl_value += token_a_amount * curr_price_a
         if token_b_amount > 0 and curr_price_b > 0:

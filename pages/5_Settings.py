@@ -113,8 +113,10 @@ with tab_thresh:
         "Smart tuning auto-adjusts the APY threshold after each scan based on prediction accuracy.</div>",
         unsafe_allow_html=True,
     )
+    _raw_apy_thresh = config["thresholds"].get("min_apy_alert", 150)
+    _apy_slider_val = int(round(_raw_apy_thresh / 10) * 10)   # round to nearest step=10, no truncation
     min_apy   = st.slider("Alert when any APY exceeds (%)", 50, 300,
-                          int(config["thresholds"].get("min_apy_alert", 150)), 10, key="min_apy_thresh")
+                          max(50, min(300, _apy_slider_val)), 10, key="min_apy_thresh")
     arb_alert = st.toggle("Alert on ACT NOW arbitrage opportunities",
                            value=config["thresholds"].get("new_arb_alert", True), key="arb_alert_cb")
 

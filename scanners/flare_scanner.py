@@ -1062,7 +1062,11 @@ def fetch_fasset_data() -> dict:
         logger.warning(f"FAsset on-chain fetch failed: {exc}")
 
     # ── Attempt 2: DeFiLlama — enrich circulating supply for FXRP ────────────
-    if result["data_source"] == "baseline" or (result["assets"].get("FXRP") or {}).get("circulating", 0) == 0:
+    # Only run if still on baseline OR on-chain returned a non-zero supply that
+    # we want to cross-check. Do NOT overwrite a confirmed on-chain zero — that
+    # means the FAsset genuinely has no minted supply yet.
+    _fxrp_onchain_supply = (result["assets"].get("FXRP") or {}).get("circulating", -1)
+    if result["data_source"] == "baseline" or _fxrp_onchain_supply == -1:
         try:
             dl = _get("https://api.llama.fi/protocol/flare-fassets", timeout=8)
             if dl and isinstance(dl, dict):

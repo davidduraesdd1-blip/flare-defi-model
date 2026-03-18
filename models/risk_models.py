@@ -268,7 +268,7 @@ def build_opportunity(
     rs = compute_risk_score(il_risk, protocol_type, data_source, tvl_usd)
 
     # Confidence: higher TVL + live data + FTSO oracle agreement = higher confidence
-    tvl_score   = min(50, tvl_usd / 2_000_000) if tvl_usd else 0
+    tvl_score   = min(50, tvl_usd / 2_000_000) if tvl_usd and tvl_usd > 0 else 0
     fresh_score = 40 if data_source in ("live", "on-chain") else (25 if data_source == "research" else 15)
     # Upgrade #3: FTSO oracle signal adds up to 10 points when oracle confirms price data
     confidence  = max(0, min(100, round(tvl_score + fresh_score + (10 - rs) * 2 + ftso_signal, 1)))

@@ -105,9 +105,13 @@ def fetch_volatility_data() -> list:
             regime = "extreme"
 
         iv = round(hv * 1.15, 4)
+        spot = live_prices.get(symbol) or FALLBACK_PRICES.get(symbol)
+        if spot is None:
+            logger.warning(f"options_scanner: no price for {symbol}, skipping volatility calc")
+            continue
         results.append(VolatilityData(
             token=symbol,
-            price_usd=live_prices.get(symbol, FALLBACK_PRICES.get(symbol, 1.0)),
+            price_usd=spot,
             historical_vol=hv,
             implied_vol=iv,
             vol_regime=regime,

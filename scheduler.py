@@ -595,7 +595,8 @@ def start_scheduler() -> None:
 
     for t in run_times:
         parts = t.split(":")
-        hour, minute = parts[0], parts[1] if len(parts) >= 2 else "0"
+        hour   = parts[0] if len(parts) >= 1 and parts[0].strip() else "0"
+        minute = parts[1] if len(parts) >= 2 and parts[1].strip() else "0"
         scheduler.add_job(
             run_full_scan,
             trigger=CronTrigger(hour=int(hour), minute=int(minute), timezone=tz),

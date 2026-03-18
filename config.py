@@ -49,6 +49,7 @@ TOKENS = {
     "sFLR":  "0x12e605bc104e93B45e1aD99F9e555f659051c2BB",
     "stFLR": "0x1a77D13B87B8e5F58cf9bCDaCae6d3CDdA4f4344",  # SparkDEX V4 stFLR (verify addr)
     "stXRP": "0xFcB23FA1d5b4652D0A0B48F0E42697D7Bca07A0c",  # Firelight stXRP
+    "FBTC":  "",  # FAssets FBTC  — address TBD (not yet live on mainnet as of Mar 2026)
     "FDOGE": "",  # FAssets FDOGE — address TBD (beta, limited minting as of Mar 2026)
     "HLN":   "0x7D3c9C6566375d6F11D9B00b06A14eaF5a2f4e75",
 }

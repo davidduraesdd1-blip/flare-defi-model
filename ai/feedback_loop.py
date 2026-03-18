@@ -126,7 +126,10 @@ def record_actuals(scan_result: dict) -> None:
     all_actuals = {**current_pools, **current_lending, **current_staking}
 
     for pred in (history.get("predictions") or []):
-        pred_time = datetime.fromisoformat(pred.get("timestamp", datetime.now(timezone.utc).replace(tzinfo=None).isoformat()))
+        _ts = pred.get("timestamp")
+        if not _ts:
+            continue   # skip records with no timestamp — cannot determine age
+        pred_time = datetime.fromisoformat(_ts)
         age_secs  = (now - pred_time).total_seconds()
 
         # ── 24h evaluation ────────────────────────────────────────────────────

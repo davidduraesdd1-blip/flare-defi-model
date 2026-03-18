@@ -125,14 +125,17 @@ def fetch_cross_chain_prices() -> list:
     CoinGecko call within the same scan cycle.
     A persistent price gap > 0.5% is an arbitrage signal.
     """
-    prices      = _fetch_flare_prices()
-    xrp_entry   = next((p for p in prices if p.symbol == "XRP"), None)
-    xrp_price   = xrp_entry.price_usd   if xrp_entry else FALLBACK_PRICES["XRP"]
-    data_source = xrp_entry.data_source if xrp_entry else "estimate"
+    prices       = _fetch_flare_prices()
+    xrp_entry    = next((p for p in prices if p.symbol == "XRP"),  None)
+    fxrp_entry   = next((p for p in prices if p.symbol == "FXRP"), None)
+    xrp_price    = xrp_entry.price_usd   if xrp_entry  else FALLBACK_PRICES["XRP"]
+    fxrp_price   = fxrp_entry.price_usd  if fxrp_entry else FALLBACK_PRICES.get("FXRP", xrp_price * 0.998)
+    data_source  = xrp_entry.data_source if xrp_entry  else "estimate"
+    fxrp_source  = fxrp_entry.data_source if fxrp_entry else "derived"
 
     return [
-        CrossChainPrice(token="XRP",  chain="spot",  price_usd=xrp_price,         liquidity_usd=0, data_source=data_source),
-        CrossChainPrice(token="FXRP", chain="flare", price_usd=xrp_price * 0.998, liquidity_usd=0, data_source="derived"),
+        CrossChainPrice(token="XRP",  chain="spot",  price_usd=xrp_price,  liquidity_usd=0, data_source=data_source),
+        CrossChainPrice(token="FXRP", chain="flare", price_usd=fxrp_price, liquidity_usd=0, data_source=fxrp_source),
     ]
 
 
