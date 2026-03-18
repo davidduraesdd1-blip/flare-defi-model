@@ -227,7 +227,11 @@ if feedback:
         key="acc_window",
         help="24h: accuracy vs next-day actuals. 7d: accuracy vs 7-day actuals.",
     )
-    profile_data = feedback.get("per_profile") or {} if acc_window == "24h" else feedback.get("per_profile_7d") or feedback.get("per_profile") or {}
+    profile_data = (
+        (feedback.get("per_profile") or {})
+        if acc_window == "24h"
+        else (feedback.get("per_profile_7d") or feedback.get("per_profile") or {})
+    )
 
     for p in RISK_PROFILE_NAMES:
         acc   = profile_data.get(p) or {}

@@ -23,7 +23,7 @@ def atomic_json_write(path: Path, data: Any) -> bool:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         os.replace(tmp_path, path)
         return True

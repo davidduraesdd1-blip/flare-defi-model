@@ -603,7 +603,7 @@ def render_sidebar() -> dict:
         # ─── Scan completion polling ───────────────────────────────────────────
         if st.session_state.get("_scanning"):
             try:
-                with open(HISTORY_FILE) as _f:
+                with open(HISTORY_FILE, encoding="utf-8") as _f:
                     _hist_ts = (json.load(_f).get("latest") or {}).get("completed_at") or ""
             except Exception:
                 _hist_ts = ""
@@ -688,7 +688,7 @@ def _load_history_file() -> dict:
     if not HISTORY_FILE.exists():
         return {}
     try:
-        with open(HISTORY_FILE) as f:
+        with open(HISTORY_FILE, encoding="utf-8") as f:
             return json.load(f)
     except json.JSONDecodeError:
         st.warning("⚠️ history.json is corrupted — re-run the scheduler.")
@@ -711,7 +711,7 @@ def load_positions() -> list:
     if not POSITIONS_FILE.exists():
         return []
     try:
-        with open(POSITIONS_FILE) as f:
+        with open(POSITIONS_FILE, encoding="utf-8") as f:
             return json.load(f)
     except json.JSONDecodeError:
         st.warning("⚠️ positions.json is corrupted.")
@@ -731,7 +731,7 @@ def load_wallets() -> list:
     if not WALLETS_FILE.exists():
         return []
     try:
-        with open(WALLETS_FILE) as f:
+        with open(WALLETS_FILE, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return []
@@ -748,7 +748,7 @@ def load_monitor_digest() -> dict:
     if not MONITOR_DIGEST_FILE.exists():
         return {}
     try:
-        with open(MONITOR_DIGEST_FILE) as f:
+        with open(MONITOR_DIGEST_FILE, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {}

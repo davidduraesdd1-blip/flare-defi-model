@@ -267,7 +267,7 @@ def check_cl_range_alerts(prices: list) -> list:
         return []
 
     try:
-        with open(POSITIONS_FILE) as _f:
+        with open(POSITIONS_FILE, encoding="utf-8") as _f:
             positions = json.load(_f)
     except Exception:
         return []
