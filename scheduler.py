@@ -92,7 +92,7 @@ def _ensure_positions_file() -> None:
 
 def _load_quick_cache() -> dict:
     try:
-        with open(QUICK_CACHE_FILE) as f:
+        with open(QUICK_CACHE_FILE, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {}

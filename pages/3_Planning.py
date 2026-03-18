@@ -419,8 +419,9 @@ with tab5:
 
         # Adjust for IL comfort
         if not il_comfort:
+            _had_high = any(p["risk"] == "High" for p in _plans)
             _plans = [p for p in _plans if p["risk"] in ("None", "Low", "Medium")]
-            if any(p["risk"] == "High" for p in _plans):
+            if _had_high:
                 _warnings.append("High-IL strategies removed — toggle 'comfortable with IL' to unlock them.")
 
         # Render the plan

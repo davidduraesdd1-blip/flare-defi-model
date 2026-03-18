@@ -42,7 +42,7 @@ def _is_valid_telegram_token(token: str) -> bool:
 def load_alerts_config() -> dict:
     if ALERTS_CONFIG_FILE.exists():
         try:
-            with open(ALERTS_CONFIG_FILE) as f:
+            with open(ALERTS_CONFIG_FILE, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.warning(f"Could not load alerts config: {e}")

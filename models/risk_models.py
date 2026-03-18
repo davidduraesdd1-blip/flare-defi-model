@@ -407,7 +407,7 @@ def _load_history_data() -> tuple:
     try:
         import json
         from config import HISTORY_FILE
-        with open(HISTORY_FILE, "r") as f:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             history = json.load(f)
         runs = (history.get("runs") or [])[-14:]
         apy_map: dict = {}

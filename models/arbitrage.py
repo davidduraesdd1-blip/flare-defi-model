@@ -391,7 +391,7 @@ def detect_sflr_borrow_arb(staking_data: list, lending_data: list) -> list:
                     ),
                     risk_level="medium",
                     applicable_profiles=["medium", "high"],
-                    data_source=sflr["data_source"],
+                    data_source=sflr.get("data_source", "estimate"),
                 ))
     return opps
 

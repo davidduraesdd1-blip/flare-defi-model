@@ -83,7 +83,7 @@ h_icon    = {"healthy": "✓", "caution": "⚠", "unknown": "?"}.get(health, "?"
 
 assets     = fasset.get("assets", {})
 latest     = load_latest()
-prices_raw = latest.get("prices", [])
+prices_raw = latest.get("flare_scan", {}).get("prices", [])
 price_lkp  = {p["symbol"]: p.get("price_usd", 0) for p in prices_raw if isinstance(p, dict) and p.get("symbol")}
 
 fxrp_info  = assets.get("FXRP", {})
@@ -328,11 +328,12 @@ render_section_header("Current Arb Window", "Real-time premium/discount vs XRP s
 
 try:
     from models.arbitrage import detect_fassets_arb
-    arb_opps = detect_fassets_arb(load_latest().get("prices", []))
+    from dataclasses import asdict as _asdict
+    _raw_opps = detect_fassets_arb((load_latest().get("flare_scan") or {}).get("prices", []))
+    arb_opps = [_asdict(a) if not isinstance(a, dict) else a for a in _raw_opps]
     if arb_opps:
         for arb in arb_opps:
-            net = arb.get("net_profit_pct", 0)
-            direction = arb.get("direction", "")
+            net = arb.get("estimated_profit", 0)
             col = "#22c55e" if net > 0 else "#ef4444"
             st.markdown(
                 f"<div class='arb-tag'>"
@@ -340,7 +341,7 @@ try:
                 f"<span style='color:#475569; margin-left:8px;'>{arb.get('urgency', '').upper()}</span>"
                 f"<div style='color:#94a3b8; font-size:0.82rem; margin-top:6px;'>"
                 f"Net profit: <span style='color:{col}; font-weight:700;'>{net:.2f}%</span>"
-                f" · {_html.escape(str(arb.get('action', '')))}</div>"
+                f" · {_html.escape(str(arb.get('plain_english', '')))}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )

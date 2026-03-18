@@ -30,7 +30,7 @@ _ACCURACY_THRESHOLD = 20.0                    # within 20% of actual APY = "accu
 def load_history() -> dict:
     if HISTORY_FILE.exists():
         try:
-            with open(HISTORY_FILE) as f:
+            with open(HISTORY_FILE, encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
             logger.warning(f"history.json is malformed ({e}) — starting fresh")
