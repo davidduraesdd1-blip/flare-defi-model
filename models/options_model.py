@@ -177,7 +177,7 @@ def protective_put_analysis(spot: float, token: str, vol: float, expiry_days: in
     put    = price_option(token, spot, strike, expiry_days, vol, "put")
 
     cost_pct       = put.price / spot * 100
-    annualised_pct = cost_pct * (365 / expiry_days)
+    annualised_pct = cost_pct * (365 / expiry_days) if expiry_days > 0 else 0.0
 
     return {
         "strategy":          "Protective Put",

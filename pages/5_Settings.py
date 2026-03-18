@@ -130,11 +130,11 @@ with tab_thresh:
         cal_html = ""
         if cal_at and samples:
             from ui.common import _ts_fmt
+            _p75_str = f"p75 APY = {p75:.1f}%" if p75 is not None else "p75 APY = N/A"
             cal_html = (
                 f"<span style='color:#22c55e; font-weight:600;'>Active</span> · "
                 f"Last calibrated: {_ts_fmt(cal_at)} · "
-                f"{samples} samples · "
-                f"p75 APY = {p75:.1f}%" if p75 is not None else "p75 APY = N/A"
+                f"{samples} samples · {_p75_str}"
             )
         else:
             cal_html = "<span style='color:#475569;'>Waiting for prediction history (need 6+ evaluated predictions)</span>"
