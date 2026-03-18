@@ -229,7 +229,7 @@ def fetch_prices() -> list:
             "tether":         ("USD0", "live"),
         }
         for cg_id, (symbol, src) in mapping.items():
-            if cg_id in data:
+            if cg_id in data and isinstance(data[cg_id], dict):
                 results.append(TokenPrice(
                     symbol=symbol,
                     price_usd=data[cg_id].get("usd", 0),
@@ -396,7 +396,7 @@ def _baseline_pools(protocol_key: str) -> list:
             tvl_usd=0,
             token0=t0,
             token1=t1,
-            il_risk=cfg["il_risk"],
+            il_risk=cfg.get("il_risk", "medium"),
             reward_token=cfg.get("reward_token", ""),
             data_source="baseline",
             reward_apr=rwd_apr,
@@ -690,8 +690,8 @@ def fetch_kinetic_rates() -> list:
 
         except Exception as e:
             logger.warning(f"Kinetic on-chain fetch failed for {asset}: {e} — using baseline")
-            supply_apy  = cfg["baseline_supply"]
-            borrow_apy  = cfg["baseline_borrow"]
+            supply_apy  = cfg.get("baseline_supply", 0.0)
+            borrow_apy  = cfg.get("baseline_borrow", 0.0)
             utilisation = 0.0   # unknown when using baseline; do not fabricate a value
             tvl_usd     = PROTOCOLS["kinetic"]["tvl_usd"] / max(1, len(k_tokens))
             data_source = "baseline"
@@ -1002,8 +1002,8 @@ def fetch_fasset_data() -> dict:
             collat_ratio  = info.get("collateralRatio",info.get("collateral_ratio",base_info.get("min_cr_bips",16000)))
             circulating   = info.get("circulatingSupply", info.get("circulating_supply", base_info.get("circulating", 0)))
             result["assets"][sym_upper] = {
-                "mint_fee_pct":     minting_fee / 100 if minting_fee > 1 else minting_fee,
-                "redeem_fee_pct":   redeem_fee  / 100 if redeem_fee  > 1 else redeem_fee,
+                "mint_fee_pct":     minting_fee / 100 if minting_fee >= 1 else minting_fee,
+                "redeem_fee_pct":   redeem_fee  / 100 if redeem_fee  >= 1 else redeem_fee,
                 "cr_pct":           collat_ratio / 100 if collat_ratio > 100 else collat_ratio,
                 "circulating":      float(circulating or 0),
                 "collateral_token": base_info.get("collateral_token", "FLR"),

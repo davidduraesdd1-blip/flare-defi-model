@@ -789,6 +789,8 @@ def _next_scan() -> str:
         scan_times.append(datetime(today.year, today.month, today.day, h, m, tzinfo=tz))
     future = [t for t in scan_times if t > now_local]
     if not future:
+        if not SCHEDULER.get("run_times"):
+            return "unknown"
         tmrw   = today + timedelta(days=1)
         h0, m0 = map(int, SCHEDULER["run_times"][0].split(":"))
         next_t = datetime(tmrw.year, tmrw.month, tmrw.day, h0, m0, tzinfo=tz)
@@ -837,7 +839,10 @@ def compute_position_pnl(pos: dict, current_prices: list) -> dict:
     il_pct = 0.0
     hodl_value = 0.0
     if pos.get("position_type", "lp") == "lp":
-        price_lookup  = {p.get("symbol", ""): p.get("price_usd", 0) for p in (current_prices or [])}
+        price_lookup  = {
+            (p.get("symbol", "") if isinstance(p, dict) else getattr(p, "symbol", "")): (p.get("price_usd", 0) if isinstance(p, dict) else getattr(p, "price_usd", 0))
+            for p in (current_prices or [])
+        }
         token_a       = pos.get("token_a", "")
         entry_price_a = float(pos.get("entry_price_a", 0))
         curr_price_a  = price_lookup.get(token_a, entry_price_a) or entry_price_a
@@ -1086,7 +1091,7 @@ def render_opportunity_card(
     il_icon  = {"none": "✓", "low": "✓", "medium": "~", "high": "!"}.get(il, "~")
 
     est_tag  = " <span class='badge-est'>EST</span>" if src in ("baseline", "estimate") else " <span class='badge-live'>LIVE</span>"
-    medals   = ["🥇", "🥈", "🥉", "4", "5", "6"]
+    medals   = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣"]
     medal    = medals[min(idx, 5)]
     proto    = _html.escape(str(proto))
     pool     = _html.escape(str(pool))
@@ -1134,7 +1139,7 @@ def render_opportunity_card(
     _apy_decomp_html = ""
     if reward_apy > 0 or fee_apy > 0:
         # Sustainability score (how much of APY is durable fee income)
-        _sustain_pct  = round(fee_apy / apy * 100) if apy > 0 else 0
+        _sustain_pct  = round(fee_apy / apy * 100) if apy > 0 else (100 if fee_apy > 0 else 0)
         _sustain_color = "#10b981" if _sustain_pct >= 60 else ("#f59e0b" if _sustain_pct >= 30 else "#ef4444")
 
         # Incentive expiry badge
