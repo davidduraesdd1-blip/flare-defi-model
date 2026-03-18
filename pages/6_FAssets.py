@@ -124,16 +124,17 @@ with c1:
         <div style="color:#475569; font-size:0.82rem; margin-top:4px;">{health.capitalize()}</div>
     </div>""", unsafe_allow_html=True)
 with c2:
-    st.markdown(f"""
-    <div class="metric-card card-blue">
-        <div class="label">Active Agents</div>
-        <div class="big-number">{agents if agents else "—"}</div>
-        <div style="color:#475569; font-size:0.82rem; margin-top:4px;">
-            <span style="color:#10b981;">✓ {_ag_healthy}</span>
-            {"&nbsp; <span style='color:#f59e0b;'>⚠ " + str(_ag_warning) + "</span>" if _ag_warning else ""}
-            {"&nbsp; <span style='color:#ef4444;'>✗ " + str(_ag_liq) + "</span>" if _ag_liq else ""}
-        </div>
-    </div>""", unsafe_allow_html=True)
+    _warn_html = f"&nbsp;<span style='color:#f59e0b;'>⚠ {_ag_warning}</span>" if _ag_warning else ""
+    _liq_html  = f"&nbsp;<span style='color:#ef4444;'>✗ {_ag_liq}</span>" if _ag_liq else ""
+    st.markdown(
+        f"<div class='metric-card card-blue'>"
+        f"<div class='label'>Active Agents</div>"
+        f"<div class='big-number'>{agents if agents else '—'}</div>"
+        f"<div style='color:#475569; font-size:0.82rem; margin-top:4px;'>"
+        f"<span style='color:#10b981;'>✓ {_ag_healthy}</span>{_warn_html}{_liq_html}"
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
 with c3:
     st.markdown(f"""
     <div class="metric-card card-orange">
