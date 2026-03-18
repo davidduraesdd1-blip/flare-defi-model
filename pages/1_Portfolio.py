@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import csv
+import io
 import logging
 import html as _html
 import streamlit as st
@@ -42,7 +44,225 @@ st.markdown(
 )
 
 
+# ─── Export Helpers ───────────────────────────────────────────────────────────
+
+def _build_csv_export(positions: list, pnl_results: list) -> bytes:
+    """Build a UTF-8 CSV of all positions with P&L data."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Protocol", "Pool", "Type", "Entry Date",
+        "Deposit ($)", "Current Value ($)", "P&L ($)", "P&L (%)",
+        "Days Active", "Est. Fees Earned ($)", "IL (%)",
+        "Unclaimed Fees ($)", "Entry APY (%)", "Notes",
+    ])
+    for pos, pnl in zip(positions, pnl_results):
+        writer.writerow([
+            pos.get("protocol", "").capitalize(),
+            pos.get("pool", ""),
+            pos.get("position_type", ""),
+            pos.get("entry_date", ""),
+            f"{pnl['deposit_usd']:.2f}",
+            f"{pnl['current_value']:.2f}",
+            f"{pnl['value_change']:.2f}",
+            f"{pnl['value_change_pct']:.2f}",
+            pnl["days_active"],
+            f"{pnl['fees_earned_est']:.2f}",
+            f"{pnl['il_pct']:.2f}",
+            f"{pnl['unclaimed_fees']:.2f}",
+            f"{pos.get('entry_apy', 0):.1f}",
+            pos.get("notes", ""),
+        ])
+    return buf.getvalue().encode("utf-8")
+
+
+def _build_pdf_export(positions: list, pnl_results: list) -> bytes:
+    """Build a PDF portfolio report using fpdf2."""
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return b""
+
+    total_value   = sum(p["current_value"] for p in pnl_results)
+    total_deposit = sum(p["deposit_usd"]   for p in pnl_results)
+    total_pnl     = total_value - total_deposit
+    total_fees    = sum(p["unclaimed_fees"] for p in pnl_results)
+    report_date   = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=12)
+    pdf.add_page()
+
+    # Title
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "Flare DeFi Model — Portfolio Report", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 6, f"Generated: {report_date}", ln=True)
+    pdf.ln(4)
+
+    # Summary row
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, "Portfolio Summary", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(60, 6, f"Total Value:   ${total_value:,.2f}")
+    pdf.cell(60, 6, f"Total P&L:   ${total_pnl:+,.2f}")
+    pdf.cell(0,  6, f"Unclaimed Fees:   ${total_fees:,.2f}", ln=True)
+    pdf.cell(60, 6, f"Positions:   {len(positions)}")
+    pdf.cell(0,  6, f"Deposited:   ${total_deposit:,.2f}", ln=True)
+    pdf.ln(6)
+
+    # Table header
+    cols   = ["Protocol", "Pool", "Deposit", "Value", "P&L", "P&L%", "Days", "Fees Est.", "IL%"]
+    widths = [28, 42, 22, 22, 22, 14, 12, 22, 12]
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_fill_color(30, 41, 59)
+    pdf.set_text_color(255, 255, 255)
+    for col, w in zip(cols, widths):
+        pdf.cell(w, 7, col, border=1, fill=True)
+    pdf.ln()
+
+    # Table rows
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(0, 0, 0)
+    for i, (pos, pnl) in enumerate(zip(positions, pnl_results)):
+        fill = i % 2 == 0
+        pdf.set_fill_color(241, 245, 249) if fill else pdf.set_fill_color(255, 255, 255)
+        row = [
+            pos.get("protocol", "").capitalize()[:12],
+            pos.get("pool", "")[:20],
+            f"${pnl['deposit_usd']:,.0f}",
+            f"${pnl['current_value']:,.0f}",
+            f"${pnl['value_change']:+,.0f}",
+            f"{pnl['value_change_pct']:+.1f}%",
+            str(pnl["days_active"]),
+            f"${pnl['fees_earned_est']:,.2f}",
+            f"{pnl['il_pct']:.1f}%",
+        ]
+        for val, w in zip(row, widths):
+            pdf.cell(w, 6, val, border=1, fill=fill)
+        pdf.ln()
+
+    pdf.ln(8)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.cell(0, 5, "Not financial advice. DeFi positions carry risk including impermanent loss and smart contract risk.", ln=True)
+
+    return bytes(pdf.output())
+
+
 # ─── Wallet Tracker ───────────────────────────────────────────────────────────
+
+def _detect_onchain_positions(wallet: str) -> list:
+    """
+    Detect lending/staking positions from on-chain token balances.
+    Checks: Kinetic kTokens (lending), sFLR (Sceptre staking), stXRP (Firelight staking).
+    Returns a list of pre-filled position dicts the user can confirm and add.
+    """
+    from web3 import Web3
+    from scanners.flare_scanner import _get_web3
+    w3 = _get_web3()
+    if not w3:
+        raise ConnectionError("Could not connect to Flare RPC.")
+
+    addr_cs   = Web3.to_checksum_address(wallet)
+    ERC20_ABI = [{
+        "inputs": [{"name": "account", "type": "address"}],
+        "name": "balanceOf", "outputs": [{"type": "uint256"}],
+        "stateMutability": "view", "type": "function",
+    }]
+
+    suggestions = []
+    today_str   = datetime.now(timezone.utc).date().isoformat()
+
+    # ── Kinetic kToken balances (lending positions) ────────────────────────────
+    k_tokens = PROTOCOLS.get("kinetic", {}).get("kTokens", {})
+    for asset, cfg in k_tokens.items():
+        addr = cfg.get("address")
+        if not addr:
+            continue
+        try:
+            contract = w3.eth.contract(address=Web3.to_checksum_address(addr), abi=ERC20_ABI)
+            bal = contract.functions.balanceOf(addr_cs).call()
+            if bal > 0:
+                bal_human = bal / 1e8   # kTokens use 8 decimals (Compound standard)
+                suggestions.append({
+                    "protocol":       "kinetic",
+                    "pool":           asset,
+                    "position_type":  "lending",
+                    "entry_date":     today_str,
+                    "deposit_usd":    0.0,
+                    "entry_apy":      cfg.get("baseline_supply", 0.0),
+                    "current_value":  0.0,
+                    "unclaimed_fees": 0.0,
+                    "entry_value":    0.0,
+                    "token_a":        asset,
+                    "token_a_amount": round(bal_human, 6),
+                    "entry_price_a":  0.0,
+                    "token_b":        "",
+                    "token_b_amount": 0.0,
+                    "entry_price_b":  0.0,
+                    "notes":          f"Auto-detected: {bal_human:.6f} k{asset} on Kinetic",
+                })
+        except Exception as _e:
+            logger.debug(f"kToken balance check failed for {asset}: {_e}")
+
+    # ── sFLR balance (Sceptre staking) ─────────────────────────────────────────
+    sflr_addr = TOKENS.get("sFLR")
+    if sflr_addr:
+        try:
+            contract = w3.eth.contract(address=Web3.to_checksum_address(sflr_addr), abi=ERC20_ABI)
+            bal = contract.functions.balanceOf(addr_cs).call() / 1e18
+            if bal >= 0.001:
+                suggestions.append({
+                    "protocol":       "sceptre",
+                    "pool":           "sFLR",
+                    "position_type":  "staking",
+                    "entry_date":     today_str,
+                    "deposit_usd":    0.0,
+                    "entry_apy":      4.5,
+                    "current_value":  0.0,
+                    "unclaimed_fees": 0.0,
+                    "entry_value":    0.0,
+                    "token_a":        "sFLR",
+                    "token_a_amount": round(bal, 4),
+                    "entry_price_a":  0.0,
+                    "token_b":        "",
+                    "token_b_amount": 0.0,
+                    "entry_price_b":  0.0,
+                    "notes":          f"Auto-detected: {bal:.4f} sFLR staked on Sceptre",
+                })
+        except Exception as _e:
+            logger.debug(f"sFLR balance check failed: {_e}")
+
+    # ── stXRP balance (Firelight staking) ──────────────────────────────────────
+    stxrp_addr = TOKENS.get("stXRP")
+    if stxrp_addr:
+        try:
+            contract = w3.eth.contract(address=Web3.to_checksum_address(stxrp_addr), abi=ERC20_ABI)
+            bal = contract.functions.balanceOf(addr_cs).call() / 1e18
+            if bal >= 0.001:
+                suggestions.append({
+                    "protocol":       "firelight",
+                    "pool":           "stXRP",
+                    "position_type":  "staking",
+                    "entry_date":     today_str,
+                    "deposit_usd":    0.0,
+                    "entry_apy":      5.0,
+                    "current_value":  0.0,
+                    "unclaimed_fees": 0.0,
+                    "entry_value":    0.0,
+                    "token_a":        "stXRP",
+                    "token_a_amount": round(bal, 4),
+                    "entry_price_a":  0.0,
+                    "token_b":        "",
+                    "token_b_amount": 0.0,
+                    "entry_price_b":  0.0,
+                    "notes":          f"Auto-detected: {bal:.4f} stXRP on Firelight",
+                })
+        except Exception as _e:
+            logger.debug(f"stXRP balance check failed: {_e}")
+
+    return suggestions
+
 
 def _fetch_wallet_balances(wallet: str) -> list:
     from web3 import Web3
@@ -112,6 +332,46 @@ with st.expander("Connect a wallet (read-only)"):
                         st.warning("Install web3: `pip install web3`")
                     except Exception as e:
                         st.error(f"Error: {e}")
+
+            if st.button("🔍 Detect Positions", key="detect_pos_btn", use_container_width=True,
+                         help="Auto-detect Kinetic lending, sFLR staking, and stXRP staking from wallet"):
+                with st.spinner("Scanning on-chain positions…"):
+                    try:
+                        suggestions = _detect_onchain_positions(saved_wallets[sel_idx]["address"])
+                        if suggestions:
+                            st.session_state["_pos_suggestions"] = suggestions
+                            st.success(f"Found {len(suggestions)} position(s). Review below ↓")
+                        else:
+                            st.info("No Kinetic / sFLR / stXRP positions detected for this wallet.")
+                    except ImportError:
+                        st.warning("Install web3: `pip install web3`")
+                    except Exception as e:
+                        st.error(f"Detection error: {e}")
+
+        # ── Detected position suggestions ─────────────────────────────────────
+        if st.session_state.get("_pos_suggestions"):
+            st.markdown("**Detected positions — confirm to add:**")
+            for i, sug in enumerate(st.session_state["_pos_suggestions"]):
+                ca2, cb2 = st.columns([5, 1])
+                with ca2:
+                    st.markdown(
+                        f"<div style='font-size:0.85rem; color:#94a3b8; padding:4px 0;'>"
+                        f"<b>{sug['pool']}</b> · {sug['protocol'].capitalize()} · "
+                        f"{sug['position_type']} · {sug.get('token_a_amount', 0):,.4f} {sug.get('token_a', '')}"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                with cb2:
+                    if st.button("Add", key=f"add_sug_{i}", use_container_width=True):
+                        new_pos = dict(sug)
+                        new_pos["id"] = f"pos_{int(datetime.now(timezone.utc).timestamp())}_{i}"
+                        positions.append(new_pos)
+                        save_positions(positions)
+                        st.session_state["_pos_suggestions"].pop(i)
+                        st.rerun()
+            if st.button("Clear suggestions", key="clear_sug_btn"):
+                st.session_state["_pos_suggestions"] = []
+                st.rerun()
         with col_remove:
             if st.button("Remove", key="remove_wallet_btn", use_container_width=True):
                 if sel_idx < len(saved_wallets):
@@ -154,6 +414,32 @@ if positions:
 
     # Compute P&L once for all positions — reused in cards and exit timeline below
     pnl_results = [compute_position_pnl(pos, prices) for pos in positions]
+
+    # ── Export ────────────────────────────────────────────────────────────────
+    _exp_csv, _exp_pdf = st.columns([1, 1])
+    with _exp_csv:
+        _csv_bytes = _build_csv_export(positions, pnl_results)
+        st.download_button(
+            "⬇ Export CSV",
+            data=_csv_bytes,
+            file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    with _exp_pdf:
+        _pdf_bytes = _build_pdf_export(positions, pnl_results)
+        if _pdf_bytes:
+            st.download_button(
+                "⬇ Export PDF",
+                data=_pdf_bytes,
+                file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        else:
+            st.caption("PDF: `pip install fpdf2`")
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
     for idx, pos in enumerate(positions):
         pnl      = pnl_results[idx]
