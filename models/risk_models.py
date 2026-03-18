@@ -401,17 +401,17 @@ def _load_history_data() -> tuple:
         from config import HISTORY_FILE
         with open(HISTORY_FILE, "r") as f:
             history = json.load(f)
-        runs = history.get("runs", [])[-14:]
+        runs = (history.get("runs") or [])[-14:]
         apy_map: dict = {}
         tvl_map: dict = {}
         for run in runs:
             # APY from model output
             for profile_key in RISK_PROFILE_NAMES:
-                for opp in run.get("models", {}).get(profile_key, []):
+                for opp in (run.get("models") or {}).get(profile_key) or []:
                     key = (opp.get("protocol", ""), opp.get("asset_or_pool", ""))
                     apy_map.setdefault(key, []).append(float(opp.get("estimated_apy", 0)))
             # TVL from raw pool scan data
-            for pool in run.get("pools", []):
+            for pool in (run.get("pools") or []):
                 proto = pool.get("protocol", "")
                 proto_name = PROTOCOLS.get(proto, {}).get("name", proto)
                 pool_name  = pool.get("pool_name", "")
@@ -419,7 +419,7 @@ def _load_history_data() -> tuple:
                 if proto_name and pool_name and tvl:
                     tvl_map.setdefault((proto_name, pool_name), []).append(float(tvl))
             # TVL from lending/staking entries
-            for entry in run.get("lending", []) + run.get("staking", []):
+            for entry in (run.get("lending") or []) + (run.get("staking") or []):
                 proto = entry.get("protocol", "")
                 proto_name = PROTOCOLS.get(proto, {}).get("name", proto)
                 name  = entry.get("asset") or entry.get("token", "")

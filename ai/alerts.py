@@ -236,10 +236,10 @@ def calibrate_alert_thresholds() -> dict:
 
     # Collect APYs of accurate top predictions across all profiles
     accurate_apys = []
-    for pred in history.get("predictions", []):
+    for pred in (history.get("predictions") or []):
         if not pred.get("evaluated"):
             continue
-        for profile_picks in pred.get("profiles", {}).values():
+        for profile_picks in (pred.get("profiles") or {}).values():
             for pick in profile_picks[:1]:   # only the top-ranked pick per profile
                 if pick.get("accurate") and pick.get("predicted_apy") is not None:
                     try:

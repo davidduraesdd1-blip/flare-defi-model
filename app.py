@@ -55,7 +55,7 @@ prices     = load_live_prices() or flare_scan.get("prices", [])
 render_price_strip(prices)
 
 # ── Data Freshness ────────────────────────────────────────────────────────────
-all_pts = flare_scan.get("pools", []) + flare_scan.get("lending", []) + flare_scan.get("staking", [])
+all_pts = (flare_scan.get("pools") or []) + (flare_scan.get("lending") or []) + (flare_scan.get("staking") or [])
 if all_pts:
     total     = len(all_pts)
     live      = sum(1 for p in all_pts if p.get("data_source") == "live")
@@ -85,7 +85,7 @@ if all_pts:
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ── Yield Hero Cards ──────────────────────────────────────────────────────────
-model_data = latest.get("models", {})
+model_data = latest.get("models") or {}
 opps       = model_data.get(profile, [])
 
 render_section_header("Estimated Yield", "Projected returns based on your top-3 ranked opportunities")
@@ -112,7 +112,7 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 # ── Arbitrage Alerts ──────────────────────────────────────────────────────────
 render_section_header("Arbitrage Alerts", "Real-time profit opportunities from price differences across platforms")
 
-arb_data = latest.get("arbitrage", {}).get(profile, [])
+arb_data = (latest.get("arbitrage") or {}).get(profile, [])
 if not arb_data:
     st.markdown(
         "<div style='color:#334155; font-size:0.88rem; padding:16px 0;'>"

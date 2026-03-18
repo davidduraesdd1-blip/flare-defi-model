@@ -602,7 +602,7 @@ def render_sidebar() -> dict:
         if st.session_state.get("_scanning"):
             try:
                 with open(HISTORY_FILE) as _f:
-                    _hist_ts = json.load(_f).get("latest", {}).get("completed_at") or ""
+                    _hist_ts = (json.load(_f).get("latest") or {}).get("completed_at") or ""
             except Exception:
                 _hist_ts = ""
             if _hist_ts and _hist_ts != st.session_state.get("_scan_baseline", ""):
@@ -697,11 +697,11 @@ def _load_history_file() -> dict:
 
 
 def load_latest() -> dict:
-    return _load_history_file().get("latest", {})
+    return _load_history_file().get("latest") or {}
 
 
 def load_history_runs() -> list:
-    return _load_history_file().get("runs", [])
+    return _load_history_file().get("runs") or []
 
 
 @st.cache_data(ttl=60)

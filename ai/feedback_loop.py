@@ -90,6 +90,8 @@ def record_prediction(model_results: dict) -> None:
             for o in top3
         ]
 
+    if not isinstance(history.get("predictions"), list):
+        history["predictions"] = []
     history["predictions"].append(prediction)
 
     # Keep only last 90 days of predictions; prune only when over-limit to avoid
@@ -97,7 +99,7 @@ def record_prediction(model_results: dict) -> None:
     if len(history["predictions"]) > 200:
         cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=90)).isoformat()
         history["predictions"] = [
-            p for p in history["predictions"] if p["timestamp"] >= cutoff
+            p for p in history["predictions"] if p.get("timestamp", "") >= cutoff
         ]
 
     if not save_history(history):
@@ -118,13 +120,13 @@ def record_actuals(scan_result: dict) -> None:
     now     = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Build lookup from current scan data
-    current_pools   = {p["pool_name"].lower().strip(): p["apr"]       for p in scan_result.get("pools", [])   if p.get("pool_name")}
-    current_lending = {r["asset"].lower().strip():     r["supply_apy"] for r in scan_result.get("lending", []) if r.get("asset")}
-    current_staking = {s["token"].lower().strip():     s["apy"]        for s in scan_result.get("staking", []) if s.get("token")}
+    current_pools   = {p["pool_name"].lower().strip(): p.get("apr", 0)        for p in (scan_result.get("pools")   or []) if p.get("pool_name")}
+    current_lending = {r["asset"].lower().strip():     r.get("supply_apy", 0) for r in (scan_result.get("lending") or []) if r.get("asset")}
+    current_staking = {s["token"].lower().strip():     s.get("apy", 0)        for s in (scan_result.get("staking") or []) if s.get("token")}
     all_actuals = {**current_pools, **current_lending, **current_staking}
 
-    for pred in history["predictions"]:
-        pred_time = datetime.fromisoformat(pred["timestamp"])
+    for pred in (history.get("predictions") or []):
+        pred_time = datetime.fromisoformat(pred.get("timestamp", datetime.now(timezone.utc).replace(tzinfo=None).isoformat()))
         age_secs  = (now - pred_time).total_seconds()
 
         # ── 24h evaluation ────────────────────────────────────────────────────
@@ -199,8 +201,8 @@ def compute_accuracy(profile: str, history: dict = None, window: str = "24h") ->
     cutoff   = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=LOOKBACK_DAYS)).isoformat()
 
     evaluated = [
-        p for p in history["predictions"]
-        if p.get(eval_key) and p["timestamp"] >= cutoff
+        p for p in (history.get("predictions") or [])
+        if p.get(eval_key) and p.get("timestamp", "") >= cutoff
     ]
 
     # Time-weight each pick: recent predictions count more (exponential decay by age)
@@ -319,8 +321,9 @@ def get_feedback_dashboard() -> dict:
     history = load_history()   # load once, pass to all helpers
 
     # Historical prediction count
-    pred_count = len(history["predictions"])
-    evaluated  = len([p for p in history["predictions"] if p.get("evaluated")])
+    preds      = history.get("predictions") or []
+    pred_count = len(preds)
+    evaluated  = len([p for p in preds if p.get("evaluated")])
 
     # Per-profile accuracy — 24h and 7d windows (reuse already-loaded history)
     accuracy_24h = {
@@ -360,10 +363,10 @@ def _compute_trend(history: dict = None) -> str:
     recent   = (now - timedelta(days=7)).isoformat()
     previous = (now - timedelta(days=14)).isoformat()
 
-    recent_preds   = [p for p in history.get("predictions", [])
-                      if p.get("evaluated") and p["timestamp"] >= recent]
-    previous_preds = [p for p in history.get("predictions", [])
-                      if p.get("evaluated") and previous <= p["timestamp"] < recent]
+    recent_preds   = [p for p in (history.get("predictions") or [])
+                      if p.get("evaluated") and p.get("timestamp", "") >= recent]
+    previous_preds = [p for p in (history.get("predictions") or [])
+                      if p.get("evaluated") and previous <= p.get("timestamp", "") < recent]
 
     def avg_accuracy(preds):
         picks = [

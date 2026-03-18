@@ -39,9 +39,9 @@ if not digest:
     )
 else:
     generated  = digest.get("generated_at", "")
-    new_p      = len(digest.get("new_protocols", []))
-    news_n     = len(digest.get("news_items", []))
-    known_tvl  = digest.get("known_tvl", {})
+    new_p      = len(digest.get("new_protocols") or [])
+    news_n     = len(digest.get("news_items") or [])
+    known_tvl  = digest.get("known_tvl") or {}
 
     # Status bar
     parts = []
@@ -85,7 +85,7 @@ else:
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
     # New protocols
-    new_protocols = digest.get("new_protocols", [])
+    new_protocols = digest.get("new_protocols") or []
     if new_protocols:
         st.markdown(f"#### New Protocols on Flare ({len(new_protocols)})")
         for proto in new_protocols:
@@ -94,7 +94,7 @@ else:
             desc     = _html.escape(str(proto.get("description", "")))
             st.markdown(
                 f"<div class='arb-tag'>"
-                f"<span style='font-weight:700; color:#f1f5f9;'>{_html.escape(str(proto['name']))}</span>"
+                f"<span style='font-weight:700; color:#f1f5f9;'>{_html.escape(str(proto.get('name', '?')))}</span>"
                 f"<span style='color:#475569;'> · {_html.escape(str(proto.get('category','?')))} · {tvl_str}{url_md}</span>"
                 f"{'<div style=\"color:#64748b;font-size:0.82rem;margin-top:6px\">' + desc + '</div>' if desc else ''}"
                 f"</div>",
@@ -121,7 +121,7 @@ else:
             st.dataframe(pd.DataFrame(tvl_rows), use_container_width=True, hide_index=True)
 
     # News
-    news_items = digest.get("news_items", [])
+    news_items = digest.get("news_items") or []
     if news_items:
         st.markdown(
             f"<div style='font-size:0.78rem; font-weight:700; color:#94a3b8; "
@@ -164,7 +164,7 @@ else:
             unsafe_allow_html=True,
         )
 
-    errors = digest.get("errors", [])
+    errors = digest.get("errors") or []
     if errors:
         with st.expander("Monitor errors (non-critical)"):
             for err in errors:
@@ -227,10 +227,10 @@ if feedback:
         key="acc_window",
         help="24h: accuracy vs next-day actuals. 7d: accuracy vs 7-day actuals.",
     )
-    profile_data = feedback.get("per_profile", {}) if acc_window == "24h" else feedback.get("per_profile_7d", feedback.get("per_profile", {}))
+    profile_data = feedback.get("per_profile") or {} if acc_window == "24h" else feedback.get("per_profile_7d") or feedback.get("per_profile") or {}
 
     for p in RISK_PROFILE_NAMES:
-        acc   = profile_data.get(p, {})
+        acc   = profile_data.get(p) or {}
         pcfg  = RISK_PROFILES[p]
         pcol  = pcfg["color"]
         grade = acc.get("grade", "N/A")
@@ -261,7 +261,7 @@ if feedback:
         )
 
     # Model weights
-    weights = feedback.get("model_weights", {})
+    weights = feedback.get("model_weights") or {}
     if weights:
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
         st.markdown("#### Model Confidence Weights")

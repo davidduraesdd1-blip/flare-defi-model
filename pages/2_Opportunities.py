@@ -29,7 +29,7 @@ portfolio_size = ctx["portfolio_size"]
 
 latest     = load_latest()
 runs       = load_history_runs()
-model_data = latest.get("models", {})
+model_data = latest.get("models") or {}
 
 st.markdown("# Opportunities")
 st.markdown(
@@ -44,7 +44,7 @@ st.markdown(
 render_section_header("Starter Portfolios", "Pre-built Kelly-sized allocations for each risk profile")
 
 for p in RISK_PROFILE_NAMES:
-    opps = model_data.get(p, [])
+    opps = model_data.get(p) or []
     pcfg = RISK_PROFILES[p]
     pcol = pcfg["color"]
     w    = weight if p == profile else 1.0
@@ -80,7 +80,7 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 render_section_header("APY Trend", "Top 3 pools — last 14 scans")
 
-opps = model_data.get(profile, [])
+opps = model_data.get(profile) or []
 if not opps or len(runs) < 3:
     st.info("Need at least 3 scans to show sparklines.")
 else:
@@ -90,7 +90,7 @@ else:
     for col, (proto, pool) in zip(cols, top_pools):
         history_apy = []
         for run in runs[-14:]:
-            run_opps = run.get("models", {}).get(profile, [])
+            run_opps = (run.get("models") or {}).get(profile) or []
             match = next(
                 (o for o in run_opps if o.get("protocol") == proto and o.get("asset_or_pool") == pool),
                 None,

@@ -179,7 +179,7 @@ def detect_fassets_arb(prices_data: list) -> list:
                 ),
                 risk_level="medium",
                 applicable_profiles=["medium", "high"],
-                data_source=fxrp["data_source"],
+                data_source=fxrp.get("data_source", "live"),
             ))
     elif pct_diff < -0.5:
         net = round(abs(pct_diff) - 0.3, 2)
@@ -200,7 +200,7 @@ def detect_fassets_arb(prices_data: list) -> list:
                 ),
                 risk_level="medium",
                 applicable_profiles=["medium", "high"],
-                data_source=fxrp["data_source"],
+                data_source=fxrp.get("data_source", "live"),
             ))
 
     return opps
@@ -222,9 +222,9 @@ def detect_funding_rate_neutral(perps_data: list, prices_data: list) -> list:
             opps.append(ArbitrageOpportunity(
                 strategy="funding_rate_neutral",
                 strategy_label="Delta-Neutral Funding Rate",
-                token_or_pair=perp["pair"],
+                token_or_pair=perp.get("pair", pair),
                 buy_where=f"Buy {token} spot on Blazeswap/SparkDEX",
-                sell_where=f"Short equal amount on {perp['exchange']} perpetuals",
+                sell_where=f"Short equal amount on {perp.get('exchange', '?')} perpetuals",
                 estimated_profit=round(fr_annual, 2),
                 capital_needed=500,
                 urgency="act_now" if fr_annual > 20 else ("act_soon" if fr_annual > 10 else "monitor"),
@@ -236,7 +236,7 @@ def detect_funding_rate_neutral(perps_data: list, prices_data: list) -> list:
                 ),
                 risk_level="medium",
                 applicable_profiles=["medium", "high"],
-                data_source=perp["data_source"],
+                data_source=perp.get("data_source", "live"),
             ))
     return opps
 
@@ -249,7 +249,7 @@ def detect_cyclo_arb(staking_data: list) -> list:
     If cysFLR price < sFLR price by > 2%: buy cysFLR, redeem for sFLR.
     This is a unique Flare-specific opportunity.
     """
-    sflr = next((s for s in staking_data if s["token"] == "sFLR"), None)
+    sflr = next((s for s in staking_data if s.get("token") == "sFLR"), None)
     if not sflr:
         return []
 
@@ -366,7 +366,7 @@ def detect_sflr_borrow_arb(staking_data: list, lending_data: list) -> list:
     borrow FLR → stake as sFLR → earn spread.
     """
     opps = []
-    sflr = next((s for s in staking_data if s["token"] == "sFLR"), None)
+    sflr = next((s for s in staking_data if s.get("token") == "sFLR"), None)
     if not sflr:
         return opps
 
@@ -400,11 +400,11 @@ def detect_sflr_borrow_arb(staking_data: list, lending_data: list) -> list:
 
 def _run_all_detectors(scan_result: dict, multi_result: dict) -> list:
     """Run all 8 detectors and return unfiltered ArbitrageOpportunity objects."""
-    prices  = scan_result.get("prices", [])
-    pools   = scan_result.get("pools",  [])
-    lending = scan_result.get("lending",[])
-    staking = scan_result.get("staking",[])
-    perps   = multi_result.get("perps", [])
+    prices  = scan_result.get("prices")  or []
+    pools   = scan_result.get("pools")   or []
+    lending = scan_result.get("lending") or []
+    staking = scan_result.get("staking") or []
+    perps   = multi_result.get("perps")  or []
 
     opps = []
     opps += detect_lending_rate_arb(lending)

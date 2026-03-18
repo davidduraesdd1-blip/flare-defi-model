@@ -184,7 +184,7 @@ else:
                                            min_value=0.0, value=10000.0, step=1000.0,
                                            key="report_portfolio")
 
-    opps        = latest.get("models", {}).get(report_profile, [])
+    opps        = (latest.get("models") or {}).get(report_profile) or []
     profile_cfg = RISK_PROFILES[report_profile]
     ts          = latest.get("completed_at", datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 

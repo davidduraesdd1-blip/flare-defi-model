@@ -1035,7 +1035,7 @@ def fetch_fasset_data() -> dict:
             logger.warning(f"FAsset API {_url} failed: {exc}")
 
     # ── Attempt 2: DeFiLlama — enrich circulating supply for FXRP ────────────
-    if result["data_source"] == "baseline" or result["assets"].get("FXRP", {}).get("circulating", 0) == 0:
+    if result["data_source"] == "baseline" or (result["assets"].get("FXRP") or {}).get("circulating", 0) == 0:
         try:
             dl = _get("https://api.llama.fi/protocol/flare-fassets", timeout=8)
             if dl and isinstance(dl, dict):

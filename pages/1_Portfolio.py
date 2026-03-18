@@ -31,8 +31,8 @@ portfolio_size = ctx["portfolio_size"]
 latest    = load_latest()
 runs      = load_history_runs()
 positions = load_positions()
-flare_scan = latest.get("flare_scan", {})
-prices     = load_live_prices() or flare_scan.get("prices", [])
+flare_scan = latest.get("flare_scan") or {}
+prices     = load_live_prices() or flare_scan.get("prices") or []
 
 st.markdown("# Portfolio")
 st.markdown(
@@ -380,7 +380,7 @@ profile = ctx["profile"]
 records = []
 for run in runs[-30:]:
     ts   = run.get("run_id", "")
-    opps = run.get("models", {}).get(profile, [])
+    opps = (run.get("models") or {}).get(profile) or []
     if opps and ts:
         try:
             records.append({"date": datetime.fromisoformat(ts), "apy": opps[0].get("estimated_apy", 0)})
