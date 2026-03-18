@@ -764,20 +764,33 @@ def fetch_clearpool_rates() -> list:
 
 # ─── Mystic (Morpho) Rates Scanner ───────────────────────────────────────────
 
+_MYSTIC_KNOWN_ASSETS: frozenset = frozenset(
+    cfg["asset"].upper() for cfg in PROTOCOLS["mystic"]["vaults"].values()
+)   # {"FXRP", "WFLR", "USD0"} — DeFiLlama occasionally returns cross-chain Morpho
+    # pools (e.g. "COREUSDT0", "COREWFLR") for the mystic-finance-lending project
+    # that are not actual Mystic vaults on Flare.  Filter to known vault assets only.
+
+
 def fetch_mystic_rates() -> list:
     """Mystic Finance lending rates. Tries DeFiLlama first, then baseline."""
     dl = _fetch_defillama_raw()
     mystic_pools = dl.get("mystic", [])
     if mystic_pools:
-        return [LendingRate(
-            protocol="mystic",
-            asset=p["symbol"] or "USD0",
-            supply_apy=p["apy"],
-            borrow_apy=0,
-            utilisation=0.0,
-            tvl_usd=p["tvl_usd"],
-            data_source="live",
-        ) for p in mystic_pools if p["apy"] > 0]
+        filtered = [
+            p for p in mystic_pools
+            if p["apy"] > 0
+            and (p.get("symbol") or "").upper() in _MYSTIC_KNOWN_ASSETS
+        ]
+        if filtered:
+            return [LendingRate(
+                protocol="mystic",
+                asset=p["symbol"],
+                supply_apy=p["apy"],
+                borrow_apy=0,
+                utilisation=0.0,
+                tvl_usd=p["tvl_usd"],
+                data_source="live",
+            ) for p in filtered]
 
     return [LendingRate(
         protocol="mystic",
