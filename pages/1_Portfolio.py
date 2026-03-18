@@ -70,7 +70,7 @@ def _build_csv_export(positions: list, pnl_results: list) -> bytes:
             f"{pnl['fees_earned_est']:.2f}",
             f"{pnl['il_pct']:.2f}",
             f"{pnl['unclaimed_fees']:.2f}",
-            f"{pos.get('entry_apy', 0):.1f}",
+            f"{pos.get('entry_apy') or 0:.1f}",
             pos.get("notes", ""),
         ])
     return buf.getvalue().encode("utf-8")
