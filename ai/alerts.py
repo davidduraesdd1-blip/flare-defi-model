@@ -60,6 +60,16 @@ def load_alerts_config() -> dict:
             "bot_token": "",
             "chat_id":   "",
         },
+        # Feature 9: Discord and generic webhook support
+        "discord": {
+            "enabled":     False,
+            "webhook_url": "",
+        },
+        "webhook": {
+            "enabled":     False,
+            "url":         "",
+            "secret":      "",   # optional HMAC-SHA256 signing secret
+        },
         "thresholds": {
             "min_apy_alert":  150.0,
             "new_arb_alert":  True,
@@ -130,6 +140,92 @@ def send_telegram_alert(message: str, config: dict) -> bool:
         return False
 
 
+def send_discord_alert(message: str, config: dict) -> bool:
+    """
+    Feature 9: Send an alert to Discord via incoming webhook.
+    Returns True on success.
+    """
+    cfg = config.get("discord", {})
+    if not cfg.get("enabled") or not cfg.get("webhook_url"):
+        return False
+    url = cfg["webhook_url"].strip()
+    if not url.startswith("https://discord.com/api/webhooks/"):
+        logger.warning("Discord alert skipped — webhook URL format invalid.")
+        return False
+    try:
+        # Discord embeds markdown-ish formatting; wrap in a code block for readability
+        payload = {"content": f"```\n{message[:1990]}\n```"}
+        r = requests.post(url, json=payload, timeout=10)
+        if r.status_code in (200, 204):
+            logger.info("Discord alert sent.")
+            return True
+        logger.warning(f"Discord alert failed: {r.status_code} — {r.text[:200]}")
+        return False
+    except Exception as e:
+        logger.warning(f"Discord alert failed: {e}")
+        return False
+
+
+def send_webhook_alert(subject: str, message: str, config: dict) -> bool:
+    """
+    Feature 9: Send a generic JSON webhook (e.g. Zapier, Make, n8n, Slack incoming webhook).
+    Optionally signs the payload with HMAC-SHA256 if a secret is set.
+    Returns True on success.
+    """
+    cfg = config.get("webhook", {})
+    if not cfg.get("enabled") or not cfg.get("url"):
+        return False
+    url = cfg["url"].strip()
+    if not url.startswith("https://"):
+        logger.warning("Webhook alert skipped — URL must use HTTPS.")
+        return False
+    try:
+        payload = {
+            "source":    "flare_defi_model",
+            "subject":   subject,
+            "message":   message,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        headers = {"Content-Type": "application/json"}
+        secret = cfg.get("secret", "").strip()
+        if secret:
+            import hmac
+            import hashlib
+            body = json.dumps(payload, separators=(",", ":")).encode()
+            sig  = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+            headers["X-Flare-Signature"] = sig
+        r = requests.post(url, json=payload, headers=headers, timeout=10)
+        if r.ok:
+            logger.info("Webhook alert sent.")
+            return True
+        logger.warning(f"Webhook alert failed: {r.status_code} — {r.text[:200]}")
+        return False
+    except Exception as e:
+        logger.warning(f"Webhook alert failed: {e}")
+        return False
+
+
+def test_discord(config: dict) -> tuple:
+    """Send a test Discord message. Returns (success: bool, message: str)."""
+    ok = send_discord_alert(
+        f"⚡ Flare DeFi Model — Test Alert\n"
+        f"Sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.\n"
+        f"Discord alerts are working correctly.",
+        config,
+    )
+    return (ok, "Test Discord message sent!" if ok else "Discord failed — check webhook URL.")
+
+
+def test_webhook(config: dict) -> tuple:
+    """Send a test webhook. Returns (success: bool, message: str)."""
+    ok = send_webhook_alert(
+        "⚡ Flare DeFi Model — Test Alert",
+        f"Test sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}. Webhook is working.",
+        config,
+    )
+    return (ok, "Test webhook sent!" if ok else "Webhook failed — check URL and logs.")
+
+
 def test_email(config: dict) -> tuple:
     """Send a test email. Returns (success: bool, message: str)."""
     ok = send_email_alert(
@@ -149,6 +245,60 @@ def test_telegram(config: dict) -> tuple:
         config,
     )
     return (ok, "Test message sent!" if ok else "Telegram failed — check bot token and chat ID.")
+
+
+# ─── CL Out-of-Range Alert Checker (Feature 12) ───────────────────────────────
+
+def check_cl_range_alerts(prices: list) -> list:
+    """
+    Feature 12: Returns a list of alert strings for any LP positions whose
+    current FTSO price has moved outside the user-defined CL (concentrated
+    liquidity) range.  Positions must have cl_range_low and cl_range_high set.
+    prices: list of dicts with keys {symbol, price_usd}.
+    """
+    import json
+    from config import POSITIONS_FILE
+
+    price_lkp = {
+        p.get("symbol", ""): float(p.get("price_usd", 0))
+        for p in prices if isinstance(p, dict) and p.get("symbol")
+    }
+    if not price_lkp:
+        return []
+
+    try:
+        with open(POSITIONS_FILE) as _f:
+            positions = json.load(_f)
+    except Exception:
+        return []
+
+    alerts = []
+    for pos in positions:
+        if pos.get("position_type", "lp") != "lp":
+            continue
+        try:
+            cl_low  = float(pos["cl_range_low"])
+            cl_high = float(pos["cl_range_high"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        token_a = pos.get("token_a", "")
+        current_price = price_lkp.get(token_a, 0.0)
+        if current_price <= 0:
+            continue
+        label = pos.get("name") or pos.get("asset_or_pool") or token_a
+        if current_price < cl_low:
+            alerts.append(
+                f"CL OUT OF RANGE (BELOW): {label} — "
+                f"{token_a} ${current_price:.4f} < range low ${cl_low:.4f} "
+                f"(fees paused, position is 100% {token_a})"
+            )
+        elif current_price > cl_high:
+            alerts.append(
+                f"CL OUT OF RANGE (ABOVE): {label} — "
+                f"{token_a} ${current_price:.4f} > range high ${cl_high:.4f} "
+                f"(fees paused, position fully converted)"
+            )
+    return alerts
 
 
 # ─── Threshold Checker ────────────────────────────────────────────────────────
@@ -208,6 +358,8 @@ def check_and_send_alerts(model_results: dict, arb_results: dict = None) -> None
 
     send_email_alert(subject, message, config)
     send_telegram_alert(message, config)
+    send_discord_alert(message, config)       # Feature 9
+    send_webhook_alert(subject, message, config)  # Feature 9
 
 
 # ─── Smart Alert Tuning (Upgrade #6) ─────────────────────────────────────────

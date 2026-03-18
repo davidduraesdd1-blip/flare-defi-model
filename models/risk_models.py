@@ -63,6 +63,9 @@ class Opportunity:
     # TVL velocity (Upgrade #1)
     tvl_velocity:     float = 0.0   # 7-day TVL change %
     tvl_trend:        str  = ""     # "up" / "stable" / "down" / ""
+    # Predictive yield shift (Feature 14)
+    apy_trend:        str  = ""     # "rising" / "falling" / "stable" / ""
+    apy_trend_pct:    float = 0.0   # % change over last N scans (signed)
     generated_at:     str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 
@@ -233,6 +236,9 @@ def build_opportunity(
     # TVL Velocity (Upgrade #1)
     _tvl_velocity, _tvl_trend = _compute_tvl_velocity(tvl_history)
 
+    # Predictive yield shift (Feature 14): detect trend from APY history
+    _apy_trend, _apy_trend_pct = _compute_apy_trend(apy_history)
+
     # IL calculation (V3 concentrated positions amplify IL)
     il_exp, il_worst = estimate_il_for_pool(il_risk, is_v3)
     net_apy = max(0, apr - il_exp)
@@ -318,6 +324,8 @@ def build_opportunity(
         reward_apy=_reward_apy,
         tvl_velocity=_tvl_velocity,
         tvl_trend=_tvl_trend,
+        apy_trend=_apy_trend,
+        apy_trend_pct=_apy_trend_pct,
     )
 
 
@@ -451,6 +459,32 @@ def _compute_tvl_velocity(tvl_history: list) -> tuple:
     else:
         trend = "stable"
     return round(velocity, 1), trend
+
+
+def _compute_apy_trend(apy_history: list) -> tuple:
+    """
+    Feature 14: Predictive yield shift detection.
+    Given a list of APY observations (oldest first), compute trend direction and % change.
+    Returns (trend, trend_pct) where trend is 'rising' / 'falling' / 'stable' / ''.
+    Uses a simple linear comparison: last 3 scans vs first 3 scans of available history.
+    """
+    if not apy_history or len(apy_history) < 4:
+        return "", 0.0
+    valid = [h for h in apy_history if h is not None and h >= 0]
+    if len(valid) < 4:
+        return "", 0.0
+    early_avg = sum(valid[:3]) / 3
+    late_avg  = sum(valid[-3:]) / 3
+    if early_avg <= 0:
+        return "", 0.0
+    pct_change = (late_avg - early_avg) / early_avg * 100
+    if pct_change >= 10:
+        trend = "rising"
+    elif pct_change <= -10:
+        trend = "falling"
+    else:
+        trend = "stable"
+    return trend, round(pct_change, 1)
 
 
 def _compute_ftso_signal(scan_result: dict) -> float:

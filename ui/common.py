@@ -270,7 +270,9 @@ def _inject_css() -> None:
         background: rgba(255,255,255,0.92) !important; border-color: rgba(0,0,0,0.07) !important;
     }
     div[style*="border:1px solid rgba(255,255,255"] { border-color: rgba(0,0,0,0.08) !important; }
-    div[style*="background:rgba(255,255,255,0.05"], div[style*="background:rgba(255,255,255,0.07"] { background: rgba(0,0,0,0.09) !important; }
+    div[style*="background:rgba(255,255,255,0.05"], div[style*="background:rgba(255,255,255,0.07"],
+    div[style*="background:rgba(255,255,255,0.04"] { background: rgba(0,0,0,0.07) !important; }
+    span[style*="background:rgba(255,255,255,0.04"] { background: rgba(0,0,0,0.05) !important; }
 
     /* ── Override Streamlit CSS variables ────────────────────────────── */
     /* These variables drive ALL widget backgrounds (expanders, selects,  */
@@ -865,6 +867,89 @@ def compute_position_pnl(pos: dict, current_prices: list) -> dict:
     }
 
 
+# ─── FTSO IL Calculator (Feature 4) ──────────────────────────────────────────
+
+def render_ftso_il_calculator(prices: list = None) -> None:
+    """
+    Feature 4: Interactive IL calculator using FTSO/live prices.
+    Renders a Streamlit widget showing IL for any token pair at any price scenario.
+    Can be called from any page.
+    """
+    from models.risk_models import calculate_il
+    from config import FALLBACK_PRICES
+
+    # Build price lookup from live prices
+    price_lkp = {}
+    if prices:
+        price_lkp = {p.get("symbol", ""): p.get("price_usd", 0) for p in prices if isinstance(p, dict)}
+
+    known_tokens = ["FLR", "WFLR", "sFLR", "FXRP", "XRP", "wETH", "HLN", "USD0", "USDT0", "USDC.e"]
+
+    c1, c2 = st.columns(2)
+    with c1:
+        token_a_sym = st.selectbox("Token A", known_tokens, key="il_token_a")
+        _default_a  = price_lkp.get(token_a_sym) or FALLBACK_PRICES.get(token_a_sym, 0.01)
+        entry_a = st.number_input("Token A entry price ($)", value=float(_default_a),
+                                  min_value=0.0001, format="%.6f", key="il_entry_a",
+                                  help="Uses FTSO live price when available")
+        current_a = st.number_input("Token A current price ($)", value=float(price_lkp.get(token_a_sym) or _default_a),
+                                    min_value=0.0001, format="%.6f", key="il_curr_a")
+    with c2:
+        token_b_sym = st.selectbox("Token B", ["USD0", "USDT0", "USDC.e", "WFLR", "sFLR", "FXRP", "wETH", "HLN"], key="il_token_b")
+        _default_b  = price_lkp.get(token_b_sym) or FALLBACK_PRICES.get(token_b_sym, 1.00)
+        entry_b = st.number_input("Token B entry price ($)", value=float(_default_b),
+                                  min_value=0.0001, format="%.6f", key="il_entry_b")
+        current_b = st.number_input("Token B current price ($)", value=float(price_lkp.get(token_b_sym) or _default_b),
+                                    min_value=0.0001, format="%.6f", key="il_curr_b")
+
+    deposit = st.number_input("Deposit value ($)", min_value=1.0, value=1000.0, step=100.0, key="il_deposit")
+
+    # Compute IL using the FTSO-validated price ratio
+    if entry_a > 0 and entry_b > 0 and current_a > 0 and current_b > 0:
+        # Price ratio = (current_a/current_b) / (entry_a/entry_b)
+        entry_ratio   = entry_a / entry_b
+        current_ratio = current_a / current_b
+        price_ratio   = current_ratio / entry_ratio if entry_ratio > 0 else 1.0
+        il_pct        = calculate_il(price_ratio)
+        il_usd        = deposit * il_pct / 100
+        hodl_val      = deposit * 0.5 * (current_a / entry_a) + deposit * 0.5 * (current_b / entry_b)
+        lp_val        = deposit - il_usd
+        il_color      = "#10b981" if il_pct < 1 else ("#f59e0b" if il_pct < 5 else "#ef4444")
+
+        is_ftso = bool(price_lkp.get(token_a_sym) or price_lkp.get(token_b_sym))
+        src_label = "FTSO/Live" if is_ftso else "Manual"
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f"""<div class="metric-card card-red">
+            <div class="label">Impermanent Loss</div>
+            <div class="big-number" style="color:{il_color};">{il_pct:.2f}%</div>
+            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">≈ ${il_usd:,.2f} on ${deposit:,.0f}</div>
+            </div>""", unsafe_allow_html=True)
+        with c2:
+            st.markdown(f"""<div class="metric-card card-blue">
+            <div class="label">LP Value Now</div>
+            <div class="big-number">${lp_val:,.0f}</div>
+            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">After IL vs ${deposit:,.0f} in</div>
+            </div>""", unsafe_allow_html=True)
+        with c3:
+            hodl_diff = hodl_val - lp_val
+            h_color   = "#10b981" if hodl_diff <= 0 else "#ef4444"
+            st.markdown(f"""<div class="metric-card card-orange">
+            <div class="label">HODL vs LP</div>
+            <div class="big-number" style="color:{h_color};">${hodl_diff:+,.0f}</div>
+            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">HODL would be ${hodl_val:,.0f}</div>
+            </div>""", unsafe_allow_html=True)
+
+        st.markdown(
+            f"<div style='font-size:0.75rem; color:#475569; margin-top:6px;'>"
+            f"Price source: <span style='color:#a78bfa;'>{src_label}</span> · "
+            f"Price ratio: {price_ratio:.4f}x · "
+            f"IL formula: 2√r/(1+r) − 1</div>",
+            unsafe_allow_html=True,
+        )
+
+
 # ─── Shared Render Components ─────────────────────────────────────────────────
 
 def render_price_strip(prices: list) -> None:
@@ -1041,19 +1126,54 @@ def render_opportunity_card(
               f"${tvl:,.0f}</span>{_trend_html}</span>" if tvl > 0 else "")
     )
 
-    # APY decomposition (Upgrade #2)
+    # APY decomposition (Upgrade #2) + expiry badge + sustainability (Feature 1)
     fee_apy    = opp.get("fee_apy", 0.0)
     reward_apy = opp.get("reward_apy", 0.0)
+    apy_trend_flag = opp.get("apy_trend", "")      # Feature 14: "rising"/"falling"/"stable"/""
+    apy_trend_pct  = opp.get("apy_trend_pct", 0.0)
     _apy_decomp_html = ""
-    if reward_apy > 0 and fee_apy > 0:
+    if reward_apy > 0 or fee_apy > 0:
+        # Sustainability score (how much of APY is durable fee income)
+        _sustain_pct  = round(fee_apy / apy * 100) if apy > 0 else 0
+        _sustain_color = "#10b981" if _sustain_pct >= 60 else ("#f59e0b" if _sustain_pct >= 30 else "#ef4444")
+
+        # Incentive expiry badge
+        _expiry_html = ""
+        if reward_apy > 0:
+            try:
+                _expiry_dt   = datetime.strptime(INCENTIVE_PROGRAM.get("expires", "2026-07-01"), "%Y-%m-%d")
+                _days_left   = max(0, (_expiry_dt - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+                _exp_color   = "#10b981" if _days_left > 90 else ("#f59e0b" if _days_left > 30 else "#ef4444")
+                _expiry_html = (
+                    f"<span style='color:{_exp_color}; font-size:0.70rem; font-weight:600; "
+                    f"background:rgba(255,255,255,0.04); padding:1px 6px; border-radius:4px; "
+                    f"border:1px solid {_exp_color}44;' title='Incentive program expires Jul 2026'>"
+                    f"⏳ {_days_left}d left</span>"
+                )
+            except Exception:
+                _expiry_html = ""
+
+        # APY trend flag (Feature 14)
+        _trend_flag_html = ""
+        if apy_trend_flag in ("rising", "falling") and abs(apy_trend_pct) >= 5:
+            _tf_color = "#22c55e" if apy_trend_flag == "rising" else "#ef4444"
+            _tf_icon  = "▲" if apy_trend_flag == "rising" else "▼"
+            _trend_flag_html = (
+                f"<span style='color:{_tf_color}; font-size:0.70rem; font-weight:600;' "
+                f"title='APY trending {apy_trend_flag} over last 7 scans'>"
+                f"{_tf_icon} {abs(apy_trend_pct):.0f}% {apy_trend_flag}</span>"
+            )
+
         _apy_decomp_html = (
-            f"<div style='display:flex; gap:8px; font-size:0.72rem; margin-top:6px; flex-wrap:wrap;'>"
-            f"<span style='color:#64748b;'>Base fees: "
-            f"<span style='color:#94a3b8; font-weight:600;'>{fee_apy:.1f}%</span></span>"
-            f"<span style='color:#334155;'>·</span>"
-            f"<span style='color:#64748b;'>Token rewards: "
-            f"<span style='color:#a78bfa; font-weight:600;'>{reward_apy:.1f}%</span></span>"
-            f"</div>"
+            f"<div style='display:flex; gap:8px; font-size:0.72rem; margin-top:6px; flex-wrap:wrap; align-items:center;'>"
+            + (f"<span style='color:#64748b;'>Base fees: <span style='color:#94a3b8; font-weight:600;'>{fee_apy:.1f}%</span></span>"
+               f"<span style='color:#334155;'>·</span>" if fee_apy > 0 else "")
+            + (f"<span style='color:#64748b;'>Rewards: <span style='color:#a78bfa; font-weight:600;'>{reward_apy:.1f}%</span></span>"
+               f"<span style='color:#334155;'>·</span>" if reward_apy > 0 else "")
+            + f"<span style='color:#64748b;'>Sustainable: <span style='color:{_sustain_color}; font-weight:600;'>{_sustain_pct}%</span></span>"
+            + (f"<span style='color:#334155;'>·</span>{_expiry_html}" if _expiry_html else "")
+            + (f"<span style='color:#334155;'>·</span>{_trend_flag_html}" if _trend_flag_html else "")
+            + f"</div>"
         )
 
     # Confidence bar visual (0–100)

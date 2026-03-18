@@ -19,7 +19,7 @@ from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
     load_positions, save_positions, load_wallets, save_wallets,
     compute_position_pnl, render_opportunity_card, render_section_header,
-    _ts_fmt, load_live_prices,
+    _ts_fmt, load_live_prices, risk_score_to_grade, render_ftso_il_calculator,
 )
 from config import PROTOCOLS, TOKENS, INCENTIVE_PROGRAM, RISK_PROFILES, FALLBACK_PRICES
 
@@ -168,6 +168,16 @@ if positions:
         il_pct   = pnl["il_pct"]
         hodl     = pnl["hodl_value"]
 
+        # Feature 8: Risk grade per position
+        _ptype_lower = pos.get("position_type", "lp")
+        _il_risk = "high" if _ptype_lower == "lp" else "none"
+        _rs = 7.0 if _ptype_lower == "lp" else (2.0 if _ptype_lower == "lending" else 1.0)
+        _grade, _grade_color = risk_score_to_grade(_rs)
+        _grade_html = (
+            f"<span style='background:{_grade_color}; color:#000; font-size:0.65rem; "
+            f"font-weight:800; padding:1px 7px; border-radius:4px; margin-left:6px;'>{_grade}</span>"
+        )
+
         days_str  = f"{days}d" if days > 0 else "—"
         fees_html = f" · Est. fees earned: <span style='color:#10b981'>${fees_est:,.2f}</span>" if fees_est > 0 else ""
         il_html   = f" · IL est: <span style='color:#f59e0b'>{il_pct:.1f}%</span>" if il_pct > 0.1 else ""
@@ -194,6 +204,7 @@ if positions:
                         <span style="color:#475569; margin:0 6px;">·</span>
                         <span style="color:#64748b; font-size:0.88rem;">{proto}</span>
                         <span style="color:#334155; font-size:0.75rem; margin-left:6px;">({ptype})</span>
+                        {_grade_html}
                     </div>
                     <span style="color:{vc_color}; font-weight:700;">{vc:+,.0f} ({vc_pct:+.1f}%)</span>
                 </div>
@@ -368,6 +379,232 @@ with tab_timeline:
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         st.caption("DEX LP pools depend on RFLR incentives expiring ~July 2026. FlareDrop ended Jan 30 2026 — sFLR staking yields reduced. Lending positions have low incentive dependency.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ─── PnL vs HODL Comparison (Feature 5) ──────────────────────────────────────
+
+if positions:
+    render_section_header("PnL vs HODL", "Quantified LP vs holding cost — are your fees beating impermanent loss?")
+
+    hodl_rows = []
+    total_lp_val   = 0
+    total_hodl_val = 0
+    total_dep      = 0
+    for i, pos in enumerate(positions):
+        pnl = pnl_results[i]
+        lp_val   = pnl["current_value"]
+        hodl_val = pnl["hodl_value"]
+        dep      = pnl["deposit_usd"]
+        fees_est = pnl["fees_earned_est"]
+        if hodl_val > 0 and lp_val > 0:
+            total_lp_val   += lp_val
+            total_hodl_val += hodl_val
+            total_dep      += dep
+            diff     = (lp_val + fees_est) - hodl_val
+            diff_pct = diff / hodl_val * 100 if hodl_val > 0 else 0
+            hodl_rows.append({
+                "Position":      f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
+                "Deposit":       f"${dep:,.0f}",
+                "LP Value":      f"${lp_val:,.0f}",
+                "Est. Fees":     f"${fees_est:,.2f}",
+                "HODL Value":    f"${hodl_val:,.0f}",
+                "LP+Fees vs HODL": f"{diff:+,.0f} ({diff_pct:+.1f}%)",
+            })
+
+    if hodl_rows:
+        st.dataframe(pd.DataFrame(hodl_rows), use_container_width=True, hide_index=True)
+        if total_hodl_val > 0:
+            net_diff = (total_lp_val + sum(pnl_results[i]["fees_earned_est"] for i in range(len(positions)))) - total_hodl_val
+            net_color = "#10b981" if net_diff >= 0 else "#ef4444"
+            verdict   = "LP + fees is OUTPERFORMING HODL ✓" if net_diff >= 0 else "HODL would have been better — consider IL impact ⚠"
+            st.markdown(
+                f"<div style='font-size:0.84rem; color:{net_color}; margin-top:8px; font-weight:600;'>"
+                f"Overall: {verdict} (net {net_diff:+,.0f})</div>",
+                unsafe_allow_html=True,
+            )
+        st.caption("HODL value = token amounts × current prices without providing liquidity. Fees are estimated from entry APY × days held.")
+    else:
+        st.markdown(
+            "<div style='color:#334155; font-size:0.85rem;'>Add LP positions with token amounts to see HODL comparison.</div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ─── Claimable Rewards Aggregator (Feature 3) ─────────────────────────────────
+
+if positions:
+    render_section_header("Claimable Rewards", "All unclaimed fees + FTSO rewards across your positions")
+
+    total_fees    = sum(float(p.get("unclaimed_fees", 0)) for p in positions)
+    total_rewards = sum(float(p.get("rewards", 0)) for p in positions if isinstance(p.get("rewards"), (int, float)))
+
+    # FTSO reward estimate: ~4.3% APY on FLR held in LP positions
+    _FTSO_RATE    = 0.043
+    flr_in_lp     = 0.0
+    for p in positions:
+        if p.get("position_type") == "lp":
+            tok_a = (p.get("token_a") or "").upper()
+            tok_b = (p.get("token_b") or "").upper()
+            price_lkp = {pr.get("symbol", ""): pr.get("price_usd", 0) for pr in (prices or [])}
+            flr_price = price_lkp.get("FLR") or FALLBACK_PRICES.get("FLR", 0.0088)
+            if "FLR" in (tok_a, tok_b) or "WFLR" in (tok_a, tok_b):
+                dep = float(p.get("deposit_usd", 0)) * 0.5   # ~50% in FLR side
+                flr_in_lp += dep / flr_price if flr_price > 0 else 0
+
+    days_to_expiry = max(0, (datetime(2026, 7, 1) - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+    ftso_est_usd   = flr_in_lp * FALLBACK_PRICES.get("FLR", 0.0088) * _FTSO_RATE * (30 / 365)  # 30-day estimate
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f"""<div class="metric-card card-green">
+        <div class="label">Unclaimed LP Fees</div>
+        <div class="big-number" style="color:#10b981;">${total_fees:,.2f}</div>
+        <div style="color:#475569; font-size:0.8rem; margin-top:4px;">Across {len(positions)} position(s)</div>
+        </div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""<div class="metric-card card-blue">
+        <div class="label">FTSO Delegation Est.</div>
+        <div class="big-number">${ftso_est_usd:,.2f}</div>
+        <div style="color:#475569; font-size:0.8rem; margin-top:4px;">~30-day estimate @ 4.3% APY</div>
+        </div>""", unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""<div class="metric-card card-orange">
+        <div class="label">Incentives Expire In</div>
+        <div class="big-number" style="color:#f59e0b;">{days_to_expiry}d</div>
+        <div style="color:#475569; font-size:0.8rem; margin-top:4px;">rFLR program ends Jul 2026</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.caption("Unclaimed fees pulled from tracked positions. FTSO estimate based on FLR in LP positions at 4.3% APY. Claim via app.flare.network.")
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ─── rFLR Incentive Tracker (Feature 6) ──────────────────────────────────────
+
+if positions:
+    _incentive_positions = [p for p in positions if p.get("protocol", "") in ("blazeswap", "enosys", "sparkdex")]
+    if _incentive_positions:
+        render_section_header("rFLR Incentive Tracker", "Estimated rFLR earned + projected earnings to July 2026")
+
+        _RFLR_PER_USD_DAILY  = 0.0012   # rough: ~43% reward APY on $1 → ~$0.00118/day in rFLR value
+        _FLR_PRICE           = (next((pr.get("price_usd", 0) for pr in (prices or []) if pr.get("symbol") == "FLR"), 0)
+                                or FALLBACK_PRICES.get("FLR", 0.0088))
+        _days_to_jul2026     = max(0, (datetime(2026, 7, 1) - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+
+        rflr_rows = []
+        for p in _incentive_positions:
+            dep       = float(p.get("deposit_usd", 0))
+            entry_apy = float(p.get("entry_apy", 0))
+            _reward_rate = max(0, (entry_apy - 5) / 100)   # rough: subtract ~5% base fee yield
+            days_held = 0
+            if p.get("entry_date"):
+                try:
+                    days_held = max(0, (datetime.now(timezone.utc).replace(tzinfo=None) - datetime.fromisoformat(p["entry_date"])).days)
+                except Exception:
+                    pass
+            earned_usd   = dep * _reward_rate * days_held / 365 if days_held > 0 else 0
+            earned_rflr  = earned_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
+            proj_usd     = dep * _reward_rate * _days_to_jul2026 / 365
+            proj_rflr    = proj_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
+            rflr_rows.append({
+                "Position":           f"{p.get('pool','?')} ({p.get('protocol','?').capitalize()})",
+                "Deposit":            f"${dep:,.0f}",
+                "Days Held":          days_held,
+                "Est. rFLR Earned":   f"{earned_rflr:,.0f} FLR (≈${earned_usd:,.2f})",
+                f"Proj. to Jul 2026": f"{proj_rflr:,.0f} FLR (≈${proj_usd:,.2f})",
+            })
+
+        st.dataframe(pd.DataFrame(rflr_rows), use_container_width=True, hide_index=True)
+        st.caption(
+            f"rFLR rewards estimated from entry APY minus ~5% base fees. FLR price: ${_FLR_PRICE:.4f}. "
+            f"Incentive program ends July 1 2026 ({_days_to_jul2026} days). Claim via blazeswap.finance or enosys.finance."
+        )
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ─── FTSO IL Calculator (Feature 4) ──────────────────────────────────────────
+
+render_section_header("IL Calculator", "Real-time impermanent loss with FTSO price data")
+render_ftso_il_calculator(prices)
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ─── Net Worth Over Time Chart (Feature 2) ────────────────────────────────────
+
+render_section_header("Net Worth Projection", "Portfolio value over time — based on your positions + top opportunity APY")
+
+if positions:
+    total_dep_nw = sum(float(p.get("deposit_usd", 0)) for p in positions)
+    avg_apy      = 0.0
+    _latest_opps = (latest.get("models") or {}).get(ctx.get("profile", "medium")) or []
+    if _latest_opps:
+        avg_apy = sum(o.get("estimated_apy", 0) for o in _latest_opps[:3]) / min(3, len(_latest_opps))
+
+    if total_dep_nw > 0 and avg_apy > 0:
+        import numpy as _np_nw
+        months     = list(range(0, 25))
+        lp_curve   = [total_dep_nw * ((1 + avg_apy / 100 / 12) ** m) for m in months]
+        hodl_curve = [total_dep_nw] * len(months)   # HODL = flat (no yield)
+
+        # Project post-incentive (after Jul 2026): drop to ~5% base fees only
+        _months_to_expiry = min(24, max(0, _days_to_jul2026 // 30))
+        base_fee_apy = max(5.0, avg_apy * 0.25)  # ~25% of current APY remains as base fees
+        post_expiry  = [lp_curve[_months_to_expiry] * ((1 + base_fee_apy / 100 / 12) ** (m - _months_to_expiry))
+                        for m in range(_months_to_expiry, len(months))]
+        lp_curve_adj = lp_curve[:_months_to_expiry] + post_expiry
+
+        now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+        dates  = [(now_dt + timedelta(days=30 * m)).strftime("%b %Y") for m in months]
+
+        fig_nw = go.Figure()
+        fig_nw.add_trace(go.Scatter(
+            x=dates, y=lp_curve,
+            mode="lines", name=f"LP @ {avg_apy:.0f}% APY (current)",
+            line=dict(color="#3b82f6", width=2, dash="dash"),
+            opacity=0.5,
+        ))
+        fig_nw.add_trace(go.Scatter(
+            x=dates, y=lp_curve_adj,
+            mode="lines", name="LP (post-incentive adjusted)",
+            line=dict(color="#a78bfa", width=2),
+            fill="tozeroy", fillcolor="rgba(167,139,250,0.06)",
+        ))
+        fig_nw.add_trace(go.Scatter(
+            x=dates, y=hodl_curve,
+            mode="lines", name="HODL (no yield)",
+            line=dict(color="#475569", width=1, dash="dot"),
+        ))
+        # Mark incentive expiry
+        if 0 < _months_to_expiry < len(dates):
+            fig_nw.add_vline(
+                x=dates[_months_to_expiry], line_dash="dot",
+                line_color="#f59e0b", opacity=0.6,
+                annotation_text="Incentive expiry",
+                annotation_font_color="#f59e0b",
+            )
+        fig_nw.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            font_color="#475569",
+            xaxis=dict(gridcolor="rgba(148,163,184,0.15)", color="#475569"),
+            yaxis=dict(title="Portfolio Value ($)", gridcolor="rgba(148,163,184,0.15)", color="#475569",
+                       tickprefix="$", tickformat=",.0f"),
+            legend=dict(font=dict(size=10, color="#64748b"), bgcolor="rgba(0,0,0,0)"),
+            margin=dict(l=60, r=20, t=20, b=40),
+            height=290,
+        )
+        st.plotly_chart(fig_nw, use_container_width=True)
+        st.caption(
+            f"Starting from ${total_dep_nw:,.0f}. LP curve uses top-3 avg APY ({avg_apy:.0f}%). "
+            f"Post-incentive drops to ~{base_fee_apy:.0f}% (base fees only). Not financial advice."
+        )
+    else:
+        st.info("Add positions and run a scan to see the net worth projection.")
+else:
+    st.info("Add positions to see the net worth projection chart.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 

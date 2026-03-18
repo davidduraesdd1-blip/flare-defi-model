@@ -6,11 +6,13 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import csv
 import html as _html
+import io
 import streamlit as st
 from datetime import datetime, timezone
 
-from ui.common import page_setup, render_sidebar, load_latest
+from ui.common import page_setup, render_sidebar, load_latest, load_history_runs
 from config import RISK_PROFILES, INCENTIVE_PROGRAM
 
 page_setup("Settings · Flare DeFi")
@@ -35,14 +37,19 @@ st.markdown(
 )
 
 try:
-    from ai.alerts import load_alerts_config, save_alerts_config, test_email, test_telegram
+    from ai.alerts import (
+        load_alerts_config, save_alerts_config,
+        test_email, test_telegram, test_discord, test_webhook,
+    )
 except ImportError:
     st.error("ai/alerts.py not found. Check your installation.")
     st.stop()
 
 config = load_alerts_config()
 
-tab_email, tab_tg, tab_thresh = st.tabs(["📧  Email", "📱  Telegram", "⚙️  Thresholds"])
+tab_email, tab_tg, tab_discord, tab_webhook, tab_thresh = st.tabs([
+    "📧  Email", "📱  Telegram", "💬  Discord", "🔗  Webhook", "⚙️  Thresholds",
+])
 
 with tab_email:
     st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Gmail users: use an App Password (Settings → Security → App Passwords).</div>", unsafe_allow_html=True)
@@ -73,6 +80,31 @@ with tab_tg:
     bot_token  = st.text_input("Bot token", value=config["telegram"].get("bot_token", ""),
                                 key="bot_token", type="password")
     chat_id    = st.text_input("Chat ID",   value=config["telegram"].get("chat_id", ""), key="chat_id")
+
+with tab_discord:
+    st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Create a Discord webhook: Server Settings → Integrations → Webhooks → New Webhook → Copy URL.</div>", unsafe_allow_html=True)
+    discord_enabled = st.toggle("Enable Discord alerts", value=config.get("discord", {}).get("enabled", False), key="discord_enabled")
+    discord_url     = st.text_input("Discord Webhook URL", value=config.get("discord", {}).get("webhook_url", ""),
+                                     key="discord_url", placeholder="https://discord.com/api/webhooks/…")
+    st.markdown(
+        "<div class='warn-box' style='font-size:0.82rem;'>"
+        "Webhook URL is stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
+        unsafe_allow_html=True,
+    )
+
+with tab_webhook:
+    st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Send JSON payloads to any HTTPS endpoint (Zapier, Make, n8n, Slack, custom API). Optionally sign with HMAC-SHA256.</div>", unsafe_allow_html=True)
+    webhook_enabled = st.toggle("Enable webhook alerts", value=config.get("webhook", {}).get("enabled", False), key="webhook_enabled")
+    webhook_url     = st.text_input("Webhook URL (HTTPS)", value=config.get("webhook", {}).get("url", ""),
+                                     key="webhook_url", placeholder="https://hooks.zapier.com/…")
+    webhook_secret  = st.text_input("Signing secret (optional)", value=config.get("webhook", {}).get("secret", ""),
+                                     key="webhook_secret", type="password",
+                                     help="If set, adds X-Flare-Signature HMAC-SHA256 header to each request")
+    st.markdown(
+        "<div class='warn-box' style='font-size:0.82rem;'>"
+        "Secret stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
+        unsafe_allow_html=True,
+    )
 
 with tab_thresh:
     st.markdown(
@@ -133,6 +165,8 @@ with col_save:
             "email":    {"enabled": enabled, "address": email_addr, "smtp_server": smtp_srv,
                          "smtp_port": int(smtp_port), "username": smtp_user, "password": smtp_pass},
             "telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id},
+            "discord":  {"enabled": discord_enabled, "webhook_url": discord_url},
+            "webhook":  {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret},
             "thresholds": {"min_apy_alert": min_apy, "new_arb_alert": arb_alert},
         }
         save_alerts_config(new_config)
@@ -140,7 +174,6 @@ with col_save:
 
 with col_test_e:
     if st.button("Send Test Email", key="test_email_btn", use_container_width=True):
-        # Use current form values — not stale disk config — so unsaved changes are tested
         _test_cfg = {"email": {"enabled": enabled, "address": email_addr,
                                "smtp_server": smtp_srv, "smtp_port": int(smtp_port),
                                "username": smtp_user, "password": smtp_pass}}
@@ -149,9 +182,20 @@ with col_test_e:
 
 with col_test_t:
     if st.button("Send Test Telegram", key="test_tg_btn", use_container_width=True):
-        # Use current form values — not stale disk config — so unsaved changes are tested
         _test_cfg = {"telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id}}
         ok, msg = test_telegram(_test_cfg)
+        st.success(msg) if ok else st.error(msg)
+
+col_test_d, col_test_w, _ = st.columns(3)
+with col_test_d:
+    if st.button("Test Discord", key="test_discord_btn", use_container_width=True):
+        _test_cfg = {"discord": {"enabled": discord_enabled, "webhook_url": discord_url}}
+        ok, msg = test_discord(_test_cfg)
+        st.success(msg) if ok else st.error(msg)
+with col_test_w:
+    if st.button("Test Webhook", key="test_webhook_btn", use_container_width=True):
+        _test_cfg = {"webhook": {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret}}
+        ok, msg = test_webhook(_test_cfg)
         st.success(msg) if ok else st.error(msg)
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -270,3 +314,71 @@ else:
         key="pdf_export_btn",
         use_container_width=True,
     )
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ─── Tax CSV Export (Feature 11) ──────────────────────────────────────────────
+
+st.markdown("### Tax Export")
+st.markdown(
+    "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
+    "Download a CSV of all scanned opportunities for tax records or external analysis. "
+    "Includes estimated yield per position based on your portfolio size.</div>",
+    unsafe_allow_html=True,
+)
+
+_tax_runs = load_history_runs()
+if not _tax_runs:
+    st.info("No scan history yet. Run a scan first to generate a tax export.")
+else:
+    _tax_col1, _tax_col2 = st.columns(2)
+    with _tax_col1:
+        _tax_portfolio = st.number_input(
+            "Portfolio size for yield estimate ($)",
+            min_value=0.0, value=10000.0, step=1000.0, key="tax_portfolio_size",
+        )
+    with _tax_col2:
+        _tax_profiles = st.multiselect(
+            "Include profiles",
+            ["conservative", "medium", "high"],
+            default=["conservative", "medium", "high"],
+            format_func=lambda p: RISK_PROFILES[p]["label"],
+            key="tax_profiles",
+        )
+
+    _tax_rows = []
+    for _run in _tax_runs:
+        _date_str = (_run.get("completed_at") or _run.get("run_id", ""))[:10]
+        for _prof in (_tax_profiles or ["conservative", "medium", "high"]):
+            for _opp in (_run.get("models") or {}).get(_prof, [])[:5]:
+                _apy = float(_opp.get("estimated_apy") or 0)
+                _ann_yield = round(_tax_portfolio * _apy / 100, 2) if _tax_portfolio > 0 else 0.0
+                _day_yield = round(_ann_yield / 365, 4)
+                _tax_rows.append({
+                    "Date":                 _date_str,
+                    "Risk Profile":         _prof.capitalize(),
+                    "Protocol":             _opp.get("protocol", "—"),
+                    "Pool / Asset":         _opp.get("asset_or_pool", "—"),
+                    "Est. APY (%)":         round(_apy, 2),
+                    "Est. Annual Yield ($)": _ann_yield,
+                    "Est. Daily Yield ($)":  _day_yield,
+                    "Confidence (%)":       round(float(_opp.get("confidence") or 0), 1),
+                    "Action":               _opp.get("action", "—"),
+                })
+
+    if _tax_rows:
+        _buf = io.StringIO()
+        _writer = csv.DictWriter(_buf, fieldnames=list(_tax_rows[0].keys()))
+        _writer.writeheader()
+        _writer.writerows(_tax_rows)
+        _csv_fname = f"flare_defi_tax_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+        st.download_button(
+            label=f"Download Tax CSV ({len(_tax_rows)} rows, {len(_tax_runs)} scans)",
+            data=_buf.getvalue().encode("utf-8"),
+            file_name=_csv_fname,
+            mime="text/csv",
+            key="tax_csv_btn",
+            use_container_width=True,
+        )
+        st.caption(f"Top 5 opportunities per profile per scan · {len(_tax_runs)} scan(s) in history")

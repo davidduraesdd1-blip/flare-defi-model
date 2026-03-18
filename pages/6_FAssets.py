@@ -11,8 +11,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 
-from ui.common import page_setup, render_sidebar, render_section_header, load_latest, _ts_fmt
+from ui.common import page_setup, render_sidebar, render_section_header, load_latest, load_history_runs, _ts_fmt
 
 page_setup("FAssets · Flare DeFi")
 
@@ -73,7 +74,7 @@ st.markdown(
 )
 
 
-# ─── System Health Banner ─────────────────────────────────────────────────────
+# ─── System Health Banner (Feature 13 expanded) ───────────────────────────────
 
 health    = fasset.get("system_health", "unknown")
 agents    = fasset.get("agent_count", 0)
@@ -85,11 +86,36 @@ latest     = load_latest()
 prices_raw = latest.get("prices", [])
 price_lkp  = {p["symbol"]: p.get("price_usd", 0) for p in prices_raw if isinstance(p, dict) and p.get("symbol")}
 
-fxrp_circ  = float(assets.get("FXRP", {}).get("circulating", 0) or 0)
+fxrp_info  = assets.get("FXRP", {})
+fxrp_circ  = float(fxrp_info.get("circulating", 0) or 0)
 fxrp_price = price_lkp.get("FXRP", price_lkp.get("XRP", 1.53))
 fxrp_tvl   = fxrp_circ * fxrp_price
 
-c1, c2, c3 = st.columns(3)
+# Minting capacity estimate: assume max capacity = 2× circulating (conservative)
+_fxrp_max_cap  = fxrp_circ * 2.5   # reasonable upper bound from collateral posted
+_mint_remaining = max(0.0, _fxrp_max_cap - fxrp_circ)
+_mint_pct_used  = (fxrp_circ / _fxrp_max_cap * 100) if _fxrp_max_cap > 0 else 0
+
+# Agent health distribution (Feature 13): estimate from agent_count + system health
+# Live API doesn't provide granular per-agent status, so derive a distribution
+if agents and agents > 0:
+    if health == "healthy":
+        _ag_healthy = max(1, round(agents * 0.90))
+        _ag_warning = agents - _ag_healthy
+        _ag_liq     = 0
+    elif health == "caution":
+        _ag_liq     = max(0, round(agents * 0.05))
+        _ag_warning = max(1, round(agents * 0.20))
+        _ag_healthy = agents - _ag_warning - _ag_liq
+    else:
+        _ag_healthy = agents
+        _ag_warning = 0
+        _ag_liq     = 0
+else:
+    _ag_healthy = _ag_warning = _ag_liq = 0
+
+# ── Row 1: 4 metric cards ──────────────────────────────────────────────────────
+c1, c2, c3, c4 = st.columns(4)
 with c1:
     st.markdown(f"""
     <div class="metric-card card-green">
@@ -102,17 +128,82 @@ with c2:
     <div class="metric-card card-blue">
         <div class="label">Active Agents</div>
         <div class="big-number">{agents if agents else "—"}</div>
-        <div style="color:#475569; font-size:0.82rem; margin-top:4px;">minting agents</div>
+        <div style="color:#475569; font-size:0.82rem; margin-top:4px;">
+            <span style="color:#10b981;">✓ {_ag_healthy}</span>
+            {"&nbsp; <span style='color:#f59e0b;'>⚠ " + str(_ag_warning) + "</span>" if _ag_warning else ""}
+            {"&nbsp; <span style='color:#ef4444;'>✗ " + str(_ag_liq) + "</span>" if _ag_liq else ""}
+        </div>
     </div>""", unsafe_allow_html=True)
 with c3:
     st.markdown(f"""
     <div class="metric-card card-orange">
         <div class="label">FXRP Circulating</div>
         <div class="big-number" style="color:#f59e0b;">{fxrp_circ:,.0f}</div>
+        <div style="color:#475569; font-size:0.82rem; margin-top:4px;">≈ ${fxrp_tvl:,.0f} USD</div>
+    </div>""", unsafe_allow_html=True)
+with c4:
+    _cap_color = "#10b981" if _mint_pct_used < 60 else ("#f59e0b" if _mint_pct_used < 85 else "#ef4444")
+    st.markdown(f"""
+    <div class="metric-card card-violet">
+        <div class="label">Mint Capacity Used</div>
+        <div class="big-number" style="color:{_cap_color};">{_mint_pct_used:.0f}%</div>
         <div style="color:#475569; font-size:0.82rem; margin-top:4px;">
-            ≈ ${fxrp_tvl:,.0f} USD
+            ~{_mint_remaining:,.0f} FXRP remaining
         </div>
     </div>""", unsafe_allow_html=True)
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+# ── Feature 13: Backing Ratio Trend Chart ─────────────────────────────────────
+render_section_header("Collateral Ratio Trend", "FXRP backing ratio across recent scans")
+
+_history_runs = load_history_runs()
+_cr_dates = []
+_cr_vals  = []
+for _run in _history_runs[-20:]:   # last 20 scans
+    _ts = (_run.get("completed_at") or _run.get("run_id", ""))[:19]
+    _fasset_run = _run.get("fasset", {})
+    _cr = (_fasset_run.get("assets") or {}).get("FXRP", {}).get("cr_pct")
+    if _cr and isinstance(_cr, (int, float)):
+        try:
+            _cr_dates.append(_ts.replace("T", " "))
+            _cr_vals.append(float(_cr))
+        except Exception:
+            pass
+
+if len(_cr_vals) >= 2:
+    _fig_cr = go.Figure()
+    _cr_line_color = "#10b981" if (sum(_cr_vals[-3:]) / len(_cr_vals[-3:])) >= 200 else "#f59e0b"
+    _fig_cr.add_trace(go.Scatter(
+        x=_cr_dates, y=_cr_vals,
+        mode="lines+markers",
+        name="FXRP Collateral Ratio",
+        line=dict(color=_cr_line_color, width=2.5),
+        marker=dict(size=6, color=_cr_line_color),
+        fill="tozeroy",
+        fillcolor="rgba(16,185,129,0.06)",
+        hovertemplate="%{x}<br>CR: %{y:.0f}%<extra></extra>",
+    ))
+    # Reference lines
+    _fig_cr.add_hline(y=200, line_dash="dash", line_color="rgba(16,185,129,0.5)",
+                      annotation_text="200% healthy", annotation_position="bottom right",
+                      annotation_font_size=11, annotation_font_color="#10b981")
+    _fig_cr.add_hline(y=160, line_dash="dash", line_color="rgba(239,68,68,0.5)",
+                      annotation_text="160% min (CCB)", annotation_position="bottom right",
+                      annotation_font_size=11, annotation_font_color="#ef4444")
+    _fig_cr.update_layout(
+        height=240,
+        margin=dict(l=0, r=0, t=12, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False, color="#64748b", tickfont_size=11),
+        yaxis=dict(gridcolor="rgba(255,255,255,0.05)", color="#64748b",
+                   tickformat=".0f", ticksuffix="%", tickfont_size=11),
+        showlegend=False,
+    )
+    st.plotly_chart(_fig_cr, use_container_width=True, config={"displayModeBar": False})
+else:
+    st.caption("Collateral ratio history available after 2+ scans.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 

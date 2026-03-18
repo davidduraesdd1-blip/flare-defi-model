@@ -24,11 +24,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "💰  Income Planner",
     "🔒  Spectra Fixed-Rate",
     "📡  FTSO Delegation",
     "🌐  FAssets",
+    "🎯  Strategy Planner",
 ])
 
 
@@ -169,29 +170,86 @@ with tab3:
         unsafe_allow_html=True,
     )
 
+    # Feature 7: Risk-adjusted FTSO delegation optimizer
+    # Score = reward_rate × (uptime/100)² × vote_power_factor
+    # Vote power cap: providers >2.5% vote power get rewards cut off
     ftso_providers = [
-        {"name": "Ankr",        "reward_rate": 4.5, "uptime": 99.2, "note": "Large global infrastructure"},
-        {"name": "AlphaOracle", "reward_rate": 4.4, "uptime": 99.0, "note": "High uptime, consistent rewards"},
-        {"name": "SolidiFi",    "reward_rate": 4.2, "uptime": 98.8, "note": "Community-run provider"},
-        {"name": "FlareOracle", "reward_rate": 4.3, "uptime": 98.9, "note": "Flare-native provider"},
-        {"name": "FTSO EU",     "reward_rate": 4.1, "uptime": 98.5, "note": "European-based node"},
-        {"name": "BlockNG",     "reward_rate": 4.0, "uptime": 97.5, "note": "Multi-chain infrastructure"},
+        {"name": "Ankr",        "reward_rate": 4.5, "uptime": 99.2, "vote_power_pct": 8.2,  "note": "Large global infra — ABOVE 2.5% vote power cap ⚠"},
+        {"name": "AlphaOracle", "reward_rate": 4.4, "uptime": 99.0, "vote_power_pct": 1.8,  "note": "High uptime, consistent rewards"},
+        {"name": "SolidiFi",    "reward_rate": 4.2, "uptime": 98.8, "vote_power_pct": 2.1,  "note": "Community-run, near cap — monitor"},
+        {"name": "FlareOracle", "reward_rate": 4.3, "uptime": 98.9, "vote_power_pct": 1.4,  "note": "Flare-native, well under cap"},
+        {"name": "FTSO EU",     "reward_rate": 4.1, "uptime": 98.5, "vote_power_pct": 0.9,  "note": "European-based, decentralised"},
+        {"name": "BlockNG",     "reward_rate": 4.0, "uptime": 97.5, "vote_power_pct": 0.7,  "note": "Multi-chain infrastructure"},
+        {"name": "DelegateXRP", "reward_rate": 4.3, "uptime": 98.7, "vote_power_pct": 1.2,  "note": "XRP community focused"},
+        {"name": "OracleDeFi",  "reward_rate": 4.2, "uptime": 98.6, "vote_power_pct": 0.6,  "note": "DeFi-native, low vote power"},
     ]
 
+    _VOTE_CAP = 2.5   # providers above this % have reward eligibility risk
+
+    # Compute risk-adjusted scores
+    for p in ftso_providers:
+        vp    = p["vote_power_pct"]
+        cap_penalty = 0.0 if vp <= _VOTE_CAP else min(1.0, (vp - _VOTE_CAP) / _VOTE_CAP)
+        p["risk_adj_rate"]  = round(p["reward_rate"] * (p["uptime"] / 100) ** 2 * (1 - cap_penalty * 0.5), 3)
+        p["cap_warning"]    = vp > _VOTE_CAP
+        p["cap_risk"]       = "⚠ ABOVE CAP" if vp > _VOTE_CAP else ("⚡ Near cap" if vp > _VOTE_CAP * 0.8 else "✓ OK")
+
+    # Sort by risk-adjusted rate
+    ftso_providers.sort(key=lambda x: x["risk_adj_rate"], reverse=True)
+
     flr_amount = st.number_input("FLR to delegate", min_value=0.0, value=1000.0, step=100.0, key="ftso_flr")
+
+    # Vote power cap warning banner
+    over_cap = [p for p in ftso_providers if p["cap_warning"]]
+    if over_cap:
+        st.markdown(
+            f"<div class='warn-box'>"
+            f"<span style='font-weight:700; color:#f59e0b;'>⚠ Vote Power Cap Warning</span>"
+            f"<div style='color:#94a3b8; font-size:0.83rem; margin-top:4px;'>"
+            f"{len(over_cap)} provider(s) exceed the 2.5% vote power cap. "
+            f"Flare reduces reward eligibility for over-cap providers — avoid delegating to these: "
+            f"<b>{', '.join(p['name'] for p in over_cap)}</b></div></div>",
+            unsafe_allow_html=True,
+        )
+
     if flr_amount > 0:
-        rows = [{
-            "Provider":          p["name"],
-            "Est. Annual Rate":  f"{p['reward_rate']:.1f}%",
-            "Uptime":            f"{p['uptime']:.1f}%",
-            "Annual FLR Earned": f"{flr_amount * (p['reward_rate']/100):,.1f} FLR",
-            "Notes":             p["note"],
-        } for p in ftso_providers]
+        rows = []
+        for p in ftso_providers:
+            annual_flr = flr_amount * (p["reward_rate"] / 100)
+            risk_flr   = flr_amount * (p["risk_adj_rate"] / 100)
+            rows.append({
+                "Provider":           p["name"],
+                "Raw APY":            f"{p['reward_rate']:.1f}%",
+                "Uptime":             f"{p['uptime']:.1f}%",
+                "Vote Power":         f"{p['vote_power_pct']:.1f}%",
+                "Cap Status":         p["cap_risk"],
+                "Risk-Adj APY":       f"{p['risk_adj_rate']:.2f}%",
+                "Annual FLR (raw)":   f"{annual_flr:,.1f}",
+                "Annual FLR (adj)":   f"{risk_flr:,.1f}",
+                "Notes":              p["note"],
+            })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+        # Top recommendation
+        top2 = [p for p in ftso_providers if not p["cap_warning"]][:2]
+        if top2:
+            st.markdown(
+                f"<div style='background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.14); "
+                f"border-radius:10px; padding:12px 16px; font-size:0.84rem; color:#94a3b8; margin-top:10px;'>"
+                f"🤖 <span style='color:#a78bfa; font-weight:600;'>Recommendation:</span> "
+                f"Split {flr_amount:,.0f} FLR between "
+                f"<b style='color:#f1f5f9;'>{top2[0]['name']}</b> ({flr_amount*0.6:,.0f} FLR, "
+                f"risk-adj {top2[0]['risk_adj_rate']:.2f}%) and "
+                f"<b style='color:#f1f5f9;'>{top2[1]['name']}</b> ({flr_amount*0.4:,.0f} FLR, "
+                f"risk-adj {top2[1]['risk_adj_rate']:.2f}%) for coverage.</div>",
+                unsafe_allow_html=True,
+            )
+
         st.caption(
+            "Risk-Adj APY = Raw APY × Uptime² × vote-power-cap factor. "
             "Split between 2 providers for coverage. "
-            "Delegate at app.flare.network or via Sceptre (earns sFLR rewards too). "
-            "Rates are estimated historical averages."
+            "Delegate at app.flare.network or via Sceptre. "
+            "Vote power cap: providers >2.5% lose reward eligibility."
         )
 
 
@@ -248,3 +306,164 @@ Flare's FAssets system needs collateral agents to mint synthetic assets. Agents 
 
 *Requires significant collateral (~$10,000 FLR minimum). See flare.network/fassets for details.*
     """)
+
+
+# ─── Tab 5: Intent-Based Strategy Planner (Feature 15) ───────────────────────
+
+with tab5:
+    render_section_header("Strategy Planner", "Tell us your goal — get a personalised DeFi plan")
+    st.markdown(
+        "<div style='color:#475569; font-size:0.85rem; margin-bottom:20px;'>"
+        "Answer a few questions and the planner builds a custom strategy using only Flare-native protocols.</div>",
+        unsafe_allow_html=True,
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        intent      = st.selectbox("My primary goal is…", [
+            "Maximise yield (I accept higher risk)",
+            "Stable passive income (low risk)",
+            "Replace FlareDrop income",
+            "Earn on my XRP without selling",
+            "Earn on my BTC without selling",
+            "Preserve capital + beat inflation",
+            "Learn DeFi with small amount",
+        ], key="intent_goal")
+        capital     = st.number_input("Capital to deploy ($)", min_value=0.0, value=5000.0, step=500.0, key="intent_capital")
+    with c2:
+        risk_tol    = st.selectbox("Risk tolerance", ["Low — protect capital", "Medium — balanced", "High — max yield"], key="intent_risk")
+        time_horiz  = st.selectbox("Time horizon", ["<3 months", "3–6 months", "6–12 months", "1–2 years", "2+ years"], key="intent_time")
+        il_comfort  = st.checkbox("I'm comfortable with impermanent loss risk", value=False, key="intent_il")
+        exp_level   = st.selectbox("DeFi experience", ["Beginner", "Intermediate", "Advanced"], key="intent_exp")
+
+    if st.button("Build My Strategy", key="build_strategy_btn", use_container_width=True, type="primary"):
+        # Strategy engine: maps intent + parameters to Flare-native strategies
+        _plans = []
+        _warnings = []
+        _is_low_risk  = "Low" in risk_tol
+        _is_high_risk = "High" in risk_tol
+        _long_horizon = time_horiz in ("6–12 months", "1–2 years", "2+ years")
+
+        days_to_jul26 = max(0, (datetime(2026, 7, 1) - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+        _incentive_ok = days_to_jul26 > 60
+
+        if "XRP" in intent:
+            _plans = [
+                {"protocol": "Upshift EarnXRP", "strategy": "FXRP Vault", "alloc_pct": 60, "apy_est": 7.0, "risk": "Low",
+                 "action": "Bridge XRP → FXRP via Flare. Deposit in Upshift EarnXRP vault for 4–10% APY with auto-compounding."},
+                {"protocol": "Enosys DEX",      "strategy": "FXRP-USD0 LP", "alloc_pct": 30, "apy_est": 45.0, "risk": "Medium",
+                 "action": "Provide FXRP-USD0 liquidity on Enosys for high APY. Accept ~5–15% IL risk."},
+                {"protocol": "Kinetic Finance",  "strategy": "FXRP Lending", "alloc_pct": 10, "apy_est": 5.0, "risk": "Low",
+                 "action": "Deposit FXRP on Kinetic for lending yield with no IL."},
+            ]
+        elif "BTC" in intent:
+            _plans = [
+                {"protocol": "Flare FAssets",   "strategy": "FBTC (Coming Soon)", "alloc_pct": 100, "apy_est": 5.0, "risk": "Medium",
+                 "action": "Wait for FBTC launch (in development). Bridge BTC → FBTC → deploy in LP or lending. Monitor flare.network for launch date."},
+            ]
+            _warnings.append("FBTC is not yet live. Use sFLR staking or Kinetic lending in the meantime.")
+        elif "Replace FlareDrop" in intent:
+            _plans = [
+                {"protocol": "Kinetic Finance",  "strategy": "Stablecoin Lending", "alloc_pct": 40, "apy_est": 8.5, "risk": "Low",
+                 "action": "Deposit USDT0 or USD0 on Kinetic for 8–12% APY with zero IL. Most stable income."},
+                {"protocol": "Clearpool",        "strategy": "X-Pool USD0",        "alloc_pct": 30, "apy_est": 11.5, "risk": "Low",
+                 "action": "Institutional lending pool. 11–14% APY on USD0. Lower TVL than Kinetic — moderate smart-contract risk."},
+                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 20, "apy_est": 4.5, "risk": "Low",
+                 "action": "Stake FLR for sFLR to earn 4–5% APY + FTSO rewards. Capital grows with FLR price."},
+                {"protocol": "FTSO Delegation",  "strategy": "Vote Power",          "alloc_pct": 10, "apy_est": 4.3, "risk": "None",
+                 "action": "Delegate remaining FLR vote power for 4.3% APY. Keep your FLR liquid."},
+            ]
+        elif "capital" in intent.lower() or "inflation" in intent.lower():
+            _plans = [
+                {"protocol": "Kinetic Finance",  "strategy": "USDT0 Lending",      "alloc_pct": 50, "apy_est": 8.5, "risk": "Low",
+                 "action": "Stable dollar-denominated yield. 8–12% beats inflation significantly."},
+                {"protocol": "Clearpool",        "strategy": "USDX T-Pool",        "alloc_pct": 30, "apy_est": 9.1, "risk": "Low",
+                 "action": "T-bill backed pool. ~$38M TVL. 9–10% on stablecoins."},
+                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 20, "apy_est": 4.5, "risk": "Low",
+                 "action": "FLR upside + 4.5% staking yield as hedge against inflation."},
+            ]
+        elif "Learn" in intent or "small" in intent.lower():
+            _plans = [
+                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 50, "apy_est": 4.5, "risk": "None",
+                 "action": "Safest way to earn: stake FLR → get sFLR. Learn how LSTs work with zero IL."},
+                {"protocol": "Kinetic Finance",  "strategy": "USDT0 Lending",      "alloc_pct": 30, "apy_est": 8.0, "risk": "Low",
+                 "action": "Deposit a stablecoin and earn interest. No price risk."},
+                {"protocol": "Blazeswap",        "strategy": "sFLR-WFLR LP",       "alloc_pct": 20, "apy_est": 37.0, "risk": "Low",
+                 "action": "Both tokens track FLR price — minimal IL. Good intro to liquidity providing."},
+            ]
+        elif _is_high_risk or "Maximise" in intent:
+            _plans = [
+                {"protocol": "Blazeswap",        "strategy": "WFLR-USD0 LP",       "alloc_pct": 40, "apy_est": 133.0, "risk": "High",
+                 "action": "Highest available APY on Flare. Full USD0 paired with WFLR — significant IL risk if FLR moves."},
+                {"protocol": "Enosys DEX",       "strategy": "FXRP-WFLR LP",       "alloc_pct": 30, "apy_est": 78.0,  "risk": "High",
+                 "action": "Two volatile assets — compounding IL risk but high reward."},
+                {"protocol": "Hyperliquid",      "strategy": "HLP Vault",          "alloc_pct": 20, "apy_est": 15.0,  "risk": "Medium",
+                 "action": "Cross-chain perps liquidity. Market-making yield. Lower IL than DEX LP."},
+                {"protocol": "Kinetic Finance",  "strategy": "Stablecoin Lending", "alloc_pct": 10, "apy_est": 8.5,   "risk": "Low",
+                 "action": "Stable income anchor for the portfolio."},
+            ]
+            if _incentive_ok:
+                _warnings.append(f"⚠ rFLR incentives expire in {days_to_jul26} days — re-evaluate LP positions by May 2026.")
+        else:
+            # Medium / stable income default
+            _plans = [
+                {"protocol": "Kinetic Finance",  "strategy": "USDT0 Lending",      "alloc_pct": 35, "apy_est": 8.5,  "risk": "Low",
+                 "action": "Core stable income. 8–12% APY, no price risk."},
+                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 25, "apy_est": 4.5,  "risk": "Low",
+                 "action": "FLR upside + staking yield. Low risk, liquid."},
+                {"protocol": "Blazeswap",        "strategy": "sFLR-WFLR LP",       "alloc_pct": 25, "apy_est": 37.0, "risk": "Low",
+                 "action": "Correlated pair LP — low IL, elevated APY."},
+                {"protocol": "Clearpool",        "strategy": "X-Pool USD0",        "alloc_pct": 15, "apy_est": 11.5, "risk": "Low",
+                 "action": "Institutional yield. Higher than Kinetic, slightly more complex."},
+            ]
+
+        # Adjust for IL comfort
+        if not il_comfort:
+            _plans = [p for p in _plans if p["risk"] in ("None", "Low", "Medium")]
+            if any(p["risk"] == "High" for p in _plans):
+                _warnings.append("High-IL strategies removed — toggle 'comfortable with IL' to unlock them.")
+
+        # Render the plan
+        if _plans:
+            total_alloc = sum(p["alloc_pct"] for p in _plans)
+            st.markdown("### Your Personalised Strategy")
+            for plan in _plans:
+                alloc_usd = capital * plan["alloc_pct"] / 100
+                risk_color = {"None": "#10b981", "Low": "#22c55e", "Medium": "#f59e0b", "High": "#ef4444"}.get(plan["risk"], "#64748b")
+                st.markdown(
+                    f"<div class='opp-card' style='border-left:3px solid {risk_color};'>"
+                    f"<div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;'>"
+                    f"<div><span style='font-weight:700; color:#f1f5f9;'>{plan['protocol']}</span>"
+                    f"<span style='color:#475569; margin:0 6px;'>·</span>"
+                    f"<span style='color:#94a3b8; font-size:0.9rem;'>{plan['strategy']}</span></div>"
+                    f"<div style='display:flex; gap:12px; font-size:0.82rem;'>"
+                    f"<span style='color:#a78bfa; font-weight:700;'>{plan['apy_est']:.0f}% est. APY</span>"
+                    f"<span style='color:{risk_color}; font-weight:600;'>{plan['risk']} Risk</span>"
+                    f"<span style='color:#f1f5f9; font-weight:700;'>{plan['alloc_pct']}% = ${alloc_usd:,.0f}</span>"
+                    f"</div></div>"
+                    f"<div style='color:#94a3b8; font-size:0.88rem; margin-top:8px;'>{plan['action']}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            # Summary metrics
+            blended_apy = sum(p["apy_est"] * p["alloc_pct"] / total_alloc for p in _plans)
+            annual_usd  = capital * blended_apy / 100
+            st.markdown(
+                f"<div style='background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.14); "
+                f"border-radius:10px; padding:14px 18px; margin-top:14px; font-size:0.88rem;'>"
+                f"<div style='color:#a78bfa; font-weight:700; margin-bottom:6px;'>Strategy Summary</div>"
+                f"<div style='display:flex; gap:24px; flex-wrap:wrap; color:#94a3b8;'>"
+                f"<span>Capital: <b style='color:#f1f5f9;'>${capital:,.0f}</b></span>"
+                f"<span>Blended APY: <b style='color:#22c55e;'>{blended_apy:.1f}%</b></span>"
+                f"<span>Est. Annual Yield: <b style='color:#22c55e;'>${annual_usd:,.0f}</b></span>"
+                f"<span>Est. Monthly: <b style='color:#22c55e;'>${annual_usd/12:,.0f}</b></span>"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+
+        if _warnings:
+            for w in _warnings:
+                st.warning(w)
+
+        st.caption("Allocations are suggestions only. Always diversify and do your own research. Not financial advice.")

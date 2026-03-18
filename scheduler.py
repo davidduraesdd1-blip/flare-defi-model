@@ -237,9 +237,27 @@ def run_quick_check() -> None:
                     f"delta-neutral carry trade may be profitable"
                 )
 
-        # ── Save updated price cache ──────────────────────────────────────
+        # ── 6. TVL crash / anomaly detection (Feature 10) ─────────────────
+        tvl_drop_limit = float(thresholds.get("tvl_drop_pct", 20.0))
+        last_tvl = cache.get("tvl", {})
+        current_tvl = {}
+        for _pool in blaze_pools + spark_pools:
+            _tvl_key = f"{_pool.protocol}:{_pool.pool_name}"
+            current_tvl[_tvl_key] = _pool.tvl_usd
+        for _pool_key, _curr_tvl in current_tvl.items():
+            _last_t = last_tvl.get(_pool_key)
+            if _last_t is not None and _last_t > 10_000 and _curr_tvl >= 0:
+                _drop_pct = (_curr_tvl - _last_t) / _last_t * 100
+                if _drop_pct <= -tvl_drop_limit:
+                    alerts.append(
+                        f"TVL CRASH: {_pool_key} dropped {_drop_pct:.1f}% "
+                        f"(${_last_t:,.0f} → ${_curr_tvl:,.0f}) — possible liquidity exodus"
+                    )
+
+        # ── Save updated price + TVL cache ────────────────────────────────
         _save_quick_cache({
             "prices":     current_prices,
+            "tvl":        current_tvl,
             "checked_at": now.isoformat(),
         })
 
@@ -259,6 +277,15 @@ def run_quick_check() -> None:
         except Exception as _fe:
             logger.debug(f"Quick check feedback update failed (non-critical): {_fe}")
 
+        # ── 7. CL out-of-range alerts (Feature 12) ────────────────────────
+        try:
+            from ai.alerts import check_cl_range_alerts
+            _prices_as_dicts = [{"symbol": p.symbol, "price_usd": p.price_usd} for p in prices_list]
+            _cl_alerts = check_cl_range_alerts(_prices_as_dicts)
+            alerts.extend(_cl_alerts)
+        except Exception as _cle:
+            logger.debug(f"CL range check failed (non-critical): {_cle}")
+
         # ── Send alerts if any were triggered ────────────────────────────
         if alerts:
             lines = [
@@ -275,10 +302,15 @@ def run_quick_check() -> None:
             for a in alerts:
                 logger.info(f"  → {a}")
             try:
-                from ai.alerts import load_alerts_config, send_email_alert, send_telegram_alert
+                from ai.alerts import (
+                    load_alerts_config, send_email_alert, send_telegram_alert,
+                    send_discord_alert, send_webhook_alert,
+                )
                 cfg = load_alerts_config()
                 send_email_alert(subject, message, cfg)
                 send_telegram_alert(message, cfg)
+                send_discord_alert(message, cfg)
+                send_webhook_alert(subject, message, cfg)
             except Exception as _ae:
                 logger.debug(f"Quick check alert delivery failed (non-critical): {_ae}")
             _notify("Flare DeFi Intraday Alert", f"{len(alerts)} signal(s) — check dashboard")
