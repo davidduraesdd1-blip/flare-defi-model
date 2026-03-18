@@ -419,7 +419,7 @@ def _load_history_data() -> tuple:
                     key = (opp.get("protocol", ""), opp.get("asset_or_pool", ""))
                     apy_map.setdefault(key, []).append(float(opp.get("estimated_apy", 0)))
             # TVL from raw pool scan data
-            for pool in (run.get("pools") or []):
+            for pool in (run.get("flare_scan", {}).get("pools") or []):
                 proto = pool.get("protocol", "")
                 proto_name = PROTOCOLS.get(proto, {}).get("name", proto)
                 pool_name  = pool.get("pool_name", "")
@@ -427,7 +427,7 @@ def _load_history_data() -> tuple:
                 if proto_name and pool_name and tvl:
                     tvl_map.setdefault((proto_name, pool_name), []).append(float(tvl))
             # TVL from lending/staking entries
-            for entry in (run.get("lending") or []) + (run.get("staking") or []):
+            for entry in (run.get("flare_scan", {}).get("lending") or []) + (run.get("flare_scan", {}).get("staking") or []):
                 proto = entry.get("protocol", "")
                 proto_name = PROTOCOLS.get(proto, {}).get("name", proto)
                 name  = entry.get("asset") or entry.get("token", "")

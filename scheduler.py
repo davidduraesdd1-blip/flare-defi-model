@@ -81,7 +81,7 @@ def _notify(title: str, message: str) -> None:
 
 def _ensure_positions_file() -> None:
     try:
-        with open(POSITIONS_FILE, "x") as f:   # 'x' fails atomically if file already exists
+        with open(POSITIONS_FILE, "x", encoding="utf-8") as f:   # 'x' fails atomically if file already exists
             json.dump(INITIAL_POSITIONS, f, indent=2)
         logger.info("Positions file created with seed data from your existing Excel positions.")
     except FileExistsError:
