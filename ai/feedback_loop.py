@@ -130,6 +130,8 @@ def record_actuals(scan_result: dict) -> None:
         if not _ts:
             continue   # skip records with no timestamp — cannot determine age
         pred_time = datetime.fromisoformat(_ts)
+        if pred_time.tzinfo is not None:
+            pred_time = pred_time.replace(tzinfo=None)
         age_secs  = (now - pred_time).total_seconds()
 
         # ── 24h evaluation ────────────────────────────────────────────────────
@@ -217,7 +219,10 @@ def compute_accuracy(profile: str, history: dict = None, window: str = "24h") ->
     raw_count     = 0
 
     for pred in evaluated:
-        age_days = max(0.0, (now_ts - datetime.fromisoformat(pred["timestamp"])).total_seconds() / 86400)
+        _pred_ts = datetime.fromisoformat(pred["timestamp"])
+        if _pred_ts.tzinfo is not None:
+            _pred_ts = _pred_ts.replace(tzinfo=None)
+        age_days = max(0.0, (now_ts - _pred_ts).total_seconds() / 86400)
         weight   = math.exp(-age_days / _EXP_HALF_LIFE)
         for pick in pred["profiles"].get(profile, []):
             if pick.get(f"error_pct{suffix}") is not None:

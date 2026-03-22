@@ -17,6 +17,18 @@ POSITIONS_FILE      = DATA_DIR / "positions.json"
 WALLETS_FILE        = DATA_DIR / "wallets.json"
 QUICK_CACHE_FILE    = DATA_DIR / "quick_check_cache.json"
 MONITOR_DIGEST_FILE = DATA_DIR / "monitor_digest.json"
+DB_FILE             = DATA_DIR / "defi_model.db"
+AGENTKIT_WALLET_FILE = DATA_DIR / "agentkit_wallet.json"
+
+# ─── Coinbase AgentKit (CDP) ──────────────────────────────────────────────────
+# Get a free CDP API key at https://portal.cdp.coinbase.com/
+# Then set these env vars (or add to .env):
+#   CDP_API_KEY_NAME=<your key name>
+#   CDP_API_KEY_PRIVATE_KEY=<your private key>
+#   AGENTKIT_NETWORK=base-mainnet  (or flare-mainnet for Flare EVM)
+CDP_API_KEY_NAME    = os.environ.get("CDP_API_KEY_NAME", "")
+CDP_API_KEY_PRIVATE = os.environ.get("CDP_API_KEY_PRIVATE_KEY", "")
+AGENTKIT_NETWORK    = os.environ.get("AGENTKIT_NETWORK", "base-mainnet")
 
 # ─── Flare Network RPC ────────────────────────────────────────────────────────
 FLARE_RPC_URLS = [
