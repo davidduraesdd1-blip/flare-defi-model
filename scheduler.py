@@ -46,6 +46,7 @@ from utils.file_io            import atomic_json_write
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 _log_file = Path(__file__).parent / "data" / "scheduler.log"
+_log_file.parent.mkdir(parents=True, exist_ok=True)
 _rotating = logging.handlers.RotatingFileHandler(
     _log_file, mode="a", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
 )

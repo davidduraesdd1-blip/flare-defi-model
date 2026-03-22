@@ -1084,3 +1084,71 @@ else:
             unsafe_allow_html=True,
         )
     st.caption("Correlations are estimates based on Flare ecosystem token relationships. Actual correlations vary with market conditions.")
+
+# ── AgentKit Wallet ───────────────────────────────────────────────────────────
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+render_section_header("AgentKit Wallet", "Coinbase AgentKit EVM wallet — check on-chain balances")
+
+try:
+    from agentkit_wallet import get_wallet_status, get_setup_instructions
+    ws = get_wallet_status()
+
+    if ws["available"]:
+        # ── Connected state ───────────────────────────────────────────────────
+        addr = ws["address"] or "—"
+        net  = ws["network"] or "—"
+        st.markdown(
+            f"<div style='display:flex; align-items:center; gap:8px; margin-bottom:12px;'>"
+            f"<span style='display:inline-block; width:8px; height:8px; border-radius:50%; "
+            f"background:#10b981;'></span>"
+            f"<span style='color:#10b981; font-weight:600; font-size:0.85rem;'>Connected</span>"
+            f"<span style='color:#64748b; font-size:0.82rem;'>·</span>"
+            f"<span style='color:#475569; font-size:0.82rem; font-family:monospace;'>{addr}</span>"
+            f"<span style='color:#64748b; font-size:0.82rem;'>·</span>"
+            f"<span style='color:#64748b; font-size:0.82rem;'>{net}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        balances = ws.get("balances") or {}
+        if balances:
+            bal_cols = st.columns(min(len(balances), 4))
+            for i, (token, amount) in enumerate(balances.items()):
+                with bal_cols[i % len(bal_cols)]:
+                    st.markdown(
+                        f"<div style='background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.20); "
+                        f"border-radius:10px; padding:12px 16px;'>"
+                        f"<div style='font-size:0.72rem; font-weight:600; color:#64748b; "
+                        f"text-transform:uppercase; letter-spacing:0.06em;'>{_html.escape(str(token))}</div>"
+                        f"<div style='font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-top:4px;'>"
+                        f"{_html.escape(str(amount))}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+        else:
+            st.markdown(
+                "<div style='color:#64748b; font-size:0.85rem;'>No token balances found — wallet may be empty.</div>",
+                unsafe_allow_html=True,
+            )
+
+        if st.button("↺ Refresh Wallet", key="agentkit_refresh"):
+            st.cache_data.clear()
+            st.rerun()
+
+    else:
+        # ── Not configured / error state ─────────────────────────────────────
+        err = ws.get("error", "")
+        if err:
+            st.markdown(
+                f"<div class='warn-box' style='font-size:0.83rem;'>⚠️ {_html.escape(str(err))}</div>",
+                unsafe_allow_html=True,
+            )
+        with st.expander("Setup Instructions", expanded=not ws["available"]):
+            st.markdown(get_setup_instructions())
+
+except Exception as _aw_err:
+    st.markdown(
+        f"<div class='warn-box' style='font-size:0.83rem;'>⚠️ AgentKit wallet unavailable: "
+        f"{_html.escape(str(_aw_err))}</div>",
+        unsafe_allow_html=True,
+    )
