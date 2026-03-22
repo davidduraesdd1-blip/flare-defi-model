@@ -560,6 +560,23 @@ def render_sidebar() -> dict:
 
         latest    = load_latest()
         last_scan = latest.get("completed_at") or latest.get("run_id")
+
+        # ── Auto-scan on first open (no data file exists yet) ─────────────────
+        if not last_scan and not st.session_state.get("_auto_scan_triggered"):
+            st.session_state["_auto_scan_triggered"] = True
+            if not st.session_state.get("_scanning"):
+                try:
+                    _sched_path = str(Path(__file__).parent.parent / "scheduler.py")
+                    subprocess.Popen(
+                        [sys.executable, _sched_path, "--now"],
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+                    )
+                    st.session_state._scanning = True
+                    st.session_state._scan_deadline = time.time() + 120
+                    st.session_state._scan_baseline = ""
+                except Exception:
+                    pass  # user can click ▶ Scan manually
+
         # Determine data freshness
         is_fresh = False
         if last_scan:

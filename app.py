@@ -97,7 +97,10 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 render_section_header(f"Top Opportunities", f"{profile_cfg['label']} · {profile_cfg['target_apy_low']:.0f}–{profile_cfg['target_apy_high']:.0f}% target APY")
 
 if not opps:
-    st.info("No scan data yet. Run `python scheduler.py --now` to generate your first scan.")
+    if not latest.get("completed_at") and not latest.get("run_id"):
+        st.info("⏳ First scan is starting automatically — please wait ~30 seconds, then click **↺ Reload** in the sidebar.")
+    else:
+        st.info("No opportunities found for this risk profile in the latest scan.")
 else:
     for i, opp in enumerate(opps[:3]):
         render_opportunity_card(opp, i, color, portfolio_size, weight)
