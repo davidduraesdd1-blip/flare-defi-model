@@ -270,7 +270,23 @@ PROTOCOLS = {
         "url":      "https://app.hyperliquid.xyz",
         "live":     True,
         "risk":     "high",
-        "pairs": ["FXRP/USDC"],
+        "pairs": ["FXRP/USDC", "FXRP/USDH"],   # FXRP/USDH added Jan 2026
+    },
+    "flamix": {
+        "name":     "Flamix",
+        "type":     "Perp DEX",
+        "url":      "https://flamix.trade",
+        "live":     False,   # No public API yet; data manually monitored
+        "risk":     "high",
+        "note":     "Native perpetuals DEX on Flare. Up to 500x leverage. Any asset as collateral. FTSO pricing. $100M+ volume as of Dec 2025.",
+        "pairs": {
+            "FLR-USD":  {"max_leverage": 500, "reward_token": "FLMX"},
+            "XRP-USD":  {"max_leverage": 500, "reward_token": "FLMX"},
+            "BTC-USD":  {"max_leverage": 500, "reward_token": "FLMX"},
+            "ETH-USD":  {"max_leverage": 500, "reward_token": "FLMX"},
+        },
+        "volume_30d_usd": 100_000_000,
+        "open_interest_usd": 1_500_000,
     },
 }
 

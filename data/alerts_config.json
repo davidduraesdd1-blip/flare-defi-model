@@ -1,0 +1,22 @@
+{
+  "email": {
+    "enabled": false,
+    "address": "",
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "username": "",
+    "password": ""
+  },
+  "telegram": {
+    "enabled": false,
+    "bot_token": "",
+    "chat_id": ""
+  },
+  "thresholds": {
+    "min_apy_alert": 159.5,
+    "new_arb_alert": true,
+    "_calibrated_at": "2026-03-18T04:50:27.383312",
+    "_calibration_samples": 56,
+    "_raw_p75_apy": 157.1
+  }
+}
