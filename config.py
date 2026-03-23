@@ -288,6 +288,28 @@ PROTOCOLS = {
         "volume_30d_usd": 100_000_000,
         "open_interest_usd": 1_500_000,
     },
+    "kinza": {
+        "name":     "Kinza Finance",
+        "type":     "Lending",
+        "url":      "https://app.kinza.finance",
+        "live":     False,   # Aave V3 fork on Flare — baseline data only until live API confirmed
+        "risk":     "low",
+        "note":     "Aave V3-based lending market on Flare Network. Supports FXRP, WFLR, USDT0, USDC.e as collateral.",
+        "markets": {
+            "FXRP":   {"supply_apy": 4.5,  "borrow_apy":  7.0},
+            "WFLR":   {"supply_apy": 5.0,  "borrow_apy":  8.5},
+            "USDT0":  {"supply_apy": 7.5,  "borrow_apy": 11.0},
+            "USDC.e": {"supply_apy": 6.5,  "borrow_apy": 10.0},
+        },
+    },
+    "orbitalx": {
+        "name":     "OrbitalX",
+        "type":     "DEX",
+        "url":      "https://orbitalx.xyz",
+        "live":     False,   # Order book DEX on Flare — monitoring until public API is available
+        "risk":     "medium",
+        "note":     "Order book DEX on Flare Network with FTSO price feeds. Spot and perpetuals trading.",
+    },
 }
 
 # ─── Fallback Prices (used when CoinGecko is unavailable) ────────────────────
@@ -335,7 +357,7 @@ RISK_PROFILES = {
         "allowed_types":   ["Lending", "Liquid Staking", "Yield Vault", "Yield Tokenization"],
         "allowed_protocols": [
             "sceptre", "kinetic", "clearpool", "upshift",
-            "firelight", "spectra", "mystic"
+            "firelight", "spectra", "mystic", "kinza"
         ],
         "allowed_arb": ["lending_rate"],
         "description": (
@@ -355,7 +377,8 @@ RISK_PROFILES = {
         "allowed_types":   ["DEX", "Lending", "Liquid Staking", "Yield Vault", "Yield Tokenization", "DEX + Perps"],
         "allowed_protocols": [
             "sceptre", "kinetic", "clearpool", "upshift", "firelight",
-            "spectra", "mystic", "blazeswap", "enosys", "sparkdex"
+            "spectra", "mystic", "blazeswap", "enosys", "sparkdex",
+            "kinza", "orbitalx"
         ],
         "allowed_arb": ["lending_rate", "cross_dex", "fassets_mint_redeem", "funding_rate_neutral"],
         "description": (
@@ -378,7 +401,7 @@ RISK_PROFILES = {
         "allowed_protocols": [
             "sceptre", "kinetic", "clearpool", "upshift", "firelight",
             "spectra", "mystic", "blazeswap", "enosys", "sparkdex",
-            "cyclo", "hyperliquid"
+            "cyclo", "hyperliquid", "kinza", "orbitalx"
         ],
         "allowed_arb": [
             "lending_rate", "cross_dex", "fassets_mint_redeem",

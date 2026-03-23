@@ -49,19 +49,22 @@ _KNOWN_SLUGS_NORM = {
     "blazeswap", "sparkdex", "enosysdex", "enosys", "kinetic",
     "clearpool", "spectrafinance", "spectra", "upshift", "mysticfinance",
     "mystic", "cyclofinance", "cyclo", "firelight", "firelightfinance",
-    "sceptre", "hyperliquid",
+    "sceptre", "hyperliquid", "flamix", "flamixtrade",
+    "enosysloans", "enosyscdp", "kinza", "kinzafinance", "orbitalx",
 }
 
 # ─── RSS feed list ────────────────────────────────────────────────────────────
 RSS_FEEDS = [
-    {"name": "Flare Network",  "url": "https://medium.com/feed/flarenetwork"},
-    {"name": "BlazeSwap",      "url": "https://medium.com/feed/@blazeswap"},
-    {"name": "SparkDEX",       "url": "https://medium.com/feed/sparkdex"},
-    {"name": "Kinetic",        "url": "https://medium.com/feed/kinetic-market"},
-    {"name": "Clearpool",      "url": "https://medium.com/feed/clearpool"},
-    {"name": "Cyclo Finance",  "url": "https://medium.com/feed/cyclo-finance"},
-    {"name": "Enosys",         "url": "https://medium.com/feed/enosys-global"},
-    {"name": "Sceptre",        "url": "https://medium.com/feed/sceptre-fi"},
+    {"name": "Flare Network",     "url": "https://medium.com/feed/flarenetwork"},
+    {"name": "BlazeSwap",         "url": "https://medium.com/feed/@blazeswap"},
+    {"name": "SparkDEX",          "url": "https://medium.com/feed/sparkdex"},
+    {"name": "Kinetic",           "url": "https://medium.com/feed/kinetic-market"},
+    {"name": "Clearpool",         "url": "https://medium.com/feed/clearpool"},
+    {"name": "Cyclo Finance",     "url": "https://medium.com/feed/cyclo-finance"},
+    {"name": "Enosys",            "url": "https://medium.com/feed/enosys-global"},
+    {"name": "Sceptre",           "url": "https://medium.com/feed/sceptre-fi"},
+    {"name": "Mystic Finance",    "url": "https://medium.com/feed/@mysticfinance"},
+    {"name": "Firelight Finance", "url": "https://medium.com/feed/@firelightfinance"},
 ]
 
 _DEFILLAMA_API  = "https://api.llama.fi"
