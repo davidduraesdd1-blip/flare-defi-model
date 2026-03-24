@@ -448,7 +448,7 @@ with tab5:
                 )
 
             # Summary metrics
-            blended_apy = sum(p["apy_est"] * p["alloc_pct"] / total_alloc for p in _plans)
+            blended_apy = sum(p["apy_est"] * p["alloc_pct"] / total_alloc for p in _plans) if total_alloc > 0 else 0.0
             annual_usd  = capital * blended_apy / 100
             st.markdown(
                 f"<div style='background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.14); "
