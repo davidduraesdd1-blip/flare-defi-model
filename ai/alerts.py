@@ -194,7 +194,9 @@ def send_webhook_alert(subject: str, message: str, config: dict) -> bool:
             body = json.dumps(payload, separators=(",", ":")).encode()
             sig  = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
             headers["X-Flare-Signature"] = sig
-        r = requests.post(url, json=payload, headers=headers, timeout=10)
+        else:
+            body = json.dumps(payload, separators=(",", ":")).encode()
+        r = requests.post(url, data=body, headers=headers, timeout=10)
         if r.ok:
             logger.info("Webhook alert sent.")
             return True
