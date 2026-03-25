@@ -386,7 +386,7 @@ def _compute_trend(history: dict = None) -> str:
         ]
         if not picks:
             return None
-        return np.mean([p["error_pct"] for p in picks])
+        return np.mean([pick["error_pct"] for pick in picks])
 
     recent_err   = avg_accuracy(recent_preds)
     previous_err = avg_accuracy(previous_preds)

@@ -113,7 +113,10 @@ with tab_thresh:
         "Smart tuning auto-adjusts the APY threshold after each scan based on prediction accuracy.</div>",
         unsafe_allow_html=True,
     )
-    _raw_apy_thresh = config["thresholds"].get("min_apy_alert", 150)
+    try:
+        _raw_apy_thresh = float(config["thresholds"].get("min_apy_alert", 150))
+    except (TypeError, ValueError):
+        _raw_apy_thresh = 150.0
     _apy_slider_val = int(round(_raw_apy_thresh / 10) * 10)   # round to nearest step=10, no truncation
     min_apy   = st.slider("Alert when any APY exceeds (%)", 50, 300,
                           max(50, min(300, _apy_slider_val)), 10, key="min_apy_thresh")

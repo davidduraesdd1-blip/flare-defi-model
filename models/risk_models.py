@@ -355,7 +355,7 @@ def optimise_portfolio(candidates: list, risk_profile: str) -> list:
     profile = RISK_PROFILES[risk_profile]
 
     # Filter to allowed protocols for this risk profile
-    allowed_names = {PROTOCOLS[p]["name"] for p in profile["allowed_protocols"]}
+    allowed_names = {PROTOCOLS[p]["name"] for p in profile["allowed_protocols"] if p in PROTOCOLS}
     allowed = [o for o in candidates if o.protocol in allowed_names]
 
     # Filter IL risk

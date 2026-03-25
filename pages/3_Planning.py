@@ -232,7 +232,7 @@ with tab3:
 
         # Top recommendation
         top2 = [p for p in ftso_providers if not p["cap_warning"]][:2]
-        if top2:
+        if len(top2) >= 2:
             st.markdown(
                 f"<div style='background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.14); "
                 f"border-radius:10px; padding:12px 16px; font-size:0.84rem; color:#94a3b8; margin-top:10px;'>"
