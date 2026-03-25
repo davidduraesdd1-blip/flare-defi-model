@@ -110,7 +110,7 @@ else:
     if known_tvl:
         with st.expander(f"Live TVL — {len(known_tvl)} tracked protocols"):
             tvl_rows = [
-                {"Protocol": name, "TVL (USD)": f"${data['tvl_usd']:,.0f}", "Category": data.get("category", "")}
+                {"Protocol": name, "TVL (USD)": f"${data.get('tvl_usd', 0):,.0f}", "Category": data.get("category", "")}
                 for name, data in sorted(
                     known_tvl.items(),
                     key=lambda x: x[1].get("tvl_usd", 0) if isinstance(x[1], dict) else 0,
@@ -429,7 +429,7 @@ try:
         _mv4  = _oc4.get("mvrv_ratio")
         _aa4  = _oc4.get("active_addresses")
 
-        _mc4 = {"UNDERVALUED": "#00d4aa", "FAIR_VALUE": "#10b981", "OVERVALUED": "#f59e0b", "EXTREME_HEAT": "#ef4444"}.get(_ms4, "#6b7280")
+        _mvrv_color = {"UNDERVALUED": "#00d4aa", "FAIR_VALUE": "#10b981", "OVERVALUED": "#f59e0b", "EXTREME_HEAT": "#ef4444"}.get(_ms4, "#6b7280")
         _sc4 = {"CAPITULATION": "#00d4aa", "MILD_LOSS": "#10b981", "NORMAL": "#6b7280", "PROFIT_TAKING": "#f59e0b"}.get(_ss4, "#6b7280")
 
         def _fmtb(v):
@@ -441,9 +441,9 @@ try:
         _c1, _c2, _c3, _c4 = st.columns(4)
         with _c1:
             st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mc4};border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mvrv_color};border-radius:10px;padding:16px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MVRV Z-Score</div>
-  <div style="font-size:30px;font-weight:700;color:{_mc4}">{f"{_mz4:+.2f}" if _mz4 is not None else "—"}</div>
+  <div style="font-size:30px;font-weight:700;color:{_mvrv_color}">{f"{_mz4:+.2f}" if _mz4 is not None else "—"}</div>
   <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ms4.replace("_", " ")}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:6px">MVRV ratio: {f"{_mv4:.3f}" if _mv4 else "—"}</div>
 </div>

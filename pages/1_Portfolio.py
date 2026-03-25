@@ -586,10 +586,10 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 render_section_header("Exit Strategy", "Incentive expiry countdown · price targets · exit timeline")
 
 try:
-    incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"].strip(), "%Y-%m-%d")
+    incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"].strip(), "%Y-%m-%d").replace(tzinfo=timezone.utc)
 except (ValueError, KeyError):
-    incentive_expiry = datetime(2026, 7, 1)
-days_left        = max(0, (incentive_expiry - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+    incentive_expiry = datetime(2026, 7, 1, tzinfo=timezone.utc)
+days_left        = max(0, (incentive_expiry - datetime.now(timezone.utc)).days)
 exp_color        = "#10b981" if days_left > 90 else ("#f59e0b" if days_left > 30 else "#ef4444")
 exp_msg          = (
     "Monitor monthly. Consider setting a reminder for May 2026."
@@ -650,7 +650,10 @@ with tab_timeline:
             days_held = 0
             if pos.get("entry_date"):
                 try:
-                    days_held = max(0, (datetime.now(timezone.utc).replace(tzinfo=None) - datetime.fromisoformat(pos["entry_date"])).days)
+                    _held_dt = datetime.fromisoformat(pos["entry_date"])
+                    if _held_dt.tzinfo is None:
+                        _held_dt = _held_dt.replace(tzinfo=timezone.utc)
+                    days_held = max(0, (datetime.now(timezone.utc) - _held_dt).days)
                 except Exception:
                     pass
             proto_key    = pos.get("protocol", "")
@@ -743,7 +746,7 @@ if positions:
                 dep = float(p.get("deposit_usd", 0)) * 0.5   # ~50% in FLR side
                 flr_in_lp += dep / flr_price if flr_price > 0 else 0
 
-    days_to_expiry = max(0, (datetime(2026, 7, 1) - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+    days_to_expiry = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
     ftso_est_usd   = flr_in_lp * FALLBACK_PRICES.get("FLR", 0.0088) * _FTSO_RATE * (30 / 365)  # 30-day estimate
 
     c1, c2, c3 = st.columns(3)
@@ -780,7 +783,7 @@ if positions:
         _RFLR_PER_USD_DAILY  = 0.0012   # rough: ~43% reward APY on $1 → ~$0.00118/day in rFLR value
         _FLR_PRICE           = (next((pr.get("price_usd", 0) for pr in (prices or []) if pr.get("symbol") == "FLR"), 0)
                                 or FALLBACK_PRICES.get("FLR", 0.0088))
-        _days_to_jul2026     = max(0, (datetime(2026, 7, 1) - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+        _days_to_jul2026     = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
 
         rflr_rows = []
         for p in _incentive_positions:
@@ -790,7 +793,10 @@ if positions:
             days_held = 0
             if p.get("entry_date"):
                 try:
-                    days_held = max(0, (datetime.now(timezone.utc).replace(tzinfo=None) - datetime.fromisoformat(p["entry_date"])).days)
+                    _p_entry_dt = datetime.fromisoformat(p["entry_date"])
+                    if _p_entry_dt.tzinfo is None:
+                        _p_entry_dt = _p_entry_dt.replace(tzinfo=timezone.utc)
+                    days_held = max(0, (datetime.now(timezone.utc) - _p_entry_dt).days)
                 except Exception:
                     pass
             earned_usd   = dep * _reward_rate * days_held / 365 if days_held > 0 else 0
@@ -844,7 +850,7 @@ if positions:
                         for m in range(_months_to_expiry, len(months))]
         lp_curve_adj = lp_curve[:_months_to_expiry] + post_expiry
 
-        now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+        now_dt = datetime.now(timezone.utc)
         dates  = [(now_dt + timedelta(days=30 * m)).strftime("%b %Y") for m in months]
 
         fig_nw = go.Figure()
