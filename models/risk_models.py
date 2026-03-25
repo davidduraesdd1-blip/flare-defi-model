@@ -66,6 +66,8 @@ class Opportunity:
     # Predictive yield shift (Feature 14)
     apy_trend:        str  = ""     # "rising" / "falling" / "stable" / ""
     apy_trend_pct:    float = 0.0   # % change over last N scans (signed)
+    # Confluence count (Group 1 — A3): independent data sources confirming this opportunity
+    confluence_count: int   = 0     # 0 = single source; higher = more sources agree
     generated_at:     str = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
 
 
@@ -273,6 +275,14 @@ def build_opportunity(
     # Upgrade #3: FTSO oracle signal adds up to 10 points when oracle confirms price data
     confidence  = max(0, min(100, round(tvl_score + fresh_score + (10 - rs) * 2 + ftso_signal, 1)))
 
+    # Confluence count (Group 1 — A3): count independent data sources confirming this opportunity
+    _confluence = 0
+    if data_source in ("live", "on-chain"):              _confluence += 1
+    if tvl_usd and tvl_usd > 0:                          _confluence += 1
+    if apy_history and len(apy_history) >= 3:            _confluence += 1
+    if ftso_signal > 0:                                  _confluence += 1
+    if tvl_history and len(tvl_history) >= 2:            _confluence += 1
+
     # APY range: use historical std dev if 3+ data points available, else ±20%
     valid_apy = [h for h in (apy_history or []) if h is not None and h >= 0]
     if len(valid_apy) >= 3:
@@ -326,6 +336,7 @@ def build_opportunity(
         tvl_trend=_tvl_trend,
         apy_trend=_apy_trend,
         apy_trend_pct=_apy_trend_pct,
+        confluence_count=_confluence,
     )
 
 
