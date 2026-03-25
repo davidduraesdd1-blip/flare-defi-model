@@ -278,3 +278,82 @@ if feedback:
                  "Effect": "Boosted" if w > 1.0 else ("Reduced" if w < 0.9 else "Neutral")}
                 for p, w in weights.items()]
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ─── Macro Intelligence ────────────────────────────────────────────────────────
+
+render_section_header("Macro Intelligence", "FRED + yfinance · 10Y yield · VIX · BTC rolling correlations")
+
+try:
+    import macro_feeds as _mf
+    import plotly.graph_objects as go
+
+    _fred = _mf.fetch_fred_macro()
+    _yf   = _mf.fetch_yfinance_macro()
+
+    _mc1, _mc2, _mc3, _mc4, _mc5, _mc6, _mc7 = st.columns(7)
+    _mc1.metric("10Y Yield",  f"{_fred.get('ten_yr_yield', 4.35):.2f}%")
+    _mc2.metric("M2 ($B)",    f"${_fred.get('m2_supply_bn', 21500):,.0f}B")
+    _mc3.metric("ISM Mfg",    f"{_fred.get('ism_manufacturing', 52.0):.1f}")
+    _mc4.metric("WTI Oil",    f"${_fred.get('wti_crude', 67.5):.1f}")
+    _mc5.metric("DXY",        f"{_yf.get('dxy', 104.0):.1f}")
+    _mc6.metric("VIX",        f"{_yf.get('vix', 18.0):.1f}")
+    _mc7.metric("Gold",       f"${_yf.get('gold_spot', 2900.0):,.0f}")
+
+    st.markdown(
+        f"<div style='color:#475569; font-size:0.75rem; margin-bottom:14px;'>"
+        f"FRED: {_fred.get('source','?')} · yfinance: {_yf.get('source','?')} · Cached 1 hour</div>",
+        unsafe_allow_html=True,
+    )
+
+    _corr_w = st.select_slider(
+        "BTC correlation window (days)",
+        options=[14, 30, 60, 90],
+        value=30,
+        key="defi_macro_corr_days",
+    )
+    _ts = _mf.fetch_macro_timeseries(_corr_w + 20)
+
+    if _ts and "BTC" in _ts:
+        _frames: dict = {}
+        for _key in ["BTC", "VIX", "Gold", "SPX", "DXY", "Oil"]:
+            _s = _ts.get(_key)
+            if _s and isinstance(_s, dict):
+                _frames[_key] = pd.Series(_s)
+        if len(_frames) >= 2:
+            _dft = pd.DataFrame(_frames).sort_index()
+            _dft.index = pd.to_datetime(_dft.index)
+            _dfr = _dft.pct_change().dropna()
+            _fig = go.Figure()
+            _clrs = {"VIX": "#ef4444", "Gold": "#f59e0b", "SPX": "#10b981",
+                     "DXY": "#6366f1", "Oil": "#f97316"}
+            for _fac in [c for c in _dfr.columns if c != "BTC"]:
+                if "BTC" in _dfr.columns:
+                    _rc = _dfr["BTC"].rolling(_corr_w).corr(_dfr[_fac]).dropna()
+                    if not _rc.empty:
+                        _fig.add_trace(go.Scatter(
+                            x=_rc.index, y=_rc.values, mode="lines", name=_fac,
+                            line=dict(color=_clrs.get(_fac, "#888"), width=2),
+                        ))
+            _fig.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.25)")
+            _fig.update_layout(
+                height=260,
+                title=dict(text=f"BTC {_corr_w}-day Rolling Correlation", font=dict(size=13)),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e2e8f0", size=11),
+                margin=dict(l=0, r=0, t=40, b=0),
+                yaxis=dict(range=[-1, 1], gridcolor="rgba(255,255,255,0.07)"),
+                xaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            st.plotly_chart(_fig, use_container_width=True)
+        else:
+            st.info("Loading macro timeseries… (yfinance required)")
+    else:
+        st.info("Install yfinance for BTC macro correlations: `pip install yfinance`")
+
+except Exception as _macro_err:
+    st.caption(f"Macro data unavailable: {_macro_err}")
