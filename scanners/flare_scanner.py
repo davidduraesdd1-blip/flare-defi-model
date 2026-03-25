@@ -680,7 +680,7 @@ def fetch_kinetic_rates() -> list:
             utilisation = round(total_borrows / denom, 4) if denom > 0 else 0.0
 
             # TVL: convert raw token units → USD using baseline price for non-stablecoins
-            underlying_decimals = cfg["decimals"]
+            underlying_decimals = cfg.get("decimals", 18)
             if not (0 <= underlying_decimals <= 30):
                 logger.warning(f"Kinetic: invalid decimals {underlying_decimals} for {asset} — defaulting to 18")
                 underlying_decimals = 18

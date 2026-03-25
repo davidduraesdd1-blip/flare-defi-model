@@ -596,11 +596,15 @@ def start_scheduler() -> None:
 
     for t in run_times:
         parts = t.split(":")
-        hour   = parts[0] if len(parts) >= 1 and parts[0].strip() else "0"
-        minute = parts[1] if len(parts) >= 2 and parts[1].strip() else "0"
+        try:
+            hour   = int(parts[0]) if len(parts) >= 1 and parts[0].strip() else 0
+            minute = int(parts[1]) if len(parts) >= 2 and parts[1].strip() else 0
+        except ValueError:
+            logger.warning(f"Scheduler: invalid run_time format '{t}', skipping")
+            continue
         scheduler.add_job(
             run_full_scan,
-            trigger=CronTrigger(hour=int(hour), minute=int(minute), timezone=tz),
+            trigger=CronTrigger(hour=hour, minute=minute, timezone=tz),
             id=f"scan_{t.replace(':','_')}",
             name=f"DeFi Scan at {t}",
             misfire_grace_time=1800,   # 30-minute grace if system was asleep (laptop-friendly)

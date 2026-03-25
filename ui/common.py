@@ -802,14 +802,22 @@ def _next_scan() -> str:
     today     = now_local.date()
     scan_times = []
     for t in SCHEDULER["run_times"]:
-        h, m = map(int, t.split(":"))
+        try:
+            parts = t.split(":")
+            h, m = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
+        except (ValueError, IndexError):
+            continue
         scan_times.append(datetime(today.year, today.month, today.day, h, m, tzinfo=tz))
     future = [t for t in scan_times if t > now_local]
     if not future:
         if not SCHEDULER.get("run_times"):
             return "unknown"
         tmrw   = today + timedelta(days=1)
-        h0, m0 = map(int, SCHEDULER["run_times"][0].split(":"))
+        try:
+            _p0 = SCHEDULER["run_times"][0].split(":")
+            h0, m0 = int(_p0[0]), int(_p0[1]) if len(_p0) > 1 else 0
+        except (ValueError, IndexError):
+            return "unknown"
         next_t = datetime(tmrw.year, tmrw.month, tmrw.day, h0, m0, tzinfo=tz)
     else:
         next_t = min(future)
