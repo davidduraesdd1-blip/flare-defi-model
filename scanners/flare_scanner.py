@@ -200,12 +200,38 @@ _price_cache_ts: float = 0.0
 _PRICE_CACHE_TTL: int = 300   # seconds
 
 
+def _fetch_binance_24h_change() -> dict:
+    """
+    Fetch 24h price change % from Binance public API (no key required).
+    Returns {symbol: change_pct} e.g. {"FLR": 1.23, "XRP": -0.45}.
+    Used as fallback when CoinGecko free tier omits usd_24h_change.
+    """
+    import json as _json
+    binance_map = {"FLRUSDT": "FLR", "XRPUSDT": "XRP"}
+    try:
+        data = _get(
+            "https://api.binance.com/api/v3/ticker/24hr",
+            params={"symbols": _json.dumps(list(binance_map.keys()))},
+            timeout=5,
+        )
+        if isinstance(data, list):
+            return {
+                binance_map[item["symbol"]]: float(item.get("priceChangePercent", 0))
+                for item in data
+                if item.get("symbol") in binance_map
+            }
+    except Exception as e:
+        logger.debug(f"Binance 24h change fallback failed: {e}")
+    return {}
+
+
 def fetch_prices() -> list:
     """
     Fetch current USD prices for FLR, FXRP, XRP, USD0.
     Results are cached for 5 minutes so that options_scanner and multi_scanner
     can reuse them without hitting CoinGecko a second or third time per scan.
-    Uses CoinGecko free tier — no API key needed.
+    Uses CoinGecko free tier — falls back to Binance for 24h change if CoinGecko
+    omits that field (common on the unauthenticated free tier).
     """
     global _price_cache, _price_cache_ts
     if _price_cache and (time.time() - _price_cache_ts) < _PRICE_CACHE_TTL:
@@ -233,7 +259,7 @@ def fetch_prices() -> list:
                 results.append(TokenPrice(
                     symbol=symbol,
                     price_usd=data[cg_id].get("usd", 0),
-                    change_24h=data[cg_id].get("usd_24h_change", 0),
+                    change_24h=data[cg_id].get("usd_24h_change") or 0,
                     data_source=src,
                 ))
         # FXRP tracks XRP price (1:1 peg minus small fee)
@@ -245,6 +271,20 @@ def fetch_prices() -> list:
                 change_24h=xrp.change_24h,
                 data_source="derived",
             ))
+
+        # CoinGecko free tier often strips usd_24h_change — fall back to Binance
+        if all(p.change_24h == 0 for p in results if p.data_source == "live"):
+            logger.debug("CoinGecko returned no 24h change — trying Binance fallback")
+            binance_changes = _fetch_binance_24h_change()
+            if binance_changes:
+                for p in results:
+                    if p.symbol in binance_changes:
+                        p.change_24h = binance_changes[p.symbol]
+                # Sync FXRP change with updated XRP
+                xrp_up = next((p for p in results if p.symbol == "XRP"), None)
+                fxrp   = next((p for p in results if p.symbol == "FXRP"), None)
+                if xrp_up and fxrp:
+                    fxrp.change_24h = xrp_up.change_24h
     else:
         # Fallback: last known reasonable estimates (config.FALLBACK_PRICES)
         logger.warning("CoinGecko unavailable — using price estimates")
