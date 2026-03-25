@@ -409,3 +409,94 @@ try:
 """, unsafe_allow_html=True)
 except Exception as _bits_err:
     st.caption(f"Blood in Streets signal unavailable: {_bits_err}")
+
+# ─── On-Chain Intelligence (Group 4) ─────────────────────────────────────────
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+render_section_header("On-Chain Intelligence", "CoinMetrics Community API · MVRV Z-Score · SOPR · no API key required")
+
+try:
+    import macro_feeds as _mf4
+    _oc4 = _mf4.fetch_coinmetrics_onchain(days=400)
+
+    if _oc4.get("error") and not _oc4.get("mvrv_z"):
+        st.info(f"On-chain data loading… CoinMetrics Community API may be rate-limited. Error: {_oc4.get('error')}")
+    else:
+        _mz4  = _oc4.get("mvrv_z")
+        _ms4  = _oc4.get("mvrv_signal", "N/A")
+        _sp4  = _oc4.get("sopr")
+        _ss4  = _oc4.get("sopr_signal", "N/A")
+        _rc4  = _oc4.get("realized_cap")
+        _mv4  = _oc4.get("mvrv_ratio")
+        _aa4  = _oc4.get("active_addresses")
+
+        _mc4 = {"UNDERVALUED": "#00d4aa", "FAIR_VALUE": "#10b981", "OVERVALUED": "#f59e0b", "EXTREME_HEAT": "#ef4444"}.get(_ms4, "#6b7280")
+        _sc4 = {"CAPITULATION": "#00d4aa", "MILD_LOSS": "#10b981", "NORMAL": "#6b7280", "PROFIT_TAKING": "#f59e0b"}.get(_ss4, "#6b7280")
+
+        def _fmtb(v):
+            if v is None: return "—"
+            if v >= 1e12: return f"${v/1e12:.2f}T"
+            if v >= 1e9:  return f"${v/1e9:.1f}B"
+            return f"${v/1e6:.0f}M"
+
+        _c1, _c2, _c3, _c4 = st.columns(4)
+        with _c1:
+            st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mc4};border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MVRV Z-Score</div>
+  <div style="font-size:30px;font-weight:700;color:{_mc4}">{f"{_mz4:+.2f}" if _mz4 is not None else "—"}</div>
+  <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ms4.replace("_", " ")}</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:6px">MVRV ratio: {f"{_mv4:.3f}" if _mv4 else "—"}</div>
+</div>
+""", unsafe_allow_html=True)
+        with _c2:
+            st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc4};border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">SOPR</div>
+  <div style="font-size:30px;font-weight:700;color:{_sc4}">{f"{_sp4:.4f}" if _sp4 is not None else "—"}</div>
+  <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ss4.replace("_", " ")}</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:6px">&gt;1 profit-taking · &lt;1 capitulation</div>
+</div>
+""", unsafe_allow_html=True)
+        with _c3:
+            st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Realized Cap</div>
+  <div style="font-size:22px;font-weight:700;color:#6366f1">{_fmtb(_rc4)}</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:8px">BTC at last-moved price</div>
+</div>
+""", unsafe_allow_html=True)
+        with _c4:
+            st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #8b5cf6;border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Active Addresses</div>
+  <div style="font-size:22px;font-weight:700;color:#8b5cf6">{f"{_aa4:,}" if _aa4 else "—"}</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:8px">Unique BTC addresses today</div>
+</div>
+""", unsafe_allow_html=True)
+
+        # MVRV Z-Score chart
+        _mh4 = _oc4.get("mvrv_history", {})
+        if _mh4:
+            _mhs = pd.Series(_mh4).sort_index()
+            _mhz = (_mhs - _mhs.rolling(365, min_periods=30).mean()) / _mhs.rolling(365, min_periods=30).std().clip(lower=1e-6)
+            _fig_mz = go.Figure()
+            _fig_mz.add_trace(go.Scatter(x=_mhz.index, y=_mhz.values, mode="lines",
+                                         name="MVRV Z-Score", line=dict(color="#6366f1", width=2)))
+            for _th, _tl, _tc in [(3.0, "Extreme >3", "#ef4444"), (1.5, "Overvalued", "#f59e0b"), (-0.5, "Undervalued", "#00d4aa")]:
+                _fig_mz.add_hline(y=_th, line_dash="dash", line_color=_tc, opacity=0.4,
+                                  annotation_text=_tl, annotation_font_size=9)
+            _fig_mz.update_layout(
+                height=240,
+                title=dict(text="MVRV Z-Score (365-day rolling)", font=dict(size=13)),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e2e8f0", size=11), margin=dict(l=0, r=0, t=40, b=0),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
+                xaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
+                showlegend=False,
+            )
+            st.plotly_chart(_fig_mz, use_container_width=True)
+
+        _ts4 = _oc4.get("timestamp", "")[:19]
+        st.caption(f"Source: CoinMetrics Community · {_ts4} UTC · Cached 1h")
+except Exception as _oc_err:
+    st.caption(f"On-chain data unavailable: {_oc_err}")
