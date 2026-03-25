@@ -324,7 +324,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             "mvrv_z":           mvrv_z,
             "mvrv_signal":      mvrv_signal,
             "realized_cap":     real_caps[-1] if real_caps else None,
-            "sopr":             round(sopr, 4) if sopr else None,
+            "sopr":             round(sopr, 4) if sopr is not None else None,
             "sopr_signal":      sopr_signal,
             "active_addresses": active_addrs[-1] if active_addrs else None,
             "mvrv_history":     {mvrv_dates[i]: round(mvrv_vals[i], 3) for i in range(len(mvrv_dates))},

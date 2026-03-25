@@ -248,9 +248,10 @@ def compute_accuracy(profile: str, history: dict = None, window: str = "24h") ->
 
     accuracy_pct    = w_accurate    / w_total * 100 if w_total > 0 else 0
     directional_pct = w_directional / w_total * 100 if w_total > 0 else 0
+    _we_weights = [w for _, w in weighted_errors]
     avg_error       = (
-        np.average([e for e, _ in weighted_errors], weights=[w for _, w in weighted_errors])
-        if weighted_errors else 0
+        np.average([e for e, _ in weighted_errors], weights=_we_weights)
+        if weighted_errors and sum(_we_weights) > 0 else 0
     )
     win_rate        = directional_pct   # win_rate = directional accuracy
 
