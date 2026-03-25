@@ -209,6 +209,7 @@ def build_opportunity(
     ftso_signal:      float = 0.0,    # Upgrade #3: FTSO oracle confidence boost (0–10)
 ) -> Opportunity:
 
+    _proto_info = PROTOCOLS.get(protocol_key, {"name": protocol_key})
     profile = RISK_PROFILES[risk_profile]
     rf_rate = RISK_FREE_RATE
 
@@ -297,24 +298,24 @@ def build_opportunity(
     il_note = f" (small risk of losing value if token prices diverge)" if il_risk in ("medium", "high") else ""
     plain = (
         f"Earn ~{round(apr,1)}% per year on {pool_or_asset} "
-        f"via {PROTOCOLS[protocol_key]['name']}{il_note}. "
+        f"via {_proto_info['name']}{il_note}. "
         f"Suggested allocation: {round(kf*100,0):.0f}% of your portfolio."
     )
 
     # Human-readable action
     type_actions = {
-        "Lending":            f"Deposit {pool_or_asset} into {PROTOCOLS[protocol_key]['name']} to earn {round(apr,1)}% APY",
-        "Liquid Staking":     f"Stake your {pool_or_asset} on {PROTOCOLS[protocol_key]['name']} to earn {round(apr,1)}% APY",
-        "Yield Vault":        f"Deposit {pool_or_asset} into the {PROTOCOLS[protocol_key]['name']} vault to earn {round(apr,1)}% APY",
-        "Yield Tokenization": f"Split your {pool_or_asset} into fixed + variable yield on {PROTOCOLS[protocol_key]['name']}",
-        "DEX":                f"Add liquidity to the {pool_or_asset} pool on {PROTOCOLS[protocol_key]['name']} to earn {round(apr,1)}% APY",
-        "DEX + Perps":        f"Provide liquidity to {pool_or_asset} on {PROTOCOLS[protocol_key]['name']} to earn {round(apr,1)}% APY",
+        "Lending":            f"Deposit {pool_or_asset} into {_proto_info['name']} to earn {round(apr,1)}% APY",
+        "Liquid Staking":     f"Stake your {pool_or_asset} on {_proto_info['name']} to earn {round(apr,1)}% APY",
+        "Yield Vault":        f"Deposit {pool_or_asset} into the {_proto_info['name']} vault to earn {round(apr,1)}% APY",
+        "Yield Tokenization": f"Split your {pool_or_asset} into fixed + variable yield on {_proto_info['name']}",
+        "DEX":                f"Add liquidity to the {pool_or_asset} pool on {_proto_info['name']} to earn {round(apr,1)}% APY",
+        "DEX + Perps":        f"Provide liquidity to {pool_or_asset} on {_proto_info['name']} to earn {round(apr,1)}% APY",
     }
-    action = type_actions.get(protocol_type, f"Invest in {pool_or_asset} on {PROTOCOLS[protocol_key]['name']}")
+    action = type_actions.get(protocol_type, f"Invest in {pool_or_asset} on {_proto_info['name']}")
 
     return Opportunity(
         rank=rank,
-        protocol=PROTOCOLS[protocol_key]["name"],
+        protocol=_proto_info["name"],
         strategy=f"{protocol_type} — {pool_or_asset}",
         asset_or_pool=pool_or_asset,
         action=action,
