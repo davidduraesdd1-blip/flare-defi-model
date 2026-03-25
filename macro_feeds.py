@@ -1,0 +1,161 @@
+"""
+macro_feeds.py — Defi Yield Model
+Macro data layer: FRED public CSV + yfinance.
+No API keys required.  All fetches cached 1 hour.
+"""
+from __future__ import annotations
+
+import logging
+import threading
+import time
+import datetime as _dt
+from typing import Any
+
+import requests
+
+logger = logging.getLogger(__name__)
+
+_SESSION = requests.Session()
+_SESSION.headers.update({"Accept-Encoding": "gzip, deflate", "Connection": "keep-alive"})
+
+_CACHE: dict = {}
+_CACHE_LOCK = threading.Lock()
+_TTL_1H  = 3600
+_TTL_30M = 1800
+
+
+def _cached_get(key: str, ttl: int, fetch_fn):
+    with _CACHE_LOCK:
+        hit = _CACHE.get(key)
+        if hit and (time.time() - hit["ts"]) < ttl:
+            return hit["data"]
+    try:
+        data = fetch_fn()
+        if data is not None:
+            with _CACHE_LOCK:
+                _CACHE[key] = {"data": data, "ts": time.time()}
+        return data
+    except Exception as e:
+        logger.debug("[MacroFeeds] %s failed: %s", key, e)
+        with _CACHE_LOCK:
+            hit = _CACHE.get(key)
+            if hit:
+                return hit["data"]
+        return None
+
+
+# ── FRED series ───────────────────────────────────────────────────────────────
+
+_FRED_SERIES = {
+    "m2_supply_bn":      "M2SL",
+    "ten_yr_yield":      "DGS10",
+    "ism_manufacturing": "NAPM",
+    "wti_crude":         "DCOILWTICO",
+}
+
+_FRED_FALLBACKS = {
+    "m2_supply_bn":      21_500.0,
+    "ten_yr_yield":          4.35,
+    "ism_manufacturing":    52.0,
+    "wti_crude":            67.5,
+}
+
+
+def fetch_fred_macro() -> dict[str, Any]:
+    """Fetch macro indicators from FRED public CSV (no API key required)."""
+    def _fetch():
+        result: dict = {}
+        for key, series_id in _FRED_SERIES.items():
+            try:
+                url  = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+                resp = _SESSION.get(url, timeout=10)
+                if resp.status_code == 200:
+                    for line in reversed(resp.text.strip().split("\n")[1:]):
+                        parts = line.split(",")
+                        if len(parts) == 2 and parts[1].strip() not in (".", ""):
+                            result[key] = round(float(parts[1].strip()), 4)
+                            break
+            except Exception as e:
+                logger.debug("[FRED] %s: %s", series_id, e)
+        if not result:
+            return None
+        for k, v in _FRED_FALLBACKS.items():
+            result.setdefault(k, v)
+        result["source"]    = "FRED"
+        result["timestamp"] = _dt.datetime.utcnow().isoformat()
+        return result
+
+    cached = _cached_get("fred_macro", _TTL_1H, _fetch)
+    if cached is None:
+        fb = dict(_FRED_FALLBACKS)
+        fb.update({"source": "fallback", "timestamp": _dt.datetime.utcnow().isoformat()})
+        return fb
+    return cached
+
+
+# ── yfinance supplementals ────────────────────────────────────────────────────
+
+_YF_FALLBACKS = {
+    "dxy": 104.0, "vix": 18.0, "gold_spot": 2900.0, "spx": 5800.0,
+}
+
+
+def fetch_yfinance_macro() -> dict[str, Any]:
+    """Fetch DXY, VIX, Gold, SPX via yfinance.  Free, no API key required."""
+    def _fetch():
+        try:
+            import yfinance as yf
+        except ImportError:
+            return None
+        _MAP = {"dxy": "DX-Y.NYB", "vix": "^VIX", "gold_spot": "GC=F", "spx": "^GSPC"}
+        result: dict = {}
+        for key, sym in _MAP.items():
+            try:
+                hist = yf.Ticker(sym).history(period="5d")
+                if not hist.empty:
+                    result[key] = round(float(hist["Close"].iloc[-1]), 2)
+            except Exception as e:
+                logger.debug("[yfinance] %s: %s", sym, e)
+        if not result:
+            return None
+        result.update({"source": "yfinance", "timestamp": _dt.datetime.utcnow().isoformat()})
+        return result
+
+    cached = _cached_get("yfinance_macro", _TTL_1H, _fetch)
+    if cached is None:
+        fb = dict(_YF_FALLBACKS)
+        fb.update({"source": "fallback", "timestamp": _dt.datetime.utcnow().isoformat()})
+        return fb
+    return cached
+
+
+def fetch_macro_timeseries(days: int = 90) -> dict[str, Any]:
+    """Return daily close price history for BTC/VIX/Gold/SPX/DXY/Oil.
+    Keys: BTC, VIX, Gold, SPX, DXY, Oil — each maps to {date_str: price}.
+    Returns {} if yfinance not installed.  Cached 30 min.
+    """
+    def _fetch():
+        try:
+            import yfinance as yf
+        except ImportError:
+            return {}
+        _SYMS = {
+            "BTC": "BTC-USD", "VIX": "^VIX", "Gold": "GC=F",
+            "SPX": "^GSPC",   "DXY": "DX-Y.NYB", "Oil": "CL=F",
+        }
+        out: dict = {}
+        for key, sym in _SYMS.items():
+            try:
+                hist = yf.Ticker(sym).history(period=f"{days}d")
+                if not hist.empty:
+                    out[key] = {
+                        str(dt)[:10]: round(float(v), 4)
+                        for dt, v in hist["Close"].items()
+                    }
+            except Exception as e:
+                logger.debug("[MacroTS] %s: %s", sym, e)
+        out.update({"_days": days, "_timestamp": _dt.datetime.utcnow().isoformat()})
+        return out
+
+    cached = _cached_get(f"macro_ts_{days}", _TTL_30M, _fetch)
+    return cached if cached else {}
