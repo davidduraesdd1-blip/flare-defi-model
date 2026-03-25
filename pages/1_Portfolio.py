@@ -386,6 +386,8 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ─── Positions Overview ───────────────────────────────────────────────────────
 
+pnl_results: list = []  # populated inside the positions block; defined here to avoid UnboundLocalError
+
 render_section_header("Your Positions", "P&L · fees earned · impermanent loss estimate")
 
 if positions:
@@ -831,7 +833,6 @@ if positions:
         avg_apy = sum(o.get("estimated_apy", 0) for o in _latest_opps[:3]) / min(3, len(_latest_opps))
 
     if total_dep_nw > 0 and avg_apy > 0:
-        import numpy as _np_nw
         months     = list(range(0, 25))
         lp_curve   = [total_dep_nw * ((1 + avg_apy / 100 / 12) ** m) for m in months]
         hodl_curve = [total_dep_nw] * len(months)   # HODL = flat (no yield)

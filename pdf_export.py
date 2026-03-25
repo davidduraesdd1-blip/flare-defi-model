@@ -30,6 +30,11 @@ if _REPORTLAB:
     GREY   = colors.HexColor("#888888")
     WHITE  = colors.white
     BLACK  = colors.black
+else:
+    # Fallback None values — _styles()/_table_style() are only reachable
+    # via generate_*() which guards with "if not _REPORTLAB: raise ImportError"
+    # but define here to prevent NameError if called directly in tests/scripts.
+    FLARE = PURPLE = GREEN = RED = ORANGE = GREY = WHITE = BLACK = None
 
 
 def _styles():

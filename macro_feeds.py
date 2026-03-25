@@ -82,13 +82,13 @@ def fetch_fred_macro() -> dict[str, Any]:
         for k, v in _FRED_FALLBACKS.items():
             result.setdefault(k, v)
         result["source"]    = "FRED"
-        result["timestamp"] = _dt.datetime.utcnow().isoformat()
+        result["timestamp"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
         return result
 
     cached = _cached_get("fred_macro", _TTL_1H, _fetch)
     if cached is None:
         fb = dict(_FRED_FALLBACKS)
-        fb.update({"source": "fallback", "timestamp": _dt.datetime.utcnow().isoformat()})
+        fb.update({"source": "fallback", "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat()})
         return fb
     return cached
 
@@ -118,13 +118,13 @@ def fetch_yfinance_macro() -> dict[str, Any]:
                 logger.debug("[yfinance] %s: %s", sym, e)
         if not result:
             return None
-        result.update({"source": "yfinance", "timestamp": _dt.datetime.utcnow().isoformat()})
+        result.update({"source": "yfinance", "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat()})
         return result
 
     cached = _cached_get("yfinance_macro", _TTL_1H, _fetch)
     if cached is None:
         fb = dict(_YF_FALLBACKS)
-        fb.update({"source": "fallback", "timestamp": _dt.datetime.utcnow().isoformat()})
+        fb.update({"source": "fallback", "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat()})
         return fb
     return cached
 
@@ -244,7 +244,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
              active_addresses, mvrv_history, sopr_history, source, error
     """
     import statistics as _stats
-    start     = (_dt.datetime.utcnow() - _dt.timedelta(days=days)).strftime("%Y-%m-%d")
+    start     = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=days)).strftime("%Y-%m-%d")
     cache_key = f"cm_oc_{days}"
 
     hit = _CM_CACHE_D.get(cache_key)
@@ -330,7 +330,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             "mvrv_history":     {mvrv_dates[i]: round(mvrv_vals[i], 3) for i in range(len(mvrv_dates))},
             "sopr_history":     {sopr_dates[i]: round(sopr_vals[i], 4) for i in range(len(sopr_dates))},
             "source":           "coinmetrics_community",
-            "timestamp":        _dt.datetime.utcnow().isoformat(),
+            "timestamp":        _dt.datetime.now(_dt.timezone.utc).isoformat(),
             "error":            None,
             "_ts":              time.time(),
         }

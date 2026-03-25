@@ -9,8 +9,6 @@ import html as _html
 import time
 import subprocess
 import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
@@ -780,7 +778,7 @@ _URGENCY_LABEL = {"act_now": "ACT NOW", "act_soon": "ACT SOON", "monitor": "MONI
 def render_urgency_badge(urgency: str) -> str:
     """Return an HTML badge string for arbitrage urgency levels."""
     color = _URGENCY_COLOR.get(urgency, "#3b82f6")
-    label = _URGENCY_LABEL.get(urgency, _html.escape(urgency.upper()))
+    label = _URGENCY_LABEL.get(urgency, _html.escape((urgency or "").upper()))
     return (
         f"<span style=\"color:{color}; font-weight:700; font-size:0.78rem; "
         f"background:rgba(255,255,255,0.04); padding:3px 10px; border-radius:6px;\">"
@@ -990,7 +988,7 @@ def render_price_strip(prices: list) -> None:
     cols = st.columns(len(prices))
     for i, p in enumerate(prices):
         sym   = _html.escape(str(p.get("symbol", "?")))
-        price = p.get("price_usd", 0)
+        price = float(p.get("price_usd") or 0)
         chg   = float(p.get("change_24h") or 0)
         color = "#22c55e" if chg >= 0 else "#ef4444"
         arrow = "▲" if chg >= 0 else "▼"

@@ -10,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime
 
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
