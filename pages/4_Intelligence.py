@@ -357,3 +357,55 @@ try:
 
 except Exception as _macro_err:
     st.caption(f"Macro data unavailable: {_macro_err}")
+
+# ─── Blood in the Streets · DCA Multiplier (Group 3) ─────────────────────────
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+render_section_header("Blood in the Streets", "Multi-factor capitulation signal · DCA sizing guide")
+
+try:
+    import macro_feeds as _mf3
+    _fred3 = _mf3.fetch_fred_macro()
+    _yf3   = _mf3.fetch_yfinance_macro()
+
+    # Use F&G from session state if available, else default to 50
+    _fg_v3 = st.session_state.get("fear_greed_value", 50)
+    _bits3 = _mf3.compute_blood_in_streets(_fg_v3)
+    _dca3  = _bits3["dca_multiplier"]
+
+    # Color maps
+    _bc3 = {"BLOOD_IN_STREETS": "#ef4444", "EXTREME_FEAR": "#f59e0b", "NORMAL": "#6b7280"}.get(_bits3["signal"], "#6b7280")
+    _bg3 = {"BLOOD_IN_STREETS": "#1f0000",  "EXTREME_FEAR": "#1c1200", "NORMAL": "#111827"}.get(_bits3["signal"], "#111827")
+    _dc3 = {0.0: "#ef4444", 0.5: "#f97316", 1.0: "#9ca3af", 2.0: "#10b981", 3.0: "#00d4aa"}.get(_dca3, "#9ca3af")
+    _dl3 = {0.0: "HOLD — no new buys", 0.5: "0.5× — reduce size", 1.0: "1× — base size", 2.0: "2× — accumulate", 3.0: "3× — max accumulate"}.get(_dca3, f"{_dca3}×")
+
+    _col1, _col2 = st.columns(2)
+    with _col1:
+        st.markdown(f"""
+<div style="background:{_bg3};border:1px solid {_bc3};border-top:3px solid {_bc3};
+            border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Blood in Streets Signal</div>
+  <div style="font-size:20px;font-weight:700;color:{_bc3}">{_bits3["signal"].replace("_", " ")}</div>
+  <div style="font-size:12px;color:#9ca3af;margin-top:4px">{_bits3["strength"]} · {_bits3["criteria_met"]}/3 criteria met</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:8px">{_bits3["description"]}</div>
+  <div style="margin-top:10px;font-size:11px;color:#6b7280">
+    {"✅" if _bits3["criteria"]["extreme_fear"] else "❌"} F&amp;G≤25 &nbsp;
+    {"✅" if _bits3["criteria"]["rsi_oversold"] else "❌"} RSI≤30 &nbsp;
+    {"✅" if _bits3["criteria"]["exchange_outflow"] else "❌"} Exchange outflow
+  </div>
+</div>
+""", unsafe_allow_html=True)
+    with _col2:
+        st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_dc3};
+            border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">DCA Multiplier</div>
+  <div style="font-size:36px;font-weight:700;color:{_dc3}">{_dca3}×</div>
+  <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_dl3}</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:8px">
+    F&amp;G: {_fg_v3}/100<br/>
+    DXY {_yf3.get("dxy", "—")} · 10Y {_fred3.get("ten_yr_yield", "—")}%
+  </div>
+</div>
+""", unsafe_allow_html=True)
+except Exception as _bits_err:
+    st.caption(f"Blood in Streets signal unavailable: {_bits_err}")
