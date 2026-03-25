@@ -13,9 +13,9 @@
     "chat_id": ""
   },
   "thresholds": {
-    "min_apy_alert": 159.5,
+    "min_apy_alert": 159.0,
     "new_arb_alert": true,
-    "_calibrated_at": "2026-03-18T04:50:27.383312",
+    "_calibrated_at": "2026-03-24T21:48:27.934625",
     "_calibration_samples": 56,
     "_raw_p75_apy": 157.1
   }
