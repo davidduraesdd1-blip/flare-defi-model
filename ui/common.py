@@ -579,8 +579,10 @@ def render_sidebar() -> dict:
         is_fresh = False
         if last_scan:
             try:
-                scan_dt = datetime.fromisoformat(last_scan.replace("Z", "+00:00")).replace(tzinfo=None)
-                is_fresh = (datetime.now(timezone.utc).replace(tzinfo=None) - scan_dt).total_seconds() < 3600
+                scan_dt = datetime.fromisoformat(last_scan.replace("Z", "+00:00"))
+                if scan_dt.tzinfo is None:
+                    scan_dt = scan_dt.replace(tzinfo=timezone.utc)
+                is_fresh = (datetime.now(timezone.utc) - scan_dt).total_seconds() < 3600
             except Exception:
                 pass
         dot_html = "<span class='live-dot'></span>" if is_fresh else "<span class='stale-dot'></span>"
@@ -819,8 +821,8 @@ def _next_scan() -> str:
         next_t = datetime(tmrw.year, tmrw.month, tmrw.day, h0, m0, tzinfo=tz)
     else:
         next_t = min(future)
-    next_utc = next_t.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-    delta       = next_utc - datetime.now(timezone.utc).replace(tzinfo=None)
+    next_utc = next_t.astimezone(timezone.utc)
+    delta       = next_utc - datetime.now(timezone.utc)
     total_mins  = max(0, int(delta.total_seconds())) // 60
     h, m        = divmod(total_mins, 60)
     return f"{h}h {m}m"
@@ -847,7 +849,10 @@ def compute_position_pnl(pos: dict, current_prices: list) -> dict:
     entry_date_str = pos.get("entry_date", "")
     if entry_date_str:
         try:
-            days_active = max(0, (datetime.now(timezone.utc).replace(tzinfo=None) - datetime.fromisoformat(entry_date_str)).days)
+            _entry_dt = datetime.fromisoformat(entry_date_str)
+            if _entry_dt.tzinfo is None:
+                _entry_dt = _entry_dt.replace(tzinfo=timezone.utc)
+            days_active = max(0, (datetime.now(timezone.utc) - _entry_dt).days)
         except Exception:
             pass
 
@@ -1171,8 +1176,8 @@ def render_opportunity_card(
         _expiry_html = ""
         if reward_apy > 0:
             try:
-                _expiry_dt   = datetime.strptime(INCENTIVE_PROGRAM.get("expires", "2026-07-01"), "%Y-%m-%d")
-                _days_left   = max(0, (_expiry_dt - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+                _expiry_dt   = datetime.strptime(INCENTIVE_PROGRAM.get("expires", "2026-07-01"), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                _days_left   = max(0, (_expiry_dt - datetime.now(timezone.utc)).days)
                 _exp_color   = "#10b981" if _days_left > 90 else ("#f59e0b" if _days_left > 30 else "#ef4444")
                 _expiry_html = (
                     f"<span style='color:{_exp_color}; font-size:0.70rem; font-weight:600; "
