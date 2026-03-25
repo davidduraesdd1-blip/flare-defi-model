@@ -500,3 +500,121 @@ try:
         st.caption(f"Source: CoinMetrics Community · {_ts4} UTC · Cached 1h")
 except Exception as _oc_err:
     st.caption(f"On-chain data unavailable: {_oc_err}")
+
+# ── GROUP 5: Options Flow ─────────────────────────────────────────────────────
+st.markdown("---")
+render_section_header("📐 Options Flow", "Deribit public API · OI by Strike · Put/Call Ratio · Max Pain · IV Term Structure · no key required")
+
+try:
+    import macro_feeds as _mf5
+    _oc5 = _mf5.fetch_deribit_options_chain(currency="BTC")
+
+    if _oc5.get("error") and not _oc5.get("oi_by_strike"):
+        st.caption(f"Options data unavailable: {_oc5.get('error')}")
+    else:
+        _pc5   = _oc5.get("put_call_ratio")
+        _mp5   = _oc5.get("max_pain")
+        _tput5 = _oc5.get("total_put_oi", 0)
+        _tcal5 = _oc5.get("total_call_oi", 0)
+        _osig5 = _oc5.get("signal", "N/A")
+        _spot5 = _oc5.get("spot_price")
+
+        _sc5 = {
+            "EXTREME_PUTS": "#ef4444", "BEARISH": "#f59e0b",
+            "NEUTRAL": "#6b7280", "BULLISH": "#10b981", "EXTREME_CALLS": "#00d4aa",
+        }.get(_osig5, "#6b7280")
+
+        _d5a, _d5b, _d5c, _d5d = st.columns(4)
+        with _d5a:
+            st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc5};border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Put/Call Ratio</div>
+  <div style="font-size:28px;font-weight:700;color:{_sc5}">{f"{_pc5:.3f}" if _pc5 is not None else "—"}</div>
+  <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_osig5.replace("_", " ")}</div>
+</div>
+""", unsafe_allow_html=True)
+        with _d5b:
+            _mp5_d = f"{abs(_mp5 - _spot5) / _spot5 * 100:.1f}% {'below' if _mp5 < _spot5 else 'above'} spot" if _mp5 and _spot5 else ""
+            st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Max Pain</div>
+  <div style="font-size:24px;font-weight:700;color:#6366f1">{f"${_mp5:,.0f}" if _mp5 else "—"}</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:6px">{_mp5_d}</div>
+</div>
+""", unsafe_allow_html=True)
+        with _d5c:
+            st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #ef4444;border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Put OI</div>
+  <div style="font-size:24px;font-weight:700;color:#ef4444">{f"{_tput5:,.0f}" if _tput5 else "—"}</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:6px">contracts</div>
+</div>
+""", unsafe_allow_html=True)
+        with _d5d:
+            st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #10b981;border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Call OI</div>
+  <div style="font-size:24px;font-weight:700;color:#10b981">{f"{_tcal5:,.0f}" if _tcal5 else "—"}</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:6px">contracts</div>
+</div>
+""", unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        _oi5d  = _oc5.get("oi_by_strike", [])
+        _ts5d  = [t for t in _oc5.get("term_structure", []) if t.get("atm_iv") is not None and t.get("dte", 0) <= 365]
+        _col5L, _col5R = st.columns([3, 2])
+
+        with _col5L:
+            if _oi5d:
+                import plotly.graph_objects as go
+                _fig5d = go.Figure()
+                _sk5   = [str(int(r["strike"])) for r in _oi5d]
+                _fig5d.add_trace(go.Bar(name="Puts", x=_sk5,
+                    y=[r["put_oi"] for r in _oi5d], marker_color="rgba(239,68,68,0.8)"))
+                _fig5d.add_trace(go.Bar(name="Calls", x=_sk5,
+                    y=[r["call_oi"] for r in _oi5d], marker_color="rgba(16,185,129,0.8)"))
+                if _mp5:
+                    _fig5d.add_vline(x=str(int(_mp5)), line_dash="dash", line_color="#6366f1",
+                                     opacity=0.8, annotation_text=f"Max Pain ${_mp5:,.0f}",
+                                     annotation_font_size=10)
+                if _spot5:
+                    _fig5d.add_vline(x=str(int(_spot5)), line_dash="dot", line_color="#f59e0b",
+                                     opacity=0.6, annotation_text="Spot", annotation_font_size=10)
+                _fig5d.update_layout(
+                    title="OI by Strike (Top 20)", barmode="stack",
+                    height=300, paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e2e8f0", size=11),
+                    margin=dict(l=0, r=0, t=40, b=60),
+                    legend=dict(orientation="h", y=1.08),
+                    xaxis=dict(tickangle=-45, gridcolor="rgba(255,255,255,0.05)"),
+                    yaxis=dict(gridcolor="rgba(255,255,255,0.07)", title="OI (contracts)"),
+                )
+                st.plotly_chart(_fig5d, use_container_width=True)
+
+        with _col5R:
+            if _ts5d:
+                import plotly.graph_objects as go
+                _fig5e = go.Figure()
+                _fig5e.add_trace(go.Scatter(
+                    x=[t["dte"] for t in _ts5d], y=[t["atm_iv"] for t in _ts5d],
+                    mode="lines+markers", name="ATM IV",
+                    line=dict(color="#6366f1", width=2), marker=dict(size=6),
+                    text=[t["expiry"] for t in _ts5d],
+                    hovertemplate="%{text}<br>DTE: %{x}<br>IV: %{y:.1f}%<extra></extra>",
+                ))
+                _fig5e.update_layout(
+                    title="IV Term Structure (ATM)",
+                    height=300, paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e2e8f0", size=11),
+                    margin=dict(l=0, r=0, t=40, b=0),
+                    xaxis=dict(title="Days to Expiry", gridcolor="rgba(255,255,255,0.05)"),
+                    yaxis=dict(title="IV (%)", gridcolor="rgba(255,255,255,0.07)"),
+                )
+                st.plotly_chart(_fig5e, use_container_width=True)
+
+        _ts5_txt = _oc5.get("timestamp", "")[:19]
+        st.caption(f"Source: Deribit · {_ts5_txt} UTC · Cached 15 min")
+except Exception as _opt_err:
+    st.caption(f"Options data unavailable: {_opt_err}")
