@@ -339,3 +339,143 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
     except Exception as e:
         logger.debug("[CoinMetrics] onchain fetch failed: %s", e)
         return {"error": str(e), "source": "coinmetrics"}
+
+
+# ── GROUP 5: Deribit Options Chain ─────────────────────────────────────────
+
+def fetch_deribit_options_chain(currency: str = "BTC") -> dict:
+    """
+    Fetch full options chain from Deribit public API (no key required).
+    Computes OI by strike, put/call ratio, max pain, and IV term structure.
+    Cached 15 min.
+    """
+    def _fetch():
+        try:
+            resp = _SESSION.get(
+                "https://www.deribit.com/api/v2/public/get_book_summary_by_currency",
+                params={"currency": currency, "kind": "option"},
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                return {"error": f"HTTP {resp.status_code}", "source": "deribit"}
+            data = resp.json().get("result", [])
+            if not data:
+                return {"error": "empty response", "source": "deribit"}
+
+            now  = _dt.datetime.utcnow()
+            spot = None
+            oi_by_strike: dict = {}
+            expiry_data:  dict = {}
+
+            for item in data:
+                name  = item.get("instrument_name", "")
+                parts = name.split("-")
+                if len(parts) < 4:
+                    continue
+                try:
+                    exp = _dt.datetime.strptime(parts[1], "%d%b%y")
+                except ValueError:
+                    try:
+                        exp = _dt.datetime.strptime(parts[1], "%d%b%Y")
+                    except ValueError:
+                        continue
+                dte = (exp - now).days
+                if dte < 0:
+                    continue
+                try:
+                    strike = float(parts[2])
+                except ValueError:
+                    continue
+                opt_type = parts[3].upper()
+                oi       = float(item.get("open_interest") or 0)
+                mark_iv  = item.get("mark_iv")
+                if spot is None:
+                    spot = item.get("underlying_price")
+
+                if strike not in oi_by_strike:
+                    oi_by_strike[strike] = {"put_oi": 0.0, "call_oi": 0.0}
+                if opt_type == "P":
+                    oi_by_strike[strike]["put_oi"] += oi
+                else:
+                    oi_by_strike[strike]["call_oi"] += oi
+
+                exp_str = exp.strftime("%Y-%m-%d")
+                if exp_str not in expiry_data:
+                    expiry_data[exp_str] = {"dte": dte, "put_oi": 0.0, "call_oi": 0.0, "atm_data": []}
+                if opt_type == "P":
+                    expiry_data[exp_str]["put_oi"] += oi
+                else:
+                    expiry_data[exp_str]["call_oi"] += oi
+                if mark_iv and spot:
+                    expiry_data[exp_str]["atm_data"].append((abs(strike - float(spot)), float(mark_iv), opt_type))
+
+            if not oi_by_strike:
+                return {"error": "no options data parsed", "source": "deribit"}
+
+            total_put_oi  = sum(v["put_oi"]  for v in oi_by_strike.values())
+            total_call_oi = sum(v["call_oi"] for v in oi_by_strike.values())
+            pc_ratio = round(total_put_oi / total_call_oi, 3) if total_call_oi > 0 else None
+
+            max_pain_strike = None
+            min_pain = None
+            for s in sorted(oi_by_strike.keys()):
+                pain = sum(
+                    max(s - k, 0) * v["call_oi"] + max(k - s, 0) * v["put_oi"]
+                    for k, v in oi_by_strike.items()
+                )
+                if min_pain is None or pain < min_pain:
+                    min_pain = pain
+                    max_pain_strike = s
+
+            oi_list = [
+                {"strike": k, "put_oi": round(v["put_oi"], 1),
+                 "call_oi": round(v["call_oi"], 1),
+                 "total_oi": round(v["put_oi"] + v["call_oi"], 1)}
+                for k, v in oi_by_strike.items() if v["put_oi"] + v["call_oi"] > 0
+            ]
+            oi_list.sort(key=lambda x: x["total_oi"], reverse=True)
+            top20 = sorted(oi_list[:20], key=lambda x: x["strike"])
+
+            term_structure = []
+            for exp_str, ed in sorted(expiry_data.items()):
+                atm_iv = None
+                if ed["atm_data"]:
+                    calls_atm = sorted([(d, iv) for d, iv, t in ed["atm_data"] if t == "C"])[:3]
+                    puts_atm  = sorted([(d, iv) for d, iv, t in ed["atm_data"] if t == "P"])[:3]
+                    src = calls_atm or puts_atm
+                    if src:
+                        atm_iv = round(sum(iv for _, iv in src) / len(src), 1)
+                term_structure.append({
+                    "expiry":  exp_str,
+                    "dte":     ed["dte"],
+                    "atm_iv":  atm_iv,
+                    "put_oi":  round(ed["put_oi"], 1),
+                    "call_oi": round(ed["call_oi"], 1),
+                })
+
+            if pc_ratio is None:      signal = "N/A"
+            elif pc_ratio > 1.5:      signal = "EXTREME_PUTS"
+            elif pc_ratio > 1.1:      signal = "BEARISH"
+            elif pc_ratio < 0.6:      signal = "EXTREME_CALLS"
+            elif pc_ratio < 0.9:      signal = "BULLISH"
+            else:                     signal = "NEUTRAL"
+
+            return {
+                "put_call_ratio":  pc_ratio,
+                "max_pain":        max_pain_strike,
+                "total_put_oi":    round(total_put_oi, 1),
+                "total_call_oi":   round(total_call_oi, 1),
+                "oi_by_strike":    top20,
+                "term_structure":  term_structure,
+                "signal":          signal,
+                "spot_price":      spot,
+                "source":          "deribit",
+                "timestamp":       _dt.datetime.utcnow().isoformat(),
+                "error":           None,
+            }
+        except Exception as e:
+            logger.debug("[Deribit] options chain failed: %s", e)
+            return {"error": str(e), "source": "deribit"}
+
+    cached = _cached_get(f"deribit_chain_{currency}", 900, _fetch)
+    return cached if cached else {"error": "cache miss", "source": "deribit"}
