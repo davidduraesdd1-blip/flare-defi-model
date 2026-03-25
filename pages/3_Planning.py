@@ -109,8 +109,8 @@ with tab2:
         unsafe_allow_html=True,
     )
 
-    maturity_date    = datetime(2026, 5, 17)
-    days_to_maturity = max(0, (maturity_date - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+    maturity_date    = datetime(2026, 5, 17, tzinfo=timezone.utc)
+    days_to_maturity = max(0, (maturity_date - datetime.now(timezone.utc)).days)
 
     c1, c2 = st.columns([2, 1])
     with c1:
@@ -344,7 +344,7 @@ with tab5:
         _is_high_risk = "High" in risk_tol
         _long_horizon = time_horiz in ("6–12 months", "1–2 years", "2+ years")
 
-        days_to_jul26 = max(0, (datetime(2026, 7, 1) - datetime.now(timezone.utc).replace(tzinfo=None)).days)
+        days_to_jul26 = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
         _incentive_ok = days_to_jul26 > 60
 
         if "XRP" in intent:

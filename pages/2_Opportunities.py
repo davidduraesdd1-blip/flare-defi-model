@@ -67,7 +67,7 @@ for p in RISK_PROFILE_NAMES:
                     "Grade":        grade,
                     "Alloc %":      f"{kf*100:.0f}%",
                     "$ Amount":     f"${kf*portfolio_size:,.0f}" if portfolio_size > 0 else "—",
-                    "IL Risk":      opp.get("il_risk", "—").upper(),
+                    "IL Risk":      (opp.get("il_risk") or "—").upper(),
                 })
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         st.caption(pcfg.get("description", ""))

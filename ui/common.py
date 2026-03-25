@@ -1107,7 +1107,7 @@ def render_opportunity_card(
     lo     = opp.get("apy_low",  apy * 0.8)
     hi     = opp.get("apy_high", apy * 1.2)
     conf   = min(100, opp.get("confidence", 50) * weight)
-    il     = opp.get("il_risk", "low")
+    il     = opp.get("il_risk") or "low"
     action = opp.get("action", opp.get("plain_english", "—"))
     proto  = opp.get("protocol", "—")
     pool   = opp.get("asset_or_pool", "—")
