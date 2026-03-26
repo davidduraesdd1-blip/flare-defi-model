@@ -12,6 +12,7 @@ import pandas as pd
 
 from ui.common import (
     page_setup, render_sidebar, load_monitor_digest, render_section_header, _ts_fmt,
+    load_latest,
 )
 
 page_setup("Intelligence · Flare DeFi")
@@ -618,3 +619,79 @@ try:
         st.caption(f"Source: Deribit · {_ts5_txt} UTC · Cached 15 min")
 except Exception as _opt_err:
     st.caption(f"Options data unavailable: {_opt_err}")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ─── FTSO Price Monitor ────────────────────────────────────────────────────────
+
+render_section_header(
+    "FTSO Oracle Price Monitor",
+    "Live Flare oracle prices vs CoinGecko — divergence signals arb opportunity",
+)
+
+@st.cache_data(ttl=120)
+def _cached_ftso_prices() -> dict:
+    try:
+        from scanners.flare_scanner import fetch_ftso_prices
+        return fetch_ftso_prices()
+    except Exception:
+        return {}
+
+_ftso_col1, _ftso_col2 = st.columns([3, 1])
+with _ftso_col2:
+    if st.button("Refresh FTSO", key="ftso_refresh"):
+        _cached_ftso_prices.clear()
+
+_ftso_prices = _cached_ftso_prices()
+
+if not _ftso_prices:
+    st.info("FTSO oracle data unavailable — Flare data availability layer may be unreachable.")
+else:
+    # Load CoinGecko prices from latest scan for comparison
+    _latest_scan  = load_latest()
+    _cg_prices_raw = _latest_scan.get("prices") or []
+    _cg_lookup: dict = {}
+    if isinstance(_cg_prices_raw, list):
+        for _p in _cg_prices_raw:
+            if isinstance(_p, dict):
+                _sym = _p.get("symbol", "")
+                _px  = _p.get("price_usd")
+                if _sym and _px is not None:
+                    _cg_lookup[_sym] = float(_px)
+
+    _rows = []
+    _alerts = []
+    for _sym, _ftso_px in sorted(_ftso_prices.items()):
+        if _ftso_px is None:
+            continue
+        _ftso_px = float(_ftso_px)
+        _cg_px   = _cg_lookup.get(_sym)
+        if _cg_px and _cg_px > 0:
+            _div_pct = (_ftso_px - _cg_px) / _cg_px * 100
+            _div_str = f"{_div_pct:+.2f}%"
+            _status  = "⚠️ Arb" if abs(_div_pct) > 2 else ("✅ Aligned" if abs(_div_pct) < 0.5 else "🔶 Watch")
+            if abs(_div_pct) > 2:
+                _alerts.append((_sym, _div_pct, _ftso_px, _cg_px))
+        else:
+            _div_str = "—"
+            _status  = "—"
+        _rows.append({
+            "Token":          _sym,
+            "FTSO Oracle":    f"${_ftso_px:.6g}",
+            "CoinGecko":      f"${_cg_px:.6g}" if _cg_px else "—",
+            "Divergence":     _div_str,
+            "Status":         _status,
+        })
+
+    if _alerts:
+        for _sym, _div_pct, _ftso_px, _cg_px in _alerts:
+            _dir = "above" if _div_pct > 0 else "below"
+            st.warning(
+                f"**{_sym}** FTSO price ${_ftso_px:.6g} is {abs(_div_pct):.2f}% {_dir} "
+                f"CoinGecko ${_cg_px:.6g} — potential arbitrage window."
+            )
+
+    if _rows:
+        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True)
+    st.caption("FTSO oracle prices refresh every 2 min. Divergence >2% may indicate arb opportunity. Source: Flare Data Availability Layer.")

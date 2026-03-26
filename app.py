@@ -140,7 +140,7 @@ if not arb_data:
     )
 else:
     for arb in arb_data[:5]:
-        profit        = arb.get("estimated_profit", 0)
+        profit        = float(arb.get("estimated_profit", 0) or 0)
         urgency       = arb.get("urgency", "monitor")
         label         = _html.escape(str(arb.get("strategy_label", arb.get("strategy", "Arb"))))
         desc          = _html.escape(str(arb.get("plain_english", "—")))

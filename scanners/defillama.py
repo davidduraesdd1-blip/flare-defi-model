@@ -137,7 +137,7 @@ def fetch_protocol_tvl(slug: str) -> dict:
         chain_tvls = data.get("chainTvls", {})
         for chain_name, chain_data in chain_tvls.items():
             if "flare" in chain_name.lower() or chain_name.lower() == "total":
-                tvls = chain_data.get("tvl", [])
+                tvls = chain_data.get("tvl", []) if isinstance(chain_data, dict) else []
                 if tvls:
                     try:
                         tvl_current = float(tvls[-1].get("totalLiquidityUSD", 0) or 0)
