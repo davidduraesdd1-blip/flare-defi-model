@@ -574,13 +574,47 @@ try:
                     y=[r["put_oi"] for r in _oi5d], marker_color="rgba(239,68,68,0.8)"))
                 _fig5d.add_trace(go.Bar(name="Calls", x=_sk5,
                     y=[r["call_oi"] for r in _oi5d], marker_color="rgba(16,185,129,0.8)"))
+                # Use add_shape instead of add_vline — the x-axis uses string
+                # categorical labels (strike prices as strings), so add_vline()
+                # triggers Plotly's internal _mean() TypeError on string values.
                 if _mp5:
-                    _fig5d.add_vline(x=str(int(_mp5)), line_dash="dash", line_color="#6366f1",
-                                     opacity=0.8, annotation_text=f"Max Pain ${_mp5:,.0f}",
-                                     annotation_font_size=10)
+                    _mp5_str = str(int(_mp5))
+                    _fig5d.add_shape(
+                        type="line",
+                        x0=_mp5_str, x1=_mp5_str,
+                        y0=0, y1=1,
+                        xref="x", yref="paper",
+                        line=dict(color="#6366f1", dash="dash", width=1.5),
+                        opacity=0.8,
+                    )
+                    _fig5d.add_annotation(
+                        x=_mp5_str, y=1,
+                        xref="x", yref="paper",
+                        text=f"Max Pain ${_mp5:,.0f}",
+                        showarrow=False,
+                        font=dict(color="#6366f1", size=10),
+                        xanchor="left",
+                        yanchor="top",
+                    )
                 if _spot5:
-                    _fig5d.add_vline(x=str(int(_spot5)), line_dash="dot", line_color="#f59e0b",
-                                     opacity=0.6, annotation_text="Spot", annotation_font_size=10)
+                    _spot5_str = str(int(_spot5))
+                    _fig5d.add_shape(
+                        type="line",
+                        x0=_spot5_str, x1=_spot5_str,
+                        y0=0, y1=1,
+                        xref="x", yref="paper",
+                        line=dict(color="#f59e0b", dash="dot", width=1.5),
+                        opacity=0.6,
+                    )
+                    _fig5d.add_annotation(
+                        x=_spot5_str, y=0.95,
+                        xref="x", yref="paper",
+                        text="Spot",
+                        showarrow=False,
+                        font=dict(color="#f59e0b", size=10),
+                        xanchor="left",
+                        yanchor="top",
+                    )
                 _fig5d.update_layout(
                     title="OI by Strike (Top 20)", barmode="stack",
                     height=300, paper_bgcolor="rgba(0,0,0,0)",
