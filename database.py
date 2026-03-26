@@ -75,8 +75,12 @@ def _get_conn_and_init() -> _PooledConn:
     global _db_initialized
     conn = _get_conn()
     if not _db_initialized:
-        _db_initialized = True   # set before init_db to prevent re-entry
-        init_db()
+        _db_initialized = True   # set before init_db to prevent re-entry on success
+        try:
+            init_db()
+        except Exception:
+            _db_initialized = False  # reset so next call retries init
+            raise
     return conn
 
 
@@ -323,7 +327,7 @@ def save_arb_opportunities(arb_results: dict):
             a.get("asset_a") or "",
             a.get("asset_b") or "",
             a.get("estimated_profit"),
-            a.get("min_capital_usd"),
+            a.get("capital_needed") or a.get("min_capital_usd"),
             a.get("urgency") or "normal",
             1,
             json.dumps(a),
