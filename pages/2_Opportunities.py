@@ -10,12 +10,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
     render_opportunity_card, render_section_header, risk_score_to_grade,
 )
 from config import RISK_PROFILES, RISK_PROFILE_NAMES
+from scanners.defillama import (
+    fetch_yields_pools, fetch_protocol_risk_score, fetch_tvl_change_alert,
+    fetch_governance_alerts, fetch_bridge_flows,
+)
 
 page_setup("Opportunities · Flare DeFi")
 
@@ -25,6 +30,15 @@ profile_cfg    = ctx["profile_cfg"]
 color          = ctx["color"]
 weight         = ctx["weight"]
 portfolio_size = ctx["portfolio_size"]
+demo_mode      = ctx.get("demo_mode", False)
+
+# #82 Beginner/Pro toggle
+_pro_mode = st.toggle(
+    "Pro Mode",
+    value=st.session_state.get("defi_pro_mode", True),
+    key="defi_pro_mode",
+    help="Pro: shows Real Yield Ratio, DeFi Sharpe, risk scoring details. Beginner: simplified card view.",
+)
 
 latest     = load_latest()
 runs       = load_history_runs()
@@ -327,3 +341,223 @@ else:
                             unsafe_allow_html=True,
                         )
                     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 8 SECTIONS
+# ═══════════════════════════════════════════════════════════════════════════
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Multi-Chain Pool Opportunities (#68 #70-78) ────────────────────────────
+
+render_section_header(
+    "Multi-Chain Pools",
+    "Pendle · EigenLayer · Ethena · Aerodrome · Morpho · Kamino — via DeFiLlama yields API",
+)
+
+with st.spinner("Loading multi-chain pools…"):
+    if demo_mode:
+        _mc_pools = [
+            {"project": "pendle", "chain": "Ethereum", "symbol": "PT-USDe 29Jun2025",
+             "apy": 12.4, "apyBase": 8.2, "apyReward": 4.2, "tvlUsd": 420_000_000, "audits": 3, "ilRisk": "no"},
+            {"project": "ether.fi", "chain": "Ethereum", "symbol": "eETH",
+             "apy": 6.1, "apyBase": 6.1, "apyReward": 0.0, "tvlUsd": 6_200_000_000, "audits": 5, "ilRisk": "no"},
+            {"project": "morpho", "chain": "Ethereum", "symbol": "USDC vault",
+             "apy": 9.3, "apyBase": 9.3, "apyReward": 0.0, "tvlUsd": 1_800_000_000, "audits": 4, "ilRisk": "no"},
+            {"project": "ethena", "chain": "Ethereum", "symbol": "sUSDe",
+             "apy": 27.5, "apyBase": 14.0, "apyReward": 13.5, "tvlUsd": 3_900_000_000, "audits": 3, "ilRisk": "no"},
+            {"project": "aerodrome-finance", "chain": "Base", "symbol": "USDC/WETH",
+             "apy": 38.7, "apyBase": 12.0, "apyReward": 26.7, "tvlUsd": 580_000_000, "audits": 2, "ilRisk": "yes"},
+        ]
+    else:
+        _mc_pools = fetch_yields_pools(min_tvl_usd=5_000_000, max_results=20)
+
+if _mc_pools:
+    # Display as table with pro/beginner columns
+    _mc_rows = []
+    for p in _mc_pools:
+        _fee   = float(p.get("apyBase") or 0)
+        _rew   = float(p.get("apyReward") or 0)
+        _total = float(p.get("apy") or 0)
+        _ry    = round(_fee / _total * 100) if _total > 0 else 0
+        _row = {
+            "Protocol":    p.get("project", "—").replace("-", " ").title(),
+            "Chain":       p.get("chain", "—"),
+            "Pool":        p.get("symbol", "—"),
+            "APY %":       f"{_total:.1f}%",
+            "TVL":         f"${float(p.get('tvlUsd', 0))/1e6:.0f}M" if p.get("tvlUsd", 0) >= 1e6 else f"${p.get('tvlUsd', 0):,.0f}",
+        }
+        if _pro_mode:
+            _row["Base APY"] = f"{_fee:.1f}%"
+            _row["Reward APY"] = f"{_rew:.1f}%"
+            _row["Real Yield %"] = f"{_ry}%"
+            _row["Audits"] = str(p.get("audits", "—"))
+            _row["IL Risk"] = ("Yes" if p.get("ilRisk", "no") != "no" else "No")
+        _mc_rows.append(_row)
+    st.dataframe(pd.DataFrame(_mc_rows), use_container_width=True, hide_index=True)
+else:
+    st.info("Multi-chain pool data loading... Run a scan or check API connectivity.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Yield Curve Visualization (#86) ───────────────────────────────────────
+
+if _pro_mode:
+    render_section_header(
+        "Yield Curve",
+        "APY vs Risk Score scatter — higher-left = better risk-adjusted yield (efficient frontier)",
+    )
+    _all_opps_yc = []
+    for _p in RISK_PROFILE_NAMES:
+        for _opp in (model_data.get(_p) or []):
+            if _opp not in _all_opps_yc:
+                _all_opps_yc.append(_opp)
+    if _all_opps_yc:
+        _yc_df = pd.DataFrame([{
+            "Protocol":   o.get("protocol", "—"),
+            "Pool":       o.get("asset_or_pool", "—"),
+            "APY":        float(o.get("estimated_apy", 0)),
+            "Risk Score": float(o.get("risk_score", 5)),
+            "TVL ($M)":   float(o.get("tvl_usd", 0) or 0) / 1e6,
+            "Confidence": float(o.get("confidence", 50)),
+        } for o in _all_opps_yc])
+        _fig_yc = px.scatter(
+            _yc_df, x="Risk Score", y="APY", size="TVL ($M)", color="Protocol",
+            hover_data={"Pool": True, "Confidence": True, "TVL ($M)": True},
+            labels={"Risk Score": "Risk Score (0=safest)", "APY": "Est. APY (%)"},
+            title="",
+        )
+        _fig_yc.add_hline(y=5.0, line_dash="dash", line_color="#475569",
+                          annotation_text="Risk-free (5%)")
+        _fig_yc.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.8)",
+            font_color="#94a3b8",
+            xaxis=dict(gridcolor="rgba(148,163,184,0.1)", range=[0, 11]),
+            yaxis=dict(gridcolor="rgba(148,163,184,0.1)", ticksuffix="%"),
+            height=380, margin=dict(l=40, r=20, t=20, b=40),
+            legend=dict(bgcolor="rgba(0,0,0,0)", font_size=10),
+        )
+        st.plotly_chart(_fig_yc, use_container_width=True, config={"displayModeBar": False})
+    else:
+        st.info("Run a scan to populate yield curve data.")
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── TVL Change Alerts (#79) ───────────────────────────────────────────────
+
+render_section_header(
+    "TVL Change Alerts",
+    "Protocols with significant 24h TVL changes — >5% drop may indicate exploit or capital migration",
+)
+
+_alert_slugs = ["kinetic-finance", "clearpool-lending", "morpho", "aave-v3", "eigenlayer"]
+_tvl_alerts  = []
+for _slug in _alert_slugs:
+    try:
+        _alert = fetch_tvl_change_alert(_slug, threshold_pct=5.0)
+        if _alert.get("current_tvl", 0) > 0:
+            _tvl_alerts.append(_alert)
+    except Exception:
+        pass
+
+if _tvl_alerts:
+    for _al in _tvl_alerts:
+        _chg   = _al.get("change_pct", 0)
+        _sev   = _al.get("severity", "normal")
+        _col   = "#EF4444" if _sev == "critical" else "#F59E0B" if _sev == "warning" else "#34D399"
+        _icon  = "🚨" if _sev == "critical" else "⚠️" if _sev == "warning" else "✅"
+        _tvl_m = round(_al.get("current_tvl", 0) / 1e6, 1)
+        st.markdown(
+            f"<div style='background:rgba(0,0,0,0.2);border-left:3px solid {_col};"
+            f"border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:0.85rem'>"
+            f"{_icon} <b>{_al['slug']}</b> · TVL ${_tvl_m}M · "
+            f"<span style='color:{_col}'>{_chg:+.1f}% 24h</span></div>",
+            unsafe_allow_html=True,
+        )
+else:
+    st.info("No significant TVL alerts at this time.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Governance Alerts (#74) ────────────────────────────────────────────────
+
+render_section_header(
+    "Governance Alerts",
+    "Active Snapshot votes that may impact yield parameters — sourced from Snapshot GraphQL",
+)
+
+with st.spinner("Checking governance proposals…"):
+    _proposals = [] if demo_mode else fetch_governance_alerts()
+
+if demo_mode:
+    _proposals = [
+        {"title": "Adjust USDC lending rate parameters", "space": "aave.eth",
+         "votes": 1842, "end_date": "2026-04-01", "apy_impact": True},
+        {"title": "Enable new reward token for LPs", "space": "aerodrome.eth",
+         "votes": 503, "end_date": "2026-03-30", "apy_impact": True},
+    ]
+
+if _proposals:
+    for _prop in _proposals:
+        _imp_badge = (" <span style='background:#1c1200;color:#FBBF24;font-size:0.68rem;"
+                     "padding:1px 6px;border-radius:4px;border:1px solid #fbbf2444'>⚡ APY Impact</span>"
+                     if _prop.get("apy_impact") else "")
+        st.markdown(
+            f"<div style='background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);"
+            f"border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:0.85rem'>"
+            f"<b>{_html.escape(_prop['title'])}</b>{_imp_badge}<br>"
+            f"<span style='color:#64748b;font-size:0.75rem'>{_prop['space']} · {_prop['votes']} votes · ends {_prop['end_date']}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+else:
+    st.info("No active governance proposals at this time.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Bridge Flow Indicator (#85) ────────────────────────────────────────────
+
+if _pro_mode:
+    render_section_header(
+        "Bridge Flow Monitor",
+        "7-day TVL change per chain as capital flow proxy — INFLOW = capital entering, OUTFLOW = leaving",
+    )
+
+    with st.spinner("Fetching bridge flow data…"):
+        _flows = [] if demo_mode else fetch_bridge_flows()
+
+    if demo_mode:
+        _flows = [
+            {"chain": "Base", "tvl_usd": 7_400_000_000, "change_7d_pct": 18.2, "flow_signal": "INFLOW"},
+            {"chain": "Ethereum", "tvl_usd": 50_000_000_000, "change_7d_pct": 2.1, "flow_signal": "STABLE"},
+            {"chain": "Solana", "tvl_usd": 8_200_000_000, "change_7d_pct": -6.3, "flow_signal": "OUTFLOW"},
+            {"chain": "Flare", "tvl_usd": 85_000_000, "change_7d_pct": 3.1, "flow_signal": "STABLE"},
+        ]
+
+    if _flows:
+        _fl_cols = st.columns(min(len(_flows), 4))
+        for _fi, _fl in enumerate(_flows[:4]):
+            _fsig   = _fl["flow_signal"]
+            _fcol   = "#34D399" if _fsig == "INFLOW" else "#EF4444" if _fsig == "OUTFLOW" else "#9CA3AF"
+            _ficon  = "↑" if _fsig == "INFLOW" else "↓" if _fsig == "OUTFLOW" else "→"
+            _ftvl_m = _fl["tvl_usd"] / 1e9 if _fl["tvl_usd"] >= 1e9 else _fl["tvl_usd"] / 1e6
+            _funit  = "B" if _fl["tvl_usd"] >= 1e9 else "M"
+            with _fl_cols[_fi % 4]:
+                st.markdown(
+                    f"<div style='background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.06);"
+                    f"border-top:2px solid {_fcol};border-radius:8px;padding:10px 12px;text-align:center'>"
+                    f"<div style='font-size:0.72rem;color:#64748b;text-transform:uppercase'>{_fl['chain']}</div>"
+                    f"<div style='font-size:1.4rem;font-weight:700;color:{_fcol}'>{_ficon} {_fl['change_7d_pct']:+.1f}%</div>"
+                    f"<div style='font-size:0.72rem;color:#475569'>TVL ${_ftvl_m:.1f}{_funit}</div>"
+                    f"<div style='font-size:0.70rem;color:{_fcol};margin-top:2px'>{_fsig}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+    else:
+        st.info("Bridge flow data unavailable.")
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)

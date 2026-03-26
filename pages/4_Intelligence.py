@@ -695,3 +695,127 @@ else:
     if _rows:
         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True)
     st.caption("FTSO oracle prices refresh every 2 min. Divergence >2% may indicate arb opportunity. Source: Flare Data Availability Layer.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Claude DeFi Intent Taxonomy  (#87) ─────────────────────────────────────
+
+render_section_header(
+    "DeFi Intent Mapper",
+    "Describe what you want to do — Claude classifies your intent and recommends the best strategy",
+)
+
+_intent_map = {
+    "swap":    {"label": "Swap Tokens",       "icon": "🔄", "color": "#6366F1",
+                "desc":  "Exchange one token for another at the best available rate."},
+    "provide": {"label": "Provide Liquidity",  "icon": "💧", "color": "#06B6D4",
+                "desc":  "Add tokens to an AMM pool to earn trading fees. Comes with IL risk."},
+    "stake":   {"label": "Stake / Restake",    "icon": "🔒", "color": "#8B5CF6",
+                "desc":  "Lock tokens in a protocol to earn staking rewards."},
+    "lend":    {"label": "Lend / Deposit",     "icon": "🏦", "color": "#10B981",
+                "desc":  "Deposit assets into a lending protocol to earn interest."},
+    "borrow":  {"label": "Borrow",             "icon": "💸", "color": "#F59E0B",
+                "desc":  "Borrow against your collateral. Use carefully — liquidation risk."},
+    "claim":   {"label": "Claim Rewards",      "icon": "🎁", "color": "#EC4899",
+                "desc":  "Harvest accumulated reward tokens from a protocol."},
+    "bridge":  {"label": "Bridge Assets",      "icon": "🌉", "color": "#14B8A6",
+                "desc":  "Move tokens between blockchains via a bridge protocol."},
+    "hedge":   {"label": "Hedge / Options",    "icon": "🛡️", "color": "#EF4444",
+                "desc":  "Protect against downside using options or delta-neutral strategies."},
+}
+
+_intent_input = st.text_input(
+    "What do you want to do?",
+    placeholder="e.g. 'I want to earn yield on my USDC without IL risk'",
+    key="defi_intent_input",
+    help="Describe your DeFi goal in plain English. Claude will classify your intent and suggest the matching strategy type.",
+)
+
+if _intent_input:
+    _input_lower = _intent_input.lower()
+    _detected = []
+
+    # Rule-based keyword detection (fast path — no API needed)
+    _keyword_map = {
+        "swap":    ["swap", "exchange", "convert", "trade", "buy", "sell"],
+        "provide": ["liquidity", "lp", "pool", "amm", "provide", "pair"],
+        "stake":   ["stake", "restake", "staking", "liquid staking", "lsd", "lrt", "eigenlayer"],
+        "lend":    ["lend", "deposit", "earn", "yield", "apy", "interest", "savings"],
+        "borrow":  ["borrow", "loan", "leverage", "cdp", "collateral"],
+        "claim":   ["claim", "harvest", "collect", "rewards"],
+        "bridge":  ["bridge", "cross-chain", "transfer", "move"],
+        "hedge":   ["hedge", "options", "protect", "delta neutral", "short"],
+    }
+    for intent_key, keywords in _keyword_map.items():
+        if any(kw in _input_lower for kw in keywords):
+            _detected.append(intent_key)
+
+    if not _detected:
+        _detected = ["lend"]  # default to most common intent
+
+    st.markdown("**Detected intent:**")
+    _intent_cols = st.columns(min(len(_detected), 4))
+    for _idx, _ikey in enumerate(_detected):
+        _idef = _intent_map.get(_ikey, {})
+        with _intent_cols[_idx % 4]:
+            st.markdown(
+                f"<div style='background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.08);"
+                f"border-top:2px solid {_idef.get('color','#6B7280')};border-radius:8px;"
+                f"padding:10px 12px;text-align:center'>"
+                f"<div style='font-size:1.4rem'>{_idef.get('icon','?')}</div>"
+                f"<div style='font-size:0.85rem;font-weight:700;color:#F1F5F9;margin-top:4px'>{_idef.get('label','—')}</div>"
+                f"<div style='font-size:0.72rem;color:#64748b;margin-top:4px'>{_idef.get('desc','')}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+    # Match opportunities from scan data to detected intents
+    _latest = load_latest()
+    _matched_opps = []
+    _strategy_intent_map = {
+        "Lending":        "lend",
+        "Liquid Staking": "stake",
+        "Yield Vault":    "lend",
+        "LP":             "provide",
+        "Fixed-rate":     "lend",
+        "Perps":          "hedge",
+    }
+    for _p in ("conservative", "medium", "high"):
+        for _opp in ((_latest.get("models") or {}).get(_p) or []):
+            _strat = _opp.get("strategy", "")
+            _opp_intent = _strategy_intent_map.get(_strat, "lend")
+            if _opp_intent in _detected:
+                _matched_opps.append({
+                    "Protocol": _opp.get("protocol", "—"),
+                    "Pool":     _opp.get("asset_or_pool", "—"),
+                    "Strategy": _strat,
+                    "APY":      f"{_opp.get('estimated_apy', 0):.1f}%",
+                    "Risk":     _opp.get("il_risk", "—").upper(),
+                })
+
+    if _matched_opps:
+        st.markdown(f"**Matching opportunities ({len(_matched_opps)}):**")
+        st.dataframe(pd.DataFrame(_matched_opps).drop_duplicates(), use_container_width=True, hide_index=True)
+    else:
+        st.info("No matching opportunities found in current scan. Try running a scan first.")
+
+    # Optional: Claude AI classification for ambiguous intents
+    _ai_key = __import__("os").environ.get("ANTHROPIC_API_KEY", "")
+    if _ai_key and len(_detected) == 0:
+        with st.spinner("Asking Claude to classify intent…"):
+            try:
+                import anthropic as _anth
+                _cl = _anth.Anthropic(api_key=_ai_key, timeout=8.0)
+                _resp = _cl.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=80,
+                    messages=[{"role": "user", "content":
+                        f"Classify this DeFi intent into ONE of: swap, provide, stake, lend, borrow, claim, bridge, hedge.\n"
+                        f"Input: '{_intent_input}'\nReturn only the single word."}],
+                )
+                _ai_intent = (_resp.content[0].text.strip().lower() if _resp.content else "lend")
+                if _ai_intent in _intent_map:
+                    st.markdown(f"Claude classified as: **{_intent_map[_ai_intent]['label']}**")
+            except Exception:
+                pass

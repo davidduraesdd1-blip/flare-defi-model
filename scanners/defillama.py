@@ -297,3 +297,332 @@ def invalidate_cache():
     """Clear DeFiLlama data cache."""
     with _cache_lock:
         _cache.clear()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# YIELDS.LLAMA.FI POOL AGGREGATOR  (#68)
+# Fetches 10,000+ pool APY/TVL from yields.llama.fi/pools
+# Filtered to target protocols for memory efficiency (#69)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Target protocol slugs for multi-chain pools (#70-78)
+_YIELD_TARGET_PROJECTS = {
+    # Pendle Finance (#70) — PT/YT yield tokenization
+    "pendle",
+    # EigenLayer + LRTs (#71)
+    "eigenlayer", "ether.fi", "renzo", "kelp-dao", "swell-network",
+    # Ethena (#76)
+    "ethena",
+    # Aerodrome + Morpho (#77)
+    "aerodrome-finance", "morpho", "morpho-blue",
+    # Kamino + Meteora (#78)
+    "kamino-finance", "meteora",
+    # Existing Flare protocols
+    "blazeswap", "kinetic-finance", "spectra-v2", "sceptre-liquid",
+    "enosys", "clearpool-lending", "mystic-finance-lending", "upshift",
+}
+
+_YIELDS_POOLS_TTL = 900  # 15 min — pools update ~every 15 min on DeFiLlama
+
+
+def fetch_yields_pools(
+    projects: Optional[set] = None,
+    min_tvl_usd: float = 100_000,
+    max_results: int = 200,
+) -> List[dict]:
+    """
+    Fetch pool-level APY and TVL from yields.llama.fi/pools.
+
+    Filters payload from ~20MB (10k+ pools) to ~500KB (#69 memory optimization)
+    by restricting to target projects and minimum TVL.
+
+    Returns list of pool dicts with keys:
+        pool, project, chain, symbol, apy, apyBase, apyReward,
+        tvlUsd, apy7d, volumeUsd1d, il7d, rewardTokens, audits
+    """
+    cache_key = f"yields_pools:{min_tvl_usd}"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and now - cached.get("_ts", 0) < _YIELDS_POOLS_TTL:
+            return cached.get("data", [])
+
+    target = projects or _YIELD_TARGET_PROJECTS
+
+    try:
+        resp = _SESSION.get(f"{_DEFILLAMA_YIELDS}/pools", timeout=20)
+        resp.raise_for_status()
+        raw = resp.json().get("data", []) or []
+    except Exception as e:
+        logger.warning("[Yields] pools fetch failed: %s", e)
+        return []
+
+    filtered = []
+    for p in raw:
+        proj = (p.get("project") or "").lower()
+        tvl  = float(p.get("tvlUsd") or 0)
+        if proj not in target:
+            continue
+        if tvl < min_tvl_usd:
+            continue
+        filtered.append({
+            "pool":         p.get("pool", ""),
+            "project":      p.get("project", ""),
+            "chain":        p.get("chain", ""),
+            "symbol":       p.get("symbol", ""),
+            "apy":          float(p.get("apy") or 0),
+            "apyBase":      float(p.get("apyBase") or 0),
+            "apyReward":    float(p.get("apyReward") or 0),
+            "tvlUsd":       tvl,
+            "apy7d":        float(p.get("apyMean30d") or p.get("apy") or 0),
+            "volumeUsd1d":  float(p.get("volumeUsd1d") or 0),
+            "il7d":         float(p.get("il7d") or 0),
+            "rewardTokens": p.get("rewardTokens") or [],
+            "audits":       int(p.get("audits") or 0),
+            "ilRisk":       p.get("ilRisk", "no"),
+            "exposure":     p.get("exposure", "single"),
+        })
+        if len(filtered) >= max_results:
+            break
+
+    with _cache_lock:
+        _cache[cache_key] = {"data": filtered, "_ts": now}
+
+    logger.info("[Yields] %d pools fetched (filtered from %d raw)", len(filtered), len(raw))
+    return filtered
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROTOCOL RISK SCORING  (#80)
+# DeFiLlama hack/exploit history + audit count as risk signal
+# ─────────────────────────────────────────────────────────────────────────────
+
+_HACKS_TTL = 86400  # 24 hours — hack history doesn't change often
+
+
+def fetch_protocol_risk_score(slug: str) -> dict:
+    """
+    Compute a risk score for a protocol based on:
+    - DeFiLlama hack history (funds_lost, hack_count)
+    - Audit count (from yields pools data)
+    - Category risk tier
+
+    Returns dict: slug, hack_count, funds_lost_usd, audit_count, risk_score (0-10, lower=safer)
+    """
+    cache_key = f"risk:{slug}"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and now - cached.get("_ts", 0) < _HACKS_TTL:
+            return {k: v for k, v in cached.items() if k != "_ts"}
+
+    result = {
+        "slug": slug, "hack_count": 0, "funds_lost_usd": 0.0,
+        "audit_count": 0, "risk_score": 5.0, "source": "unavailable",
+    }
+
+    try:
+        data = _get(f"{_DEFILLAMA_API}/hacks")
+        if isinstance(data, list):
+            for hack in data:
+                targets = hack.get("targetedProtocols") or []
+                if any(slug.lower() in t.lower() for t in targets):
+                    result["hack_count"]    += 1
+                    result["funds_lost_usd"] += float(hack.get("fundsLost") or 0)
+            result["source"] = "live"
+    except Exception as e:
+        logger.debug("[RiskScore] hacks fetch failed for %s: %s", slug, e)
+
+    # Base risk from hack history
+    hack_penalty = min(result["hack_count"] * 2.5, 7.0)
+    result["risk_score"] = round(min(10.0, 3.0 + hack_penalty), 1)
+    result["funds_lost_m"] = round(result["funds_lost_usd"] / 1e6, 2)
+
+    with _cache_lock:
+        _cache[cache_key] = {**result, "_ts": now}
+
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TVL HISTORY & 24H CHANGE ALERTS  (#79)
+# Detects >5% TVL drop in last 24h as exploit/migration signal
+# ─────────────────────────────────────────────────────────────────────────────
+
+_TVL_HISTORY_TTL = 3600  # 1 hour
+
+
+def fetch_tvl_change_alert(slug: str, threshold_pct: float = 5.0) -> dict:
+    """
+    Check if a protocol's TVL dropped >threshold_pct in the last 24 hours.
+
+    Returns dict: slug, current_tvl, prev_tvl, change_pct, alert (bool), severity
+    """
+    cache_key = f"tvl_alert:{slug}"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and now - cached.get("_ts", 0) < _TVL_HISTORY_TTL:
+            return {k: v for k, v in cached.items() if k != "_ts"}
+
+    result = {
+        "slug": slug, "current_tvl": 0.0, "prev_tvl": 0.0,
+        "change_pct": 0.0, "alert": False, "severity": "normal",
+    }
+
+    try:
+        data = _get(f"{_DEFILLAMA_API}/protocol/{slug}")
+        if data:
+            tvl_hist = data.get("tvl", [])
+            if len(tvl_hist) >= 2:
+                cur  = float(tvl_hist[-1].get("totalLiquidityUSD", 0) or 0)
+                prev = float(tvl_hist[-2].get("totalLiquidityUSD", 0) or 0)
+                result["current_tvl"] = cur
+                result["prev_tvl"]    = prev
+                if prev > 0:
+                    change = (cur - prev) / prev * 100
+                    result["change_pct"] = round(change, 2)
+                    if change <= -threshold_pct:
+                        result["alert"]    = True
+                        result["severity"] = "critical" if change <= -20 else "warning"
+    except Exception as e:
+        logger.debug("[TVLAlert] %s: %s", slug, e)
+
+    with _cache_lock:
+        _cache[cache_key] = {**result, "_ts": now}
+
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GOVERNANCE ALERTS  (#74)
+# Snapshot GraphQL — active governance votes that may impact APY
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SNAPSHOT_URL    = "https://hub.snapshot.org/graphql"
+_GOVERNANCE_TTL  = 3600  # 1 hour
+
+# Governance spaces for tracked protocols
+_GOVERNANCE_SPACES = [
+    "aave.eth", "uniswapgovernance.eth", "morpho.eth",
+    "pendle.eth", "eigenlayer.eth", "aerodrome.eth",
+]
+
+
+def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
+    """
+    Fetch active Snapshot governance proposals for tracked DeFi protocols.
+    Returns list of proposals with: title, space, state, votes, end_date, apy_impact_flag.
+    """
+    cache_key = "governance_alerts"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and now - cached.get("_ts", 0) < _GOVERNANCE_TTL:
+            return cached.get("data", [])
+
+    target_spaces = spaces or _GOVERNANCE_SPACES
+    query = """
+    query($spaces: [String!]) {
+      proposals(
+        first: 20,
+        where: {
+          space_in: $spaces,
+          state: "active"
+        },
+        orderBy: "created",
+        orderDirection: desc
+      ) {
+        id title space { id } state votes end
+      }
+    }
+    """
+    try:
+        resp = _SESSION.post(
+            _SNAPSHOT_URL,
+            json={"query": query, "variables": {"spaces": target_spaces}},
+            timeout=10,
+            headers={"Content-Type": "application/json"},
+        )
+        resp.raise_for_status()
+        proposals_raw = resp.json().get("data", {}).get("proposals", []) or []
+        proposals = []
+        for p in proposals_raw:
+            import datetime as _dt
+            end_ts = p.get("end", 0)
+            end_dt = _dt.datetime.utcfromtimestamp(end_ts).strftime("%Y-%m-%d") if end_ts else "—"
+            # Flag proposals likely to impact yield parameters
+            title_lower = (p.get("title") or "").lower()
+            apy_impact = any(kw in title_lower for kw in [
+                "fee", "rate", "apy", "yield", "emission", "reward",
+                "incentive", "borrow", "supply", "cap", "gauge",
+            ])
+            proposals.append({
+                "id":          p.get("id", ""),
+                "title":       p.get("title", ""),
+                "space":       p.get("space", {}).get("id", ""),
+                "state":       p.get("state", ""),
+                "votes":       int(p.get("votes") or 0),
+                "end_date":    end_dt,
+                "apy_impact":  apy_impact,
+            })
+    except Exception as e:
+        logger.warning("[Governance] Snapshot fetch failed: %s", e)
+        proposals = []
+
+    with _cache_lock:
+        _cache[cache_key] = {"data": proposals, "_ts": now}
+
+    return proposals
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BRIDGE FLOW INDICATOR  (#85)
+# DeFiLlama chain TVL weekly delta as cross-chain capital flow proxy
+# ─────────────────────────────────────────────────────────────────────────────
+
+_BRIDGE_FLOW_TTL = 3600
+
+
+def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
+    """
+    Fetch 7-day TVL change for target chains as a bridge flow proxy.
+    Positive = capital flowing in, Negative = capital flowing out.
+
+    Returns list of: chain, tvl_usd, change_7d_pct, flow_signal (INFLOW/OUTFLOW/STABLE)
+    """
+    cache_key = "bridge_flows"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and now - cached.get("_ts", 0) < _BRIDGE_FLOW_TTL:
+            return cached.get("data", [])
+
+    target_chains = chains or ["Ethereum", "Base", "Flare", "Solana", "Arbitrum", "Polygon"]
+
+    try:
+        data = _get(f"{_DEFILLAMA_API}/v2/chains")
+        if not isinstance(data, list):
+            return []
+        chain_lookup = {c.get("name", "").lower(): c for c in data}
+        flows = []
+        for chain in target_chains:
+            c = chain_lookup.get(chain.lower(), {})
+            tvl = float(c.get("tvl") or 0)
+            d7  = float(c.get("change_7d") or 0)
+            signal = "INFLOW" if d7 > 5 else "OUTFLOW" if d7 < -5 else "STABLE"
+            flows.append({
+                "chain":       chain,
+                "tvl_usd":     tvl,
+                "change_7d_pct": round(d7, 2),
+                "flow_signal": signal,
+            })
+        flows.sort(key=lambda x: x["change_7d_pct"], reverse=True)
+    except Exception as e:
+        logger.warning("[BridgeFlow] fetch failed: %s", e)
+        flows = []
+
+    with _cache_lock:
+        _cache[cache_key] = {"data": flows, "_ts": now}
+
+    return flows

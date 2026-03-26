@@ -681,3 +681,178 @@ def run_all_models(scan_result: dict) -> dict:
         f"medium: {len(results['medium'])} picks, high: {len(results['high'])} picks"
     )
     return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REAL YIELD RATIO  (#73)
+# fee_apy / total_apy — measures what fraction of yield is from real revenue
+# vs token incentives. A ratio near 1.0 = sustainable; near 0.0 = ponzi risk.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_real_yield_ratio(fee_apy: float, reward_apy: float) -> dict:
+    """
+    Compute the Real Yield Ratio = fee_apy / (fee_apy + reward_apy).
+
+    Returns dict:
+        ratio     : float 0.0–1.0 (1.0 = 100% fee revenue)
+        label     : str "Sustainable" / "Partially Incentivized" / "Incentive-Driven"
+        color     : hex color for UI
+        pct_real  : float % of APY from real fees
+        pct_incentive : float % from token rewards
+    """
+    total = float(fee_apy or 0) + float(reward_apy or 0)
+    if total <= 0:
+        return {"ratio": 0.0, "label": "No Yield", "color": "#6B7280",
+                "pct_real": 0.0, "pct_incentive": 0.0}
+
+    ratio = float(fee_apy or 0) / total
+    pct_real      = round(ratio * 100, 1)
+    pct_incentive = round((1 - ratio) * 100, 1)
+
+    if ratio >= 0.7:
+        label, color = "Sustainable", "#34D399"
+    elif ratio >= 0.35:
+        label, color = "Partially Incentivized", "#FBBF24"
+    else:
+        label, color = "Incentive-Driven", "#EF4444"
+
+    return {
+        "ratio":          round(ratio, 3),
+        "label":          label,
+        "color":          color,
+        "pct_real":       pct_real,
+        "pct_incentive":  pct_incentive,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IL vs HODL CALCULATOR  (#75)
+# Compares LP position value vs simply holding the same tokens
+# ─────────────────────────────────────────────────────────────────────────────
+
+def calc_il_vs_hodl(
+    entry_price_ratio: float,
+    current_price_ratio: float,
+    initial_usd: float = 1000.0,
+    fee_income_usd: float = 0.0,
+) -> dict:
+    """
+    Calculate IL vs HODL comparison for a 50/50 AMM LP position.
+
+    Args:
+        entry_price_ratio:   token1/token0 price ratio at entry
+        current_price_ratio: token1/token0 price ratio now
+        initial_usd:         USD value at entry
+        fee_income_usd:      accumulated fees earned since entry
+
+    Returns:
+        lp_value_usd, hodl_value_usd, il_usd, il_pct,
+        net_vs_hodl_usd, net_vs_hodl_pct, fees_offset_il (bool)
+    """
+    if entry_price_ratio <= 0 or current_price_ratio <= 0:
+        return {"error": "Invalid price ratio — must be > 0"}
+
+    k = current_price_ratio / entry_price_ratio
+
+    # LP value (constant product formula): V_lp = V_entry * sqrt(k)
+    lp_value   = initial_usd * (k ** 0.5)
+    # HODL value: 50% token0 (unchanged), 50% token1 (×k)
+    hodl_value = initial_usd * (0.5 + 0.5 * k)
+    il_usd     = lp_value - hodl_value  # negative = loss vs hodl
+    il_pct     = (il_usd / hodl_value * 100) if hodl_value > 0 else 0.0
+
+    # Net position after fees
+    net_vs_hodl_usd = il_usd + fee_income_usd
+    net_vs_hodl_pct = (net_vs_hodl_usd / hodl_value * 100) if hodl_value > 0 else 0.0
+
+    return {
+        "lp_value_usd":      round(lp_value + fee_income_usd, 2),
+        "hodl_value_usd":    round(hodl_value, 2),
+        "il_usd":            round(il_usd, 2),
+        "il_pct":            round(il_pct, 2),
+        "fee_income_usd":    round(fee_income_usd, 2),
+        "net_vs_hodl_usd":   round(net_vs_hodl_usd, 2),
+        "net_vs_hodl_pct":   round(net_vs_hodl_pct, 2),
+        "fees_offset_il":    fee_income_usd >= abs(il_usd),
+        "price_ratio_change": round((k - 1) * 100, 1),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONCENTRATED LP RANGE EFFICIENCY  (#83)
+# Uniswap V3 in-range probability and capital efficiency vs full-range
+# ─────────────────────────────────────────────────────────────────────────────
+
+def calc_concentrated_lp_efficiency(
+    price: float,
+    lower_tick_price: float,
+    upper_tick_price: float,
+    volatility_pct_daily: float = 3.0,
+) -> dict:
+    """
+    Estimate capital efficiency and in-range probability for a Uniswap V3 position.
+
+    Capital efficiency = sqrt(upper/lower) / (sqrt(upper/lower) - 1)
+    relative to full-range. Higher = more capital efficient but narrower range.
+
+    In-range probability uses a simplified Gaussian assumption:
+    daily_moves * sqrt(days_until_exit) vs range width.
+
+    Args:
+        price:               current token price
+        lower_tick_price:    lower price boundary of LP range
+        upper_tick_price:    upper price boundary of LP range
+        volatility_pct_daily: estimated daily price volatility % (default 3%)
+
+    Returns:
+        in_range_pct, capital_efficiency_x, range_width_pct,
+        est_days_in_range, label
+    """
+    import math
+
+    if lower_tick_price <= 0 or upper_tick_price <= lower_tick_price:
+        return {"error": "Invalid price range"}
+    if not (lower_tick_price <= price <= upper_tick_price):
+        return {
+            "in_range_pct": 0.0, "capital_efficiency_x": 0.0,
+            "range_width_pct": 0.0, "est_days_in_range": 0.0,
+            "label": "Out of Range", "in_range": False,
+        }
+
+    sqrt_ratio = math.sqrt(upper_tick_price / lower_tick_price)
+    capital_efficiency = sqrt_ratio / (sqrt_ratio - 1) if sqrt_ratio > 1 else 1.0
+
+    range_width_pct = (upper_tick_price - lower_tick_price) / price * 100
+
+    # Simplified in-range probability: half the range width / daily vol
+    half_range = range_width_pct / 2.0
+    daily_vol  = max(volatility_pct_daily, 0.01)
+    # Expected days before price exits (random walk approximation)
+    est_days   = (half_range / daily_vol) ** 2
+
+    # In-range probability over 7 days (rough Gaussian)
+    sigma_7d = daily_vol * math.sqrt(7)
+    from_center = abs(price - (lower_tick_price + upper_tick_price) / 2) / price * 100
+    z_score     = half_range / sigma_7d if sigma_7d > 0 else 999
+    import_erf  = min(z_score / 1.4142, 3.0)  # scaled erf approximation
+    # Approx erf using polynomial (avoids scipy dependency)
+    t = 1 / (1 + 0.3275911 * abs(import_erf))
+    erf_approx = 1 - (0.254829592*t - 0.284496736*t**2 + 1.421413741*t**3
+                      - 1.453152027*t**4 + 1.061405429*t**5) * math.exp(-import_erf**2)
+    in_range_pct = round(erf_approx * 100, 1)
+
+    if capital_efficiency >= 10:
+        label = f"{capital_efficiency:.0f}× efficient (very tight range)"
+    elif capital_efficiency >= 3:
+        label = f"{capital_efficiency:.1f}× efficient (moderate range)"
+    else:
+        label = f"{capital_efficiency:.1f}× efficient (wide range)"
+
+    return {
+        "in_range_pct":       in_range_pct,
+        "capital_efficiency_x": round(capital_efficiency, 1),
+        "range_width_pct":    round(range_width_pct, 1),
+        "est_days_in_range":  round(est_days, 1),
+        "label":              label,
+        "in_range":           True,
+    }

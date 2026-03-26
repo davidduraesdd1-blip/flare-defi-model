@@ -811,6 +811,34 @@ def load_monitor_digest() -> dict:
         return {}
 
 
+# ─── Memory Optimization: Shared Model Cache (#69) ───────────────────────────
+# st.cache_resource creates a SINGLE shared copy per process rather than
+# per-session copies. For a 20MB history.json this saves N×20MB of RAM
+# where N = concurrent user sessions.
+
+@st.cache_resource
+def _get_history_cache() -> dict:
+    """Process-level singleton for the history.json data object."""
+    return {"data": None, "loaded_at": 0.0}
+
+
+def load_latest_cached(ttl: float = 60.0) -> dict:
+    """
+    Memory-optimized version of load_latest() using a shared process-level cache.
+    Avoids duplicating the large history dict across all Streamlit sessions.
+    Falls back to load_latest() if cache object is unavailable.
+    """
+    try:
+        _cache_obj = _get_history_cache()
+        now = time.time()
+        if _cache_obj["data"] is None or (now - _cache_obj["loaded_at"]) > ttl:
+            _cache_obj["data"]      = load_latest()
+            _cache_obj["loaded_at"] = now
+        return _cache_obj["data"] or {}
+    except Exception:
+        return load_latest()
+
+
 # ─── Utility Helpers ──────────────────────────────────────────────────────────
 
 _URGENCY_COLOR = {"act_now": "#ef4444", "act_soon": "#f59e0b", "monitor": "#3b82f6"}
@@ -1251,6 +1279,25 @@ def render_opportunity_card(
             + f"</div>"
         )
 
+    # Real Yield Ratio (#73) — fee revenue vs token incentive indicator
+    _ry_html = ""
+    if fee_apy > 0 or reward_apy > 0:
+        _ry_total = fee_apy + reward_apy
+        _ry_ratio = fee_apy / _ry_total if _ry_total > 0 else 0.0
+        _ry_pct   = round(_ry_ratio * 100)
+        if _ry_ratio >= 0.7:
+            _ry_label, _ry_color = "Sustainable", "#34D399"
+        elif _ry_ratio >= 0.35:
+            _ry_label, _ry_color = "Partial", "#FBBF24"
+        else:
+            _ry_label, _ry_color = "Incentive-Driven", "#EF4444"
+        _ry_html = (
+            f"<span style='font-size:0.70rem;color:{_ry_color};font-weight:600;"
+            f"background:rgba(0,0,0,0.2);padding:1px 6px;border-radius:4px;"
+            f"border:1px solid {_ry_color}44;' title='Real Yield: {_ry_pct}% of APY is from protocol fees (not emissions)'>"
+            f"⚡ Real Yield {_ry_pct}% · {_ry_label}</span>"
+        )
+
     # Confidence bar visual (0–100)
     conf_bar_pct = f"{conf:.0f}%"
     conf_color   = "#22c55e" if conf >= 70 else ("#f59e0b" if conf >= 45 else "#ef4444")
@@ -1271,5 +1318,6 @@ def render_opportunity_card(
 <span style="display:flex;align-items:center;gap:5px;">Confidence:<span style="display:inline-block;width:48px;height:5px;background:rgba(255,255,255,0.07);border-radius:3px;vertical-align:middle;margin:0 2px;overflow:hidden;"><span style="display:block;width:{conf_bar_pct};height:100%;background:{conf_color};border-radius:3px;"></span></span><span style="color:{conf_color};font-weight:600;">{conf:.0f}%</span></span>
 <span>Suggested: <span style="color:#94a3b8;font-weight:600;">{alloc_str}</span></span>
 {tvl_html}
+{_ry_html}
 </div>
 </div>""", unsafe_allow_html=True)
