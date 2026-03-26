@@ -24,12 +24,13 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "💰  Income Planner",
     "🔒  Spectra Fixed-Rate",
     "📡  FTSO Delegation",
     "🌐  FAssets",
     "🎯  Strategy Planner",
+    "📈  Compound Calculator",
 ])
 
 
@@ -468,3 +469,129 @@ with tab5:
                 st.warning(w)
 
         st.caption("Allocations are suggestions only. Always diversify and do your own research. Not financial advice.")
+
+
+# ─── Tab 6: Compound Returns Calculator (Phase 10) ───────────────────────────
+
+with tab6:
+    import plotly.graph_objects as go
+    import math
+
+    render_section_header(
+        "Compound Returns Calculator",
+        "Project how DeFi yields grow over time with daily compounding + optional monthly top-ups",
+    )
+
+    _cc1, _cc2, _cc3 = st.columns(3)
+    with _cc1:
+        _cc_principal = st.number_input(
+            "Initial Capital ($)", min_value=100.0, max_value=10_000_000.0,
+            value=10_000.0, step=1_000.0, format="%.0f", key="cc_principal",
+        )
+    with _cc2:
+        _cc_apy = st.number_input(
+            "Target APY (%)", min_value=0.1, max_value=500.0,
+            value=12.0, step=0.5, format="%.1f", key="cc_apy",
+        )
+    with _cc3:
+        _cc_months = st.slider("Projection (months)", min_value=1, max_value=60, value=24, key="cc_months")
+
+    _cc4, _cc5 = st.columns(2)
+    with _cc4:
+        _cc_topup = st.number_input(
+            "Monthly Top-up ($)", min_value=0.0, max_value=100_000.0,
+            value=0.0, step=100.0, format="%.0f", key="cc_topup",
+        )
+    with _cc5:
+        _cc_compound = st.selectbox(
+            "Compounding Frequency",
+            ["Daily", "Weekly", "Monthly"],
+            index=0,
+            key="cc_compound",
+        )
+
+    _freq_map = {"Daily": 365, "Weekly": 52, "Monthly": 12}
+    _n = _freq_map[_cc_compound]
+    _r = _cc_apy / 100.0
+
+    # Compute month-by-month balance
+    _balance = _cc_principal
+    _months_list   = [0]
+    _balance_list  = [_balance]
+    _interest_list = [0.0]
+    _topup_total   = 0.0
+
+    for _m in range(1, _cc_months + 1):
+        _periods_this_month = _n / 12
+        # Compound for this month's periods
+        _balance = _balance * (1 + _r / _n) ** _periods_this_month
+        # Add monthly top-up at end of month
+        _balance    += _cc_topup
+        _topup_total += _cc_topup
+        _months_list.append(_m)
+        _balance_list.append(round(_balance, 2))
+        _interest_list.append(round(_balance - _cc_principal - _topup_total, 2))
+
+    _final_balance  = _balance_list[-1]
+    _total_interest = _interest_list[-1]
+    _total_invested = _cc_principal + _topup_total
+    _roi_pct = (_final_balance - _total_invested) / _total_invested * 100 if _total_invested > 0 else 0
+
+    # KPI strip
+    _kc1, _kc2, _kc3, _kc4 = st.columns(4)
+    _kc1.metric("Final Balance",   f"${_final_balance:,.0f}")
+    _kc2.metric("Interest Earned", f"${_total_interest:,.0f}")
+    _kc3.metric("Total Invested",  f"${_total_invested:,.0f}")
+    _kc4.metric("ROI",             f"{_roi_pct:.1f}%")
+
+    # Chart
+    _fig_cc = go.Figure()
+    _fig_cc.add_trace(go.Scatter(
+        x=_months_list, y=_balance_list,
+        mode="lines", name="Balance",
+        line=dict(color="#22c55e", width=2.5),
+        fill="tozeroy", fillcolor="rgba(34,197,94,0.07)",
+    ))
+    _principal_line = [_cc_principal + _cc_topup * _m for _m in _months_list]
+    _fig_cc.add_trace(go.Scatter(
+        x=_months_list, y=_principal_line,
+        mode="lines", name="Capital Invested",
+        line=dict(color="#6366f1", width=1.5, dash="dash"),
+    ))
+    _fig_cc.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(
+            title="Month", gridcolor="rgba(148,163,184,0.1)",
+            tickfont=dict(color="#64748b", size=10),
+        ),
+        yaxis=dict(
+            title="Value (USD)", gridcolor="rgba(148,163,184,0.1)",
+            tickprefix="$", tickfont=dict(color="#64748b", size=10),
+        ),
+        legend=dict(font=dict(color="#94a3b8"), bgcolor="rgba(0,0,0,0)"),
+        margin=dict(l=60, r=20, t=10, b=40),
+        height=300,
+    )
+    st.plotly_chart(_fig_cc, use_container_width=True, config={"displayModeBar": False})
+
+    # Compare multiple APY scenarios
+    with st.expander("Compare APY scenarios"):
+        _scenarios = [_cc_apy * 0.5, _cc_apy, _cc_apy * 1.5, _cc_apy * 2.0]
+        _scen_rows = []
+        for _s_apy in _scenarios:
+            _s_r = _s_apy / 100.0
+            _s_bal = _cc_principal
+            for _m in range(_cc_months):
+                _s_bal = _s_bal * (1 + _s_r / _n) ** (_n / 12) + _cc_topup
+            _s_interest = _s_bal - _total_invested
+            _scen_rows.append({
+                "APY":            f"{_s_apy:.1f}%",
+                "Final Balance":  f"${_s_bal:,.0f}",
+                "Interest":       f"${_s_interest:,.0f}",
+                "ROI":            f"{(_s_bal - _total_invested) / _total_invested * 100:.1f}%",
+            })
+        st.dataframe(pd.DataFrame(_scen_rows), use_container_width=True, hide_index=True)
+    st.caption(
+        f"Assumes {_cc_compound.lower()} compounding · No fees deducted · "
+        "Real DeFi yields fluctuate — use as a directional guide only. Not financial advice."
+    )
