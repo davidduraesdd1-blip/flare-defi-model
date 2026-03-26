@@ -1092,6 +1092,138 @@ else:
         )
     st.caption("Correlations are estimates based on Flare ecosystem token relationships. Actual correlations vary with market conditions.")
 
+# ─── Portfolio Rebalancing Advisor (Phase 8) ──────────────────────────────────
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+render_section_header("Rebalancing Advisor", "Compare current allocation vs model recommendation — find drift")
+
+if positions and total_value > 0:
+    # ── Step 1: Current allocation by protocol type ──────────────────────────
+    _type_map = {k: v.get("type", "Other") for k, v in PROTOCOLS.items()}
+    _current_alloc: dict = {}
+    for pos in positions:
+        proto_key  = pos.get("protocol", "")
+        proto_type = _type_map.get(proto_key, "Other")
+        # Simplify types for comparison
+        if "DEX" in proto_type or "Perp" in proto_type:
+            bucket = "DEX / LP"
+        elif "Lending" in proto_type or "CDP" in proto_type:
+            bucket = "Lending"
+        elif "Staking" in proto_type or "Liquid" in proto_type:
+            bucket = "Staking"
+        elif "Yield" in proto_type:
+            bucket = "Yield Vault"
+        else:
+            bucket = "Other"
+        pnl_idx = positions.index(pos)
+        _current_alloc[bucket] = _current_alloc.get(bucket, 0) + pnl_results[pnl_idx]["current_value"]
+
+    _current_pct = {k: round(v / total_value * 100, 1) for k, v in _current_alloc.items()}
+
+    # ── Step 2: Target allocation from model recommendations ─────────────────
+    _prof_key    = ctx.get("profile", "medium")
+    _model_opps  = (latest.get("models") or {}).get(_prof_key) or []
+    _target_alloc: dict = {}
+    _total_kf = sum(o.get("kelly_fraction", 0) for o in _model_opps) or 1.0
+    for opp in _model_opps:
+        proto_key  = ""
+        proto_name = opp.get("protocol", "")
+        # Reverse-lookup protocol key from name
+        for k, v in PROTOCOLS.items():
+            if v.get("name") == proto_name:
+                proto_key = k
+                break
+        proto_type = _type_map.get(proto_key, "Other")
+        if "DEX" in proto_type or "Perp" in proto_type:
+            bucket = "DEX / LP"
+        elif "Lending" in proto_type or "CDP" in proto_type:
+            bucket = "Lending"
+        elif "Staking" in proto_type or "Liquid" in proto_type:
+            bucket = "Staking"
+        elif "Yield" in proto_type:
+            bucket = "Yield Vault"
+        else:
+            bucket = "Other"
+        kf = opp.get("kelly_fraction", 0) / _total_kf * 100
+        _target_alloc[bucket] = _target_alloc.get(bucket, 0) + kf
+
+    _target_pct = {k: round(v, 1) for k, v in _target_alloc.items()}
+
+    if _target_pct:
+        # ── Step 3: Show drift table ─────────────────────────────────────────
+        all_buckets = sorted(set(list(_current_pct.keys()) + list(_target_pct.keys())))
+        rebal_rows  = []
+        actions     = []
+        for bucket in all_buckets:
+            cur = _current_pct.get(bucket, 0.0)
+            tgt = _target_pct.get(bucket, 0.0)
+            drift = cur - tgt
+            if drift > 8:
+                action = "Reduce"
+                arrow  = "↓ Overweight"
+                dollar_adj = -(drift / 100) * total_value
+            elif drift < -8:
+                action = "Increase"
+                arrow  = "↑ Underweight"
+                dollar_adj = abs(drift / 100) * total_value
+            else:
+                action = "Hold"
+                arrow  = "✓ On target"
+                dollar_adj = 0.0
+            if action != "Hold":
+                actions.append({"bucket": bucket, "action": action, "drift": drift, "dollar_adj": dollar_adj})
+            rebal_rows.append({
+                "Strategy Type": bucket,
+                "Current %":     f"{cur:.1f}%",
+                "Model Target %": f"{tgt:.1f}%",
+                "Drift":         f"{drift:+.1f}%",
+                "Signal":        arrow,
+                "$ Adjustment":  f"${abs(dollar_adj):,.0f}" if dollar_adj != 0 else "—",
+            })
+
+        st.dataframe(pd.DataFrame(rebal_rows), use_container_width=True, hide_index=True)
+
+        # ── Step 4: Actionable suggestions ───────────────────────────────────
+        if actions:
+            st.markdown(
+                "<div style='font-weight:600; color:#a78bfa; font-size:0.88rem; margin:12px 0 8px;'>"
+                "Rebalancing Actions</div>",
+                unsafe_allow_html=True,
+            )
+            for act in sorted(actions, key=lambda x: abs(x["drift"]), reverse=True):
+                _act_color = "#ef4444" if act["action"] == "Reduce" else "#10b981"
+                _act_icon  = "▼" if act["action"] == "Reduce" else "▲"
+                _msg = (
+                    f"Withdraw ${abs(act['dollar_adj']):,.0f} from {act['bucket']} positions "
+                    f"(currently {_current_pct.get(act['bucket'], 0):.0f}% vs {_target_pct.get(act['bucket'], 0):.0f}% target)"
+                    if act["action"] == "Reduce"
+                    else f"Add ${abs(act['dollar_adj']):,.0f} to {act['bucket']} opportunities "
+                    f"({_current_pct.get(act['bucket'], 0):.0f}% current vs {_target_pct.get(act['bucket'], 0):.0f}% target)"
+                )
+                st.markdown(
+                    f"<div style='background:rgba(15,23,42,0.5); border:1px solid rgba(148,163,184,0.1); "
+                    f"border-left:3px solid {_act_color}; border-radius:8px; padding:10px 14px; "
+                    f"margin-bottom:6px; font-size:0.87rem; color:#94a3b8;'>"
+                    f"<span style='color:{_act_color}; font-weight:700;'>{_act_icon} {act['action']} {act['bucket']}</span>"
+                    f"<span style='color:#475569; margin:0 6px;'>·</span>{_msg}</div>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.markdown(
+                "<div style='color:#10b981; font-size:0.85rem; padding:6px 0;'>"
+                "✓ Portfolio is well-aligned with model recommendations — no rebalancing needed.</div>",
+                unsafe_allow_html=True,
+            )
+        st.caption(f"Target based on Kelly-sized {RISK_PROFILES[_prof_key]['label']} model picks. Drift >8% triggers an action. Not financial advice.")
+    else:
+        st.info("Run a scan first to generate model recommendations for comparison.")
+else:
+    st.markdown(
+        "<div style='color:#334155; font-size:0.85rem;'>"
+        "Add tracked positions to see rebalancing suggestions.</div>",
+        unsafe_allow_html=True,
+    )
+
 # ── AgentKit Wallet ───────────────────────────────────────────────────────────
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 render_section_header("AgentKit Wallet", "Coinbase AgentKit EVM wallet — check on-chain balances")

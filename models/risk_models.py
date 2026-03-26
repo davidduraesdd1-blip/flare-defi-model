@@ -274,7 +274,15 @@ def build_opportunity(
     tvl_score   = min(50, tvl_usd / 2_000_000) if tvl_usd and tvl_usd > 0 else 0
     fresh_score = 40 if data_source in ("live", "on-chain") else (25 if data_source == "research" else 15)
     # Upgrade #3: FTSO oracle signal adds up to 10 points when oracle confirms price data
-    confidence  = max(0, min(100, round(tvl_score + fresh_score + (10 - rs) * 2 + ftso_signal, 1)))
+    # APY trend adjustment: rising yield = +3 confidence; falling yield = -5 (risk of lower returns)
+    apy_trend_adj = 3.0 if _apy_trend == "rising" else (-5.0 if _apy_trend == "falling" else 0.0)
+    # Confluence boost: each independent confirming data source adds 2 pts (max +8 for 4 sources)
+    _conf_cnt  = (1 if data_source in ("live", "on-chain") else 0)
+    _conf_cnt += (1 if tvl_usd and tvl_usd > 0 else 0)
+    _conf_cnt += (1 if apy_history and len(apy_history) >= 3 else 0)
+    _conf_cnt += (1 if ftso_signal > 0 else 0)
+    confluence_boost = _conf_cnt * 2.0
+    confidence  = max(0, min(100, round(tvl_score + fresh_score + (10 - rs) * 2 + ftso_signal + apy_trend_adj + confluence_boost, 1)))
 
     # Confluence count (Group 1 — A3): count independent data sources confirming this opportunity
     _confluence = 0

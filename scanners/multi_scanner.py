@@ -116,6 +116,45 @@ def fetch_sparkdex_funding() -> list:
     )]
 
 
+def fetch_flamix_baseline() -> list:
+    """
+    Flamix — native perpetuals DEX on Flare (up to 500x leverage, FTSO pricing).
+    No public API as of Mar 2026; returns baseline data from config and known public metrics.
+    $100M+ 30-day volume and $1.5M+ OI from Dec 2025 Flamix announcements.
+    Replace with live fetch when Flamix releases a public REST API.
+    """
+    prices = _fetch_flare_prices()
+    flr_price = next((p.price_usd for p in prices if p.symbol == "FLR"), FALLBACK_PRICES["FLR"])
+    xrp_price = next((p.price_usd for p in prices if p.symbol == "XRP"), FALLBACK_PRICES["XRP"])
+
+    # Estimated OI split across major pairs: FLR ~40%, XRP ~35%, BTC ~25%
+    total_oi_usd = 1_500_000
+    return [
+        PerpData(
+            exchange="flamix",
+            pair="FLR/USD",
+            mark_price=flr_price,
+            index_price=flr_price,
+            funding_rate=0.0001,   # typical rate for high-leverage native DEX
+            funding_rate_annualised=round(0.0001 * 3 * 365 * 100, 4),
+            open_interest=total_oi_usd * 0.40,
+            volume_24h=100_000_000 / 30,   # $100M/30 days ≈ $3.3M/day estimate
+            data_source="baseline",
+        ),
+        PerpData(
+            exchange="flamix",
+            pair="XRP/USD",
+            mark_price=xrp_price,
+            index_price=xrp_price,
+            funding_rate=0.0001,
+            funding_rate_annualised=round(0.0001 * 3 * 365 * 100, 4),
+            open_interest=total_oi_usd * 0.35,
+            volume_24h=100_000_000 / 30 * 0.35,
+            data_source="baseline",
+        ),
+    ]
+
+
 # ─── Cross-Chain Price Comparison ─────────────────────────────────────────────
 
 def fetch_cross_chain_prices() -> list:
@@ -143,7 +182,7 @@ def fetch_cross_chain_prices() -> list:
 
 def run_multi_scan() -> dict:
     logger.info("Starting multi-platform scan...")
-    perps  = fetch_hyperliquid_perps() + fetch_sparkdex_funding()
+    perps  = fetch_hyperliquid_perps() + fetch_sparkdex_funding() + fetch_flamix_baseline()
     prices = fetch_cross_chain_prices()
 
     logger.info(f"Multi-scan complete — {len(perps)} perps, {len(prices)} cross-chain prices")
