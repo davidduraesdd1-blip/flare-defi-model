@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 from ui.common import page_setup, render_sidebar, render_section_header
 from config import FALLBACK_PRICES
+from models.risk_models import calc_il_vs_hodl, calc_concentrated_lp_efficiency
 
 page_setup("Planning · Flare DeFi")
 
@@ -595,3 +596,91 @@ with tab6:
         f"Assumes {_cc_compound.lower()} compounding · No fees deducted · "
         "Real DeFi yields fluctuate — use as a directional guide only. Not financial advice."
     )
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── IL vs HODL Calculator  (#75) ────────────────────────────────────────────
+
+render_section_header(
+    "IL vs HODL Calculator",
+    "Compare your LP position value against simply holding the same tokens",
+)
+
+_il_c1, _il_c2 = st.columns(2)
+with _il_c1:
+    _il_entry  = st.number_input("Entry price ratio (token1/token0)", min_value=0.0001,
+                                  value=1.0, step=0.01, format="%.4f", key="il_entry")
+    _il_current = st.number_input("Current price ratio", min_value=0.0001,
+                                   value=1.2, step=0.01, format="%.4f", key="il_current")
+with _il_c2:
+    _il_invest  = st.number_input("Initial LP value ($)", min_value=1.0,
+                                   value=1000.0, step=100.0, format="%.0f", key="il_invest")
+    _il_fees    = st.number_input("Fees earned to date ($)", min_value=0.0,
+                                   value=0.0, step=10.0, format="%.2f", key="il_fees")
+
+_il_res = calc_il_vs_hodl(
+    entry_price_ratio=_il_entry,
+    current_price_ratio=_il_current,
+    initial_usd=_il_invest,
+    fee_income_usd=_il_fees,
+)
+
+if "error" not in _il_res:
+    _net_pos  = _il_res["net_vs_hodl_pct"]
+    _net_col  = "#34D399" if _net_pos >= 0 else "#EF4444"
+    _il_m1, _il_m2, _il_m3, _il_m4 = st.columns(4)
+    _il_m1.metric("LP Position Value", f"${_il_res['lp_value_usd']:,.2f}")
+    _il_m2.metric("HODL Value", f"${_il_res['hodl_value_usd']:,.2f}")
+    _il_m3.metric("Impermanent Loss", f"${_il_res['il_usd']:,.2f}",
+                  delta=f"{_il_res['il_pct']:.2f}%",
+                  delta_color="inverse")
+    _il_m4.metric("Net vs HODL (after fees)", f"${_il_res['net_vs_hodl_usd']:,.2f}",
+                  delta=f"{_il_res['net_vs_hodl_pct']:.2f}%",
+                  delta_color="normal")
+    if _il_res["fees_offset_il"]:
+        st.success(f"✅ Fees (${_il_fees:.2f}) fully offset impermanent loss. LP is beating HODL.")
+    else:
+        st.warning(f"⚠️ You need ${abs(_il_res['il_usd']) - _il_fees:.2f} more in fees to offset IL.")
+    st.caption(f"Price ratio changed {_il_res['price_ratio_change']:+.1f}% since entry.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Concentrated LP Range Efficiency  (#83) ─────────────────────────────────
+
+render_section_header(
+    "Concentrated LP Range Efficiency",
+    "Estimate Uniswap V3 capital efficiency and probability of staying in range",
+)
+
+_clp_c1, _clp_c2 = st.columns(2)
+with _clp_c1:
+    _clp_price = st.number_input("Current token price ($)", min_value=0.0001,
+                                  value=1.0, step=0.01, format="%.4f", key="clp_price")
+    _clp_lower = st.number_input("Range lower bound ($)", min_value=0.0001,
+                                  value=0.8, step=0.01, format="%.4f", key="clp_lower")
+with _clp_c2:
+    _clp_upper = st.number_input("Range upper bound ($)", min_value=0.0001,
+                                  value=1.2, step=0.01, format="%.4f", key="clp_upper")
+    _clp_vol   = st.number_input("Daily volatility % (estimate)", min_value=0.01,
+                                  value=3.0, step=0.5, format="%.1f", key="clp_vol")
+
+_clp_res = calc_concentrated_lp_efficiency(
+    price=_clp_price, lower_tick_price=_clp_lower,
+    upper_tick_price=_clp_upper, volatility_pct_daily=_clp_vol,
+)
+
+if "error" not in _clp_res:
+    _clp_cols = st.columns(4)
+    _clp_cols[0].metric("In-Range Probability (7d)", f"{_clp_res['in_range_pct']:.0f}%")
+    _clp_cols[1].metric("Capital Efficiency", f"{_clp_res['capital_efficiency_x']:.1f}×")
+    _clp_cols[2].metric("Range Width", f"{_clp_res['range_width_pct']:.1f}%")
+    _clp_cols[3].metric("Est. Days In Range", f"{_clp_res['est_days_in_range']:.0f}d")
+    if _clp_res.get("in_range"):
+        st.info(f"ℹ️ {_clp_res['label']}. "
+                f"At {_clp_vol}% daily vol, expect to rebalance approx every {_clp_res['est_days_in_range']:.0f} days.")
+    else:
+        st.error("⚠️ Current price is outside your specified range — position earns no fees.")
+elif "error" in _clp_res:
+    st.warning(_clp_res["error"])
