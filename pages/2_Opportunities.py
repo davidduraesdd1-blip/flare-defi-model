@@ -185,7 +185,7 @@ else:
             (lambda t: float(t) if t is not None else 0)(_all_opps[p].get("tvl_usd"))
             for p in _sel_protos
         ]
-        _il_map    = {"none": 10, "low": 7, "medium": 4, "high": 1, None: 5}
+        _il_map    = {"none": 10, "low": 7, "medium": 4, "high": 1, "": 5}
 
         _apy_lo, _apy_hi   = min(_apy_vals),  max(_apy_vals)
         _conf_lo, _conf_hi = min(_conf_vals), max(_conf_vals)
@@ -200,7 +200,7 @@ else:
         fig_radar = go.Figure()
         for _i, _proto in enumerate(_sel_protos):
             _opp = _all_opps[_proto]
-            _il_score = _il_map.get((_opp.get("il_risk") or "").lower(), 5)
+            _il_score = _il_map.get((_opp.get("il_risk") or "none").lower(), 5)
             _scores = [
                 _norm(_opp.get("estimated_apy",  0), _apy_lo,  _apy_hi),
                 _norm(_opp.get("confidence",    50), _conf_lo, _conf_hi),
