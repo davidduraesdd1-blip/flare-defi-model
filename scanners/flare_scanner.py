@@ -875,10 +875,11 @@ def fetch_staking_yields() -> list:
     else:
         sp = _dl_pick("sceptre", "sflr")
         if sp:
+            _sp_apy = sp.get("apy", 0)
             yields.append(StakingYield(
                 protocol="sceptre", token="sFLR",
-                apy=sp["apy"], apy_low=sp["apy"] * 0.85, apy_high=sp["apy"] * 1.15,
-                tvl_usd=sp["tvl_usd"], data_source="live",
+                apy=_sp_apy, apy_low=_sp_apy * 0.85, apy_high=_sp_apy * 1.15,
+                tvl_usd=sp.get("tvl_usd", 0), data_source="live",
             ))
         else:
             _sflr_cfg = PROTOCOLS["sceptre"]["tokens"]["sFLR"]

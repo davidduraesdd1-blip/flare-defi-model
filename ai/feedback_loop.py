@@ -120,9 +120,9 @@ def record_actuals(scan_result: dict) -> None:
     now     = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Build lookup from current scan data
-    current_pools   = {p["pool_name"].lower().strip(): p.get("apr", 0)        for p in (scan_result.get("pools")   or []) if p.get("pool_name")}
-    current_lending = {r["asset"].lower().strip():     r.get("supply_apy", 0) for r in (scan_result.get("lending") or []) if r.get("asset")}
-    current_staking = {s["token"].lower().strip():     s.get("apy", 0)        for s in (scan_result.get("staking") or []) if s.get("token")}
+    current_pools   = {p.get("pool_name", "").lower().strip(): p.get("apr", 0)        for p in (scan_result.get("pools")   or []) if p.get("pool_name")}
+    current_lending = {r.get("asset", "").lower().strip():     r.get("supply_apy", 0) for r in (scan_result.get("lending") or []) if r.get("asset")}
+    current_staking = {s.get("token", "").lower().strip():     s.get("apy", 0)        for s in (scan_result.get("staking") or []) if s.get("token")}
     all_actuals = {**current_pools, **current_lending, **current_staking}
 
     for pred in (history.get("predictions") or []):
@@ -346,7 +346,7 @@ def get_feedback_dashboard() -> dict:
 
     # Overall health = average of the three 24h health scores
     scores = [accuracy_24h[p]["health_score"] for p in accuracy_24h]
-    overall_health = int(np.mean(scores))
+    overall_health = int(np.mean(scores)) if scores else 0
 
     # Trend (reuse already-loaded history)
     trend = _compute_trend(history=history)

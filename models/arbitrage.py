@@ -373,19 +373,21 @@ def detect_sflr_borrow_arb(staking_data: list, lending_data: list) -> list:
     sflr_apy = sflr.get("apy", 0)
     for rate in lending_data:
         if rate.get("asset") in ("WFLR", "FLR") and rate.get("borrow_apy", 0) > 0:
-            spread = sflr_apy - rate["borrow_apy"] - 1.5   # 1.5% buffer: gas + liquidation risk
+            _borrow_apy = rate.get("borrow_apy", 0)
+            _protocol   = rate.get("protocol", "Unknown")
+            spread = sflr_apy - _borrow_apy - 1.5   # 1.5% buffer: gas + liquidation risk
             if spread >= MIN_PROFIT_PCT:
                 opps.append(ArbitrageOpportunity(
                     strategy="sflr_borrow_arb",
                     strategy_label="sFLR Staking Carry Trade",
                     token_or_pair="WFLR/sFLR",
-                    buy_where=f"Borrow WFLR at {rate['borrow_apy']:.1f}% on {rate['protocol']}",
+                    buy_where=f"Borrow WFLR at {_borrow_apy:.1f}% on {_protocol}",
                     sell_where=f"Stake as sFLR at {sflr_apy:.1f}% APY on Sceptre",
                     estimated_profit=round(spread, 2),
                     capital_needed=1000,
                     urgency="monitor",
                     plain_english=(
-                        f"Borrow FLR at {rate['borrow_apy']:.1f}% from {rate['protocol']}, "
+                        f"Borrow FLR at {_borrow_apy:.1f}% from {_protocol}, "
                         f"then stake it as sFLR to earn {sflr_apy:.1f}%. "
                         f"Net carry profit: ~{round(spread,1)}% per year."
                     ),
