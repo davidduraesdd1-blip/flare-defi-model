@@ -230,7 +230,7 @@ else:
                 r=_scores + [_scores[0]],
                 theta=_DIMENSIONS + [_DIMENSIONS[0]],
                 fill="toself",
-                fillcolor=_col + "22",
+                fillcolor="rgba({},{},{},0.13)".format(int(_col[1:3],16),int(_col[3:5],16),int(_col[5:7],16)),
                 line=dict(color=_col, width=2),
                 name=_proto,
                 hovertemplate=(
