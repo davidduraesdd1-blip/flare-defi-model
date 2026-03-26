@@ -38,6 +38,9 @@ _FLARE_PROTOCOL_SLUGS = [
     "kinetic-finance",
     "enosys",
     "upshift",
+    "kinza-finance",      # Aave V3 fork on Flare — slug may resolve once indexed
+    "blazeswap",          # Primary Flare AMM DEX
+    "firelight-finance",  # stXRP liquid staking
 ]
 
 _cache: dict = {}
