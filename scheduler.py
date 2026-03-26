@@ -611,6 +611,15 @@ def start_scheduler() -> None:
         )
         logger.info(f"Scheduled scan at {t} {tz}")
 
+    # Guard: warn if no full scans were scheduled (all run_times were malformed)
+    scheduled_ids = [job.id for job in scheduler.get_jobs()]
+    full_scan_jobs = [jid for jid in scheduled_ids if jid.startswith("scan_")]
+    if not full_scan_jobs:
+        logger.error(
+            "No valid full-scan times scheduled — check SCHEDULER['run_times'] in config.py. "
+            f"Configured times: {run_times}"
+        )
+
     # Lightweight intraday check — runs every N hours (default 3)
     interval_hours = int(SCHEDULER.get("quick_check_interval_hours", 3))
     scheduler.add_job(
