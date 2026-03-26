@@ -238,8 +238,8 @@ def fetch_prices() -> list:
         logger.debug("fetch_prices: returning cached prices (TTL not expired)")
         return _price_cache
 
-    # Include SPRK (SparkDEX native token) for reward APY USD-adjustment (#68)
-    ids = "flare-networks,ripple,tether,sparkdex-ai"
+    # Include SPRK (SparkDEX reward token) and ripple-usd (RLUSD) for reward APY + pool tracking (#68-70)
+    ids = "flare-networks,ripple,tether,sparkdex-ai,ripple-usd,hyperliquid"
     url = f"{APIS['coingecko']}/simple/price"
     data = _get(url, params={
         "ids": ids,
@@ -251,10 +251,12 @@ def fetch_prices() -> list:
 
     if data:
         mapping = {
-            "flare-networks": ("FLR",  "live"),
-            "ripple":         ("XRP",  "live"),
-            "tether":         ("USD0", "live"),
-            "sparkdex-ai":    ("SPRK", "live"),   # SparkDEX reward token price
+            "flare-networks": ("FLR",   "live"),
+            "ripple":         ("XRP",   "live"),
+            "tether":         ("USD0",  "live"),
+            "sparkdex-ai":    ("SPRK",  "live"),    # SparkDEX reward token price
+            "ripple-usd":     ("RLUSD", "live"),    # Ripple USD regulated stablecoin
+            "hyperliquid":    ("HYPE",  "live"),    # Hyperliquid native token (#70)
         }
         for cg_id, (symbol, src) in mapping.items():
             if cg_id in data and isinstance(data[cg_id], dict):
