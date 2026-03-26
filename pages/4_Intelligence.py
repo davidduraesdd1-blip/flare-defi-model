@@ -751,8 +751,10 @@ if _intent_input:
         if any(kw in _input_lower for kw in keywords):
             _detected.append(intent_key)
 
+    _used_default = False
     if not _detected:
         _detected = ["lend"]  # default to most common intent
+        _used_default = True
 
     st.markdown("**Detected intent:**")
     _intent_cols = st.columns(min(len(_detected), 4))
@@ -802,7 +804,7 @@ if _intent_input:
 
     # Optional: Claude AI classification for ambiguous intents
     _ai_key = __import__("os").environ.get("ANTHROPIC_API_KEY", "")
-    if _ai_key and len(_detected) == 0:
+    if _ai_key and _used_default:
         with st.spinner("Asking Claude to classify intent…"):
             try:
                 import anthropic as _anth

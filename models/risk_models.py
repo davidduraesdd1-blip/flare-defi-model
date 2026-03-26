@@ -832,13 +832,12 @@ def calc_concentrated_lp_efficiency(
 
     # In-range probability over 7 days (rough Gaussian)
     sigma_7d = daily_vol * math.sqrt(7)
-    from_center = abs(price - (lower_tick_price + upper_tick_price) / 2) / price * 100
-    z_score     = half_range / sigma_7d if sigma_7d > 0 else 999
-    import_erf  = min(z_score / 1.4142, 3.0)  # scaled erf approximation
+    z_score  = half_range / sigma_7d if sigma_7d > 0 else 999
+    z_scaled = min(z_score / 1.4142, 3.0)  # scaled erf approximation
     # Approx erf using polynomial (avoids scipy dependency)
-    t = 1 / (1 + 0.3275911 * abs(import_erf))
+    t = 1 / (1 + 0.3275911 * abs(z_scaled))
     erf_approx = 1 - (0.254829592*t - 0.284496736*t**2 + 1.421413741*t**3
-                      - 1.453152027*t**4 + 1.061405429*t**5) * math.exp(-import_erf**2)
+                      - 1.453152027*t**4 + 1.061405429*t**5) * math.exp(-z_scaled**2)
     in_range_pct = round(erf_approx * 100, 1)
 
     if capital_efficiency >= 10:
