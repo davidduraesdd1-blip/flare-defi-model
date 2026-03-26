@@ -168,8 +168,9 @@ PROTOCOLS = {
             "T-Pool":    {"apr": 3.5,  "asset": "USD0",  "strategy": "treasury"},
             "X-Pool":    {"apr": 11.5, "asset": "USD0",  "strategy": "arb+tbill"},
             "USDX-Pool": {"apr": 9.1,  "asset": "USDX",  "strategy": "t-bill",   "tvl_usd": 38_000_000},
+            "RLUSD-Pool": {"apr": 5.0, "asset": "RLUSD", "strategy": "rlusd_tbill", "tvl_usd": 5_000_000, "note": "Ripple USD — regulated stablecoin pool (Mar 2026 launch)"},
         },
-        "tvl_usd": 41_000_000,
+        "tvl_usd": 46_000_000,   # updated Mar 2026 to include RLUSD pool
     },
     "spectra": {
         "name":     "Spectra Finance",
@@ -315,10 +316,13 @@ PROTOCOLS = {
 # ─── Fallback Prices (used when CoinGecko is unavailable) ────────────────────
 # Update these conservatively whenever prices move significantly (>20%).
 FALLBACK_PRICES = {
-    "FLR":  0.0088,
-    "XRP":  1.53,
-    "FXRP": 1.527,   # XRP * 0.998 bridge discount
-    "USD0": 1.00,
+    "FLR":   0.0088,
+    "XRP":   1.53,
+    "FXRP":  1.527,   # XRP * 0.998 bridge discount
+    "USD0":  1.00,
+    "RLUSD": 1.00,    # Ripple USD — regulated stablecoin, maintains $1 peg
+    "SPRK":  0.05,    # SparkDEX token — placeholder; updated live from CoinGecko
+    "HYPE":  10.0,    # Hyperliquid native token — placeholder; updated live from CoinGecko
 }
 
 # ─── Model Parameters ─────────────────────────────────────────────────────────
