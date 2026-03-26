@@ -470,3 +470,53 @@ INITIAL_POSITIONS = [
         "entry_apy":      None,
     },
 ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FEATURE FLAGS — auto-enabled by API key presence (zero code changes needed)
+# ─────────────────────────────────────────────────────────────────────────────
+
+SENTRY_DSN: str | None = os.environ.get("DEFI_SENTRY_DSN")
+ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")
+COINGECKO_API_KEY: str | None = os.environ.get("DEFI_COINGECKO_API_KEY")
+
+FEATURES: dict = {
+    "ai_analysis":      bool(ANTHROPIC_API_KEY),
+    "coingecko_pro":    bool(COINGECKO_API_KEY),
+    "cdp_agentkit":     bool(CDP_API_KEY_NAME and CDP_API_KEY_PRIVATE),
+    "sentry":           bool(SENTRY_DSN),
+    "flare_rpc":        True,        # always available (public RPC)
+    "hyperliquid":      True,        # free public API
+    "defillama":        True,        # free public API
+    "coingecko_free":   True,        # always available
+}
+
+
+def feature_enabled(name: str) -> bool:
+    """Return True if the named feature is available."""
+    return FEATURES.get(name, False)
+
+
+# ─── SSRF Allowlist — only these domains can be fetched ──────────────────────
+ALLOWED_DOMAINS: frozenset = frozenset({
+    "api.coingecko.com",
+    "pro-api.coingecko.com",
+    "api.llama.fi",
+    "yields.llama.fi",
+    "api.alternative.me",
+    "api.geckoterminal.com",
+    "api.hyperliquid.xyz",
+    "flare-api.flare.network",
+    "rpc.ankr.com",
+    "flare.public-rpc.com",
+    "flare-explorer.flare.network",
+    "api-portal.flare.network",
+    "flaremetrics.io",
+    "flr-data-availability.flare.network",
+    "subgraph.blazeswap.xyz",
+    "api.portals.fi",
+    "api.clearpool.finance",
+    "app.sceptre.fi",
+    "api.kinetic.market",
+    "api.upshift.fi",
+})
