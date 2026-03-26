@@ -1,0 +1,14 @@
+title = "RWA Infinity Model - Gitleaks Config"
+
+[allowlist]
+description = "Allowlist for known safe patterns"
+paths = [
+    ".streamlit/secrets.toml.example",
+    "requirements.txt",
+]
+regexes = [
+    # Placeholder values in example/template files
+    '''your[_-]?api[_-]?key[_-]?here''',
+    '''sk-ant-example''',
+    '''REPLACE_WITH_YOUR_KEY''',
+]

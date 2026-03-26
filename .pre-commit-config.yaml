@@ -3,14 +3,17 @@ repos:
     rev: v8.21.2
     hooks:
       - id: gitleaks
-        name: Detect secrets with gitleaks
-        description: Scan for hardcoded secrets before committing
+        name: Detect hardcoded secrets
+        description: Detects hardcoded secrets using Gitleaks
+        entry: gitleaks protect --verbose --redact --staged
+        language: golang
+        pass_filenames: false
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: check-added-large-files
-        args: ["--maxkb=1000"]
+        args: ['--maxkb=500']
       - id: check-merge-conflict
       - id: detect-private-key
       - id: end-of-file-fixer
