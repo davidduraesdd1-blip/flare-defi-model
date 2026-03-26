@@ -206,7 +206,7 @@ else:
                 _norm(_opp.get("confidence",    50), _conf_lo, _conf_hi),
                 _norm(10 - _opp.get("risk_score", 5), 0, 10),  # invert: lower risk → higher score
                 _norm(
-                    (lambda t: float(t) if t else 0)(_opp.get("tvl_usd")),
+                    (lambda t: float(t) if t is not None else 0)(_opp.get("tvl_usd")),
                     _tvl_lo, _tvl_hi,
                 ),
                 _il_score,
@@ -257,7 +257,6 @@ else:
         _cmp_rows = []
         for _proto in _sel_protos:
             _opp = _all_opps[_proto]
-            from ui.common import risk_score_to_grade
             _grade, _ = risk_score_to_grade(_opp.get("risk_score", 5))
             _cmp_rows.append({
                 "Protocol":    _proto,
@@ -268,8 +267,8 @@ else:
                 "Risk Grade":  _grade,
                 "IL Risk":     (_opp.get("il_risk") or "—").title(),
                 "TVL":         (
-                    f"${_opp['tvl_usd']/1e6:.1f}M"
-                    if _opp.get("tvl_usd") and float(_opp["tvl_usd"]) > 0
+                    f"${float(_opp.get('tvl_usd', 0))/1e6:.1f}M"
+                    if _opp.get("tvl_usd") and float(_opp.get("tvl_usd", 0)) > 0
                     else "—"
                 ),
             })

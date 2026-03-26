@@ -588,7 +588,7 @@ with tab6:
                 "APY":            f"{_s_apy:.1f}%",
                 "Final Balance":  f"${_s_bal:,.0f}",
                 "Interest":       f"${_s_interest:,.0f}",
-                "ROI":            f"{(_s_bal - _total_invested) / _total_invested * 100:.1f}%",
+                "ROI":            f"{(_s_bal - _total_invested) / _total_invested * 100:.1f}%" if _total_invested > 0 else "—",
             })
         st.dataframe(pd.DataFrame(_scen_rows), use_container_width=True, hide_index=True)
     st.caption(

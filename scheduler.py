@@ -215,7 +215,8 @@ def run_quick_check() -> None:
 
         # ── 4. Price moves vs last check ──────────────────────────────────
         cache = _load_quick_cache()
-        last_prices = cache.get("prices", {})
+        _cached_prices = cache.get("prices", {})
+        last_prices = _cached_prices if isinstance(_cached_prices, dict) else {}
         current_prices = {p.symbol: p.price_usd for p in prices_list}
         for symbol, price in current_prices.items():
             last = last_prices.get(symbol)
