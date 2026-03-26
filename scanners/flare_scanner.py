@@ -238,7 +238,8 @@ def fetch_prices() -> list:
         logger.debug("fetch_prices: returning cached prices (TTL not expired)")
         return _price_cache
 
-    ids = "flare-networks,ripple,tether"
+    # Include SPRK (SparkDEX native token) for reward APY USD-adjustment (#68)
+    ids = "flare-networks,ripple,tether,sparkdex-ai"
     url = f"{APIS['coingecko']}/simple/price"
     data = _get(url, params={
         "ids": ids,
@@ -253,6 +254,7 @@ def fetch_prices() -> list:
             "flare-networks": ("FLR",  "live"),
             "ripple":         ("XRP",  "live"),
             "tether":         ("USD0", "live"),
+            "sparkdex-ai":    ("SPRK", "live"),   # SparkDEX reward token price
         }
         for cg_id, (symbol, src) in mapping.items():
             if cg_id in data and isinstance(data[cg_id], dict):

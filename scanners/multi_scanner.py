@@ -56,7 +56,7 @@ def fetch_hyperliquid_perps() -> list:
 
         for i, asset in enumerate(universe):
             name = asset.get("name", "")
-            if name not in ("FXRP", "XRP"):
+            if name not in ("FXRP", "XRP", "HYPE"):
                 continue
 
             if i < len(asset_ctx):
