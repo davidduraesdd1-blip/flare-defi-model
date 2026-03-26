@@ -223,11 +223,13 @@ def fetch_flare_protocols_summary() -> List[dict]:
                 apy = float(pool.get("apy") or 0)
                 e["_apy_sum"] += apy
                 e["n_pools"]  += 1
-                # Approximate 7d TVL change from il7d data if available
+                # DeFiLlama il7d = 7-day IL as decimal (negative = LP lost vs holding).
+                # Use directly (no sign inversion): negative IL means pool value declined,
+                # which is represented correctly as a negative tvl_7d_change_pct.
                 il7d = pool.get("il7d")
                 if il7d is not None:
                     try:
-                        e["tvl_7d_change_pct"] = float(il7d) * -1  # inverted IL = loss
+                        e["tvl_7d_change_pct"] = float(il7d)
                     except (TypeError, ValueError):
                         pass
             except (TypeError, ValueError):
