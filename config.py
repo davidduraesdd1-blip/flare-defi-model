@@ -270,7 +270,7 @@ PROTOCOLS = {
         "url":      "https://app.hyperliquid.xyz",
         "live":     True,
         "risk":     "high",
-        "pairs": ["FXRP/USDC", "FXRP/USDH"],   # FXRP/USDH added Jan 2026
+        "pairs": ["FXRP/USDC", "FXRP/USDH", "HYPE/USDC"],   # FXRP/USDH added Jan 2026; HYPE native token added Mar 2026
     },
     "flamix": {
         "name":     "Flamix",
