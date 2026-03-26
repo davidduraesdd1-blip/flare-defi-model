@@ -12,6 +12,22 @@ sys.path.insert(0, str(Path(__file__).parent))
 from dotenv import load_dotenv
 load_dotenv()
 
+# ─── Sentry error monitoring (free tier — only loads when DSN is set) ──────────
+try:
+    from config import SENTRY_DSN as _SENTRY_DSN
+    if _SENTRY_DSN:
+        try:
+            import sentry_sdk
+            sentry_sdk.init(
+                dsn=_SENTRY_DSN,
+                traces_sample_rate=0.05,
+                send_default_pii=False,
+            )
+        except ImportError:
+            pass
+except ImportError:
+    pass
+
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_positions,
     render_price_strip, render_incentive_warning,
