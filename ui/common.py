@@ -82,6 +82,14 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
     _inject_css()
 
 
+@st.cache_data(ttl=86400)
+def _build_css(theme: str) -> str:
+    """Return the full CSS string for the given theme. Cached for 24 hours (upgrade #32)."""
+    if theme == "light":
+        return _CSS_LIGHT
+    return _CSS_DARK
+
+
 def _inject_css() -> None:
     # ── Detect theme FIRST before injecting any CSS ───────────────────────────
     # This ensures we inject ONLY one theme's CSS, preventing dark/light conflicts.
@@ -94,7 +102,14 @@ def _inject_css() -> None:
 
     if _is_light:
         # ── LIGHT MODE: complete standalone CSS (no dark CSS injected at all) ──
-        st.markdown("""
+        st.markdown(_build_css("light"), unsafe_allow_html=True)
+    else:
+        # ── DARK MODE: complete standalone CSS ────────────────────────────────
+        st.markdown(_build_css("dark"), unsafe_allow_html=True)
+
+
+# ── CSS constant strings (extracted for module-level caching, upgrade #32) ────
+_CSS_LIGHT = """
 <style>
     /* ── Chrome Reset ─────────────────────────────────────────────────── */
     #MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden; }
@@ -362,11 +377,9 @@ def _inject_css() -> None:
     [data-testid="stCheckbox"] label span,
     [data-testid="stToggle"] label span { color: #1e293b !important; }
 </style>
-""", unsafe_allow_html=True)
+"""
 
-    else:
-        # ── DARK MODE: complete standalone CSS ────────────────────────────────
-        st.markdown("""
+_CSS_DARK = """
 <style>
     /* ── Chrome Reset ─────────────────────────────────────────────────── */
     #MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden; }
@@ -533,7 +546,7 @@ def _inject_css() -> None:
     :is(div,span,p,a)[style*="color:#1e293b"] { color: #64748b !important; }
     :is(div,span,p,a)[style*="color:#0f172a"] { color: #64748b !important; }
 </style>
-""", unsafe_allow_html=True)
+"""
 
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────

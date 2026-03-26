@@ -20,8 +20,9 @@ from config import DB_FILE
 
 logger = logging.getLogger(__name__)
 
-_write_lock   = threading.Lock()
-_thread_local = threading.local()
+_write_lock    = threading.Lock()
+_thread_local  = threading.local()
+_db_initialized = False
 
 
 # ─── Connection Pool ──────────────────────────────────────────────────────────
@@ -67,6 +68,16 @@ def _get_conn() -> _PooledConn:
             w = _PooledConn(_make_conn())
             _thread_local.conn = w
     return w
+
+
+def _get_conn_and_init() -> _PooledConn:
+    """Return a connection, running init_db() exactly once on first call (upgrade #31)."""
+    global _db_initialized
+    conn = _get_conn()
+    if not _db_initialized:
+        _db_initialized = True   # set before init_db to prevent re-entry
+        init_db()
+    return conn
 
 
 # ─── Schema ───────────────────────────────────────────────────────────────────
@@ -154,6 +165,15 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_feedback_ts     ON ai_feedback(timestamp);
             CREATE INDEX IF NOT EXISTS idx_feedback_profile ON ai_feedback(profile);
         """)
+        # Compound indexes for common profile+timestamp query patterns (upgrade #29)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_opps_profile_ts "
+            "ON opportunities(profile, timestamp DESC)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_feedback_profile_ts "
+            "ON ai_feedback(profile, timestamp DESC)"
+        )
         conn.commit()
         logger.info("[DB] Schema initialized")
 
@@ -165,7 +185,7 @@ def write_scan_status(is_running: bool, progress: int = 0,
                       timestamp: Optional[str] = None):
     ts = timestamp or datetime.now(timezone.utc).isoformat()
     with _write_lock:
-        conn = _get_conn()
+        conn = _get_conn_and_init()
         try:
             conn.execute("""
                 INSERT INTO scan_status (id, is_running, progress, current_task, timestamp, error)
@@ -183,7 +203,7 @@ def write_scan_status(is_running: bool, progress: int = 0,
 
 
 def get_scan_status() -> dict:
-    conn = _get_conn()
+    conn = _get_conn_and_init()
     try:
         row = conn.execute("SELECT * FROM scan_status WHERE id=1").fetchone()
         if row:
@@ -200,7 +220,7 @@ def save_scan_run(profile: str, n_opps: int, duration_s: float = None,
     """Insert a scan run record and return its ID."""
     ts = datetime.now(timezone.utc).isoformat()
     with _write_lock:
-        conn = _get_conn()
+        conn = _get_conn_and_init()
         try:
             cur = conn.execute(
                 "INSERT INTO scan_runs (timestamp, profile, n_opps, duration_s, status) "
@@ -222,7 +242,7 @@ def save_opportunities(profile: str, opportunities: List[dict], scan_id: int = N
         return
     ts = datetime.now(timezone.utc).isoformat()
     with _write_lock:
-        conn = _get_conn()
+        conn = _get_conn_and_init()
         try:
             rows = []
             for o in opportunities:
@@ -254,7 +274,7 @@ def save_opportunities(profile: str, opportunities: List[dict], scan_id: int = N
 
 def get_opportunities(profile: str = None, limit: int = 200) -> pd.DataFrame:
     """Return recent opportunities as a DataFrame."""
-    conn = _get_conn()
+    conn = _get_conn_and_init()
     try:
         if profile:
             return pd.read_sql_query(
@@ -313,8 +333,13 @@ def save_arb_opportunities(arb_results: dict):
         return
 
     with _write_lock:
-        conn = _get_conn()
+        conn = _get_conn_and_init()
         try:
+            # Prune stale inactive records older than 7 days to prevent unbounded growth
+            conn.execute(
+                "DELETE FROM arb_opportunities "
+                "WHERE is_active = 0 AND timestamp < datetime('now', '-7 days')"
+            )
             # Mark previous arbs inactive
             conn.execute("UPDATE arb_opportunities SET is_active=0")
             conn.executemany("""
@@ -330,7 +355,7 @@ def save_arb_opportunities(arb_results: dict):
 
 def get_active_arb_opportunities(limit: int = 100) -> pd.DataFrame:
     """Return currently active arbitrage opportunities."""
-    conn = _get_conn()
+    conn = _get_conn_and_init()
     try:
         return pd.read_sql_query(
             "SELECT * FROM arb_opportunities WHERE is_active=1 "
@@ -350,7 +375,7 @@ def save_ai_feedback(profile: str, entries: List[dict]):
         return
     ts = datetime.now(timezone.utc).isoformat()
     with _write_lock:
-        conn = _get_conn()
+        conn = _get_conn_and_init()
         try:
             rows = []
             for e in entries:
@@ -379,7 +404,7 @@ def save_ai_feedback(profile: str, entries: List[dict]):
 
 def get_ai_feedback(profile: str = None, days: int = 90) -> pd.DataFrame:
     """Return AI feedback records within the lookback window."""
-    conn = _get_conn()
+    conn = _get_conn_and_init()
     from datetime import timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     try:
@@ -398,8 +423,6 @@ def get_ai_feedback(profile: str = None, days: int = 90) -> pd.DataFrame:
 
 
 # ─── Auto-init ────────────────────────────────────────────────────────────────
-# Initialise schema on first import so callers don't need to call init_db()
-try:
-    init_db()
-except Exception as _init_err:
-    logger.error("[DB] Auto-init failed: %s", _init_err)
+# Schema is initialised lazily on the first DB operation via _get_conn_and_init()
+# (upgrade #31). This prevents blocking app startup if the DB file is locked or
+# slow to open. Callers that need the schema immediately may call init_db() directly.

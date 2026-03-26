@@ -55,6 +55,10 @@ _SFLR_ABI = [
 _SFLR_ADDRESS = "0x12e605bc104e93B45e1aD99F9e555f659051c2BB"  # Sceptre sFLR on Flare mainnet
 _BLOCKS_30D   = int(_FLARE_BLOCKS_PER_YEAR * 30 / 365)        # ~1,297,000 blocks
 
+# Module-level TTL cache for fetch_sceptre_onchain_rate (5-minute TTL)
+_sceptre_cache: dict = {"ts": 0, "data": None}
+_SCEPTRE_TTL: int = 300  # seconds
+
 
 def fetch_sceptre_onchain_rate() -> Optional[float]:
     """
@@ -63,7 +67,12 @@ def fetch_sceptre_onchain_rate() -> Optional[float]:
     Reads getPooledFlrByShares(1e18) at current block and ~30 days ago.
     Falls back to totalPooledFlr/totalShares ratio method if needed.
     Returns annualised APY % or None if RPC unavailable.
+    Results are cached for 5 minutes (_SCEPTRE_TTL) to avoid redundant RPC calls.
     """
+    now = time.time()
+    if _sceptre_cache["data"] is not None and now - _sceptre_cache["ts"] < _SCEPTRE_TTL:
+        return _sceptre_cache["data"]
+
     w3 = _get_web3()
     if w3 is None:
         return None
@@ -94,7 +103,10 @@ def fetch_sceptre_onchain_rate() -> Optional[float]:
             return None
         growth_30d = (rate_now - rate_past) / rate_past
         apy = round(growth_30d * (365 / 30) * 100, 2)
-        return apy if 0.5 <= apy <= 50.0 else None   # sanity bounds
+        result = apy if 0.5 <= apy <= 50.0 else None   # sanity bounds
+        _sceptre_cache["ts"]   = time.time()
+        _sceptre_cache["data"] = result
+        return result
     except Exception as exc:
         logger.warning(f"Sceptre on-chain rate failed: {exc}")
         return None
@@ -695,69 +707,95 @@ def fetch_enosys_pools() -> list:
 
 # ─── Kinetic Lending Scanner ──────────────────────────────────────────────────
 
+def _fetch_single_ktoken_rate(w3, asset: str, cfg: dict, n_tokens: int) -> LendingRate:
+    """Fetch a single kToken's supply/borrow rates from on-chain.  Called in parallel."""
+    supply_apy = borrow_apy = utilisation = tvl_usd = None
+    data_source = "live"
+    try:
+        if w3 is None:
+            raise ConnectionError("No Flare RPC reachable")
+
+        contract = w3.eth.contract(
+            address=Web3.to_checksum_address(cfg["address"]),
+            abi=_KTOKEN_ABI,
+        )
+
+        supply_rate   = contract.functions.supplyRatePerBlock().call()
+        borrow_rate   = contract.functions.borrowRatePerBlock().call()
+        cash          = contract.functions.getCash().call()
+        total_borrows = contract.functions.totalBorrows().call()
+
+        supply_apy = _rate_to_apy(supply_rate)
+        borrow_apy = _rate_to_apy(borrow_rate)
+
+        # Utilisation = borrows / (cash + borrows)
+        denom = cash + total_borrows
+        utilisation = round(total_borrows / denom, 4) if denom > 0 else 0.0
+
+        # TVL: convert raw token units → USD using baseline price for non-stablecoins
+        underlying_decimals = cfg.get("decimals", 18)
+        if not (0 <= underlying_decimals <= 30):
+            logger.warning(f"Kinetic: invalid decimals {underlying_decimals} for {asset} — defaulting to 18")
+            underlying_decimals = 18
+        token_amount = (cash + total_borrows) / (10 ** underlying_decimals)
+        token_price  = _BASELINE_TOKEN_PRICES.get(asset, 1.0)
+        tvl_usd = round(token_amount * token_price, 2)
+
+    except Exception as e:
+        logger.warning(f"Kinetic on-chain fetch failed for {asset}: {e} — using baseline")
+        supply_apy  = cfg.get("baseline_supply", 0.0)
+        borrow_apy  = cfg.get("baseline_borrow", 0.0)
+        utilisation = 0.0   # unknown when using baseline; do not fabricate a value
+        tvl_usd     = PROTOCOLS["kinetic"]["tvl_usd"] / max(1, n_tokens)
+        data_source = "baseline"
+
+    return LendingRate(
+        protocol="kinetic",
+        asset=asset,
+        supply_apy=supply_apy,
+        borrow_apy=borrow_apy,
+        utilisation=utilisation,
+        tvl_usd=tvl_usd,
+        data_source=data_source,
+    )
+
+
 def fetch_kinetic_rates() -> list:
     """
     Fetch live Kinetic lending rates directly from on-chain kToken contracts
     (Compound V2 fork on Flare mainnet).  Falls back to config baselines if
     the RPC is unreachable or a call fails.
+    All kToken fetches are parallelised with ThreadPoolExecutor(max_workers=6).
     """
-    w3 = _get_web3()
+    w3       = _get_web3()
     k_tokens = PROTOCOLS["kinetic"]["kTokens"]
-    rates = []
+    n_tokens = len(k_tokens)
 
-    for asset, cfg in k_tokens.items():
-        supply_apy = borrow_apy = utilisation = tvl_usd = None
-        data_source = "live"
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futs = {
+            ex.submit(_fetch_single_ktoken_rate, w3, asset, cfg, n_tokens): asset
+            for asset, cfg in k_tokens.items()
+        }
+        rate_map: dict = {}
+        for fut in as_completed(futs):
+            asset = futs[fut]
+            try:
+                rate_map[asset] = fut.result(timeout=10)
+            except Exception as e:
+                logger.warning(f"Kinetic parallel fetch timed out for {asset}: {e}")
+                cfg = k_tokens[asset]
+                rate_map[asset] = LendingRate(
+                    protocol="kinetic",
+                    asset=asset,
+                    supply_apy=cfg.get("baseline_supply", 0.0),
+                    borrow_apy=cfg.get("baseline_borrow", 0.0),
+                    utilisation=0.0,
+                    tvl_usd=PROTOCOLS["kinetic"]["tvl_usd"] / max(1, n_tokens),
+                    data_source="baseline",
+                )
 
-        try:
-            if w3 is None:
-                raise ConnectionError("No Flare RPC reachable")
-
-            contract = w3.eth.contract(
-                address=Web3.to_checksum_address(cfg["address"]),
-                abi=_KTOKEN_ABI,
-            )
-
-            supply_rate = contract.functions.supplyRatePerBlock().call()
-            borrow_rate = contract.functions.borrowRatePerBlock().call()
-            cash         = contract.functions.getCash().call()
-            total_borrows = contract.functions.totalBorrows().call()
-
-            supply_apy = _rate_to_apy(supply_rate)
-            borrow_apy = _rate_to_apy(borrow_rate)
-
-            # Utilisation = borrows / (cash + borrows)
-            denom = cash + total_borrows
-            utilisation = round(total_borrows / denom, 4) if denom > 0 else 0.0
-
-            # TVL: convert raw token units → USD using baseline price for non-stablecoins
-            underlying_decimals = cfg.get("decimals", 18)
-            if not (0 <= underlying_decimals <= 30):
-                logger.warning(f"Kinetic: invalid decimals {underlying_decimals} for {asset} — defaulting to 18")
-                underlying_decimals = 18
-            token_amount = (cash + total_borrows) / (10 ** underlying_decimals)
-            token_price  = _BASELINE_TOKEN_PRICES.get(asset, 1.0)
-            tvl_usd = round(token_amount * token_price, 2)
-
-        except Exception as e:
-            logger.warning(f"Kinetic on-chain fetch failed for {asset}: {e} — using baseline")
-            supply_apy  = cfg.get("baseline_supply", 0.0)
-            borrow_apy  = cfg.get("baseline_borrow", 0.0)
-            utilisation = 0.0   # unknown when using baseline; do not fabricate a value
-            tvl_usd     = PROTOCOLS["kinetic"]["tvl_usd"] / max(1, len(k_tokens))
-            data_source = "baseline"
-
-        rates.append(LendingRate(
-            protocol="kinetic",
-            asset=asset,
-            supply_apy=supply_apy,
-            borrow_apy=borrow_apy,
-            utilisation=utilisation,
-            tvl_usd=tvl_usd,
-            data_source=data_source,
-        ))
-
-    return rates
+    # Preserve original ordering (dict insertion order in Python 3.7+)
+    return [rate_map[asset] for asset in k_tokens if asset in rate_map]
 
 # ─── Clearpool Rates Scanner ──────────────────────────────────────────────────
 

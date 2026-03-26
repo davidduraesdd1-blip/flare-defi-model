@@ -40,9 +40,18 @@ _pro_mode = st.toggle(
     help="Pro: shows Real Yield Ratio, DeFi Sharpe, risk scoring details. Beginner: simplified card view.",
 )
 
+@st.cache_data(ttl=600)
+def _load_opp_data_cached(profile: str) -> dict:
+    """Load and return model_data for all profiles, keyed by profile name.
+    Cached for 10 minutes to avoid duplicate queries for radar chart and table.
+    """
+    _latest = load_latest()
+    return _latest.get("models") or {}
+
+
 latest     = load_latest()
 runs       = load_history_runs()
-model_data = latest.get("models") or {}
+model_data = _load_opp_data_cached(profile)
 
 st.markdown("# Opportunities")
 st.markdown(
@@ -396,7 +405,23 @@ if _mc_pools:
             _row["Audits"] = str(p.get("audits", "—"))
             _row["IL Risk"] = ("Yes" if p.get("ilRisk", "no") != "no" else "No")
         _mc_rows.append(_row)
-    st.dataframe(pd.DataFrame(_mc_rows), use_container_width=True, hide_index=True)
+    # Paginate when more than 25 rows (upgrade #33)
+    if len(_mc_rows) > 25:
+        _rows_per_page = st.select_slider(
+            "Rows per page", options=[10, 25, 50], value=25, key="opp_rows_pp"
+        )
+        _page = st.number_input(
+            "Page",
+            min_value=1,
+            max_value=max(1, -(-len(_mc_rows) // _rows_per_page)),
+            value=1,
+            key="opp_page",
+        )
+        _start     = (_page - 1) * _rows_per_page
+        _paged_rows = _mc_rows[_start: _start + _rows_per_page]
+        st.dataframe(pd.DataFrame(_paged_rows), use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(pd.DataFrame(_mc_rows), use_container_width=True, hide_index=True)
 else:
     st.info("Multi-chain pool data loading... Run a scan or check API connectivity.")
 

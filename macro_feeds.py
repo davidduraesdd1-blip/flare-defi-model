@@ -9,6 +9,7 @@ import logging
 import threading
 import time
 import datetime as _dt
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import requests
@@ -61,22 +62,40 @@ _FRED_FALLBACKS = {
 }
 
 
+def _fetch_single_fred(key: str, series_id: str) -> tuple[str, float | None]:
+    """Fetch a single FRED series CSV and return (key, latest_value)."""
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+    try:
+        resp = _SESSION.get(url, timeout=10)
+        if resp.status_code == 200:
+            for line in reversed(resp.text.strip().split("\n")[1:]):
+                parts = line.split(",")
+                if len(parts) == 2 and parts[1].strip() not in (".", ""):
+                    return key, round(float(parts[1].strip()), 4)
+    except Exception as e:
+        logger.debug("[FRED] %s: %s", series_id, e)
+    return key, None
+
+
 def fetch_fred_macro() -> dict[str, Any]:
-    """Fetch macro indicators from FRED public CSV (no API key required)."""
+    """Fetch macro indicators from FRED public CSV (no API key required).
+    All 4 FRED series are fetched in parallel with ThreadPoolExecutor(max_workers=4).
+    """
     def _fetch():
         result: dict = {}
-        for key, series_id in _FRED_SERIES.items():
-            try:
-                url  = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
-                resp = _SESSION.get(url, timeout=10)
-                if resp.status_code == 200:
-                    for line in reversed(resp.text.strip().split("\n")[1:]):
-                        parts = line.split(",")
-                        if len(parts) == 2 and parts[1].strip() not in (".", ""):
-                            result[key] = round(float(parts[1].strip()), 4)
-                            break
-            except Exception as e:
-                logger.debug("[FRED] %s: %s", series_id, e)
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futs = {
+                ex.submit(_fetch_single_fred, key, series_id): key
+                for key, series_id in _FRED_SERIES.items()
+            }
+            for fut in as_completed(futs):
+                key = futs[fut]
+                try:
+                    fetched_key, value = fut.result(timeout=15)
+                    if value is not None:
+                        result[fetched_key] = value
+                except Exception as e:
+                    logger.debug("[FRED] parallel fetch for %s failed: %s", key, e)
         if not result:
             return None
         for k, v in _FRED_FALLBACKS.items():

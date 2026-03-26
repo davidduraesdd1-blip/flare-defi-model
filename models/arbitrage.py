@@ -5,6 +5,7 @@ Returns only real, actionable opportunities above minimum profit thresholds.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Optional
@@ -401,22 +402,34 @@ def detect_sflr_borrow_arb(staking_data: list, lending_data: list) -> list:
 # ─── Master Detector ──────────────────────────────────────────────────────────
 
 def _run_all_detectors(scan_result: dict, multi_result: dict) -> list:
-    """Run all 8 detectors and return unfiltered ArbitrageOpportunity objects."""
+    """Run all 8 detectors in parallel and return unfiltered ArbitrageOpportunity objects."""
     prices  = scan_result.get("prices")  or []
     pools   = scan_result.get("pools")   or []
     lending = scan_result.get("lending") or []
     staking = scan_result.get("staking") or []
     perps   = multi_result.get("perps")  or []
 
+    # Each detector is independent — safe to parallelise
+    detectors = [
+        (detect_lending_rate_arb,        (lending,)),
+        (detect_cross_dex_arb,           (pools,)),
+        (detect_fassets_arb,             (prices,)),
+        (detect_funding_rate_neutral,    (perps, prices)),
+        (detect_cyclo_arb,               (staking,)),
+        (detect_spectra_arb,             (staking,)),
+        (detect_lp_intrinsic_arb,        (pools,)),
+        (detect_sflr_borrow_arb,         (staking, lending)),
+    ]
+
     opps = []
-    opps += detect_lending_rate_arb(lending)
-    opps += detect_cross_dex_arb(pools)
-    opps += detect_fassets_arb(prices)
-    opps += detect_funding_rate_neutral(perps, prices)
-    opps += detect_cyclo_arb(staking)
-    opps += detect_spectra_arb(staking)
-    opps += detect_lp_intrinsic_arb(pools)
-    opps += detect_sflr_borrow_arb(staking, lending)
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        futs = {ex.submit(fn, *args): fn.__name__ for fn, args in detectors}
+        for fut in as_completed(futs):
+            fname = futs[fut]
+            try:
+                opps.extend(fut.result(timeout=15) or [])
+            except Exception as e:
+                logger.warning(f"[arb] {fname} failed: {e}")
     return opps
 
 

@@ -145,7 +145,7 @@ def run_quick_check() -> None:
 
         _prewarm_gt_cache()   # warm GT cache before parallel threads to avoid rate-limit collisions
 
-        with ThreadPoolExecutor(max_workers=5) as _pool:
+        with ThreadPoolExecutor(max_workers=8) as _pool:
             futures = {
                 "prices":   _pool.submit(fetch_prices),
                 "kinetic":  _pool.submit(fetch_kinetic_rates),
