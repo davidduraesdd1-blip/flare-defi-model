@@ -56,7 +56,9 @@ _SFLR_ADDRESS = "0x12e605bc104e93B45e1aD99F9e555f659051c2BB"  # Sceptre sFLR on 
 _BLOCKS_30D   = int(_FLARE_BLOCKS_PER_YEAR * 30 / 365)        # ~1,297,000 blocks
 
 # Module-level TTL cache for fetch_sceptre_onchain_rate (5-minute TTL)
-_sceptre_cache: dict = {"ts": 0, "data": None}
+# Sentinel value distinguishes "never fetched" from "fetched but returned None"
+_SCEPTRE_SENTINEL = object()
+_sceptre_cache: dict = {"ts": 0, "data": _SCEPTRE_SENTINEL}
 _SCEPTRE_TTL: int = 300  # seconds
 
 
@@ -68,13 +70,17 @@ def fetch_sceptre_onchain_rate() -> Optional[float]:
     Falls back to totalPooledFlr/totalShares ratio method if needed.
     Returns annualised APY % or None if RPC unavailable.
     Results are cached for 5 minutes (_SCEPTRE_TTL) to avoid redundant RPC calls.
+    A sentinel is used to distinguish "never fetched" from "fetched but returned None",
+    so a None result (APY outside sanity bounds) is also cached and not re-fetched every call.
     """
     now = time.time()
-    if _sceptre_cache["data"] is not None and now - _sceptre_cache["ts"] < _SCEPTRE_TTL:
+    if _sceptre_cache["data"] is not _SCEPTRE_SENTINEL and now - _sceptre_cache["ts"] < _SCEPTRE_TTL:
         return _sceptre_cache["data"]
 
     w3 = _get_web3()
     if w3 is None:
+        _sceptre_cache["ts"]   = time.time()
+        _sceptre_cache["data"] = None
         return None
     try:
         contract = w3.eth.contract(
@@ -95,11 +101,15 @@ def fetch_sceptre_onchain_rate() -> Optional[float]:
             total_past  = contract.functions.totalPooledFlr().call(block_identifier=past_block)
             shares_past = contract.functions.totalShares().call(block_identifier=past_block)
             if shares_now == 0 or shares_past == 0:
+                _sceptre_cache["ts"]   = time.time()
+                _sceptre_cache["data"] = None
                 return None
             rate_now  = total_now  * shares_1e18 // shares_now
             rate_past = total_past * shares_1e18 // shares_past
 
         if rate_past <= 0:
+            _sceptre_cache["ts"]   = time.time()
+            _sceptre_cache["data"] = None
             return None
         growth_30d = (rate_now - rate_past) / rate_past
         apy = round(growth_30d * (365 / 30) * 100, 2)
@@ -109,6 +119,8 @@ def fetch_sceptre_onchain_rate() -> Optional[float]:
         return result
     except Exception as exc:
         logger.warning(f"Sceptre on-chain rate failed: {exc}")
+        _sceptre_cache["ts"]   = time.time()
+        _sceptre_cache["data"] = None
         return None
 
 
