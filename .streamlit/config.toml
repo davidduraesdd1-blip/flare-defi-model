@@ -1,6 +1,6 @@
 [theme]
 base = "dark"
-primaryColor = "#6366f1"
+primaryColor = "#E84142"
 backgroundColor = "#0A0E1A"
 secondaryBackgroundColor = "#111827"
 textColor = "#E2E8F0"
@@ -8,7 +8,7 @@ font = "sans serif"
 
 [server]
 headless = true
-port = 8503
+port = 8501
 enableCORS = false
 enableXsrfProtection = true
 
