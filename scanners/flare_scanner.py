@@ -12,7 +12,12 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
-from web3 import Web3
+try:
+    from web3 import Web3
+    _WEB3_AVAILABLE = True
+except ImportError:
+    Web3 = None  # type: ignore[assignment,misc]
+    _WEB3_AVAILABLE = False
 
 from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS, FALLBACK_PRICES
 from utils.http import http_get as _get, http_post as _post
@@ -109,6 +114,8 @@ _w3_cache: Optional[Web3] = None
 
 def _get_web3() -> Optional[Web3]:
     """Return a connected Web3 instance, trying each RPC URL in order. Result is cached."""
+    if not _WEB3_AVAILABLE:
+        return None
     global _w3_cache
     if _w3_cache is not None and _w3_cache.is_connected():
         return _w3_cache
