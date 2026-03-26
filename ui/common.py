@@ -6,6 +6,8 @@ Imported by every page in the Flare DeFi Model multi-page app.
 import sys
 import json
 import html as _html
+import logging
+import os
 import time
 import subprocess
 import streamlit as st
@@ -14,6 +16,26 @@ from zoneinfo import ZoneInfo
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# ─── Security Audit Logger (#15) ────────────────────────────────────────────
+# Dedicated logger for security-relevant events; does NOT propagate to root.
+_audit_handler = logging.FileHandler(
+    os.path.join(Path(__file__).parent.parent, "defi_audit.log"),
+    encoding="utf-8",
+)
+_audit_handler.setFormatter(logging.Formatter(
+    "%(asctime)s [AUDIT] %(message)s", datefmt="%Y-%m-%dT%H:%M:%SZ"
+))
+_audit_log = logging.getLogger("defi.audit")
+_audit_log.addHandler(_audit_handler)
+_audit_log.setLevel(logging.INFO)
+_audit_log.propagate = False
+
+
+def audit(event: str, **ctx) -> None:
+    """Log a security-relevant user action to the audit trail."""
+    extra = " ".join(f"{k}={v!r}" for k, v in ctx.items())
+    _audit_log.info("%s %s", event, extra)
 
 from config import (
     RISK_PROFILES, RISK_PROFILE_NAMES, INCENTIVE_PROGRAM, HISTORY_FILE,
@@ -670,6 +692,23 @@ def render_sidebar() -> dict:
         color       = profile_cfg["color"]
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+        # Demo / Sandbox mode toggle (#67)
+        _demo_val = st.toggle(
+            "Demo / Sandbox",
+            value=st.session_state.get("defi_demo_mode", False),
+            key="defi_demo_toggle",
+            help="Demo mode: shows synthetic placeholder data only — no real API calls. Safe for screenshots and onboarding.",
+        )
+        st.session_state["defi_demo_mode"] = _demo_val
+        if _demo_val:
+            st.markdown(
+                "<div style='font-size:11px;color:#F59E0B;margin-top:-4px;margin-bottom:4px;'>"
+                "⚠️ DEMO MODE — synthetic data only</div>",
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
         st.markdown(
             "<div style='font-size:0.67rem; color:#334155; line-height:1.4; padding:4px 0;'>"
             "⚠ Not financial advice · DYOR before investing.</div>",
@@ -694,6 +733,7 @@ def render_sidebar() -> dict:
         "weight":         weight,
         "feedback":       feedback,
         "portfolio_size": portfolio_size,
+        "demo_mode":      st.session_state.get("defi_demo_mode", False),
     }
 
 
