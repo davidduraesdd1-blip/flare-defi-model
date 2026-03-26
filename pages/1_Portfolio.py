@@ -871,13 +871,26 @@ if positions:
             mode="lines", name="HODL (no yield)",
             line=dict(color="#475569", width=1, dash="dot"),
         ))
-        # Mark incentive expiry
+        # Mark incentive expiry — use add_shape instead of add_vline to avoid
+        # Plotly's _mean() TypeError when x-axis contains string categorical labels.
         if 0 < _months_to_expiry < len(dates):
-            fig_nw.add_vline(
-                x=dates[_months_to_expiry], line_dash="dot",
-                line_color="#f59e0b", opacity=0.6,
-                annotation_text="Incentive expiry",
-                annotation_font_color="#f59e0b",
+            _expiry_x = dates[_months_to_expiry]
+            fig_nw.add_shape(
+                type="line",
+                x0=_expiry_x, x1=_expiry_x,
+                y0=0, y1=1,
+                xref="x", yref="paper",
+                line=dict(color="#f59e0b", dash="dot", width=1.5),
+                opacity=0.6,
+            )
+            fig_nw.add_annotation(
+                x=_expiry_x, y=1,
+                xref="x", yref="paper",
+                text="Incentive expiry",
+                showarrow=False,
+                font=dict(color="#f59e0b", size=10),
+                xanchor="left",
+                yanchor="top",
             )
         fig_nw.update_layout(
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
