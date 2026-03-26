@@ -636,7 +636,7 @@ def _fetch_gt_dex_pools(dex_id: str, protocol: str,
         cfg_key  = pool_name if pool_name in cfg_pools else f"{t1}-{t0}"
         baseline = cfg_pools.get(cfg_key, {})
         # Total = fee APR + reward incentive APR (additive, not max)
-        reward_apr = baseline.get("reward_apr", 0)
+        reward_apr = baseline.get("reward_apr") or 0
         total_apr  = fee_apr + reward_apr
 
         results.append(PoolData(
