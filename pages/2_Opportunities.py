@@ -409,7 +409,7 @@ if _mc_pools:
         _fee   = float(p.get("apyBase") or 0)
         _rew   = float(p.get("apyReward") or 0)
         _total = float(p.get("apy") or 0)
-        _ry    = round(_fee / _total * 100) if _total > 0 else 0
+        _ry    = min(100, round(_fee / _total * 100)) if _total > 0 else 0
         # Real Yield classification (#73)
         _real_info = compute_real_yield_ratio(total_apy=_total, emission_apy=_rew)
         _row = {
@@ -681,7 +681,9 @@ if _gy_display:
             "Pool":       _gp.get("symbol", "—"),
             "APY %":      f"{_g_apy:.2f}%",
             "7d Avg APY": f"{_g_apy7d:.2f}%",
-            "TVL":        f"${_g_tvl/1e9:.2f}B" if _g_tvl >= 1e9 else f"${_g_tvl/1e6:.0f}M",
+            "TVL":        (f"${_g_tvl/1e9:.2f}B" if _g_tvl >= 1e9
+                          else f"${_g_tvl/1e6:.1f}M" if _g_tvl >= 1e6
+                          else f"${_g_tvl/1e3:.0f}K"),
             "Sharpe":     f"{_g_sh:.2f}",
             "Quality":    _g_rank.capitalize(),
             "IL Risk":    ("Yes" if _gp.get("il_risk", "no") not in ("no", "") else "No"),
