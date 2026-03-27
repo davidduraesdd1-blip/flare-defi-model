@@ -498,3 +498,90 @@ def fetch_deribit_options_chain(currency: str = "BTC") -> dict:
 
     cached = _cached_get(f"deribit_chain_{currency}", 900, _fetch)
     return cached if cached else {"error": "cache miss", "source": "deribit"}
+
+
+# ── GROUP 6: DeFi Protocol Benchmarks ─────────────────────────────────────────
+
+def fetch_defi_protocol_benchmarks() -> dict[str, Any]:
+    """
+    Fetch all external DeFi protocol benchmark data in parallel.
+
+    Pulls live yield rates and TVL from Curve, Aave v3, Lido, Compound v3,
+    dYdX v4, GMX v2, Uniswap v3, and Pendle Finance.  Cached 5 minutes.
+
+    Returns the combined benchmark dict from
+    scanners.defi_protocols.fetch_all_protocol_benchmarks(), plus a
+    "source" key.  Returns {"source": "unavailable"} on import failure.
+    """
+    def _fetch():
+        try:
+            from scanners.defi_protocols import fetch_all_protocol_benchmarks
+            data = fetch_all_protocol_benchmarks()
+            data["source"] = "defi_protocols"
+            return data
+        except Exception as e:
+            logger.warning("[MacroFeeds] defi protocol benchmarks failed: %s", e)
+            return None
+
+    cached = _cached_get("defi_protocol_benchmarks", _TTL_30M, _fetch)
+    if cached is None:
+        return {"source": "unavailable", "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat()}
+    return cached
+
+
+def fetch_all_macro_data() -> dict[str, Any]:
+    """
+    Aggregate all macro and DeFi benchmark data in one call.
+
+    Fetches in parallel using ThreadPoolExecutor:
+      - FRED macro indicators   (10yr yield, M2, ISM, WTI)
+      - yfinance supplementals  (DXY, VIX, Gold, SPX)
+      - DeFi protocol benchmarks (Lido APY, Curve/Aave/Compound/dYdX/GMX/Uniswap/Pendle)
+
+    Returns a merged flat dict suitable for passing to model scoring logic.
+    Keys from each source are namespaced where needed (defi_ prefix for DeFi data).
+    """
+    def _fetch():
+        results: dict[str, Any] = {}
+
+        _TASKS = {
+            "fred":  fetch_fred_macro,
+            "yf":    fetch_yfinance_macro,
+            "defi":  fetch_defi_protocol_benchmarks,
+        }
+
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            futs = {ex.submit(fn): key for key, fn in _TASKS.items()}
+            for fut in as_completed(futs):
+                key = futs[fut]
+                try:
+                    results[key] = fut.result(timeout=30)
+                except Exception as e:
+                    logger.warning("[MacroFeeds] fetch_all %s failed: %s", key, e)
+
+        # Merge FRED + yfinance into flat dict
+        merged: dict[str, Any] = {}
+        for src_key in ("fred", "yf"):
+            src = results.get(src_key) or {}
+            for k, v in src.items():
+                if not k.startswith("_"):
+                    merged[k] = v
+
+        # Attach DeFi benchmarks under "defi_benchmarks" key and surface
+        # the most-used scalar (Lido stETH APY) at the top level.
+        defi = results.get("defi") or {}
+        merged["defi_benchmarks"]   = defi
+        merged["lido_steth_apy_pct"] = float(defi.get("lido_steth_apy_pct") or 0)
+
+        merged["_timestamp"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
+        return merged if merged else None
+
+    cached = _cached_get("all_macro_data", _TTL_30M, _fetch)
+    if cached is None:
+        return {
+            "source":     "fallback",
+            "_timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+            **_FRED_FALLBACKS,
+            **_YF_FALLBACKS,
+        }
+    return cached
