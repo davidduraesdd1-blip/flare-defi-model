@@ -14,11 +14,13 @@ from ui.common import (
     page_setup, render_sidebar, load_monitor_digest, render_section_header, _ts_fmt,
     load_latest,
 )
+from scanners.defillama import fetch_governance_alerts
 
 page_setup("Intelligence · Flare DeFi")
 
-ctx     = render_sidebar()
-profile = ctx["profile"]
+ctx      = render_sidebar()
+profile  = ctx["profile"]
+pro_mode = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 
 st.markdown("# Intelligence")
 st.markdown(
@@ -653,6 +655,94 @@ try:
         st.caption(f"Source: Deribit · {_ts5_txt} UTC · Cached 15 min")
 except Exception as _opt_err:
     st.caption(f"Options data unavailable: {_opt_err}")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Governance Alerts (#74) ────────────────────────────────────────────────────
+# Active Snapshot proposals that may impact APY/rates for tracked protocols
+
+render_section_header(
+    "Governance Alerts",
+    "Active Snapshot votes that may impact yield parameters — vote before the deadline",
+)
+
+_gov_demo   = ctx.get("demo_mode", False)
+_gov_pro    = pro_mode
+
+with st.spinner("Checking active governance proposals…"):
+    if _gov_demo:
+        _gov_proposals = [
+            {"title": "Adjust USDC borrow rate parameters", "protocol": "aave.eth",
+             "space": "aave.eth", "votes": 1842, "ends_at": "2026-04-01", "apy_impact": True,
+             "url": "https://snapshot.org/#/aave.eth"},
+            {"title": "Enable new fee tier for USDC/USDT", "protocol": "uniswap",
+             "space": "uniswap", "votes": 3210, "ends_at": "2026-04-03", "apy_impact": True,
+             "url": "https://snapshot.org/#/uniswap"},
+            {"title": "Adjust emission schedule for LP rewards", "protocol": "aerodrome.eth",
+             "space": "aerodrome.eth", "votes": 503, "ends_at": "2026-03-30", "apy_impact": True,
+             "url": "https://snapshot.org/#/aerodrome.eth"},
+        ]
+    else:
+        _gov_proposals = fetch_governance_alerts()
+
+if _gov_proposals:
+    _gov_apy_props   = [p for p in _gov_proposals if p.get("apy_impact")]
+    _gov_other_props = [p for p in _gov_proposals if not p.get("apy_impact")]
+    _gov_sorted      = _gov_apy_props + _gov_other_props
+
+    if _gov_apy_props:
+        st.markdown(
+            f"<div style='background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.20);"
+            f"border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:0.82rem;color:#FBBF24'>"
+            f"⚡ {len(_gov_apy_props)} active proposal(s) flagged as APY-impacting</div>",
+            unsafe_allow_html=True,
+        )
+
+    for _gp in _gov_sorted:
+        _g_impact = _gp.get("apy_impact")
+        _g_border = "#FBBF24" if _g_impact else "#334155"
+        _g_badge  = (
+            " <span style='background:#1c1200;color:#FBBF24;font-size:0.68rem;"
+            "padding:1px 6px;border-radius:4px;border:1px solid #fbbf2444'>⚡ APY Impact</span>"
+            if _g_impact else ""
+        )
+        _g_url    = _html.escape(str(_gp.get("url") or ""))
+        _g_link   = (
+            f" · <a href='{_g_url}' target='_blank' "
+            f"style='color:#a78bfa;font-size:0.72rem;font-weight:600;text-decoration:none;'>Vote ↗</a>"
+            if _g_url else ""
+        )
+        _g_votes  = _gp.get("votes", 0)
+        _g_space  = _html.escape(str(_gp.get("space", _gp.get("protocol", "—"))))
+        _g_ends   = _html.escape(str(_gp.get("ends_at", _gp.get("end_date", "—"))))
+        _g_title  = _html.escape(str(_gp.get("title", "")))
+
+        # Pro mode shows scores_total
+        _g_extra = ""
+        if _gov_pro:
+            _g_scores = _gp.get("scores_total", 0)
+            if _g_scores:
+                _g_extra = f" · {_g_scores:,.0f} total votes"
+
+        st.markdown(
+            f"<div style='background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);"
+            f"border-left:3px solid {_g_border};border-radius:6px;"
+            f"padding:9px 14px;margin-bottom:7px;font-size:0.86rem'>"
+            f"<b>{_g_title}</b>{_g_badge}<br>"
+            f"<span style='color:#64748b;font-size:0.74rem'>"
+            f"{_g_space} · {_g_votes:,} votes{_g_extra} · ends {_g_ends}"
+            f"{_g_link}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    st.caption(
+        f"{len(_gov_proposals)} active proposals · {len(_gov_apy_props)} APY-impacting. "
+        "Source: Snapshot GraphQL · cached 1 hour."
+    )
+else:
+    st.info("No active governance proposals at this time.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 

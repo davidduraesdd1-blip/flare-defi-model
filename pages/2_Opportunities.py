@@ -42,13 +42,9 @@ weight         = ctx["weight"]
 portfolio_size = ctx["portfolio_size"]
 demo_mode      = ctx.get("demo_mode", False)
 
-# #82 Beginner/Pro toggle
-_pro_mode = st.toggle(
-    "Pro Mode",
-    value=st.session_state.get("defi_pro_mode", True),
-    key="defi_pro_mode",
-    help="Pro: shows Real Yield Ratio, DeFi Sharpe, risk scoring details. Beginner: simplified card view.",
-)
+# #82 Beginner/Pro toggle — reads from sidebar session state (set in ui/common.py render_sidebar)
+# The sidebar toggle is the canonical source; this reads it for page-level conditionals.
+_pro_mode = st.session_state.get("defi_pro_mode", False)
 
 @st.cache_data(ttl=600)
 def _load_opp_data_cached(profile: str) -> dict:
@@ -450,44 +446,240 @@ else:
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
+# ── Pendle Finance PT/YT Yield Mechanics (#70) ────────────────────────────
+
+render_section_header(
+    "Pendle Finance — PT vs YT Mechanics",
+    "PT = fixed rate locked at purchase · YT = leveraged variable rate · choose your conviction",
+)
+
+from config import PROTOCOLS as _PROTOCOLS_CFG
+
+_pendle_markets_raw = []
+# Pull Pendle pools from DeFiLlama yields data (project = "pendle")
+for _mcp in _mc_pools:
+    if (str(_mcp.get("project") or "")).lower() == "pendle":
+        _pendle_markets_raw.append(_mcp)
+
+# Fallback: use Spectra markets (Flare-native PT equivalent) if no Pendle pools loaded
+_spectra_cfg = _PROTOCOLS_CFG.get("spectra", {}).get("markets", {})
+_spectra_markets = [
+    {
+        "symbol":    mkey,
+        "maturity":  mdata.get("maturity", ""),
+        "pt_apy":    mdata.get("fixed_apy", 0),
+        "lp_apy":    mdata.get("lp_apy", 0),
+        "asset":     mdata.get("asset", ""),
+        "chain":     "Flare",
+        "project":   "spectra-v2",
+        "tvlUsd":    0,
+        "_is_spectra": True,
+    }
+    for mkey, mdata in _spectra_cfg.items()
+]
+
+_pendle_display = _pendle_markets_raw or _spectra_markets
+
+if _pendle_display:
+    import math as _math
+    from datetime import datetime as _dt_now, timezone as _tz_now
+
+    _pendle_rows = []
+    for _pm in _pendle_display:
+        _sym        = str(_pm.get("symbol") or "")
+        _apy        = float(_pm.get("apy") or _pm.get("pt_apy") or 0)
+        _tvl        = float(_pm.get("tvlUsd") or _pm.get("tvl_usd") or 0)
+        _chain      = str(_pm.get("chain") or "—")
+        _protocol   = str(_pm.get("project") or "pendle").replace("-", " ").title()
+        _maturity   = str(_pm.get("maturity") or "")
+        _is_spectra = _pm.get("_is_spectra", False)
+
+        # PT APY = fixed rate locked at purchase (the pool APY is PT APY for Pendle PT pools)
+        _pt_apy = _apy
+
+        # YT APY approximation: underlying_apy × (1 / pt_price - 1)
+        # We approximate pt_price from APY: pt_price ≈ 1 / (1 + pt_apy/100) for 1-year equivalent
+        # Use a simpler proxy: if pt_apy > 0, yt_apy ≈ pt_apy × leverage_factor
+        # Leverage factor based on typical Pendle PT discount to par
+        _pt_price_proxy = 1.0 / (1.0 + max(_pt_apy / 100.0, 0.01))
+        _leverage       = max(0.0, 1.0 / max(_pt_price_proxy, 0.01) - 1.0)
+        # underlying APY ≈ PT APY as base; YT APY = underlying × leverage
+        _underlying_apy = float(_pm.get("apyBase") or _pt_apy)
+        _yt_apy         = round(_underlying_apy * _leverage, 2) if _leverage > 0 else 0.0
+
+        # Maturity countdown
+        _days_left = None
+        if _maturity:
+            try:
+                _mat_dt = _dt_now.strptime(_maturity[:10], "%Y-%m-%d").replace(tzinfo=_tz_now.utc)
+                _days_left = max(0, (_mat_dt - _dt_now.now(_tz_now.utc)).days)
+            except ValueError:
+                pass
+
+        # "Which is better?" recommendation
+        _rec = ""
+        if _yt_apy > 0 and _pt_apy > 0:
+            if _underlying_apy > _pt_apy:
+                _rec = "Buy YT — bet yields stay high or rise"
+            else:
+                _rec = "Buy PT — lock in the fixed rate"
+        elif _pt_apy > 0:
+            _rec = "Buy PT — lock in fixed APY"
+
+        _row = {
+            "Protocol":    _protocol,
+            "Market":      _sym,
+            "Chain":       _chain,
+            "PT APY (Fixed)": f"{_pt_apy:.1f}%",
+            "YT APY (Implied)": f"{_yt_apy:.1f}%" if _yt_apy > 0 else "N/A",
+            "Maturity":    f"{_days_left}d" if _days_left is not None else (_maturity or "—"),
+            "Recommendation": _rec,
+        }
+        if _tvl > 0:
+            _row["TVL"] = (
+                f"${_tvl/1e9:.2f}B" if _tvl >= 1e9
+                else f"${_tvl/1e6:.0f}M" if _tvl >= 1e6
+                else f"${_tvl/1e3:.0f}K"
+            )
+        _pendle_rows.append(_row)
+
+    if _pendle_rows:
+        st.dataframe(pd.DataFrame(_pendle_rows), use_container_width=True, hide_index=True)
+
+        # PT vs YT explainer
+        with st.expander("How PT vs YT works"):
+            st.markdown("""
+**Principal Token (PT)** — Fixed rate, locked at purchase.
+- You buy PT at a discount and redeem at face value at maturity.
+- Equivalent to a zero-coupon bond. Safe if you hold to maturity.
+- Best when: you think yields will *fall* or you want predictable income.
+
+**Yield Token (YT)** — Leveraged variable rate.
+- You hold the right to collect all future yield on the underlying asset until maturity.
+- Highly leveraged — YT price can go to zero if yields collapse.
+- Best when: you think yields will *rise* or stay elevated.
+
+**Formula (approximate)**:
+- YT APY ≈ Underlying APY × (1 / PT_price − 1)
+- A PT trading at $0.90 gives ~11% leverage on the yield stream.
+
+**Quick rule**: If underlying APY > implied PT fixed rate → buy YT. Otherwise → buy PT.
+            """)
+    else:
+        st.info("Pendle market data unavailable — run a scan or check connectivity.")
+else:
+    st.info("No Pendle/Spectra markets loaded. Run a scan to populate.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
 # ── Yield Curve Visualization (#86) ───────────────────────────────────────
 
 if _pro_mode:
     render_section_header(
         "Yield Curve",
-        "APY vs Risk Score scatter — higher-left = better risk-adjusted yield (efficient frontier)",
+        "APY vs Risk Score scatter — higher-left = better risk-adjusted yield · efficient frontier shown",
     )
+
+    # Protocol-type base risk scores for the efficient frontier (#86)
+    _TYPE_RISK_SCORES = {
+        "Lending": 2, "Liquid Staking": 2, "Yield Vault": 3,
+        "Yield Tokenization": 3, "DEX": 5, "DEX + Perps": 7,
+        "Leveraged Yield": 9, "Perps (Cross-chain)": 8,
+    }
+
     _all_opps_yc = []
     for _p in RISK_PROFILE_NAMES:
         for _opp in (model_data.get(_p) or []):
             if _opp not in _all_opps_yc:
                 _all_opps_yc.append(_opp)
+
+    # Also include multi-chain pools with inferred risk scores
+    _mc_type_map = {
+        "pendle": "Yield Tokenization", "morpho": "Lending", "morpho-blue": "Lending",
+        "ether.fi": "Liquid Staking", "eigenlayer": "Liquid Staking",
+        "ethena": "Yield Vault", "aerodrome-finance": "DEX",
+        "blazeswap": "DEX", "kinetic-finance": "Lending",
+    }
+    for _mcp in (_mc_pools or []):
+        _mc_proj  = (str(_mcp.get("project") or "")).lower()
+        _mc_type  = _mc_type_map.get(_mc_proj, "DEX")
+        _mc_rs    = _TYPE_RISK_SCORES.get(_mc_type, 5)
+        _all_opps_yc.append({
+            "protocol":      (_mcp.get("project") or "—").replace("-", " ").title(),
+            "asset_or_pool": _mcp.get("symbol", "—"),
+            "estimated_apy": float(_mcp.get("apy") or 0),
+            "risk_score":    float(_mc_rs),
+            "tvl_usd":       float(_mcp.get("tvlUsd") or 0),
+            "confidence":    50,
+            "_protocol_type": _mc_type,
+        })
+
     if _all_opps_yc:
-        _yc_df = pd.DataFrame([{
-            "Protocol":   o.get("protocol", "—"),
-            "Pool":       o.get("asset_or_pool", "—"),
-            "APY":        float(o.get("estimated_apy", 0)),
-            "Risk Score": float(o.get("risk_score", 5)),
-            "TVL ($M)":   float(o.get("tvl_usd", 0) or 0) / 1e6,
-            "Confidence": float(o.get("confidence", 50)),
-        } for o in _all_opps_yc])
-        _fig_yc = px.scatter(
-            _yc_df, x="Risk Score", y="APY", size="TVL ($M)", color="Protocol",
-            hover_data={"Pool": True, "Confidence": True, "TVL ($M)": True},
-            labels={"Risk Score": "Risk Score (0=safest)", "APY": "Est. APY (%)"},
-            title="",
-        )
-        _fig_yc.add_hline(y=5.0, line_dash="dash", line_color="#475569",
-                          annotation_text="Risk-free (5%)")
-        _fig_yc.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.8)",
-            font_color="#94a3b8",
-            xaxis=dict(gridcolor="rgba(148,163,184,0.1)", range=[0, 11]),
-            yaxis=dict(gridcolor="rgba(148,163,184,0.1)", ticksuffix="%"),
-            height=380, margin=dict(l=40, r=20, t=20, b=40),
-            legend=dict(bgcolor="rgba(0,0,0,0)", font_size=10),
-        )
-        st.plotly_chart(_fig_yc, use_container_width=True, config={"displayModeBar": False})
+        _yc_rows = []
+        for _o in _all_opps_yc:
+            _yc_apy = float(_o.get("estimated_apy", 0))
+            _yc_rs  = float(_o.get("risk_score", 5))
+            _yc_tvl = max(0.1, float(_o.get("tvl_usd", 0) or 0) / 1e6)
+            if _yc_apy <= 0:
+                continue
+            _yc_rows.append({
+                "Protocol":    str(_o.get("protocol", "—")),
+                "Pool":        str(_o.get("asset_or_pool", "—")),
+                "APY":         _yc_apy,
+                "Risk Score":  _yc_rs,
+                "TVL ($M)":    _yc_tvl,
+                "Confidence":  float(_o.get("confidence", 50)),
+                "Type":        str(_o.get("_protocol_type", "DeFi")),
+            })
+
+        if _yc_rows:
+            _yc_df = pd.DataFrame(_yc_rows)
+
+            _fig_yc = px.scatter(
+                _yc_df,
+                x="Risk Score", y="APY",
+                size="TVL ($M)", color="Protocol",
+                hover_data={"Pool": True, "Confidence": True, "TVL ($M)": True, "Type": True},
+                labels={"Risk Score": "Risk Score (0=safest)", "APY": "Est. APY (%)"},
+                title="",
+            )
+
+            # Efficient frontier: for each integer risk level, max APY achievable (#86)
+            _frontier_x, _frontier_y = [], []
+            for _rs_level in range(0, 11):
+                _pts_at_rs = [r["APY"] for r in _yc_rows
+                              if abs(r["Risk Score"] - _rs_level) <= 1.0]
+                if _pts_at_rs:
+                    _frontier_x.append(_rs_level)
+                    _frontier_y.append(max(_pts_at_rs))
+            if len(_frontier_x) >= 2:
+                _fig_yc.add_trace(go.Scatter(
+                    x=_frontier_x, y=_frontier_y,
+                    mode="lines",
+                    name="Efficient Frontier",
+                    line=dict(color="#f59e0b", width=2, dash="dot"),
+                    hovertemplate="Risk %{x:.0f} · Max APY %{y:.1f}%<extra>Frontier</extra>",
+                ))
+
+            _fig_yc.add_hline(y=5.0, line_dash="dash", line_color="#475569",
+                              annotation_text="Risk-free (5%)")
+            _fig_yc.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.8)",
+                font_color="#94a3b8",
+                xaxis=dict(gridcolor="rgba(148,163,184,0.1)", range=[0, 11]),
+                yaxis=dict(gridcolor="rgba(148,163,184,0.1)", ticksuffix="%"),
+                height=400, margin=dict(l=40, r=20, t=20, b=40),
+                legend=dict(bgcolor="rgba(0,0,0,0)", font_size=10),
+            )
+            st.plotly_chart(_fig_yc, use_container_width=True, config={"displayModeBar": False})
+            st.caption(
+                "Efficient frontier (dotted orange) = max APY at each risk level. "
+                "Points above frontier = exceptionally good risk-adjusted yield. "
+                "Size = TVL. Color = protocol."
+            )
+        else:
+            st.info("Run a scan to populate yield curve data.")
     else:
         st.info("Run a scan to populate yield curve data.")
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -542,25 +734,47 @@ with st.spinner("Checking governance proposals…"):
 
 if demo_mode:
     _proposals = [
-        {"title": "Adjust USDC lending rate parameters", "space": "aave.eth",
-         "votes": 1842, "end_date": "2026-04-01", "apy_impact": True},
-        {"title": "Enable new reward token for LPs", "space": "aerodrome.eth",
-         "votes": 503, "end_date": "2026-03-30", "apy_impact": True},
+        {"title": "Adjust USDC borrow rate parameters", "space": "aave.eth",
+         "protocol": "aave.eth", "votes": 1842, "end_date": "2026-04-01", "apy_impact": True,
+         "url": "https://snapshot.org/#/aave.eth"},
+        {"title": "Enable new reward emission for LPs", "space": "aerodrome.eth",
+         "protocol": "aerodrome.eth", "votes": 503, "end_date": "2026-03-30", "apy_impact": True,
+         "url": "https://snapshot.org/#/aerodrome.eth"},
+        {"title": "Adjust fee tier for USDC/USDT pool", "space": "uniswap",
+         "protocol": "uniswap", "votes": 3210, "end_date": "2026-04-03", "apy_impact": True,
+         "url": "https://snapshot.org/#/uniswap"},
     ]
 
 if _proposals:
-    for _prop in _proposals:
+    # Show APY-impacting proposals first
+    _apy_props = [p for p in _proposals if p.get("apy_impact")]
+    _other_props = [p for p in _proposals if not p.get("apy_impact")]
+    _sorted_props = _apy_props + _other_props
+
+    for _prop in _sorted_props:
         _imp_badge = (" <span style='background:#1c1200;color:#FBBF24;font-size:0.68rem;"
                      "padding:1px 6px;border-radius:4px;border:1px solid #fbbf2444'>⚡ APY Impact</span>"
                      if _prop.get("apy_impact") else "")
+        _vote_url  = _html.escape(str(_prop.get("url") or ""))
+        _vote_link = (f" · <a href='{_vote_url}' target='_blank' "
+                      f"style='color:#a78bfa;font-size:0.72rem;text-decoration:none;'>Vote ↗</a>"
+                      if _vote_url else "")
         st.markdown(
             f"<div style='background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);"
+            f"border-left:3px solid {'#FBBF24' if _prop.get('apy_impact') else '#334155'};"
             f"border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:0.85rem'>"
-            f"<b>{_html.escape(_prop['title'])}</b>{_imp_badge}<br>"
-            f"<span style='color:#64748b;font-size:0.75rem'>{_prop['space']} · {_prop['votes']} votes · ends {_prop['end_date']}</span>"
+            f"<b>{_html.escape(str(_prop.get('title', '')))}</b>{_imp_badge}<br>"
+            f"<span style='color:#64748b;font-size:0.75rem'>"
+            f"{_html.escape(str(_prop.get('space', _prop.get('protocol', '—'))))} · "
+            f"{_prop.get('votes', 0):,} votes · ends {_prop.get('end_date', _prop.get('ends_at', '—'))}"
+            f"{_vote_link}</span>"
             f"</div>",
             unsafe_allow_html=True,
         )
+    st.caption(
+        f"{len(_proposals)} active proposals · {len(_apy_props)} flagged as APY-impacting. "
+        "Source: Snapshot GraphQL · cached 1 hour."
+    )
 else:
     st.info("No active governance proposals at this time.")
 

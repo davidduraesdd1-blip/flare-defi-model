@@ -706,6 +706,20 @@ def render_sidebar() -> dict:
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+        # Pro Mode toggle (#82) — stored in session_state so all pages read it consistently
+        _pro_val = st.toggle(
+            "Pro Mode",
+            value=st.session_state.get("defi_pro_mode", False),
+            key="defi_pro_mode_sidebar",
+            help=(
+                "Pro: shows Sharpe ratio, Kelly fraction, HMM state, real yield ratio, "
+                "technical indicators, and all advanced columns. "
+                "Beginner: simplified card view with plain-English labels and tooltips."
+            ),
+        )
+        # Sync to the canonical session state key used by all pages
+        st.session_state["defi_pro_mode"] = _pro_val
+
         # Demo / Sandbox mode toggle (#67)
         _demo_val = st.toggle(
             "Demo / Sandbox",
@@ -747,6 +761,7 @@ def render_sidebar() -> dict:
         "feedback":       feedback,
         "portfolio_size": portfolio_size,
         "demo_mode":      st.session_state.get("defi_demo_mode", False),
+        "pro_mode":       st.session_state.get("defi_pro_mode", False),
     }
 
 

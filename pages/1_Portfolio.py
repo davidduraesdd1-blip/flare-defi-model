@@ -29,6 +29,7 @@ page_setup("Portfolio · Flare DeFi")
 
 ctx            = render_sidebar()
 portfolio_size = ctx["portfolio_size"]
+pro_mode       = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 
 latest    = load_latest()
 runs      = load_history_runs()

@@ -5,6 +5,7 @@ No API keys required.  All fetches cached 1 hour.
 """
 from __future__ import annotations
 
+import gc
 import logging
 import threading
 import time
@@ -372,6 +373,9 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             "error":            None,
             "_ts":              time.time(),
         }
+        # Free large intermediate lists after building result (#69 memory opt)
+        del rows, mvrv_vals, mvrv_dates, real_caps, sopr_vals, sopr_dates, active_addrs
+        gc.collect()
         _CM_CACHE_D[cache_key] = result
         return result
     except Exception as e:
@@ -593,6 +597,11 @@ def fetch_all_macro_data() -> dict[str, Any]:
         merged["lido_steth_apy_pct"] = float(defi.get("lido_steth_apy_pct") or 0)
 
         merged["_timestamp"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+        # Free large intermediate payloads from this worker thread (#69 memory opt)
+        del results
+        gc.collect()
+
         return merged if merged else None
 
     cached = _cached_get("all_macro_data", _TTL_30M, _fetch)
