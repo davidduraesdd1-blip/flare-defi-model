@@ -566,6 +566,7 @@ def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
       }
     }
     """
+    import datetime as _dt
     try:
         resp = _SESSION.post(
             _SNAPSHOT_URL,
@@ -577,7 +578,6 @@ def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
         proposals_raw = resp.json().get("data", {}).get("proposals", []) or []
         proposals = []
         for p in proposals_raw:
-            import datetime as _dt
             end_ts = p.get("end", 0)
             end_dt = _dt.datetime.utcfromtimestamp(end_ts).strftime("%Y-%m-%d") if end_ts else "—"
             # Filter: only proposals with yield-relevant keywords (#74)
