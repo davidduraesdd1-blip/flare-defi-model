@@ -49,6 +49,17 @@ _ALLOWED_HOSTS: frozenset = frozenset({
     "api.cryptopanic.com",
     "api.stlouisfed.org",
     "fapi.binance.com", "api.binance.com",
+    "api.hyperliquid.xyz",        # Hyperliquid perps (multi_scanner.py)
+    "subgraph.blazeswap.xyz",     # Blazeswap subgraph fallback (flare_scanner.py)
+    "api.clearpool.finance",      # Clearpool pool data (flare_scanner.py)
+    "api.geckoterminal.com",      # GeckoTerminal DEX pools (flare_scanner.py)
+    "community-api.coinmetrics.io",  # CoinMetrics on-chain data (macro_feeds.py)
+    "api.curve.fi",               # Curve pool data (defi_protocols.py)
+    "eth-api.lido.fi",            # Lido stETH APR (defi_protocols.py)
+    "indexer.dydx.trade",         # dYdX v4 perpetuals (defi_protocols.py)
+    "api-v2.pendle.finance",      # Pendle pools (defi_protocols.py)
+    "fred.stlouisfed.org",        # FRED CSV download (macro_feeds.py)
+    "discord.com",                # Discord webhook alerts (ai/alerts.py)
 })
 
 
