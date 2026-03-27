@@ -9,6 +9,7 @@ All fetches cached with module-level TTL caches (5–15 min).
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -39,6 +40,7 @@ _pendle_cache   = {"ts": 0, "data": None}
 
 # Shared DeFiLlama yields cache — populated once, reused across multiple fetchers
 _llama_pools_cache = {"ts": 0, "data": None}
+_llama_pools_lock  = threading.Lock()
 _LLAMA_YIELDS_URL  = "https://yields.llama.fi/pools"
 
 
@@ -56,22 +58,27 @@ def _get(url: str, timeout: int = 10) -> Any:
 
 def _get_llama_pools() -> list[dict]:
     """
-    Fetch all DeFiLlama yield pools with a shared 15-minute cache.
+    Fetch all DeFiLlama yield pools with a shared 15-minute TTL cache.
+    Thread-safe via _llama_pools_lock.
     Returns the raw data list (thousands of pools) for in-memory filtering.
     """
     now = time.time()
-    if _llama_pools_cache["data"] is not None and now - _llama_pools_cache["ts"] < _TTL_LONG:
-        return _llama_pools_cache["data"]
+    with _llama_pools_lock:
+        if _llama_pools_cache["data"] is not None and now - _llama_pools_cache["ts"] < _TTL_LONG:
+            return _llama_pools_cache["data"]
     try:
         resp = _SESSION.get(_LLAMA_YIELDS_URL, timeout=20)
         resp.raise_for_status()
         pools = resp.json().get("data", []) or []
-        _llama_pools_cache["ts"]   = time.time()
-        _llama_pools_cache["data"] = pools
+        if pools:  # only update cache when we received a non-empty response
+            with _llama_pools_lock:
+                _llama_pools_cache["ts"]   = time.time()
+                _llama_pools_cache["data"] = pools
         return pools
     except Exception as e:
         logger.warning("[DeFiProtocols] DeFiLlama pools fetch failed: %s", e)
-        return _llama_pools_cache["data"] or []
+        with _llama_pools_lock:
+            return _llama_pools_cache["data"] or []
 
 
 # ── 1. Curve Finance ──────────────────────────────────────────────────────────
@@ -259,21 +266,35 @@ def fetch_dydx_v4_funding() -> list[dict]:
         data = _get("https://indexer.dydx.trade/v4/perpetuals?limit=30")
         if data and isinstance(data.get("perpetuals"), list):
             for p in data["perpetuals"]:
-                ticker     = p.get("ticker", "")
-                # nextFundingRate is a decimal per hour (e.g. 0.0001 = 0.01%/hr)
+                # Response structure:
+                # {"perpetual": {"params": {"ticker": str, "atomicResolution": int,
+                #                           "openInterest": str, ...},
+                #                "openInterest": str},
+                #  "nextFundingRate": str}
+                perp_obj   = p.get("perpetual") or {}
+                params_obj = perp_obj.get("params") or {}
+                ticker     = params_obj.get("ticker") or perp_obj.get("ticker") or p.get("ticker", "")
+                # nextFundingRate is at the top-level item (decimal per hour)
                 funding_hr = float(p.get("nextFundingRate") or 0)
                 # Annualised: hourly_rate × 8760 hours × 100 → percent
                 funding_ann_pct = round(funding_hr * 8760 * 100, 4)
                 # openInterest in base asset; atomicResolution adjusts decimal places
-                oi_raw      = float(p.get("openInterest") or 0)
-                atomic_res  = int(p.get("atomicResolution") or 0)
+                # openInterest lives inside perpetual.params or perpetual (string)
+                oi_raw     = float(
+                    params_obj.get("openInterest") or perp_obj.get("openInterest") or
+                    p.get("openInterest") or 0
+                )
+                atomic_res = int(
+                    params_obj.get("atomicResolution") or p.get("atomicResolution") or 0
+                )
                 oi_adjusted = oi_raw * (10 ** atomic_res)  # normalize to whole units
+                status = params_obj.get("status") or p.get("status", "")
                 result.append({
                     "ticker":              ticker,
                     "funding_rate_hourly": round(funding_hr * 100, 6),   # as %
                     "funding_rate_annual": funding_ann_pct,
                     "open_interest":       round(oi_adjusted, 2),
-                    "status":              p.get("status", ""),
+                    "status":              status,
                 })
             # Sort by open interest descending, return top 10
             result.sort(key=lambda x: x["open_interest"], reverse=True)
