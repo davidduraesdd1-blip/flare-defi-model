@@ -702,11 +702,14 @@ if "error" not in _il_res2:
 else:
     st.error(_il_res2.get("error", "Calculation error"))
 
-st.caption(
-    f"IL formula: 2×√k/(1+k) − 1 where k = 1 + price_change. "
-    f"Breakeven APY = {_il_res2.get('breakeven_fee_apy', 0):.1f}% (needed to offset IL over {_il_hold_yrs:.1f}y). "
-    "Not financial advice."
-)
+if "error" not in _il_res2:
+    st.caption(
+        f"IL formula: 2×√k/(1+k) − 1 where k = 1 + price_change. "
+        f"Breakeven APY = {_il_res2.get('breakeven_fee_apy', 0):.1f}% (needed to offset IL over {_il_hold_yrs:.1f}y). "
+        "Not financial advice."
+    )
+else:
+    st.caption("IL formula: 2×√k/(1+k) − 1 where k = 1 + price_change. Not financial advice.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
