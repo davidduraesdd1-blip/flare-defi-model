@@ -17,7 +17,12 @@ import requests
 logger = logging.getLogger(__name__)
 
 _SESSION = requests.Session()
-_SESSION.headers.update({"Accept-Encoding": "gzip, deflate", "Connection": "keep-alive"})
+_SESSION.headers.update({
+    "Accept-Encoding": "gzip, deflate",
+    "Connection":      "keep-alive",
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept":          "application/json",
+})
 
 _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()
@@ -295,7 +300,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             timeout=15,
         )
         if resp.status_code == 403 and not api_key:
-            return {"error": "HTTP 403 — CoinMetrics requires a free API key. Get one at coinmetrics.io/free-community-data and add as DEFI_COINMETRICS_API_KEY", "source": "coinmetrics"}
+            return {"error": "HTTP 403 — Streamlit Cloud IP blocked by CoinMetrics. Add DEFI_COINMETRICS_API_KEY (free at coinmetrics.io) to use the authenticated endpoint instead.", "source": "coinmetrics"}
         if resp.status_code != 200:
             return {"error": f"HTTP {resp.status_code}", "source": "coinmetrics"}
         rows = resp.json().get("data", [])
