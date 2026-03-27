@@ -252,9 +252,10 @@ def fetch_dydx_v4_funding() -> list[dict]:
     dYdX v4 perpetual funding rates and open interest.
 
     Source: https://indexer.dydx.trade/v4/perpetuals?limit=30
-    Response: perpetuals[] with ticker, nextFundingRate (decimal per hour),
-              openInterest (in base asset units), atomicResolution.
-    Converts funding rate to annualized % (rate/hr × 8760 × 100).
+    Response: perpetuals[] with ticker, nextFundingRate (decimal 8-hour rate,
+              e.g. "0.0001" = 0.01% per 8 h), openInterest (in base asset
+              units), atomicResolution.
+    Converts funding rate to annualized % (8h_rate × 3 periods/day × 365 days × 100).
     Returns top 10 by open interest USD value.
     """
     now = time.time()
@@ -274,10 +275,11 @@ def fetch_dydx_v4_funding() -> list[dict]:
                 perp_obj   = p.get("perpetual") or {}
                 params_obj = perp_obj.get("params") or {}
                 ticker     = params_obj.get("ticker") or perp_obj.get("ticker") or p.get("ticker", "")
-                # nextFundingRate is at the top-level item (decimal per hour)
-                funding_hr = float(p.get("nextFundingRate") or 0)
-                # Annualised: hourly_rate × 8760 hours × 100 → percent
-                funding_ann_pct = round(funding_hr * 8760 * 100, 4)
+                # nextFundingRate is at the top-level item: decimal 8-hour rate
+                # e.g. "0.0001" means 0.01% per 8-hour period.
+                funding_8h = float(p.get("nextFundingRate") or 0)
+                # Annualised: 8h_rate × 3 periods/day × 365 days × 100 → percent
+                funding_ann_pct = round(funding_8h * 3 * 365 * 100, 4)
                 # openInterest in base asset; atomicResolution adjusts decimal places
                 # openInterest lives inside perpetual.params or perpetual (string)
                 oi_raw     = float(
@@ -291,7 +293,7 @@ def fetch_dydx_v4_funding() -> list[dict]:
                 status = params_obj.get("status") or p.get("status", "")
                 result.append({
                     "ticker":              ticker,
-                    "funding_rate_hourly": round(funding_hr * 100, 6),   # as %
+                    "funding_rate_8h_pct": round(funding_8h * 100, 6),   # 8-hour rate as %
                     "funding_rate_annual": funding_ann_pct,
                     "open_interest":       round(oi_adjusted, 2),
                     "status":              status,
