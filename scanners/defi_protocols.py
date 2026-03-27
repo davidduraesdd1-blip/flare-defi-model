@@ -29,14 +29,22 @@ _SESSION.headers.update({
 })
 
 # ── Module-level TTL caches ────────────────────────────────────────────────────
-_curve_cache    = {"ts": 0, "data": None}
-_aave_cache     = {"ts": 0, "data": None}
-_lido_cache     = {"ts": 0, "data": None}
-_compound_cache = {"ts": 0, "data": None}
-_dydx_cache     = {"ts": 0, "data": None}
-_gmx_cache      = {"ts": 0, "data": None}
-_uniswap_cache  = {"ts": 0, "data": None}
-_pendle_cache   = {"ts": 0, "data": None}
+_curve_cache      = {"ts": 0, "data": None}
+_aave_cache       = {"ts": 0, "data": None}
+_lido_cache       = {"ts": 0, "data": None}
+_compound_cache   = {"ts": 0, "data": None}
+_dydx_cache       = {"ts": 0, "data": None}
+_gmx_cache        = {"ts": 0, "data": None}
+_uniswap_cache    = {"ts": 0, "data": None}
+_pendle_cache     = {"ts": 0, "data": None}
+_ethena_cache     = {"ts": 0, "data": None}   # #76
+_aerodrome_cache  = {"ts": 0, "data": None}   # #77
+_morpho_cache     = {"ts": 0, "data": None}   # #77
+
+# #79 — TVL snapshot store for 24h-change alerts
+# { protocol_slug: {"tvl": float, "ts": float} }
+_tvl_snapshots: dict[str, dict] = {}
+_tvl_snapshots_lock = threading.Lock()
 
 # Shared DeFiLlama yields cache — populated once, reused across multiple fetchers
 _llama_pools_cache = {"ts": 0, "data": None}
@@ -468,9 +476,15 @@ def fetch_all_protocol_benchmarks() -> dict:
         "gmx_pools":        fetch_gmx_v2_pools,
         "uniswap_pools":    fetch_uniswap_v3_pools,
         "pendle_markets":   fetch_pendle_markets,
+        "ethena_yield":     fetch_ethena_yield,    # #76
+        "aerodrome_pools":  fetch_aerodrome_pools, # #77
+        "morpho_vaults":    fetch_morpho_vaults,   # #77
     }
 
-    benchmarks: dict = {k: ([] if k != "lido_steth_apy" else {}) for k in _TASKS}
+    benchmarks: dict = {
+        k: ({} if k in ("lido_steth_apy", "ethena_yield") else [])
+        for k in _TASKS
+    }
 
     with ThreadPoolExecutor(max_workers=4) as ex:
         future_map = {ex.submit(fn): key for key, fn in _TASKS.items()}
@@ -489,7 +503,8 @@ def fetch_all_protocol_benchmarks() -> dict:
 
     logger.info(
         "[DeFiProtocols] benchmarks fetched — Lido=%.2f%% Curve=%d Aave=%d "
-        "Compound=%d dYdX=%d GMX=%d Uniswap=%d Pendle=%d",
+        "Compound=%d dYdX=%d GMX=%d Uniswap=%d Pendle=%d "
+        "Ethena_sUSDe=%.2f%% Aerodrome=%d Morpho=%d",
         benchmarks["lido_steth_apy_pct"],
         len(benchmarks["curve_top_pools"]),
         len(benchmarks["aave_markets"]),
@@ -498,5 +513,256 @@ def fetch_all_protocol_benchmarks() -> dict:
         len(benchmarks["gmx_pools"]),
         len(benchmarks["uniswap_pools"]),
         len(benchmarks["pendle_markets"]),
+        float((benchmarks.get("ethena_yield") or {}).get("susde_apy") or 0),
+        len(benchmarks.get("aerodrome_pools") or []),
+        len(benchmarks.get("morpho_vaults") or []),
     )
     return benchmarks
+
+
+# ── 9. Ethena USDe / sUSDe (#76) ─────────────────────────────────────────────
+
+_ETHENA_API_URL = "https://ethena.fi/api/yields/protocol-and-staking-yield"
+
+
+def fetch_ethena_yield() -> dict:
+    """
+    Fetch Ethena sUSDe APY.
+
+    Primary source: https://ethena.fi/api/yields/protocol-and-staking-yield
+    Fallback:       DeFiLlama yields pools filtered to project=="ethena".
+
+    Returns:
+        dict with keys:
+          susde_apy  : float — current sUSDe APY %
+          protocol   : "ethena"
+          mechanism  : "delta_neutral"
+          source     : "ethena_api" | "defillama" | "unavailable"
+    """
+    now = time.time()
+    if _ethena_cache["data"] is not None and now - _ethena_cache["ts"] < _TTL_LONG:
+        return _ethena_cache["data"]
+
+    result: dict = {
+        "susde_apy": 0.0,
+        "protocol":  "ethena",
+        "mechanism": "delta_neutral",
+        "source":    "unavailable",
+    }
+
+    # Primary: Ethena public API
+    try:
+        data = _get(_ETHENA_API_URL, timeout=10)
+        if isinstance(data, dict):
+            # The response typically has "stakingYield" or "susdeApy" fields.
+            # Field names observed: stakingYield.value or susdeApy (percent)
+            staking = data.get("stakingYield") or {}
+            apy_val = (
+                staking.get("value")
+                or data.get("susdeApy")
+                or data.get("sUSDe_apy")
+                or data.get("apy")
+            )
+            if apy_val is not None:
+                result["susde_apy"] = round(float(apy_val), 4)
+                result["source"]    = "ethena_api"
+    except Exception as e:
+        logger.debug("[Ethena] primary API failed: %s", e)
+
+    # Fallback: DeFiLlama
+    if result["source"] == "unavailable":
+        try:
+            pools = _get_llama_pools()
+            best_apy = 0.0
+            for p in pools:
+                proj = (p.get("project") or "").lower()
+                sym  = (p.get("symbol")  or "").lower()
+                if proj == "ethena" and "susde" in sym:
+                    apy = float(p.get("apy") or 0)
+                    if apy > best_apy:
+                        best_apy = apy
+            if best_apy > 0:
+                result["susde_apy"] = round(best_apy, 4)
+                result["source"]    = "defillama"
+        except Exception as e:
+            logger.debug("[Ethena] DeFiLlama fallback failed: %s", e)
+
+    _ethena_cache["ts"]   = time.time()
+    _ethena_cache["data"] = result
+    logger.info("[Ethena] sUSDe APY=%.2f%% (source=%s)", result["susde_apy"], result["source"])
+    return result
+
+
+# ── 10. Aerodrome Finance (#77) ───────────────────────────────────────────────
+
+def fetch_aerodrome_pools() -> list[dict]:
+    """
+    Top Aerodrome Finance pools on Base by TVL from DeFiLlama yields pools.
+
+    Filters to project in ("aerodrome-v2", "aerodrome", "aerodrome-finance")
+    and chain == "Base". Returns top 10 by TVL.
+
+    Returns list with keys: symbol, project, chain, apy, tvl_usd, pool_id.
+    """
+    now = time.time()
+    if _aerodrome_cache["data"] is not None and now - _aerodrome_cache["ts"] < _TTL_LONG:
+        return _aerodrome_cache["data"]
+
+    result: list[dict] = []
+    _AERO_PROJECTS = {"aerodrome-v2", "aerodrome", "aerodrome-finance"}
+    try:
+        pools = _get_llama_pools()
+        for p in pools:
+            proj  = (p.get("project") or "").lower()
+            chain = (p.get("chain")   or "").lower()
+            if proj not in _AERO_PROJECTS or chain != "base":
+                continue
+            tvl = float(p.get("tvlUsd") or 0)
+            result.append({
+                "symbol":  p.get("symbol", ""),
+                "project": p.get("project", ""),
+                "chain":   "Base",
+                "apy":     round(float(p.get("apy") or 0), 4),
+                "apy_7d":  round(float(p.get("apyMean30d") or p.get("apy") or 0), 4),
+                "tvl_usd": round(tvl, 2),
+                "pool_id": p.get("pool", ""),
+            })
+        result.sort(key=lambda x: x["tvl_usd"], reverse=True)
+        result = result[:10]
+    except Exception as e:
+        logger.warning("[Aerodrome] fetch failed: %s", e)
+
+    _aerodrome_cache["ts"]   = time.time()
+    _aerodrome_cache["data"] = result
+    logger.info("[Aerodrome] %d pools fetched", len(result))
+    return result
+
+
+# ── 11. Morpho Blue (#77) ─────────────────────────────────────────────────────
+
+def fetch_morpho_vaults() -> list[dict]:
+    """
+    Top Morpho Blue vaults across all chains from DeFiLlama yields pools.
+
+    Filters to project in ("morpho", "morpho-blue"). Returns top 10 by TVL.
+
+    Returns list with keys: symbol, project, chain, apy, tvl_usd, pool_id.
+    """
+    now = time.time()
+    if _morpho_cache["data"] is not None and now - _morpho_cache["ts"] < _TTL_LONG:
+        return _morpho_cache["data"]
+
+    result: list[dict] = []
+    _MORPHO_PROJECTS = {"morpho", "morpho-blue"}
+    try:
+        pools = _get_llama_pools()
+        for p in pools:
+            proj = (p.get("project") or "").lower()
+            if proj not in _MORPHO_PROJECTS:
+                continue
+            tvl = float(p.get("tvlUsd") or 0)
+            result.append({
+                "symbol":  p.get("symbol", ""),
+                "project": p.get("project", ""),
+                "chain":   p.get("chain", ""),
+                "apy":     round(float(p.get("apy") or 0), 4),
+                "apy_7d":  round(float(p.get("apyMean30d") or p.get("apy") or 0), 4),
+                "tvl_usd": round(tvl, 2),
+                "pool_id": p.get("pool", ""),
+            })
+        result.sort(key=lambda x: x["tvl_usd"], reverse=True)
+        result = result[:10]
+    except Exception as e:
+        logger.warning("[Morpho] fetch failed: %s", e)
+
+    _morpho_cache["ts"]   = time.time()
+    _morpho_cache["data"] = result
+    logger.info("[Morpho] %d vaults fetched", len(result))
+    return result
+
+
+# ── 12. 24-Hour TVL Change Alerts (#79) ───────────────────────────────────────
+
+def fetch_tvl_change_alerts(threshold_pct: float = 5.0) -> list[dict]:
+    """
+    Check every protocol returned by fetch_all_protocol_benchmarks() for a
+    significant TVL drop in the last ~24 hours.
+
+    Uses a module-level dict (_tvl_snapshots) to persist the previous TVL reading
+    with a timestamp.  On the first call (no snapshot) the current TVL is stored
+    and no alert is emitted.  Subsequent calls compare against the stored value.
+
+    A new snapshot is only written when the stored snapshot is >20 minutes old
+    so that rapid back-to-back calls don't overwrite the baseline.
+
+    Args:
+        threshold_pct: minimum percentage drop to trigger a WARNING (default 5%).
+                       Drops >15% trigger CRITICAL.
+
+    Returns:
+        List of alert dicts, each with:
+          protocol    : str
+          tvl_now     : float
+          tvl_24h     : float  — stored baseline TVL
+          change_pct  : float  — signed, negative = drop
+          severity    : "WARNING" | "CRITICAL"
+    """
+    _SNAPSHOT_MAX_AGE    = 86_400  # 24 h — baseline we compare against
+    _SNAPSHOT_MIN_WRITE  = 1_200   # 20 min — minimum gap before refreshing snapshot
+
+    # Collect current TVL for each protocol via DeFiLlama yields pool aggregate
+    protocol_tvls: dict[str, float] = {}
+    try:
+        pools = _get_llama_pools()
+        agg: dict[str, float] = {}
+        for p in pools:
+            proj = (p.get("project") or "").lower()
+            tvl  = float(p.get("tvlUsd") or 0)
+            agg[proj] = agg.get(proj, 0.0) + tvl
+        protocol_tvls = agg
+    except Exception as e:
+        logger.warning("[TVLAlerts] pool fetch failed: %s", e)
+        return []
+
+    now    = time.time()
+    alerts = []
+
+    with _tvl_snapshots_lock:
+        for protocol, tvl_now in protocol_tvls.items():
+            if tvl_now <= 0:
+                continue
+            snap = _tvl_snapshots.get(protocol)
+
+            if snap is None:
+                # First observation — store baseline, no alert yet
+                _tvl_snapshots[protocol] = {"tvl": tvl_now, "ts": now}
+                continue
+
+            snap_age = now - snap["ts"]
+            tvl_24h  = snap["tvl"]
+
+            # Compute change vs baseline
+            change_pct = (tvl_now - tvl_24h) / tvl_24h * 100 if tvl_24h > 0 else 0.0
+
+            # Refresh the snapshot if it's older than 24h (so we always compare ~1 day back)
+            # but only if the minimum write interval has passed (avoid overwriting too often)
+            if snap_age > _SNAPSHOT_MAX_AGE and snap_age > _SNAPSHOT_MIN_WRITE:
+                _tvl_snapshots[protocol] = {"tvl": tvl_now, "ts": now}
+
+            # Emit alert on significant drops
+            if change_pct <= -threshold_pct:
+                severity = "CRITICAL" if change_pct <= -15.0 else "WARNING"
+                alerts.append({
+                    "protocol":   protocol,
+                    "tvl_now":    round(tvl_now, 2),
+                    "tvl_24h":    round(tvl_24h, 2),
+                    "change_pct": round(change_pct, 2),
+                    "severity":   severity,
+                })
+                logger.warning(
+                    "[TVLAlerts] %s TVL drop %.1f%% ($%.0fM → $%.0fM) — %s",
+                    protocol, change_pct, tvl_24h / 1e6, tvl_now / 1e6, severity,
+                )
+
+    alerts.sort(key=lambda x: x["change_pct"])   # most severe first
+    return alerts

@@ -527,4 +527,5 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "api.upshift.fi",
     "api.coinmetrics.io",
     "community-api.coinmetrics.io",
+    "ethena.fi",                    # Ethena sUSDe yield (#76)
 })

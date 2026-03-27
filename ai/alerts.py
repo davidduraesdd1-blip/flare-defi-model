@@ -309,6 +309,7 @@ def check_and_send_alerts(model_results: dict, arb_results: dict = None) -> None
     """
     Called by the scheduler after each scan.
     Checks results against user thresholds and sends email/Telegram alerts.
+    Also checks for TVL change alerts (#79).
     """
     config     = load_alerts_config()
     thresholds = config.get("thresholds", {})
@@ -349,6 +350,23 @@ def check_and_send_alerts(model_results: dict, arb_results: dict = None) -> None
                         f"⚡ ARB [{profile.upper()}] {arb.get('strategy_label', 'Opportunity')}: "
                         f"+{arb.get('estimated_profit', 0):.2f}% — ACT NOW"
                     )
+
+    # #79 — TVL Change Alerts: check for significant drops and include in notifications
+    try:
+        from scanners.defi_protocols import fetch_tvl_change_alerts
+        tvl_alerts = fetch_tvl_change_alerts(threshold_pct=5.0)
+        for alert in tvl_alerts:
+            triggered = True
+            sev   = alert.get("severity", "WARNING")
+            proto = alert.get("protocol", "unknown")
+            chg   = alert.get("change_pct", 0.0)
+            tvl_m = round(alert.get("tvl_now", 0) / 1e6, 1)
+            lines.append(
+                f"{'🚨' if sev == 'CRITICAL' else '⚠️'} TVL {sev}: {proto} "
+                f"dropped {chg:+.1f}% (now ${tvl_m}M)"
+            )
+    except Exception as e:
+        logger.debug("[Alerts] TVL change check failed: %s", e)
 
     if not triggered:
         logger.debug("No alert thresholds met — skipping notifications.")
