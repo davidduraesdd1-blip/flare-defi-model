@@ -120,6 +120,110 @@ def sharpe_ratio(expected_return: float, risk_free_rate: float, std_dev: float) 
     return round((expected_return - risk_free_rate) / std_dev, 3)
 
 
+# ─── Pool-Level Sharpe Ratio (#72) ────────────────────────────────────────────
+
+def compute_pool_sharpe(
+    apy: float,
+    apy_7d_avg: float,
+    risk_free_rate: float = 0.045,
+) -> dict:
+    """
+    Compute a Sharpe-like ratio for an individual DeFi pool.
+
+    Inputs:
+        apy            : current pool APY (percent, e.g. 12.5)
+        apy_7d_avg     : 7-day average APY (percent); used to estimate volatility
+        risk_free_rate : annualised risk-free rate as a decimal (default 4.5%)
+
+    Volatility estimation:
+        We approximate daily return std dev from the difference between the
+        current APY and the 7d average. This is a single-point proxy — a wider
+        divergence implies higher volatility. The minimum is capped at 0.01 so
+        very stable pools still get a finite ratio.
+
+    Returns:
+        dict with keys:
+          sharpe            : float  — Sharpe ratio
+          apy               : float  — input APY echoed back
+          risk_adjusted_rank: str    — "excellent" (>2) / "good" (1-2) /
+                                       "fair" (0.5-1) / "poor" (<0.5)
+    """
+    # Convert percent → decimal for calculation
+    apy_dec    = apy / 100.0
+    apy_7d_dec = apy_7d_avg / 100.0
+
+    # Approximate volatility from the spread between current and 7d-avg APY.
+    # |current - 7d_avg| / 7 gives a rough daily change magnitude; we use this
+    # as a stand-in for std dev of daily returns.  Floor at 0.01 (1% annual vol).
+    daily_change = abs(apy_dec - apy_7d_dec) / 7.0
+    # Annualise: daily_std * sqrt(365)
+    volatility = max(daily_change * (365 ** 0.5), 0.01)
+
+    sharpe = round((apy_dec - risk_free_rate) / volatility, 3)
+
+    if sharpe > 2.0:
+        rank = "excellent"
+    elif sharpe >= 1.0:
+        rank = "good"
+    elif sharpe >= 0.5:
+        rank = "fair"
+    else:
+        rank = "poor"
+
+    return {
+        "sharpe":             sharpe,
+        "apy":                round(apy, 4),
+        "risk_adjusted_rank": rank,
+    }
+
+
+# ─── Real Yield Ratio — Ponzi Detector (#73) ──────────────────────────────────
+
+def compute_real_yield_ratio(total_apy: float, emission_apy: float) -> dict:
+    """
+    Separate real (fee-based) yield from token emission yield.
+
+    A high emission_apy relative to total_apy means most of the APY comes from
+    inflationary token rewards (a "Ponzi"-like structure), not actual fee revenue.
+
+    Inputs:
+        total_apy    : total pool APY (percent)
+        emission_apy : portion of APY coming from token rewards / emissions (percent)
+
+    Classification thresholds:
+        real_yield / total_apy > 0.50  → "SUSTAINABLE"   (majority from fees)
+        0.20 – 0.50                    → "MIXED"
+        < 0.20                         → "EMISSION_DEPENDENT"
+
+    Returns:
+        dict with keys:
+          real_yield_pct   : float — fee-only APY %
+          emission_pct     : float — emission APY % (clipped to total)
+          ratio            : float — real_yield / total_apy (0–1)
+          classification   : str
+    """
+    # Sanity clamps
+    total_apy    = max(0.0, total_apy)
+    emission_apy = max(0.0, min(emission_apy, total_apy))
+
+    real_yield = total_apy - emission_apy
+    ratio = real_yield / total_apy if total_apy > 0 else 0.0
+
+    if ratio > 0.5:
+        classification = "SUSTAINABLE"
+    elif ratio >= 0.2:
+        classification = "MIXED"
+    else:
+        classification = "EMISSION_DEPENDENT"
+
+    return {
+        "real_yield_pct": round(real_yield, 4),
+        "emission_pct":   round(emission_apy, 4),
+        "ratio":          round(ratio, 4),
+        "classification": classification,
+    }
+
+
 # ─── Kelly Criterion ──────────────────────────────────────────────────────────
 
 def kelly_fraction(win_prob: float, win_pct: float, loss_pct: float) -> float:
@@ -684,45 +788,11 @@ def run_all_models(scan_result: dict) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# REAL YIELD RATIO  (#73)
-# fee_apy / total_apy — measures what fraction of yield is from real revenue
-# vs token incentives. A ratio near 1.0 = sustainable; near 0.0 = ponzi risk.
+# REAL YIELD RATIO  (#73) — canonical implementation moved to line ~182
+# compute_real_yield_ratio(total_apy, emission_apy) → classification dict
+# The duplicate that existed here with (fee_apy, reward_apy) signature has
+# been removed. All callers now use the spec-compliant version above.
 # ─────────────────────────────────────────────────────────────────────────────
-
-def compute_real_yield_ratio(fee_apy: float, reward_apy: float) -> dict:
-    """
-    Compute the Real Yield Ratio = fee_apy / (fee_apy + reward_apy).
-
-    Returns dict:
-        ratio     : float 0.0–1.0 (1.0 = 100% fee revenue)
-        label     : str "Sustainable" / "Partially Incentivized" / "Incentive-Driven"
-        color     : hex color for UI
-        pct_real  : float % of APY from real fees
-        pct_incentive : float % from token rewards
-    """
-    total = float(fee_apy or 0) + float(reward_apy or 0)
-    if total <= 0:
-        return {"ratio": 0.0, "label": "No Yield", "color": "#6B7280",
-                "pct_real": 0.0, "pct_incentive": 0.0}
-
-    ratio = float(fee_apy or 0) / total
-    pct_real      = round(ratio * 100, 1)
-    pct_incentive = round((1 - ratio) * 100, 1)
-
-    if ratio >= 0.7:
-        label, color = "Sustainable", "#34D399"
-    elif ratio >= 0.35:
-        label, color = "Partially Incentivized", "#FBBF24"
-    else:
-        label, color = "Incentive-Driven", "#EF4444"
-
-    return {
-        "ratio":          round(ratio, 3),
-        "label":          label,
-        "color":          color,
-        "pct_real":       pct_real,
-        "pct_incentive":  pct_incentive,
-    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

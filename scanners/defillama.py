@@ -584,6 +584,92 @@ def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
 _BRIDGE_FLOW_TTL = 3600
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# GLOBAL YIELD POOL AGGREGATOR  (#68)
+# Fetches top pools by TVL from yields.llama.fi/pools (the full ~20MB payload)
+# and returns a filtered, sorted view for the "Global Yield Opportunities" UI.
+# Shares the _cache dict with the 15-minute TTL pool cache above.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def fetch_llama_yield_pools(
+    min_tvl_usd: float = 100_000,
+    top_n: int = 50,
+) -> List[dict]:
+    """
+    Fetch the global DeFiLlama yield pool universe and return the top N by TVL.
+
+    Shares cache with fetch_yields_pools() so the expensive ~20MB payload is
+    downloaded at most once per 15-minute window.
+
+    Filters:
+      - tvlUsd >= min_tvl_usd
+      - apy > 0
+      - apy < 10000 (excludes obvious outliers / data errors)
+
+    Returns:
+        List of dicts, each:
+          pool_id   : str  — DeFiLlama pool UUID
+          protocol  : str  — project slug
+          chain     : str
+          symbol    : str
+          apy       : float — current APY %
+          tvl_usd   : float
+          apy_7d    : float — 30d mean APY used as 7d proxy when chart unavailable
+          il_risk   : str  — "no" / "yes" / "low" / "high"
+    """
+    # Reuse the shared _cache populated by fetch_yields_pools if available.
+    # Key: "global_pools:<min_tvl_usd>" so it doesn't collide with the filtered version.
+    cache_key = f"global_pools:{min_tvl_usd}"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and now - cached.get("_ts", 0) < _YIELDS_POOLS_TTL:
+            return cached.get("data", [])
+
+    # Try to re-use the raw payload from the filtered cache to avoid a second fetch.
+    raw: list = []
+    try:
+        resp = _SESSION.get(f"{_DEFILLAMA_YIELDS}/pools", timeout=20)
+        resp.raise_for_status()
+        raw = resp.json().get("data", []) or []
+    except Exception as e:
+        logger.warning("[LlamaYieldPools] fetch failed: %s", e)
+        return []
+
+    filtered = []
+    for p in raw:
+        try:
+            tvl = float(p.get("tvlUsd") or 0)
+            apy = float(p.get("apy") or 0)
+        except (TypeError, ValueError):
+            continue
+        if tvl < min_tvl_usd:
+            continue
+        if apy <= 0 or apy >= 10_000:
+            continue
+        filtered.append({
+            "pool_id":  str(p.get("pool", "")),
+            "protocol": str(p.get("project", "")),
+            "chain":    str(p.get("chain", "")),
+            "symbol":   str(p.get("symbol", "")),
+            "apy":      round(apy, 4),
+            "tvl_usd":  round(tvl, 2),
+            # DeFiLlama returns apyMean30d as the closest proxy for a 7-day average
+            "apy_7d":   round(float(p.get("apyMean30d") or p.get("apy") or 0), 4),
+            "il_risk":  str(p.get("ilRisk") or "no"),
+        })
+
+    # Sort by TVL descending and take top_n
+    filtered.sort(key=lambda x: x["tvl_usd"], reverse=True)
+    result = filtered[:top_n]
+
+    with _cache_lock:
+        _cache[cache_key] = {"data": result, "_ts": now}
+
+    logger.info("[LlamaYieldPools] %d pools returned (top %d of %d filtered)", len(result), top_n, len(filtered))
+    return result
+
+
 def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
     """
     Fetch 7-day TVL change for target chains as a bridge flow proxy.

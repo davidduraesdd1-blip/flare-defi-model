@@ -20,6 +20,16 @@ from config import RISK_PROFILES, RISK_PROFILE_NAMES
 from scanners.defillama import (
     fetch_yields_pools, fetch_protocol_risk_score, fetch_tvl_change_alert,
     fetch_governance_alerts, fetch_bridge_flows,
+    fetch_llama_yield_pools,            # #68 global yield pools
+)
+from scanners.defi_protocols import (
+    fetch_ethena_yield,                 # #76
+    fetch_aerodrome_pools,              # #77
+    fetch_morpho_vaults,                # #77
+)
+from models.risk_models import (
+    compute_pool_sharpe,                # #72
+    compute_real_yield_ratio,           # #73
 )
 
 page_setup("Opportunities · Flare DeFi")
@@ -385,12 +395,23 @@ with st.spinner("Loading multi-chain pools…"):
 
 if _mc_pools:
     # Display as table with pro/beginner columns
+    # Sort by Sharpe ratio by default (#72)
+    _mc_pools_with_sharpe = []
+    for _mcp in _mc_pools:
+        _mc_apy   = float(_mcp.get("apy") or 0)
+        _mc_apy7d = float(_mcp.get("apy7d") or _mcp.get("apy") or 0)
+        _mc_sh    = compute_pool_sharpe(_mc_apy, _mc_apy7d)
+        _mc_pools_with_sharpe.append({**_mcp, "_sharpe": _mc_sh["sharpe"], "_rank": _mc_sh["risk_adjusted_rank"]})
+    _mc_pools_with_sharpe.sort(key=lambda x: x["_sharpe"], reverse=True)
+
     _mc_rows = []
-    for p in _mc_pools:
+    for p in _mc_pools_with_sharpe:
         _fee   = float(p.get("apyBase") or 0)
         _rew   = float(p.get("apyReward") or 0)
         _total = float(p.get("apy") or 0)
         _ry    = round(_fee / _total * 100) if _total > 0 else 0
+        # Real Yield classification (#73)
+        _real_info = compute_real_yield_ratio(total_apy=_total, emission_apy=_rew)
         _row = {
             "Protocol":    p.get("project", "—").replace("-", " ").title(),
             "Chain":       p.get("chain", "—"),
@@ -399,11 +420,12 @@ if _mc_pools:
             "TVL":         f"${float(p.get('tvlUsd', 0))/1e6:.0f}M" if p.get("tvlUsd", 0) >= 1e6 else f"${p.get('tvlUsd', 0):,.0f}",
         }
         if _pro_mode:
-            _row["Base APY"] = f"{_fee:.1f}%"
+            _row["Base APY"]   = f"{_fee:.1f}%"
             _row["Reward APY"] = f"{_rew:.1f}%"
-            _row["Real Yield %"] = f"{_ry}%"
-            _row["Audits"] = str(p.get("audits", "—"))
-            _row["IL Risk"] = ("Yes" if p.get("ilRisk", "no") != "no" else "No")
+            _row["Real Yield"] = f"{_ry}% · {_real_info['classification'].replace('_', ' ').title()}"
+            _row["Sharpe"]     = f"{p['_sharpe']:.2f} ({p['_rank'].capitalize()})"
+            _row["Audits"]     = str(p.get("audits", "—"))
+            _row["IL Risk"]    = ("Yes" if p.get("ilRisk", "no") != "no" else "No")
         _mc_rows.append(_row)
     # Paginate when more than 25 rows (upgrade #33)
     if len(_mc_rows) > 25:
@@ -586,3 +608,282 @@ if _pro_mode:
     else:
         st.info("Bridge flow data unavailable.")
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Global Yield Opportunities (#68) ─────────────────────────────────────────
+
+render_section_header(
+    "Global Yield Opportunities",
+    "Top 20 DeFi pools by TVL across all chains — filter by chain and min APY. "
+    "Sorted by Sharpe ratio (risk-adjusted). Compare Flare vs the broader market.",
+)
+
+with st.spinner("Loading global yield pools…"):
+    if demo_mode:
+        _gy_pools = [
+            {"pool_id": "1", "protocol": "aave-v3",        "chain": "Ethereum", "symbol": "USDC",         "apy": 5.2,  "tvl_usd": 2_800_000_000, "apy_7d": 5.0,  "il_risk": "no"},
+            {"pool_id": "2", "protocol": "lido",            "chain": "Ethereum", "symbol": "stETH",        "apy": 3.8,  "tvl_usd": 18_000_000_000,"apy_7d": 3.7,  "il_risk": "no"},
+            {"pool_id": "3", "protocol": "ethena",          "chain": "Ethereum", "symbol": "sUSDe",        "apy": 27.5, "tvl_usd": 3_900_000_000, "apy_7d": 24.0, "il_risk": "no"},
+            {"pool_id": "4", "protocol": "morpho",          "chain": "Ethereum", "symbol": "USDC vault",   "apy": 9.3,  "tvl_usd": 1_800_000_000, "apy_7d": 9.1,  "il_risk": "no"},
+            {"pool_id": "5", "protocol": "aerodrome-v2",    "chain": "Base",     "symbol": "USDC/WETH",    "apy": 38.7, "tvl_usd": 580_000_000,   "apy_7d": 32.0, "il_risk": "yes"},
+            {"pool_id": "6", "protocol": "pendle",          "chain": "Ethereum", "symbol": "PT-USDe",      "apy": 12.4, "tvl_usd": 420_000_000,   "apy_7d": 11.8, "il_risk": "no"},
+            {"pool_id": "7", "protocol": "uniswap-v3",      "chain": "Ethereum", "symbol": "USDC/ETH",     "apy": 8.1,  "tvl_usd": 310_000_000,   "apy_7d": 7.9,  "il_risk": "yes"},
+            {"pool_id": "8", "protocol": "compound-v3",     "chain": "Ethereum", "symbol": "USDC",         "apy": 4.5,  "tvl_usd": 900_000_000,   "apy_7d": 4.4,  "il_risk": "no"},
+            {"pool_id": "9", "protocol": "kinetic-finance",  "chain": "Flare",   "symbol": "USDT0",        "apy": 8.0,  "tvl_usd": 64_000_000,    "apy_7d": 7.8,  "il_risk": "no"},
+            {"pool_id":"10", "protocol": "clearpool-lending","chain": "Flare",   "symbol": "USD0 X-Pool",  "apy": 11.5, "tvl_usd": 46_000_000,    "apy_7d": 11.2, "il_risk": "no"},
+        ]
+    else:
+        _gy_pools = fetch_llama_yield_pools(min_tvl_usd=100_000, top_n=50)
+
+# Filter controls
+_gy_chains = sorted({p["chain"] for p in _gy_pools}) if _gy_pools else []
+_gy_col1, _gy_col2 = st.columns([2, 1])
+with _gy_col1:
+    _gy_chain_filter = st.multiselect(
+        "Filter by Chain", options=_gy_chains,
+        default=[], key="gy_chain_filter",
+        placeholder="All chains",
+    )
+with _gy_col2:
+    _gy_min_apy = st.number_input(
+        "Min APY %", min_value=0.0, max_value=500.0, value=0.0, step=0.5,
+        key="gy_min_apy",
+    )
+
+# Apply filters
+_gy_filtered = _gy_pools
+if _gy_chain_filter:
+    _gy_filtered = [p for p in _gy_filtered if p["chain"] in _gy_chain_filter]
+if _gy_min_apy > 0:
+    _gy_filtered = [p for p in _gy_filtered if p.get("apy", 0) >= _gy_min_apy]
+
+# Compute Sharpe for each pool and sort by Sharpe descending
+_gy_display = []
+for _gp in _gy_filtered[:20]:
+    _g_apy    = float(_gp.get("apy", 0))
+    _g_apy_7d = float(_gp.get("apy_7d", _g_apy))
+    _sharpe   = compute_pool_sharpe(_g_apy, _g_apy_7d)
+    _gy_display.append({**_gp, "_sharpe_val": _sharpe["sharpe"], "_rank": _sharpe["risk_adjusted_rank"]})
+_gy_display.sort(key=lambda x: x["_sharpe_val"], reverse=True)
+
+if _gy_display:
+    _gy_rows = []
+    for _gp in _gy_display:
+        _g_apy   = float(_gp.get("apy", 0))
+        _g_apy7d = float(_gp.get("apy_7d", _g_apy))
+        _g_tvl   = float(_gp.get("tvl_usd", 0))
+        _g_sh    = _gp["_sharpe_val"]
+        _g_rank  = _gp["_rank"]
+        _sh_col  = {"excellent": "#22c55e", "good": "#84cc16", "fair": "#f59e0b", "poor": "#ef4444"}.get(_g_rank, "#9ca3af")
+        _row = {
+            "Protocol":   (_gp.get("protocol") or "—").replace("-", " ").title(),
+            "Chain":      _gp.get("chain", "—"),
+            "Pool":       _gp.get("symbol", "—"),
+            "APY %":      f"{_g_apy:.2f}%",
+            "7d Avg APY": f"{_g_apy7d:.2f}%",
+            "TVL":        f"${_g_tvl/1e9:.2f}B" if _g_tvl >= 1e9 else f"${_g_tvl/1e6:.0f}M",
+            "Sharpe":     f"{_g_sh:.2f}",
+            "Quality":    _g_rank.capitalize(),
+            "IL Risk":    ("Yes" if _gp.get("il_risk", "no") not in ("no", "") else "No"),
+        }
+        _gy_rows.append(_row)
+    st.dataframe(pd.DataFrame(_gy_rows), use_container_width=True, hide_index=True)
+    st.caption(
+        "Sorted by Sharpe ratio (risk-adjusted). "
+        "Quality: Excellent >2.0, Good 1-2, Fair 0.5-1, Poor <0.5. "
+        "Source: yields.llama.fi — updated every 15 minutes."
+    )
+else:
+    st.info("No pools match the selected filters. Try reducing min APY or selecting more chains.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Cross-Chain DeFi — Ethena sUSDe (#76) ────────────────────────────────────
+
+render_section_header(
+    "Cross-Chain DeFi",
+    "Ethena sUSDe (delta-neutral) · Aerodrome Finance (Base) · Morpho Blue vaults",
+)
+
+with st.spinner("Loading cross-chain protocol data…"):
+    if demo_mode:
+        _ethena  = {"susde_apy": 27.5, "protocol": "ethena", "mechanism": "delta_neutral", "source": "demo"}
+        _aero    = [
+            {"symbol": "USDC/WETH", "project": "aerodrome-v2", "chain": "Base", "apy": 38.7, "apy_7d": 32.0, "tvl_usd": 580_000_000},
+            {"symbol": "WETH/cbBTC","project": "aerodrome-v2", "chain": "Base", "apy": 52.1, "apy_7d": 48.0, "tvl_usd": 290_000_000},
+        ]
+        _morpho  = [
+            {"symbol": "USDC vault",  "project": "morpho", "chain": "Ethereum", "apy": 9.3, "apy_7d": 9.1, "tvl_usd": 1_800_000_000},
+            {"symbol": "WETH vault",  "project": "morpho", "chain": "Ethereum", "apy": 4.2, "apy_7d": 4.1, "tvl_usd": 650_000_000},
+        ]
+    else:
+        _ethena = fetch_ethena_yield()
+        _aero   = fetch_aerodrome_pools()
+        _morpho = fetch_morpho_vaults()
+
+# Ethena sUSDe card
+_eth_apy = float(_ethena.get("susde_apy", 0))
+_eth_src  = _ethena.get("source", "—")
+if _eth_apy > 0:
+    _eth_sharpe = compute_pool_sharpe(_eth_apy, _eth_apy * 0.9)  # use 90% as 7d proxy
+    _eth_real   = compute_real_yield_ratio(
+        total_apy=_eth_apy,
+        emission_apy=_eth_apy * 0.5,  # Ethena ~50% emission approximation
+    )
+    _eth_sh_col = {"excellent": "#22c55e", "good": "#84cc16", "fair": "#f59e0b", "poor": "#ef4444"}.get(
+        _eth_sharpe["risk_adjusted_rank"], "#9ca3af"
+    )
+    _eth_cls    = _eth_real["classification"]
+    _eth_cls_col = "#22c55e" if _eth_cls == "SUSTAINABLE" else ("#f59e0b" if _eth_cls == "MIXED" else "#ef4444")
+    st.markdown(
+        f"<div style='background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.07);"
+        f"border-left:3px solid #6366f1;border-radius:8px;padding:12px 16px;margin-bottom:10px'>"
+        f"<div style='display:flex;justify-content:space-between;align-items:center'>"
+        f"<div>"
+        f"<span style='font-weight:700;font-size:1.0rem;color:#e2e8f0'>Ethena sUSDe</span> "
+        f"<span style='color:#64748b;font-size:0.75rem'>delta-neutral · {_eth_src}</span>"
+        f"</div>"
+        f"<div style='text-align:right'>"
+        f"<span style='font-size:1.3rem;font-weight:700;color:#22c55e'>{_eth_apy:.1f}% APY</span>"
+        f"</div>"
+        f"</div>"
+        f"<div style='margin-top:8px;display:flex;gap:8px;flex-wrap:wrap'>"
+        f"<span style='background:rgba(0,0,0,0.2);border:1px solid {_eth_sh_col};color:{_eth_sh_col};"
+        f"font-size:0.70rem;padding:2px 7px;border-radius:10px'>"
+        f"Sharpe {_eth_sharpe['sharpe']:.2f} · {_eth_sharpe['risk_adjusted_rank'].capitalize()}</span>"
+        f"<span style='background:rgba(0,0,0,0.2);border:1px solid {_eth_cls_col};color:{_eth_cls_col};"
+        f"font-size:0.70rem;padding:2px 7px;border-radius:10px'>{_eth_cls}</span>"
+        f"<span style='background:rgba(0,0,0,0.2);border:1px solid #475569;color:#94a3b8;"
+        f"font-size:0.70rem;padding:2px 7px;border-radius:10px'>delta-neutral hedge</span>"
+        f"</div>"
+        f"<div style='color:#64748b;font-size:0.74rem;margin-top:6px'>"
+        f"Mechanism: Short perpetual futures hedge offsets ETH price risk. Yield from funding rates + staking."
+        f"</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+else:
+    st.info("Ethena sUSDe data unavailable.")
+
+# Aerodrome + Morpho tables
+_cc_col1, _cc_col2 = st.columns(2)
+
+with _cc_col1:
+    st.markdown("**Aerodrome Finance (Base)**")
+    if _aero:
+        _aero_rows = []
+        for _ap in _aero:
+            _a_apy   = float(_ap.get("apy", 0))
+            _a_apy7d = float(_ap.get("apy_7d", _a_apy))
+            _a_sh    = compute_pool_sharpe(_a_apy, _a_apy7d)
+            _aero_rows.append({
+                "Pool":   _ap.get("symbol", "—"),
+                "APY %":  f"{_a_apy:.1f}%",
+                "Sharpe": f"{_a_sh['sharpe']:.2f}",
+                "TVL":    f"${float(_ap.get('tvl_usd',0))/1e6:.0f}M",
+            })
+        st.dataframe(pd.DataFrame(_aero_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("Aerodrome data unavailable.")
+
+with _cc_col2:
+    st.markdown("**Morpho Blue Vaults**")
+    if _morpho:
+        _morpho_rows = []
+        for _mp in _morpho:
+            _m_apy   = float(_mp.get("apy", 0))
+            _m_apy7d = float(_mp.get("apy_7d", _m_apy))
+            _m_sh    = compute_pool_sharpe(_m_apy, _m_apy7d)
+            _real    = compute_real_yield_ratio(_m_apy, 0.0)  # Morpho is mostly fee-based
+            _morpho_rows.append({
+                "Vault":   _mp.get("symbol", "—"),
+                "Chain":   _mp.get("chain", "—"),
+                "APY %":   f"{_m_apy:.1f}%",
+                "Sharpe":  f"{_m_sh['sharpe']:.2f}",
+                "Real Yield": _real["classification"].replace("_", " ").title(),
+                "TVL":     f"${float(_mp.get('tvl_usd',0))/1e6:.0f}M",
+            })
+        st.dataframe(pd.DataFrame(_morpho_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("Morpho data unavailable.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── 7-Day APY Sparklines for Multi-Chain Pools (#81) ─────────────────────────
+
+render_section_header(
+    "7-Day APY Sparklines",
+    "Mini trend charts for top yield pools — green = trending up, red = trending down",
+)
+
+# Use the global yield pools already fetched; show sparklines for top 6 by Sharpe
+_sp_pools = []
+for _sp in (_gy_display or [])[:6]:
+    _sp_apy   = float(_sp.get("apy", 0))
+    _sp_apy7d = float(_sp.get("apy_7d", _sp_apy))
+    if _sp_apy > 0:
+        _sp_pools.append(_sp)
+
+if _sp_pools:
+    _sp_cols = st.columns(min(len(_sp_pools), 3))
+    for _si, _sp in enumerate(_sp_pools[:6]):
+        _col_idx   = _si % 3
+        _sp_apy    = float(_sp.get("apy", 0))
+        _sp_apy7d  = float(_sp.get("apy_7d", _sp_apy))
+        _sp_proto  = (_sp.get("protocol") or "").replace("-", " ").title()
+        _sp_sym    = _sp.get("symbol", "")
+        _sp_chain  = _sp.get("chain", "")
+
+        # Build a synthetic 7-point sparkline from current APY and 7d average
+        # Interpolate linearly between apy_7d and apy across 7 points
+        _spark_vals = [
+            round(_sp_apy7d + (_sp_apy - _sp_apy7d) * (i / 6), 2)
+            for i in range(7)
+        ]
+        _trending_up = _sp_apy >= _sp_apy7d
+        _sp_line_col = "#22c55e" if _trending_up else "#ef4444"
+        _sp_fill_col = "rgba(34,197,94,0.08)" if _trending_up else "rgba(239,68,68,0.08)"
+
+        with _sp_cols[_col_idx]:
+            st.markdown(
+                f"<div style='font-size:0.72rem;color:#64748b;text-align:center;margin-bottom:4px'>"
+                f"{_html.escape(_sp_proto)}<br>"
+                f"<span style='color:#94a3b8;font-weight:600'>{_html.escape(_sp_sym)}</span> "
+                f"<span style='color:#475569'>· {_html.escape(_sp_chain)}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            _fig_sp = go.Figure()
+            _fig_sp.add_trace(go.Scatter(
+                y=_spark_vals,
+                mode="lines",
+                line=dict(color=_sp_line_col, width=2),
+                fill="tozeroy",
+                fillcolor=_sp_fill_col,
+                hovertemplate="%{y:.2f}%<extra></extra>",
+            ))
+            _fig_sp.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                margin=dict(l=0, r=0, t=0, b=0),
+                height=60,
+                showlegend=False,
+            )
+            st.plotly_chart(_fig_sp, use_container_width=True, config={"displayModeBar": False})
+            _dir_sym = "▲" if _trending_up else "▼"
+            st.markdown(
+                f"<div style='text-align:center;font-size:0.73rem;color:{_sp_line_col};margin-top:-10px'>"
+                f"{_dir_sym} {_sp_apy:.2f}% APY</div>",
+                unsafe_allow_html=True,
+            )
+        # Add new row of columns every 3 pools
+        if _col_idx == 2 and _si < len(_sp_pools) - 1:
+            _sp_cols = st.columns(min(len(_sp_pools) - _si - 1, 3))
+else:
+    st.info("Load global yield pools above to see sparklines.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
