@@ -413,14 +413,14 @@ except Exception as _bits_err:
 
 # ─── On-Chain Intelligence (Group 4) ─────────────────────────────────────────
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-render_section_header("On-Chain Intelligence", "CoinMetrics Community API · MVRV Z-Score · SOPR · no API key required")
+render_section_header("On-Chain Intelligence", "CoinMetrics API · MVRV Z-Score · SOPR · add DEFI_COINMETRICS_API_KEY (free)")
 
 try:
     import macro_feeds as _mf4
     _oc4 = _mf4.fetch_coinmetrics_onchain(days=400)
 
     if _oc4.get("error") and not _oc4.get("mvrv_z"):
-        st.info(f"On-chain data loading… CoinMetrics Community API may be rate-limited. Error: {_oc4.get('error')}")
+        st.info(f"On-chain data unavailable. {_oc4.get('error')}")
     else:
         _mz4  = _oc4.get("mvrv_z")
         _ms4  = _oc4.get("mvrv_signal", "N/A")

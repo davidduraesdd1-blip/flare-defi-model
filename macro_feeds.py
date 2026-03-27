@@ -256,13 +256,16 @@ _CM_TTL_D = 3600
 
 def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
     """
-    Fetch real BTC on-chain metrics from CoinMetrics Community API.
-    No API key required.  Cached 1 hour.
+    Fetch real BTC on-chain metrics from CoinMetrics API.
+    Uses authenticated endpoint when DEFI_COINMETRICS_API_KEY is set (free at coinmetrics.io).
+    Falls back to community endpoint without key (may return 403 if CoinMetrics restricts it).
+    Cached 1 hour.
 
     Returns: mvrv_ratio, mvrv_z, mvrv_signal, realized_cap, sopr, sopr_signal,
              active_addresses, mvrv_history, sopr_history, source, error
     """
     import statistics as _stats
+    import os as _os
     start     = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=days)).strftime("%Y-%m-%d")
     cache_key = f"cm_oc_{days}"
 
@@ -270,18 +273,29 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
     if hit and (time.time() - hit.get("_ts", 0)) < _CM_TTL_D:
         return hit
 
+    api_key = _os.environ.get("DEFI_COINMETRICS_API_KEY", "").strip()
+    if api_key:
+        base_url = "https://api.coinmetrics.io/v4/timeseries/asset-metrics"
+        params_extra = {"api_key": api_key}
+    else:
+        base_url = "https://community-api.coinmetrics.io/v4/timeseries/asset-metrics"
+        params_extra = {}
+
     try:
         resp = _SESSION.get(
-            "https://community-api.coinmetrics.io/v4/timeseries/asset-metrics",
+            base_url,
             params={
                 "assets":     "btc",
                 "metrics":    "CapMrktCurUSD,CapRealUSD,SoprNtv,AdrActCnt",
                 "start_time": start,
                 "frequency":  "1d",
                 "page_size":  days + 10,
+                **params_extra,
             },
             timeout=15,
         )
+        if resp.status_code == 403 and not api_key:
+            return {"error": "HTTP 403 — CoinMetrics requires a free API key. Get one at coinmetrics.io/free-community-data and add as DEFI_COINMETRICS_API_KEY", "source": "coinmetrics"}
         if resp.status_code != 200:
             return {"error": f"HTTP {resp.status_code}", "source": "coinmetrics"}
         rows = resp.json().get("data", [])

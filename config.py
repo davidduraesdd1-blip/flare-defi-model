@@ -483,10 +483,12 @@ INITIAL_POSITIONS = [
 SENTRY_DSN: str | None = os.environ.get("DEFI_SENTRY_DSN")
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")
 COINGECKO_API_KEY: str | None = os.environ.get("DEFI_COINGECKO_API_KEY")
+COINMETRICS_API_KEY: str | None = os.environ.get("DEFI_COINMETRICS_API_KEY")  # coinmetrics.io free community key
 
 FEATURES: dict = {
     "ai_analysis":      bool(ANTHROPIC_API_KEY),
     "coingecko_pro":    bool(COINGECKO_API_KEY),
+    "coinmetrics":      bool(COINMETRICS_API_KEY),
     "cdp_agentkit":     bool(CDP_API_KEY_NAME and CDP_API_KEY_PRIVATE),
     "sentry":           bool(SENTRY_DSN),
     "flare_rpc":        True,        # always available (public RPC)
@@ -523,4 +525,6 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "app.sceptre.fi",
     "api.kinetic.market",
     "api.upshift.fi",
+    "api.coinmetrics.io",
+    "community-api.coinmetrics.io",
 })
