@@ -44,6 +44,7 @@ profile_cfg   = ctx["profile_cfg"]
 color         = ctx["color"]
 weight        = ctx["weight"]
 portfolio_size = ctx["portfolio_size"]
+pro_mode      = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 
 latest    = load_latest()
 positions = load_positions()
@@ -112,9 +113,18 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 # ── Top Opportunities ─────────────────────────────────────────────────────────
 render_section_header(f"Top Opportunities", f"{profile_cfg['label']} · {profile_cfg['target_apy_low']:.0f}–{profile_cfg['target_apy_high']:.0f}% target APY")
 
+if not pro_mode:
+    st.markdown(
+        "<div style='background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.14);"
+        "border-radius:8px;padding:7px 14px;font-size:0.78rem;color:#a78bfa;margin-bottom:10px'>"
+        "Beginner mode: showing simplified view. Enable Pro Mode in the sidebar to see Sharpe ratio, "
+        "Kelly fraction, HMM state, and full technical detail.</div>",
+        unsafe_allow_html=True,
+    )
+
 if not opps:
     if not latest.get("completed_at") and not latest.get("run_id"):
-        st.info("⏳ First scan is starting automatically — please wait ~30 seconds, then click **↺ Reload** in the sidebar.")
+        st.info("First scan is starting automatically — please wait ~30 seconds, then click Reload in the sidebar.")
     else:
         st.info("No opportunities found for this risk profile in the latest scan.")
 else:

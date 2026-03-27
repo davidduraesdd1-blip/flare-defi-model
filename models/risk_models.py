@@ -800,6 +800,60 @@ def run_all_models(scan_result: dict) -> dict:
 # Compares LP position value vs simply holding the same tokens
 # ─────────────────────────────────────────────────────────────────────────────
 
+def compute_il_vs_hodl(
+    price_ratio_change: float,
+    initial_value: float,
+    fees_earned: float = 0.0,
+    holding_period_years: float = 1.0,
+) -> dict:
+    """
+    Impermanent Loss vs HODL Calculator (#75).
+
+    Args:
+        price_ratio_change: fractional change in price ratio (e.g. 0.5 = 50% increase, -0.3 = 30% decrease)
+        initial_value:      initial LP position value in USD
+        fees_earned:        total fee income earned over the holding period
+        holding_period_years: years in LP (used to annualise breakeven fee APY)
+
+    Formula:
+        IL = 2×√k / (1+k) - 1   where k = 1 + price_ratio_change
+        LP value  = initial_value × (1 + IL) + fees_earned
+        HODL value = initial_value × (k + 1) / 2   (equal 50/50 split)
+        breakeven_fee_apy = APY needed to fully offset IL over 1 year
+
+    Returns:
+        il_pct, lp_value, hodl_value, breakeven_fee_apy, fees_cover_il (bool)
+    """
+    k = 1.0 + price_ratio_change
+    if k <= 0:
+        return {"error": "price_ratio_change must be > -1 (price cannot go to zero or negative)"}
+
+    # Standard IL formula
+    il_factor = 2.0 * (k ** 0.5) / (1.0 + k) - 1.0   # typically negative
+    il_pct    = round(il_factor * 100.0, 4)            # negative = loss vs hodl
+
+    lp_value   = round(initial_value * (1.0 + il_factor) + fees_earned, 2)
+    hodl_value = round(initial_value * (k + 1.0) / 2.0, 2)
+
+    # Breakeven fee APY: the annualised yield that exactly offsets IL
+    il_usd = abs(il_factor * initial_value)
+    if initial_value > 0 and holding_period_years > 0:
+        breakeven_fee_apy = round((il_usd / initial_value) / holding_period_years * 100, 2)
+    else:
+        breakeven_fee_apy = 0.0
+
+    return {
+        "il_pct":             il_pct,
+        "lp_value":           lp_value,
+        "hodl_value":         hodl_value,
+        "il_usd":             round(il_usd, 2),
+        "fees_earned":        round(fees_earned, 2),
+        "breakeven_fee_apy":  breakeven_fee_apy,
+        "fees_cover_il":      fees_earned >= il_usd,
+        "net_vs_hodl_usd":    round(lp_value - hodl_value, 2),
+    }
+
+
 def calc_il_vs_hodl(
     entry_price_ratio: float,
     current_price_ratio: float,

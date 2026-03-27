@@ -528,4 +528,6 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "api.coinmetrics.io",
     "community-api.coinmetrics.io",
     "ethena.fi",                    # Ethena sUSDe yield (#76)
+    "hub.snapshot.org",             # Snapshot governance GraphQL (#74)
+    "www.deribit.com",              # Deribit options chain (macro_feeds.py)
 })

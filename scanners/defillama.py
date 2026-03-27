@@ -6,9 +6,15 @@ Supplements the pool-level yield fetching in flare_scanner.py with:
   - Protocol-level TVL and 7d/30d change tracking
   - Flare chain aggregate TVL and ranking
   - TVL-based confidence adjustment for opportunity scoring
+
+Memory optimization (#69):
+  - yields.llama.fi/pools returns ~20MB of JSON. Raw payload is NEVER stored in
+    module-level variables or st.cache objects. The raw list is filtered inline and
+    immediately discarded; only the filtered result (~500KB max) is kept in cache.
 """
 from __future__ import annotations
 
+import gc
 import logging
 import threading
 import time
@@ -352,13 +358,17 @@ def fetch_yields_pools(
     try:
         resp = _SESSION.get(f"{_DEFILLAMA_YIELDS}/pools", timeout=20)
         resp.raise_for_status()
-        raw = resp.json().get("data", []) or []
+        # Parse JSON and immediately extract only the "data" list.
+        # The full resp object (~20MB) is released as soon as we leave this block.
+        payload_data = resp.json().get("data", []) or []
+        raw_count = len(payload_data)
+        del resp  # release the raw ~20MB HTTP response immediately (#69)
     except Exception as e:
         logger.warning("[Yields] pools fetch failed: %s", e)
         return []
 
     filtered = []
-    for p in raw:
+    for p in payload_data:
         proj = (p.get("project") or "").lower()
         tvl  = float(p.get("tvlUsd") or 0)
         if proj not in target:
@@ -385,10 +395,14 @@ def fetch_yields_pools(
         if len(filtered) >= max_results:
             break
 
+    # Discard raw payload list — only the filtered result (~500KB) is cached (#69)
+    del payload_data
+    gc.collect()
+
     with _cache_lock:
         _cache[cache_key] = {"data": filtered, "_ts": now}
 
-    logger.info("[Yields] %d pools fetched (filtered from %d raw)", len(filtered), len(raw))
+    logger.info("[Yields] %d pools fetched (filtered from %d raw)", len(filtered), raw_count)
     return filtered
 
 
@@ -502,17 +516,32 @@ def fetch_tvl_change_alert(slug: str, threshold_pct: float = 5.0) -> dict:
 _SNAPSHOT_URL    = "https://hub.snapshot.org/graphql"
 _GOVERNANCE_TTL  = 3600  # 1 hour
 
-# Governance spaces for tracked protocols
+# Governance spaces for tracked protocols (#74)
+# Spaces specified in upgrade spec + additional tracked protocols
 _GOVERNANCE_SPACES = [
-    "aave.eth", "uniswapgovernance.eth", "morpho.eth",
-    "pendle.eth", "eigenlayer.eth", "aerodrome.eth",
+    "aave.eth",
+    "compound-finance.eth",
+    "uniswap",
+    "curve.eth",
+    "morpho.eth",
+    "pendle.eth",
+    "eigenlayer.eth",
+    "aerodrome.eth",
+]
+
+# Keywords that indicate APY-impacting governance proposals (#74)
+_APY_KEYWORDS = [
+    "apy", "rate", "fee", "emission", "reward", "borrow", "supply",
+    "yield", "incentive", "cap", "gauge", "interest",
 ]
 
 
 def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
     """
-    Fetch active Snapshot governance proposals for tracked DeFi protocols.
-    Returns list of proposals with: title, space, state, votes, end_date, apy_impact_flag.
+    Fetch active Snapshot governance proposals for tracked DeFi protocols (#74).
+
+    Filters to proposals containing yield-relevant keywords in the title.
+    Returns list of proposals with: title, space, state, votes, end_date, apy_impact_flag, url.
     """
     cache_key = "governance_alerts"
     now = time.time()
@@ -525,7 +554,7 @@ def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
     query = """
     query($spaces: [String!]) {
       proposals(
-        first: 20,
+        first: 10,
         where: {
           space_in: $spaces,
           state: "active"
@@ -533,7 +562,7 @@ def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
         orderBy: "created",
         orderDirection: desc
       ) {
-        id title space { id } state votes end
+        id title space { id } state votes scores_total end
       }
     }
     """
@@ -551,20 +580,22 @@ def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
             import datetime as _dt
             end_ts = p.get("end", 0)
             end_dt = _dt.datetime.utcfromtimestamp(end_ts).strftime("%Y-%m-%d") if end_ts else "—"
-            # Flag proposals likely to impact yield parameters
+            # Filter: only proposals with yield-relevant keywords (#74)
             title_lower = (p.get("title") or "").lower()
-            apy_impact = any(kw in title_lower for kw in [
-                "fee", "rate", "apy", "yield", "emission", "reward",
-                "incentive", "borrow", "supply", "cap", "gauge",
-            ])
+            apy_impact = any(kw in title_lower for kw in _APY_KEYWORDS)
+            space_id = p.get("space", {}).get("id", "")
             proposals.append({
                 "id":          p.get("id", ""),
                 "title":       p.get("title", ""),
-                "space":       p.get("space", {}).get("id", ""),
+                "protocol":    space_id,
+                "space":       space_id,
                 "state":       p.get("state", ""),
                 "votes":       int(p.get("votes") or 0),
+                "scores_total": float(p.get("scores_total") or 0),
                 "end_date":    end_dt,
+                "ends_at":     end_dt,
                 "apy_impact":  apy_impact,
+                "url":         f"https://snapshot.org/#/{space_id}/proposal/{p.get('id', '')}",
             })
     except Exception as e:
         logger.warning("[Governance] Snapshot fetch failed: %s", e)
@@ -574,6 +605,17 @@ def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
         _cache[cache_key] = {"data": proposals, "_ts": now}
 
     return proposals
+
+
+def fetch_snapshot_proposals(
+    spaces: Optional[List[str]] = None,
+) -> List[dict]:
+    """
+    Convenience alias for fetch_governance_alerts(), matching the #74 spec interface.
+    Returns proposals matching APY-relevant keywords only.
+    """
+    all_props = fetch_governance_alerts(spaces=spaces)
+    return [p for p in all_props if p.get("apy_impact")]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -626,18 +668,19 @@ def fetch_llama_yield_pools(
         if cached and now - cached.get("_ts", 0) < _YIELDS_POOLS_TTL:
             return cached.get("data", [])
 
-    # Try to re-use the raw payload from the filtered cache to avoid a second fetch.
-    raw: list = []
+    # Fetch the full ~20MB payload; filter inline and discard raw data immediately (#69).
     try:
         resp = _SESSION.get(f"{_DEFILLAMA_YIELDS}/pools", timeout=20)
         resp.raise_for_status()
-        raw = resp.json().get("data", []) or []
+        payload_data = resp.json().get("data", []) or []
+        raw_count = len(payload_data)
+        del resp  # release raw ~20MB HTTP response immediately
     except Exception as e:
         logger.warning("[LlamaYieldPools] fetch failed: %s", e)
         return []
 
     filtered = []
-    for p in raw:
+    for p in payload_data:
         try:
             tvl = float(p.get("tvlUsd") or 0)
             apy = float(p.get("apy") or 0)
@@ -659,6 +702,10 @@ def fetch_llama_yield_pools(
             "il_risk":  str(p.get("ilRisk") or "no"),
         })
 
+    # Discard raw payload list immediately; only store filtered result (#69)
+    del payload_data
+    gc.collect()
+
     # Sort by TVL descending and take top_n
     filtered.sort(key=lambda x: x["tvl_usd"], reverse=True)
     result = filtered[:top_n]
@@ -666,7 +713,7 @@ def fetch_llama_yield_pools(
     with _cache_lock:
         _cache[cache_key] = {"data": result, "_ts": now}
 
-    logger.info("[LlamaYieldPools] %d pools returned (top %d of %d filtered)", len(result), top_n, len(filtered))
+    logger.info("[LlamaYieldPools] %d pools returned (top %d of %d filtered)", len(result), top_n, raw_count)
     return result
 
 

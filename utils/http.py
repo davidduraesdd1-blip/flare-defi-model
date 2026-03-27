@@ -41,6 +41,7 @@ _ALLOWED_HOSTS: frozenset = frozenset({
     "api.coingecko.com", "pro-api.coingecko.com",
     "api.alternative.me",
     "api.deribit.com",
+    "www.deribit.com",            # Deribit public options API (macro_feeds.py)
     "flr-data-availability.flare.network",
     "explorer.flare.network",
     "api.routescan.io",
