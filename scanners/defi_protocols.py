@@ -74,6 +74,10 @@ def _get_llama_pools() -> list[dict]:
     with _llama_pools_lock:
         if _llama_pools_cache["data"] is not None and now - _llama_pools_cache["ts"] < _TTL_LONG:
             return _llama_pools_cache["data"]
+    # NOTE: The lock is released before the HTTP fetch to avoid blocking other
+    # threads during the ~20-second network call.  A second thread may also
+    # enter this branch concurrently (TOCTOU); this is intentional — the extra
+    # fetch is harmless and the last writer wins when updating the cache below.
     try:
         resp = _SESSION.get(_LLAMA_YIELDS_URL, timeout=20)
         resp.raise_for_status()
@@ -451,7 +455,7 @@ def fetch_pendle_markets() -> list[dict]:
 
 def fetch_all_protocol_benchmarks() -> dict:
     """
-    Fetch all 8 protocol data sources in parallel.
+    Fetch all 11 protocol data sources in parallel.
 
     Uses ThreadPoolExecutor(max_workers=4) to run fetches concurrently.
     Individual fetch failures return empty list/dict — does not propagate errors.
@@ -465,6 +469,9 @@ def fetch_all_protocol_benchmarks() -> dict:
         gmx_pools        : list  — GMX v2 pools across chains
         uniswap_pools    : list  — top 20 Uniswap v3 pools by TVL
         pendle_markets   : list  — top 20 Pendle markets by liquidity
+        ethena_yield     : dict  — Ethena sUSDe APY (#76)
+        aerodrome_pools  : list  — top 10 Aerodrome pools on Base (#77)
+        morpho_vaults    : list  — top 10 Morpho Blue vaults (#77)
         _timestamp       : float — unix timestamp of this fetch
     """
     _TASKS = {
@@ -553,9 +560,14 @@ def fetch_ethena_yield() -> dict:
     # Primary: Ethena public API
     try:
         data = _get(_ETHENA_API_URL, timeout=10)
+        # Ethena API may return a dict or a list of daily objects.
+        # If a list, take the most recent entry (last element).
+        if isinstance(data, list) and data:
+            data = data[-1]
         if isinstance(data, dict):
             # The response typically has "stakingYield" or "susdeApy" fields.
-            # Field names observed: stakingYield.value or susdeApy (percent)
+            # Field names observed: stakingYield.value or susdeApy (percent).
+            # stakingYield.value may be a decimal (0.275) — convert to percent if < 1.0.
             staking = data.get("stakingYield") or {}
             apy_val = (
                 staking.get("value")
@@ -564,7 +576,11 @@ def fetch_ethena_yield() -> dict:
                 or data.get("apy")
             )
             if apy_val is not None:
-                result["susde_apy"] = round(float(apy_val), 4)
+                apy_float = float(apy_val)
+                # Normalise: if value looks like a decimal (< 1.0 and > 0), convert to percent
+                if 0 < apy_float < 1.0:
+                    apy_float *= 100.0
+                result["susde_apy"] = round(apy_float, 4)
                 result["source"]    = "ethena_api"
     except Exception as e:
         logger.debug("[Ethena] primary API failed: %s", e)
