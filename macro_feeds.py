@@ -287,7 +287,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
     if hit and (time.time() - hit.get("_ts", 0)) < _CM_TTL_D:
         return hit
 
-    api_key = _os.environ.get("DEFI_COINMETRICS_API_KEY", "").strip()
+    api_key = _get_runtime_key("coinmetrics_key", _os.environ.get("DEFI_COINMETRICS_API_KEY", "")).strip()
     if api_key:
         base_url = "https://api.coinmetrics.io/v4/timeseries/asset-metrics"
         params_extra = {"api_key": api_key}
@@ -665,16 +665,16 @@ def validate_api_connections() -> dict:
     except Exception:
         results["fred"] = "error"
 
-    # CoinMetrics
-    coinmetrics_key = _os.environ.get("DEFI_COINMETRICS_API_KEY", "").strip()
+    # CoinMetrics — check env var AND session-state runtime key (#18)
+    coinmetrics_key = _get_runtime_key("coinmetrics_key", _os.environ.get("DEFI_COINMETRICS_API_KEY", "")).strip()
     results["coinmetrics"] = "configured" if coinmetrics_key else "community (may be blocked)"
 
     # Anthropic
     anthropic_key = _os.environ.get("ANTHROPIC_API_KEY", "").strip()
     results["anthropic"] = "configured" if anthropic_key else "no key"
 
-    # CoinGecko Pro
-    coingecko_pro_key = _os.environ.get("DEFI_COINGECKO_API_KEY", "").strip()
+    # CoinGecko Pro — check env var AND session-state runtime key (#18)
+    coingecko_pro_key = _get_runtime_key("coingecko_key", _os.environ.get("DEFI_COINGECKO_API_KEY", "")).strip()
     results["coingecko_pro"] = "configured" if coingecko_pro_key else "no key"
 
     results["_timestamp"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
