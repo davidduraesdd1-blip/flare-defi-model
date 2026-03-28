@@ -64,6 +64,7 @@ _ALLOWED_HOSTS: frozenset = frozenset({
     "ethena.fi",                  # Ethena sUSDe yield (#76)
     "www.ether.fi",               # ether.fi direct APY API (#71)
     "app.renzoprotocol.com",      # Renzo protocol points API (#71)
+    "bridges.llama.fi",           # DeFiLlama bridge flows API (#85)
 })
 
 
