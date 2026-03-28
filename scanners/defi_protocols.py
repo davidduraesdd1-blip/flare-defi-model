@@ -748,13 +748,14 @@ def fetch_eigenlayer_lrt_yields() -> dict:
         "swell":       "eigenlayer_native",   # swell re-staking maps to eigenlayer bucket
         "puffer":      "eigenlayer_native",
     }
+    # Symbol mapping uses lowercase keys so the comparison is case-insensitive
     _sym_mapping = {
-        "eETH":   "etherfi_weETH",
-        "weETH":  "etherfi_weETH",
-        "ezETH":  "renzo_ezETH",
-        "rsETH":  "kelp_rsETH",
-        "swETH":  "eigenlayer_native",
-        "pufETH": "eigenlayer_native",
+        "eeth":   "etherfi_weETH",
+        "weeth":  "etherfi_weETH",
+        "ezeth":  "renzo_ezETH",
+        "rseth":  "kelp_rsETH",
+        "sweth":  "eigenlayer_native",
+        "pufeth": "eigenlayer_native",
     }
     # Best per-bucket: track highest TVL seen
     _best_tvl: dict[str, float] = {k: 0.0 for k in result if k != "timestamp"}
@@ -763,7 +764,7 @@ def fetch_eigenlayer_lrt_yields() -> dict:
         pools = _get_llama_pools()
         for p in pools:
             proj = (p.get("project") or "").lower()
-            sym  = (p.get("symbol")  or "")
+            sym  = (p.get("symbol")  or "").lower()   # normalise to lowercase for matching
             tvl  = float(p.get("tvlUsd") or 0)
             apy  = float(p.get("apy") or 0)
 
