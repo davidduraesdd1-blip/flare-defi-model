@@ -12,7 +12,12 @@ from datetime import datetime, timezone
 
 from ui.common import page_setup, render_sidebar, render_section_header
 from config import FALLBACK_PRICES
-from models.risk_models import calc_il_vs_hodl, calc_concentrated_lp_efficiency, compute_il_vs_hodl
+from models.risk_models import (
+    calc_il_vs_hodl,
+    calc_concentrated_lp_efficiency,
+    compute_il_vs_hodl,
+    compute_concentrated_lp_metrics,   # #83
+)
 
 page_setup("Planning · Flare DeFi")
 
@@ -751,3 +756,142 @@ if "error" not in _clp_res:
         st.error("⚠️ Current price is outside your specified range — position earns no fees.")
 elif "error" in _clp_res:
     st.warning(_clp_res["error"])
+
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Concentrated LP Optimizer (#83) ──────────────────────────────────────────
+
+render_section_header(
+    "Concentrated LP Optimizer",
+    "Uniswap v3 / SparkDEX V3 — capital efficiency, IL at boundaries, fee income estimate",
+)
+
+_OPT_POOLS = {
+    "ETH/USDC 0.05%":  18.0,
+    "ETH/USDC 0.3%":   35.0,
+    "ETH/USDT 0.05%":  16.0,
+    "BTC/USDC 0.3%":   28.0,
+    "ARB/USDC 0.3%":   55.0,
+    "SOL/USDC 0.3%":   72.0,
+    "Custom (enter manually)": 0.0,
+}
+
+_opt_c1, _opt_c2 = st.columns([2, 1])
+with _opt_c1:
+    _opt_price = st.number_input(
+        "Current token price ($)", min_value=0.0001, value=2500.0,
+        step=10.0, format="%.2f", key="opt83_price",
+    )
+    _opt_pool_sel = st.selectbox(
+        "Select pool (sets fee APY preset)", list(_OPT_POOLS.keys()), key="opt83_pool",
+    )
+    _opt_fee_default = _OPT_POOLS[_opt_pool_sel]
+    _opt_fee = st.number_input(
+        "Pool fee APY (%)", min_value=0.0, value=float(_opt_fee_default) if _opt_fee_default > 0 else 20.0,
+        step=1.0, format="%.1f", key="opt83_fee",
+    )
+
+with _opt_c2:
+    _opt_days = st.number_input(
+        "Holding period (days)", min_value=1, max_value=365, value=30, step=1, key="opt83_days",
+    )
+
+# ── Range preset buttons ───────────────────────────────────────────────────
+st.markdown(
+    "<div style='color:#64748b;font-size:0.80rem;margin:8px 0 4px'>Quick range presets</div>",
+    unsafe_allow_html=True,
+)
+_preset_cols = st.columns(5)
+_preset_pcts = [1, 2, 5, 10, 20]
+_opt_lower_default = round(_opt_price * 0.90, 4)
+_opt_upper_default = round(_opt_price * 1.10, 4)
+
+for _pi, _pct in enumerate(_preset_pcts):
+    if _preset_cols[_pi].button(f"±{_pct}%", key=f"opt83_preset_{_pct}"):
+        st.session_state["opt83_lower_val"] = round(_opt_price * (1 - _pct / 100), 4)
+        st.session_state["opt83_upper_val"] = round(_opt_price * (1 + _pct / 100), 4)
+
+_opt_lower = st.number_input(
+    "Range lower bound ($)", min_value=0.0001,
+    value=float(st.session_state.get("opt83_lower_val", _opt_lower_default)),
+    step=_opt_price * 0.01, format="%.4f", key="opt83_lower",
+)
+_opt_upper = st.number_input(
+    "Range upper bound ($)", min_value=0.0001,
+    value=float(st.session_state.get("opt83_upper_val", _opt_upper_default)),
+    step=_opt_price * 0.01, format="%.4f", key="opt83_upper",
+)
+
+try:
+    _opt_res = compute_concentrated_lp_metrics(
+        current_price=_opt_price,
+        lower_tick_price=_opt_lower,
+        upper_tick_price=_opt_upper,
+        fee_apy=_opt_fee,
+        holding_period_days=int(_opt_days),
+    )
+
+    if "error" in _opt_res:
+        st.warning(f"Input error: {_opt_res['error']}")
+    else:
+        _m1, _m2, _m3, _m4 = st.columns(4)
+        _m1.metric("Capital Efficiency", f"{_opt_res['capital_efficiency']:.1f}×")
+        _m2.metric("Range Width", f"{_opt_res['range_width_pct']:.1f}%")
+        _m3.metric("In-Range Probability", f"{_opt_res['in_range_probability_pct']:.0f}%")
+        _m4.metric(f"Fee Income ({int(_opt_days)}d)", f"{_opt_res['fee_income_pct']:.2f}%")
+
+        _m5, _m6, _m7 = st.columns(3)
+        _il_up_pct = _opt_res["il_if_hits_upper"] * 100
+        _il_lo_pct = _opt_res["il_if_hits_lower"] * 100
+        _m5.metric("IL if hits upper",   f"{_il_up_pct:.2f}%", delta_color="inverse")
+        _m6.metric("IL if hits lower",   f"{_il_lo_pct:.2f}%", delta_color="inverse")
+        _m7.metric("Est. Net Return",    f"{_opt_res['estimated_net_return_pct']:.2f}%")
+
+        st.markdown(
+            f"<div style='background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);"
+            f"border-radius:8px;padding:10px 14px;font-size:0.85rem;color:#c4cbdb;margin-top:8px'>"
+            f"💡 <b>Recommendation:</b> {_opt_res['recommendation']}</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Visual range bar
+        if _opt_lower < _opt_upper:
+            _range_span   = _opt_upper - _opt_lower
+            _cp_in_range  = _opt_lower <= _opt_price <= _opt_upper
+            _cp_pct       = min(100, max(0, (_opt_price - _opt_lower) / _range_span * 100)) if _range_span > 0 else 50
+            _bar_color    = "#22c55e" if _cp_in_range else "#ef4444"
+            _status_text  = "In range — fees accruing" if _cp_in_range else "OUT OF RANGE — no fees"
+            st.markdown(
+                f"<div style='margin:12px 0 4px;font-size:0.75rem;color:#64748b'>Price position within range</div>",
+                unsafe_allow_html=True,
+            )
+            st.progress(int(_cp_pct) / 100)
+            st.markdown(
+                f"<div style='display:flex;justify-content:space-between;font-size:0.71rem;color:#475569;margin-top:-6px'>"
+                f"<span>${_opt_lower:.4f}</span>"
+                f"<span style='color:{_bar_color};font-weight:600'>${_opt_price:.4f} — {_status_text}</span>"
+                f"<span>${_opt_upper:.4f}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+        with st.expander("How concentrated LP works"):
+            st.markdown("""
+**Capital efficiency multiplier**: how much more capital-efficient this range is vs full-range V2.
+- A 5× multiplier means the same fees on 1/5th the capital.
+- Narrower range = higher efficiency but more frequent rebalancing when price exits.
+
+**IL at boundaries**: if price hits the upper or lower boundary, this is your impermanent loss %
+compared to just holding. Negative means a loss relative to holding.
+
+**In-range probability**: rough estimate of the chance price stays inside your range over the
+holding period. Based on 2% assumed daily price volatility.
+
+**Fee income estimate** = (fee_apy / 365) × days × capital_efficiency_multiplier
+
+**Net return estimate** = fee_income + IL_midpoint × (1 - in_range_probability)
+            """)
+except Exception as _opt_exc:
+    st.warning(f"Concentrated LP calculator error: {_opt_exc}")
