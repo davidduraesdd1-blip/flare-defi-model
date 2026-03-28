@@ -1141,18 +1141,33 @@ def compute_concentrated_lp_metrics(
         range_width_pct, capital_efficiency, il_if_hits_upper,
         il_if_hits_lower, fee_income_pct, in_range_probability_pct,
         estimated_net_return_pct, recommendation.
+
+    If current_price is outside [lower_tick_price, upper_tick_price] the
+    position earns no fees; the dict will still contain all fields but
+    in_range_probability_pct will be 0 and a note is added.
     """
+    import math  # local import — math not imported at module level in this file
     try:
-        cp  = max(float(current_price),       1e-12)
-        lo  = max(float(lower_tick_price),    1e-12)
-        hi  = max(float(upper_tick_price),    1e-12)
-        if hi <= lo:
-            return {"error": "upper price must be greater than lower price"}
-        if cp <= 0:
+        # Validate raw inputs before clamping
+        _raw_cp = float(current_price)
+        _raw_lo = float(lower_tick_price)
+        _raw_hi = float(upper_tick_price)
+        if _raw_cp <= 0:
             return {"error": "current price must be positive"}
+        if _raw_lo <= 0 or _raw_hi <= 0:
+            return {"error": "price bounds must be positive"}
+        if _raw_hi <= _raw_lo:
+            return {"error": "upper price must be greater than lower price"}
+
+        cp  = _raw_cp
+        lo  = _raw_lo
+        hi  = _raw_hi
 
         fee  = max(0.0, float(fee_apy))
         days = max(1,   int(holding_period_days))
+
+        # Out-of-range guard: position earns zero fees when price is outside [lo, hi]
+        out_of_range = not (lo <= cp <= hi)
 
         # Range width as % of current price
         range_width_pct = round((hi - lo) / cp * 100, 2)
@@ -1169,27 +1184,34 @@ def compute_concentrated_lp_metrics(
         il_upper = _il(hi / cp)
         il_lower = _il(lo / cp)
 
-        # Fee income estimate
-        fee_income_pct = round(fee / 365 * days * capital_efficiency, 4)
+        # Fee income estimate — zero if out-of-range (position accrues no fees)
+        fee_income_pct = 0.0 if out_of_range else round(fee / 365 * days * capital_efficiency, 4)
 
         # In-range probability: simple estimate capped at 100%
-        daily_vol_proxy = cp * 0.02     # 2% daily vol assumption
-        sigma_over_period = daily_vol_proxy * math.sqrt(days)
-        half_range = (hi - lo) / 2
-        in_range_raw = min(1.0, half_range / max(sigma_over_period, 1e-12))
-        in_range_probability_pct = round(in_range_raw * 100, 1)
+        # If already out-of-range, probability is 0 for the remaining period
+        if out_of_range:
+            in_range_probability_pct = 0.0
+        else:
+            daily_vol_proxy = cp * 0.02     # 2% daily vol assumption
+            sigma_over_period = daily_vol_proxy * math.sqrt(days)
+            half_range = (hi - lo) / 2
+            in_range_raw = min(1.0, half_range / max(sigma_over_period, 1e-12))
+            in_range_probability_pct = round(in_range_raw * 100, 1)
 
         # IL at midpoint of range
         mid = (hi + lo) / 2
         il_mid = _il(mid / cp)
 
         # Net return estimate
+        in_range_raw_for_net = in_range_probability_pct / 100.0
         estimated_net_return_pct = round(
-            fee_income_pct + il_mid * (1 - in_range_raw) * 100, 4
+            fee_income_pct + il_mid * (1 - in_range_raw_for_net) * 100, 4
         )
 
         # Recommendation
-        if range_width_pct < 5:
+        if out_of_range:
+            recommendation = "OUT OF RANGE: position earns no fees — rebalance or wait for price to return"
+        elif range_width_pct < 5:
             recommendation = "Very tight range: maximum capital efficiency but high rebalancing risk"
         elif range_width_pct < 15:
             recommendation = "Tight range: high fees but frequent rebalancing expected"
@@ -1207,6 +1229,7 @@ def compute_concentrated_lp_metrics(
             "in_range_probability_pct":  in_range_probability_pct,
             "estimated_net_return_pct":  estimated_net_return_pct,
             "recommendation":            recommendation,
+            "out_of_range":              out_of_range,
         }
     except Exception as e:
         return {"error": str(e)}
