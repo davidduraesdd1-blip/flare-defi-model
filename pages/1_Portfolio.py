@@ -217,8 +217,8 @@ def _build_portfolio_report(holdings: list, total_value: float) -> bytes:
     ]
     for h in holdings:
         lines.append(
-            f"  {h.get('protocol')} / {h.get('asset')}: "
-            f"${h.get('amount_usd', 0):,.0f} @ {h.get('apy', 0) * 100:.1f}% APY"
+            f"  {h.get('protocol') or ''} / {h.get('asset') or ''}: "
+            f"${(h.get('amount_usd') or 0):,.0f} @ {(h.get('apy') or 0) * 100:.1f}% APY"
         )
     return "\n".join(lines).encode("utf-8")
 
