@@ -63,9 +63,12 @@ def fetch_zerion_portfolio(address: str) -> dict:
             "sort": "value",
         }
 
-        # Zerion's free tier: try without auth first; fall back gracefully on 401
-        _zerion_api_key = "zerion_api_key:"
-        _b64 = base64.b64encode(_zerion_api_key.encode()).decode()
+        # Zerion: use ZERION_API_KEY env var for Basic auth (format: base64(key:))
+        # Falls back gracefully on 401 (anonymous access may still work for some endpoints)
+        import os as _os
+        _raw_key = _os.environ.get("ZERION_API_KEY", "").strip()
+        _auth_str = f"{_raw_key}:" if _raw_key else "zerion_api_key:"
+        _b64 = base64.b64encode(_auth_str.encode()).decode()
         headers = {
             "Accept": "application/json",
             "Authorization": f"Basic {_b64}",
