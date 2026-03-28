@@ -615,6 +615,13 @@ def fetch_all_protocol_benchmarks() -> dict:
         logger.warning("[DeFiProtocols] token_unlock_alerts error: %s", e)
         benchmarks["token_unlock_alerts"] = []
 
+    # RWA credit health (#58) — run after parallel block to avoid adding to pool
+    try:
+        benchmarks["rwa_credit_health"] = fetch_rwa_credit_health()
+    except Exception as e:
+        logger.warning("[DeFiProtocols] rwa_credit_health error: %s", e)
+        benchmarks["rwa_credit_health"] = {"timestamp": ""}
+
     # Derive convenience scalar: Lido stETH APY as the DeFi benchmark rate
     lido = benchmarks.get("lido_steth_apy") or {}
     benchmarks["lido_steth_apy_pct"] = float(lido.get("apy") or 0)
@@ -1011,6 +1018,127 @@ def fetch_meteora_yields() -> dict:
     _meteora_cache["ts"]   = time.time()
     _meteora_cache["data"] = result
     logger.info("[Meteora] %d pools fetched, total_tvl=%.0f", len(result["pools"]), result["total_tvl"])
+    return result
+
+
+# ── 15. RWA Credit Protocol Health (#58) ──────────────────────────────────────
+
+_rwa_credit_cache = {"ts": 0, "data": None}
+
+_RWA_CREDIT_PROTOCOLS = {
+    "centrifuge":    "centrifuge",
+    "maple":         "maple-finance",
+    "clearpool":     "clearpool",
+    "goldfinch":     "goldfinch",
+}
+
+_DEFILLAMA_API_BASE = "https://api.llama.fi"
+
+
+def fetch_rwa_credit_health() -> dict:
+    """Fetch credit protocol health metrics from DeFiLlama for RWA lending protocols.
+
+    Protocols: Centrifuge, Maple Finance, Clearpool, Goldfinch.
+
+    For each protocol extracts:
+      - currentChainTvls: TVL by chain
+      - tvl array: historical TVL for 30-day and 7-day trend computation
+
+    Returns:
+      {
+        "centrifuge": {
+            "tvl_usd": float,
+            "tvl_7d_change_pct": float,
+            "tvl_30d_change_pct": float,
+            "chains": list[str],
+            "health": "GROWING" | "STABLE" | "DECLINING",
+        },
+        ...
+        "timestamp": str,
+      }
+
+    Health: GROWING if 30d change > +5%, DECLINING if < -10%, else STABLE.
+    """
+    now = time.time()
+    if _rwa_credit_cache["data"] is not None and now - _rwa_credit_cache["ts"] < _TTL_LONG:
+        return _rwa_credit_cache["data"]
+
+    result: dict = {"timestamp": ""}
+
+    for name, slug in _RWA_CREDIT_PROTOCOLS.items():
+        entry = {
+            "tvl_usd":           0.0,
+            "tvl_7d_change_pct": 0.0,
+            "tvl_30d_change_pct": 0.0,
+            "chains":            [],
+            "health":            "STABLE",
+        }
+        try:
+            data = _get(f"{_DEFILLAMA_API_BASE}/protocol/{slug}")
+            if not data:
+                result[name] = entry
+                continue
+
+            # Current TVL from currentChainTvls
+            current_chain_tvls = data.get("currentChainTvls") or {}
+            total_tvl = 0.0
+            chains_list = []
+            for chain_name, val in current_chain_tvls.items():
+                if "staking" in chain_name.lower() or "pool2" in chain_name.lower():
+                    continue
+                try:
+                    chain_tvl = float(val or 0)
+                    total_tvl += chain_tvl
+                    if chain_tvl > 0:
+                        chains_list.append(chain_name)
+                except (TypeError, ValueError):
+                    pass
+
+            # Fallback: top-level tvl field
+            if total_tvl == 0:
+                total_tvl = float(data.get("tvl") or 0)
+
+            entry["tvl_usd"] = round(total_tvl, 2)
+            entry["chains"]  = chains_list
+
+            # Historical TVL for change computation
+            tvl_hist = data.get("tvl") or []
+            if isinstance(tvl_hist, list) and len(tvl_hist) >= 2:
+                cur_tvl = float((tvl_hist[-1] or {}).get("totalLiquidityUSD") or 0)
+
+                # 7-day change (8 datapoints ≈ 7 days of daily data)
+                if len(tvl_hist) >= 8:
+                    old_7d = float((tvl_hist[-8] or {}).get("totalLiquidityUSD") or 0)
+                    if old_7d > 0:
+                        entry["tvl_7d_change_pct"] = round((cur_tvl - old_7d) / old_7d * 100, 2)
+
+                # 30-day change (31 datapoints)
+                if len(tvl_hist) >= 31:
+                    old_30d = float((tvl_hist[-31] or {}).get("totalLiquidityUSD") or 0)
+                    if old_30d > 0:
+                        entry["tvl_30d_change_pct"] = round((cur_tvl - old_30d) / old_30d * 100, 2)
+
+            # Health classification
+            chg_30d = entry["tvl_30d_change_pct"]
+            if chg_30d > 5.0:
+                entry["health"] = "GROWING"
+            elif chg_30d < -10.0:
+                entry["health"] = "DECLINING"
+            else:
+                entry["health"] = "STABLE"
+
+        except Exception as e:
+            logger.warning("[RWACreditHealth] %s (%s) error: %s", name, slug, e)
+
+        result[name] = entry
+
+    result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _rwa_credit_cache["ts"]   = time.time()
+    _rwa_credit_cache["data"] = result
+    logger.info(
+        "[RWACreditHealth] fetched %d protocols",
+        len([k for k in result if k != "timestamp"]),
+    )
     return result
 
 

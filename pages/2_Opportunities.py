@@ -64,7 +64,8 @@ latest     = load_latest()
 runs       = load_history_runs()
 model_data = _load_opp_data_cached(profile)
 
-st.markdown("# Opportunities")
+st.title("🎯 Opportunities")
+st.caption("Real-time yield opportunities across 10,000+ DeFi pools • Auto-refreshed every 15 minutes")
 st.markdown(
     "<div style='color:#475569; font-size:0.87rem; margin-bottom:24px;'>"
     "Starter portfolios · APY trends · options strategies</div>",
@@ -377,7 +378,7 @@ render_section_header(
     "Pendle · EigenLayer · Ethena · Aerodrome · Morpho · Kamino — via DeFiLlama yields API",
 )
 
-with st.spinner("Loading multi-chain pools…"):
+with st.spinner("Loading yield data from DeFiLlama..."):
     if demo_mode:
         _mc_pools = [
             {"project": "pendle", "chain": "Ethereum", "symbol": "PT-USDe 29Jun2025",
@@ -395,6 +396,27 @@ with st.spinner("Loading multi-chain pools…"):
         _mc_pools = fetch_yields_pools(min_tvl_usd=5_000_000, max_results=20)
 
 if _mc_pools:
+    # Beginner metric tooltips (#59)
+    if not _pro_mode:
+        _tt_col1, _tt_col2, _tt_col3 = st.columns(3)
+        with _tt_col1:
+            st.metric(
+                "APY",
+                "?",
+                help="Annual Percentage Yield — the yearly return you'd earn. Includes both trading fees and token rewards. Higher isn't always better — check the risk score.",
+            )
+        with _tt_col2:
+            st.metric(
+                "TVL",
+                "?",
+                help="Total Value Locked — how much money is deposited in this protocol. Higher TVL generally means more trust and liquidity.",
+            )
+        with _tt_col3:
+            st.metric(
+                "IL Risk",
+                "?",
+                help="Impermanent Loss risk for liquidity providers. Stable pairs (USDC/USDT) have near-zero IL. Volatile pairs (ETH/USDC) can lose 5-20% vs just holding.",
+            )
     # Display as table with pro/beginner columns
     # Sort by Sharpe ratio by default (#72)
     _mc_pools_with_sharpe = []
@@ -461,7 +483,7 @@ if _mc_pools:
     else:
         st.dataframe(pd.DataFrame(_mc_rows), use_container_width=True, hide_index=True)
 else:
-    st.info("Multi-chain pool data loading... Run a scan or check API connectivity.")
+    st.info("No opportunities matching your filters. Try lowering the minimum TVL filter or switching chains.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -945,7 +967,7 @@ if _proposals:
         "Source: Snapshot GraphQL · cached 1 hour."
     )
 else:
-    st.info("No active governance proposals at this time.")
+    st.success("✓ No active governance votes affecting APY right now.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -1002,7 +1024,7 @@ if _unlock_alerts:
         "CRITICAL = amount >= 10% supply or <= 7 days away."
     )
 else:
-    st.info("No token unlocks scheduled within the next 30 days.")
+    st.success("✓ No major token unlocks in the next 30 days.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -1086,6 +1108,7 @@ with _gy_col2:
     _gy_min_apy = st.number_input(
         "Min APY %", min_value=0.0, max_value=500.0, value=0.0, step=0.5,
         key="gy_min_apy",
+        help="Annual Percentage Yield — the yearly return you'd earn. Includes both trading fees and token rewards. Higher isn't always better — check the risk score.",
     )
 
 # Apply filters

@@ -38,7 +38,8 @@ positions = load_positions()
 flare_scan = latest.get("flare_scan") or {}
 prices     = load_live_prices() or flare_scan.get("prices") or []
 
-st.markdown("# Portfolio")
+st.title("💼 Portfolio")
+st.caption("Track your DeFi positions, wallet balances, P&L, and exit strategies across all Flare protocols")
 st.markdown(
     "<div style='color:#475569; font-size:0.88rem; margin-bottom:24px;'>"
     "Wallet balances · tracked positions · P&L · exit planning</div>",
