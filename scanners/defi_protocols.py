@@ -1226,10 +1226,16 @@ def fetch_tvl_change_alerts(threshold_pct: float = 5.0) -> list[dict]:
 # ── 16. ERC-4626 Vault Reads (#103) ───────────────────────────────────────────
 
 # Try to connect web3 once at module import; _WEB3_AVAIL stays False if unavailable.
+# is_connected() is wrapped separately because it makes a live RPC call (eth_chainId)
+# and can raise ConnectionError/OSError (not just return False) on restricted networks
+# such as Streamlit Cloud.  The HTTPProvider timeout=5 caps the import-time block.
 try:
     from web3 import Web3 as _Web3
-    _W3 = _Web3(_Web3.HTTPProvider("https://eth.llamarpc.com", request_kwargs={"timeout": 8}))
-    _WEB3_AVAIL = _W3.is_connected()
+    _W3 = _Web3(_Web3.HTTPProvider("https://eth.llamarpc.com", request_kwargs={"timeout": 5}))
+    try:
+        _WEB3_AVAIL = _W3.is_connected()
+    except Exception:
+        _WEB3_AVAIL = False
 except Exception:
     _Web3       = None   # type: ignore[assignment]
     _W3         = None
@@ -1304,6 +1310,7 @@ def fetch_erc4626_yield_data() -> dict:
 
     result: dict = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
+    _web3_succeeded = False  # track whether any vault read actually succeeded
     if _WEB3_AVAIL and _W3 and _Web3:
         for vault_name, cfg in _ERC4626_VAULTS.items():
             addr = cfg.get("address", "")
@@ -1342,6 +1349,7 @@ def fetch_erc4626_yield_data() -> dict:
                     "yield_source": cfg.get("yield_source", "vault_read"),
                     "data_source": "vault_read",
                 }
+                _web3_succeeded = True
                 logger.debug("[ERC4626] %s pps=%.6f totalAssets=%.0f", vault_name, pps, total_assets)
             except Exception as e:
                 logger.debug("[ERC4626] %s read failed: %s", vault_name, e)
@@ -1354,7 +1362,9 @@ def fetch_erc4626_yield_data() -> dict:
 
         logger.info("[ERC4626] %d vault(s) read via web3", len(_ERC4626_VAULTS))
 
-    else:
+    # Use DeFiLlama fallback when web3 is unavailable OR when all vault reads failed
+    # (e.g. web3 was available at import but the RPC is now blocked on Streamlit Cloud)
+    if not _WEB3_AVAIL or not _web3_succeeded:
         # Fallback: DeFiLlama pool data for Morpho and Aave
         logger.info("[ERC4626] web3 unavailable — using DeFiLlama fallback")
         try:

@@ -795,6 +795,9 @@ def render_sidebar() -> dict:
             elif _wallet:
                 st.warning("Invalid address format")
                 st.session_state["defi_wallet_address_valid"] = None
+            else:
+                # User cleared the input — reset so Zerion section stops showing stale data
+                st.session_state["defi_wallet_address_valid"] = None
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
         st.markdown(
