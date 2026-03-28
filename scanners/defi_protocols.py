@@ -12,6 +12,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date
 from typing import Any
 
 import requests
@@ -454,6 +455,90 @@ def fetch_pendle_markets() -> list[dict]:
     return result
 
 
+# ── Token Unlock Schedule (#84) ──────────────────────────────────────────────
+# Known token unlock schedules (approximate dates and amounts)
+_TOKEN_UNLOCK_SCHEDULE = {
+    "ARB": [
+        {"date": "2024-03-16", "amount_pct": 11.62, "type": "Investor/Team", "cliff": False},
+        {"date": "2025-03-16", "amount_pct": 8.1,   "type": "Investor/Team", "cliff": False},
+    ],
+    "OP": [
+        {"date": "2025-05-31", "amount_pct": 5.0, "type": "Core Contributors", "cliff": False},
+    ],
+    "PENDLE": [
+        {"date": "2025-06-30", "amount_pct": 3.5, "type": "Team", "cliff": False},
+    ],
+    "WIF": [],  # Community token, no scheduled unlocks
+    "JUP": [
+        {"date": "2025-01-31", "amount_pct": 25.0, "type": "Team/Investors", "cliff": True},
+        {"date": "2026-01-31", "amount_pct": 25.0, "type": "Team/Investors", "cliff": False},
+    ],
+    "PYTH": [
+        {"date": "2025-05-20", "amount_pct": 8.0, "type": "Early Contributors", "cliff": False},
+    ],
+}
+
+# Date-based cache key (refreshes daily)
+_unlock_cache: dict = {}
+_unlock_cache_lock = threading.Lock()
+
+
+def fetch_token_unlock_alerts(within_days: int = 30) -> list:
+    """
+    Return token unlocks happening within the next N days.
+
+    Parses _TOKEN_UNLOCK_SCHEDULE and filters to events where
+    0 <= days_until <= within_days. Results are sorted by days_until ascending.
+
+    Returns list of dicts:
+        token, date, amount_pct, type, days_until, severity, is_cliff
+    Severity:
+        CRITICAL — amount_pct >= 10 or days_until <= 7
+        WARNING  — amount_pct >= 3  or days_until <= 14
+        INFO     — everything else in the window
+    """
+    today_str = str(date.today())
+    cache_key = f"unlock_alerts:{today_str}:{within_days}"
+    with _unlock_cache_lock:
+        if cache_key in _unlock_cache:
+            return _unlock_cache[cache_key]
+
+    today = date.today()
+    alerts = []
+    for token, unlocks in _TOKEN_UNLOCK_SCHEDULE.items():
+        for u in unlocks:
+            try:
+                unlock_date = date.fromisoformat(u["date"])
+            except (ValueError, KeyError):
+                continue
+            days_until = (unlock_date - today).days
+            if days_until < 0 or days_until > within_days:
+                continue
+            amount_pct = float(u.get("amount_pct", 0))
+            is_cliff   = bool(u.get("cliff", False))
+            if amount_pct >= 10 or days_until <= 7:
+                severity = "CRITICAL"
+            elif amount_pct >= 3 or days_until <= 14:
+                severity = "WARNING"
+            else:
+                severity = "INFO"
+            alerts.append({
+                "token":      token,
+                "date":       u["date"],
+                "amount_pct": amount_pct,
+                "type":       u.get("type", ""),
+                "days_until": days_until,
+                "severity":   severity,
+                "is_cliff":   is_cliff,
+            })
+
+    alerts.sort(key=lambda x: x["days_until"])
+
+    with _unlock_cache_lock:
+        _unlock_cache[cache_key] = alerts
+    return alerts
+
+
 # ── Aggregator ────────────────────────────────────────────────────────────────
 
 def fetch_all_protocol_benchmarks() -> dict:
@@ -498,6 +583,7 @@ def fetch_all_protocol_benchmarks() -> dict:
     }
 
     _DICT_KEYS = {"lido_steth_apy", "ethena_yield", "eigenlayer_lrt", "kamino_yields", "meteora_yields"}
+    # token_unlock_alerts is computed synchronously (no I/O) — added after parallel block
     benchmarks: dict = {
         k: ({} if k in _DICT_KEYS else [])
         for k in _TASKS
@@ -513,6 +599,13 @@ def fetch_all_protocol_benchmarks() -> dict:
                 logger.warning("[DeFiProtocols] %s fetch error: %s", key, e)
 
     benchmarks["_timestamp"] = time.time()
+
+    # Token unlock alerts (#84) — synchronous (no network I/O)
+    try:
+        benchmarks["token_unlock_alerts"] = fetch_token_unlock_alerts(within_days=30)
+    except Exception as e:
+        logger.warning("[DeFiProtocols] token_unlock_alerts error: %s", e)
+        benchmarks["token_unlock_alerts"] = []
 
     # Derive convenience scalar: Lido stETH APY as the DeFi benchmark rate
     lido = benchmarks.get("lido_steth_apy") or {}

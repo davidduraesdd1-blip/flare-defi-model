@@ -19,9 +19,10 @@ from ai.intent_classifier import classify_defi_intent   # #87
 
 page_setup("Intelligence · Flare DeFi")
 
-ctx      = render_sidebar()
-profile  = ctx["profile"]
-pro_mode = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
+ctx       = render_sidebar()
+profile   = ctx["profile"]
+pro_mode  = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
+demo_mode = ctx.get("demo_mode", False)  # #67 Demo/Sandbox mode
 
 st.markdown("# Intelligence")
 st.markdown(
@@ -36,13 +37,17 @@ st.markdown(
 render_section_header("DeFi Assistant", "Ask any DeFi question — AI detects your intent and surfaces relevant data")
 
 try:
-    _defi_query = st.text_input(
-        "Ask about DeFi (e.g. 'best place to stake ETH', 'how to LP on Aerodrome', 'compare restaking yields')",
-        key="defi_assistant_query",
-        placeholder="Type your DeFi question here…",
-    )
+    if demo_mode:
+        st.info("DeFi Assistant is disabled in Demo Mode. Toggle Demo Mode off in the sidebar to use it.")
+        _defi_query = ""
+    else:
+        _defi_query = st.text_input(
+            "Ask about DeFi (e.g. 'best place to stake ETH', 'how to LP on Aerodrome', 'compare restaking yields')",
+            key="defi_assistant_query",
+            placeholder="Type your DeFi question here…",
+        )
 
-    if _defi_query and _defi_query.strip():
+    if not demo_mode and _defi_query and _defi_query.strip():
         with st.spinner("Classifying intent…"):
             _intent_result = classify_defi_intent(_defi_query.strip())
 
@@ -132,6 +137,28 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 # ─── What's New ───────────────────────────────────────────────────────────────
 
 render_section_header("Ecosystem Monitor", "New protocols · recent news · on-chain activity")
+
+# Demo Mode: skip live fetches, show placeholder (#67)
+if demo_mode:
+    st.warning(
+        "Demo Mode — live API fetches are disabled. Showing sample analysis placeholder.",
+        icon="🎭",
+    )
+    st.markdown(
+        "<div style='background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);"
+        "border-radius:10px;padding:16px 20px;font-size:0.92rem'>"
+        "<b>Sample Analysis</b><br><br>"
+        "In Demo Mode, the Intelligence page skips all live network calls. "
+        "When running with real data, this section shows:<br><br>"
+        "• New Flare protocols discovered by the web monitor<br>"
+        "• On-chain activity summaries from DeFiLlama<br>"
+        "• AI-generated ecosystem digest (requires ANTHROPIC_API_KEY)<br>"
+        "• Active governance proposals from Snapshot<br>"
+        "• Model accuracy and feedback loop metrics"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    st.stop()
 
 digest = load_monitor_digest()
 if not digest:

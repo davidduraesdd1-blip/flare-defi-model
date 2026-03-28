@@ -45,6 +45,19 @@ color         = ctx["color"]
 weight        = ctx["weight"]
 portfolio_size = ctx["portfolio_size"]
 pro_mode      = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
+demo_mode     = ctx.get("demo_mode", False)   # #67 Demo/Sandbox mode
+
+# ── Demo Mode Banner (#67) ────────────────────────────────────────────────────
+if demo_mode:
+    try:
+        from data.demo_data import DEMO_PORTFOLIO, DEMO_OPPORTUNITIES, DEMO_MACRO  # noqa: F401
+    except Exception:
+        pass
+    st.warning(
+        "Demo Mode — Showing sample data. No API keys required. "
+        "Toggle in sidebar to disable.",
+        icon="🎭",
+    )
 
 latest    = load_latest()
 positions = load_positions()

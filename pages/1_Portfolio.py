@@ -30,6 +30,7 @@ page_setup("Portfolio · Flare DeFi")
 ctx            = render_sidebar()
 portfolio_size = ctx["portfolio_size"]
 pro_mode       = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
+demo_mode      = ctx.get("demo_mode", False)  # #67 Demo/Sandbox mode
 
 latest    = load_latest()
 runs      = load_history_runs()
@@ -43,6 +44,34 @@ st.markdown(
     "Wallet balances · tracked positions · P&L · exit planning</div>",
     unsafe_allow_html=True,
 )
+
+# ── Demo Mode Holdings (#67) ──────────────────────────────────────────────────
+if demo_mode:
+    st.warning(
+        "Demo Mode — Showing sample portfolio data. No API keys required.",
+        icon="🎭",
+    )
+    try:
+        from data.demo_data import DEMO_PORTFOLIO
+        _demo_holdings = DEMO_PORTFOLIO.get("holdings", [])
+        _demo_total    = DEMO_PORTFOLIO.get("total_value_usd", 0)
+        if _demo_holdings:
+            st.markdown("**Sample Holdings**")
+            import pandas as _pd_demo
+            _demo_rows = [
+                {
+                    "Protocol":    h["protocol"],
+                    "Asset":       h["asset"],
+                    "Value (USD)": f"${h['amount_usd']:,.0f}",
+                    "APY":         f"{h['apy']*100:.1f}%",
+                    "Est. Annual": f"${h['amount_usd']*h['apy']:,.0f}",
+                }
+                for h in _demo_holdings
+            ]
+            st.dataframe(_pd_demo.DataFrame(_demo_rows), use_container_width=True, hide_index=True)
+            st.metric("Total Portfolio Value", f"${_demo_total:,.0f}")
+    except Exception as _e:
+        st.info(f"Demo data unavailable: {_e}")
 
 
 # ─── Export Helpers ───────────────────────────────────────────────────────────

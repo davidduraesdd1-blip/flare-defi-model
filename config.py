@@ -532,4 +532,5 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "www.deribit.com",              # Deribit options chain (macro_feeds.py)
     "www.ether.fi",                 # ether.fi direct APY API (#71)
     "app.renzoprotocol.com",        # Renzo protocol points API (#71)
+    "bridges.llama.fi",             # DeFiLlama bridge flows API (#85)
 })

@@ -29,6 +29,7 @@ from scanners.defi_protocols import (
     fetch_eigenlayer_lrt_yields,        # #71
     fetch_kamino_yields,                # #78
     fetch_meteora_yields,               # #78
+    fetch_token_unlock_alerts,          # #84
 )
 from models.risk_models import (
     compute_pool_sharpe,                # #72
@@ -949,6 +950,63 @@ else:
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
+# ── Token Unlock Calendar (#84) ────────────────────────────────────────────
+
+render_section_header(
+    "Token Unlock Calendar",
+    "Upcoming token unlocks that may create sell pressure — shown for all users (risk-relevant)",
+)
+
+with st.spinner("Loading token unlock schedule…"):
+    if demo_mode:
+        try:
+            from data.demo_data import DEMO_TOKEN_UNLOCKS as _unlock_alerts
+        except Exception:
+            _unlock_alerts = []
+    else:
+        try:
+            _unlock_alerts = fetch_token_unlock_alerts(within_days=30)
+        except Exception:
+            _unlock_alerts = []
+
+if _unlock_alerts:
+    for _ul in _unlock_alerts:
+        _ul_sev  = _ul.get("severity", "INFO")
+        _ul_msg  = (
+            f"**{_ul['token']}** — {_ul['amount_pct']:.1f}% unlock · "
+            f"{_ul['type']} · {_ul['date']} "
+            f"({'cliff (all-at-once)' if _ul.get('is_cliff') else 'linear'}) · "
+            f"**{_ul['days_until']} days away**"
+        )
+        if _ul_sev == "CRITICAL":
+            st.error(_ul_msg)
+        else:
+            st.warning(_ul_msg)
+
+    # Summary table
+    _ul_rows = []
+    for _ul in _unlock_alerts:
+        _ul_rows.append({
+            "Token":      _ul["token"],
+            "Date":       _ul["date"],
+            "Amount %":   f"{_ul['amount_pct']:.1f}%",
+            "Type":       _ul["type"],
+            "Days Until": _ul["days_until"],
+            "Cliff?":     "Yes (all-at-once)" if _ul.get("is_cliff") else "No (linear)",
+            "Severity":   _ul["severity"],
+        })
+    st.dataframe(pd.DataFrame(_ul_rows), use_container_width=True, hide_index=True)
+    st.caption(
+        "Large unlocks can create sell pressure. "
+        "Cliff unlocks (all-at-once) are higher risk than linear unlocks. "
+        "CRITICAL = amount >= 10% supply or <= 7 days away."
+    )
+else:
+    st.info("No token unlocks scheduled within the next 30 days.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
 # ── Bridge Flow Indicator (#85) ────────────────────────────────────────────
 
 if _pro_mode:
@@ -958,15 +1016,13 @@ if _pro_mode:
     )
 
     with st.spinner("Fetching bridge flow data…"):
-        _flows = [] if demo_mode else fetch_bridge_flows()
-
-    if demo_mode:
-        _flows = [
-            {"chain": "Base", "tvl_usd": 7_400_000_000, "change_7d_pct": 18.2, "flow_signal": "INFLOW"},
-            {"chain": "Ethereum", "tvl_usd": 50_000_000_000, "change_7d_pct": 2.1, "flow_signal": "STABLE"},
-            {"chain": "Solana", "tvl_usd": 8_200_000_000, "change_7d_pct": -6.3, "flow_signal": "OUTFLOW"},
-            {"chain": "Flare", "tvl_usd": 85_000_000, "change_7d_pct": 3.1, "flow_signal": "STABLE"},
-        ]
+        if demo_mode:
+            try:
+                from data.demo_data import DEMO_BRIDGE_FLOWS as _flows
+            except Exception:
+                _flows = []
+        else:
+            _flows = fetch_bridge_flows()
 
     if _flows:
         _fl_cols = st.columns(min(len(_flows), 4))
