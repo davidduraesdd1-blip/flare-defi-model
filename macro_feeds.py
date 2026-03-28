@@ -141,14 +141,24 @@ def fetch_yfinance_macro() -> dict[str, Any]:
         except ImportError:
             return None
         _MAP = {"dxy": "DX-Y.NYB", "vix": "^VIX", "gold_spot": "GC=F", "spx": "^GSPC"}
-        result: dict = {}
-        for key, sym in _MAP.items():
+
+        def _fetch_one(ticker_tuple: tuple) -> tuple:
+            key, symbol = ticker_tuple
             try:
-                hist = yf.Ticker(sym).history(period="5d")
-                if not hist.empty:
-                    result[key] = round(float(hist["Close"].iloc[-1]), 2)
-            except Exception as e:
-                logger.debug("[yfinance] %s: %s", sym, e)
+                return key, yf.Ticker(symbol).history(period="5d")["Close"]
+            except Exception:
+                return key, None
+
+        # OPT-35: fetch all 4 tickers in parallel
+        result: dict = {}
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            for key, series in ex.map(_fetch_one, _MAP.items()):
+                try:
+                    if series is not None and not series.empty:
+                        result[key] = round(float(series.iloc[-1]), 2)
+                except Exception as e:
+                    logger.debug("[yfinance] %s: %s", key, e)
+
         if not result:
             return None
         result.update({"source": "yfinance", "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat()})
@@ -176,17 +186,27 @@ def fetch_macro_timeseries(days: int = 90) -> dict[str, Any]:
             "BTC": "BTC-USD", "VIX": "^VIX", "Gold": "GC=F",
             "SPX": "^GSPC",   "DXY": "DX-Y.NYB", "Oil": "CL=F",
         }
-        out: dict = {}
-        for key, sym in _SYMS.items():
+
+        def _fetch_ts(ticker_tuple: tuple) -> tuple:
+            key, sym = ticker_tuple
             try:
                 hist = yf.Ticker(sym).history(period=f"{days}d")
                 if not hist.empty:
-                    out[key] = {
+                    return key, {
                         str(dt)[:10]: round(float(v), 4)
                         for dt, v in hist["Close"].items()
                     }
             except Exception as e:
                 logger.debug("[MacroTS] %s: %s", sym, e)
+            return key, None
+
+        # OPT-36: fetch all 6 symbols in parallel
+        out: dict = {}
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            for key, series in ex.map(_fetch_ts, _SYMS.items()):
+                if series is not None:
+                    out[key] = series
+
         out.update({"_days": days, "_timestamp": _dt.datetime.utcnow().isoformat()})
         return out
 

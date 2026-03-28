@@ -547,7 +547,7 @@ def fetch_all_protocol_benchmarks() -> dict:
     """
     Fetch all 14 protocol data sources in parallel.
 
-    Uses ThreadPoolExecutor(max_workers=4) to run fetches concurrently.
+    Uses ThreadPoolExecutor(max_workers=14) to run all 14 fetches concurrently.
     Individual fetch failures return empty list/dict — does not propagate errors.
 
     Returns combined benchmark dict:
@@ -591,7 +591,7 @@ def fetch_all_protocol_benchmarks() -> dict:
         for k in _TASKS
     }
 
-    with ThreadPoolExecutor(max_workers=4) as ex:
+    with ThreadPoolExecutor(max_workers=min(14, len(_TASKS))) as ex:
         future_map = {ex.submit(fn): key for key, fn in _TASKS.items()}
         for fut in as_completed(future_map):
             key = future_map[fut]
@@ -1059,19 +1059,20 @@ def fetch_rwa_credit_health() -> dict:
 
     result: dict = {"timestamp": ""}
 
-    for name, slug in _RWA_CREDIT_PROTOCOLS.items():
+    def _fetch_rwa_protocol(name_slug: tuple) -> tuple[str, dict]:
+        """Fetch a single RWA credit protocol entry. Returns (name, entry)."""
+        name, slug = name_slug
         entry = {
-            "tvl_usd":           0.0,
-            "tvl_7d_change_pct": 0.0,
+            "tvl_usd":            0.0,
+            "tvl_7d_change_pct":  0.0,
             "tvl_30d_change_pct": 0.0,
-            "chains":            [],
-            "health":            "STABLE",
+            "chains":             [],
+            "health":             "STABLE",
         }
         try:
             data = _get(f"{_DEFILLAMA_API_BASE}/protocol/{slug}")
             if not data:
-                result[name] = entry
-                continue
+                return name, entry
 
             # Current TVL from currentChainTvls
             current_chain_tvls = data.get("currentChainTvls") or {}
@@ -1124,7 +1125,21 @@ def fetch_rwa_credit_health() -> dict:
         except Exception as e:
             logger.warning("[RWACreditHealth] %s (%s) error: %s", name, slug, e)
 
-        result[name] = entry
+        return name, entry
+
+    # Fetch all 4 protocols in parallel (OPT-37)
+    with ThreadPoolExecutor(max_workers=min(4, len(_RWA_CREDIT_PROTOCOLS))) as ex:
+        future_map = {ex.submit(_fetch_rwa_protocol, item): item[0]
+                      for item in _RWA_CREDIT_PROTOCOLS.items()}
+        for fut in as_completed(future_map):
+            try:
+                name, entry = fut.result(timeout=20)
+                result[name] = entry
+            except Exception as e:
+                name = future_map[fut]
+                logger.warning("[RWACreditHealth] %s parallel fetch error: %s", name, e)
+                result[name] = {"tvl_usd": 0.0, "tvl_7d_change_pct": 0.0,
+                                "tvl_30d_change_pct": 0.0, "chains": [], "health": "STABLE"}
 
     result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     _rwa_credit_cache["ts"]   = time.time()
@@ -1225,21 +1240,41 @@ def fetch_tvl_change_alerts(threshold_pct: float = 5.0) -> list[dict]:
 
 # ── 16. ERC-4626 Vault Reads (#103) ───────────────────────────────────────────
 
-# Try to connect web3 once at module import; _WEB3_AVAIL stays False if unavailable.
-# is_connected() is wrapped separately because it makes a live RPC call (eth_chainId)
-# and can raise ConnectionError/OSError (not just return False) on restricted networks
-# such as Streamlit Cloud.  The HTTPProvider timeout=5 caps the import-time block.
-try:
-    from web3 import Web3 as _Web3
-    _W3 = _Web3(_Web3.HTTPProvider("https://eth.llamarpc.com", request_kwargs={"timeout": 5}))
-    try:
-        _WEB3_AVAIL = _W3.is_connected()
-    except Exception:
-        _WEB3_AVAIL = False
-except Exception:
-    _Web3       = None   # type: ignore[assignment]
-    _W3         = None
-    _WEB3_AVAIL = False
+# OPT-45: Lazy-init web3 — deferred until first ERC-4626 call instead of at
+# module import time.  web3 pulls ~50+ submodules; skipping it at startup saves
+# ~200–400 ms on pages that never call fetch_erc4626_yield_data() or
+# fetch_multicall_erc4626().  The globals are initialised once on first use.
+_Web3       = None   # type: ignore[assignment]
+_W3         = None
+_WEB3_AVAIL = False
+_WEB3_INIT_DONE = False   # guard so we only attempt init once
+_WEB3_INIT_LOCK = threading.Lock()
+
+
+def _ensure_web3() -> None:
+    """Lazily import and connect web3 on first use.  Thread-safe via _WEB3_INIT_LOCK."""
+    global _Web3, _W3, _WEB3_AVAIL, _WEB3_INIT_DONE
+    if _WEB3_INIT_DONE:
+        return
+    with _WEB3_INIT_LOCK:
+        if _WEB3_INIT_DONE:
+            return
+        try:
+            from web3 import Web3 as _Web3Cls
+            _Web3 = _Web3Cls
+            _W3   = _Web3Cls(_Web3Cls.HTTPProvider(
+                "https://eth.llamarpc.com", request_kwargs={"timeout": 5}
+            ))
+            try:
+                _WEB3_AVAIL = _W3.is_connected()
+            except Exception:
+                _WEB3_AVAIL = False
+        except Exception:
+            _Web3       = None
+            _W3         = None
+            _WEB3_AVAIL = False
+        finally:
+            _WEB3_INIT_DONE = True
 
 # ERC-4626 minimal ABI — pricePerShare, totalAssets, decimals
 _ERC4626_ABI = [
@@ -1337,6 +1372,7 @@ def fetch_multicall_erc4626(vault_addresses: list) -> dict:
         {"0xVault1": {"total_assets_usd": float, "success": bool}, ...}
         or {} if web3 is unavailable or multicall fails.
     """
+    _ensure_web3()
     if not _WEB3_AVAIL or not _W3 or not _Web3:
         return {}
 
@@ -1408,6 +1444,7 @@ def fetch_erc4626_yield_data() -> dict:
           "timestamp": str,
         }
     """
+    _ensure_web3()   # OPT-45: lazy web3 init
     now = time.time()
     if _erc4626_cache["data"] is not None and now - _erc4626_cache["ts"] < _TTL_ERC4626:
         return _erc4626_cache["data"]
