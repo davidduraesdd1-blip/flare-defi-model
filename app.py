@@ -4,6 +4,7 @@ Multi-page app entry point. Shows prices, top opportunities, and arb alerts.
 Run with:  streamlit run app.py
 """
 
+import os
 import sys
 import html as _html
 from pathlib import Path
@@ -13,18 +14,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ─── Sentry error monitoring (free tier — only loads when DSN is set) ──────────
+
+def _scrub_sentry_event(event, hint):
+    """Remove API keys and PII from Sentry events before sending."""
+    if "request" in event:
+        event["request"].pop("cookies", None)
+        event["request"].pop("headers", None)
+    for key in list(event.get("extra", {}).keys()):
+        if any(x in key.upper() for x in ["KEY", "SECRET", "TOKEN", "PASSWORD", "DSN"]):
+            event["extra"][key] = "[REDACTED]"
+    return event
+
+
 try:
-    from config import SENTRY_DSN as _SENTRY_DSN
+    import sentry_sdk
+    _SENTRY_DSN = os.environ.get("DEFI_SENTRY_DSN", "")
     if _SENTRY_DSN:
-        try:
-            import sentry_sdk
-            sentry_sdk.init(
-                dsn=_SENTRY_DSN,
-                traces_sample_rate=0.05,
-                send_default_pii=False,
-            )
-        except ImportError:
-            pass
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            traces_sample_rate=0.05,
+            profiles_sample_rate=0.0,
+            before_send=_scrub_sentry_event,
+        )
 except ImportError:
     pass
 

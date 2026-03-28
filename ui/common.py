@@ -780,6 +780,23 @@ def render_sidebar() -> dict:
             pass
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+        # ── Wallet Import (Beta) (#110) ────────────────────────────────────────
+        with st.expander("🔗 Wallet Import (Beta)", expanded=False):
+            _wallet = st.text_input(
+                "EVM Wallet Address",
+                placeholder="0x...",
+                key="defi_wallet_address",
+                help="Read-only. We never request signing or private keys.",
+            )
+            if _wallet and len(_wallet) == 42 and _wallet.startswith("0x"):
+                st.caption("✓ Valid address detected")
+                st.session_state["defi_wallet_address_valid"] = _wallet
+            elif _wallet:
+                st.warning("Invalid address format")
+                st.session_state["defi_wallet_address_valid"] = None
+
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
         st.markdown(
             "<div style='font-size:0.67rem; color:#334155; line-height:1.4; padding:4px 0;'>"
             "⚠ Not financial advice · DYOR before investing.</div>",

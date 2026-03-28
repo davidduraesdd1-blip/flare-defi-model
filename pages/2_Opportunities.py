@@ -31,6 +31,7 @@ from scanners.defi_protocols import (
     fetch_kamino_yields,                # #78
     fetch_meteora_yields,               # #78
     fetch_token_unlock_alerts,          # #84
+    fetch_erc4626_yield_data,           # #103
 )
 from models.risk_models import (
     compute_pool_sharpe,                # #72
@@ -1276,6 +1277,68 @@ with _cc_col2:
         st.dataframe(pd.DataFrame(_morpho_rows), use_container_width=True, hide_index=True)
     else:
         st.info("Morpho data unavailable.")
+
+# ── ERC-4626 Live Vault Rates (#103) ─────────────────────────────────────────
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+render_section_header(
+    "Live Vault Rates (ERC-4626)",
+    "On-chain pricePerShare reads from major yield vaults — Morpho & Aave · via public Ethereum RPC",
+)
+
+try:
+    if demo_mode:
+        _erc4626_data = {
+            "Morpho USDC (Re7)":      {"price_per_share": 1.000823, "total_assets_usd": 48_200_000, "yield_source": "morpho_vault", "data_source": "vault_read"},
+            "Aave aUSDC v3":          {"price_per_share": 1.000012, "total_assets_usd": 2_800_000_000, "yield_source": "aave_v3",   "data_source": "vault_read"},
+            "Morpho WETH (Gauntlet)": {"price_per_share": 1.000034, "total_assets_usd": 420_000_000, "yield_source": "morpho_vault", "data_source": "vault_read"},
+            "Aave aWETH v3":          {"price_per_share": 1.000009, "total_assets_usd": 980_000_000, "yield_source": "aave_v3",      "data_source": "vault_read"},
+            "timestamp": "2026-03-27T00:00:00Z",
+        }
+    else:
+        with st.spinner("Reading vault prices from Ethereum RPC…"):
+            _erc4626_data = fetch_erc4626_yield_data()
+
+    _vault_cards = [(k, v) for k, v in _erc4626_data.items() if k != "timestamp" and isinstance(v, dict)]
+    _vault_cards.sort(key=lambda x: x[1].get("price_per_share", 1.0), reverse=True)
+
+    if _vault_cards:
+        _vc_cols = st.columns(min(len(_vault_cards), 4))
+        for _vci, (_vname, _vdata) in enumerate(_vault_cards):
+            _pps     = _vdata.get("price_per_share", 1.0)
+            _ta      = _vdata.get("total_assets_usd", 0.0)
+            _vsrc    = _vdata.get("data_source", "unavailable")
+            _yld_src = _vdata.get("yield_source", "—")
+            _live    = _vsrc == "vault_read"
+            _badge   = "<span style='background:#164e63;color:#67e8f9;font-size:0.65rem;padding:1px 6px;border-radius:8px;margin-left:4px'>📡 Live</span>" if _live else "<span style='background:#1c1917;color:#a8a29e;font-size:0.65rem;padding:1px 6px;border-radius:8px;margin-left:4px'>📊 Estimated</span>"
+            _tvl_str = (
+                f"${_ta/1e9:.2f}B" if _ta >= 1e9
+                else f"${_ta/1e6:.0f}M" if _ta >= 1e6
+                else f"${_ta:,.0f}" if _ta > 0
+                else "—"
+            )
+            with _vc_cols[_vci % len(_vc_cols)]:
+                st.markdown(
+                    f"<div style='background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.07);"
+                    f"border-left:3px solid {'#22c55e' if _live else '#f59e0b'};"
+                    f"border-radius:8px;padding:12px 14px;margin-bottom:8px'>"
+                    f"<div style='font-weight:700;font-size:0.85rem;color:#e2e8f0;margin-bottom:4px'>{_html.escape(_vname)}{_badge}</div>"
+                    f"<div style='font-size:1.1rem;font-weight:700;color:#22c55e'>pps: {_pps:.6f}</div>"
+                    f"<div style='font-size:0.75rem;color:#64748b;margin-top:3px'>Total Assets: {_tvl_str}</div>"
+                    f"<div style='font-size:0.67rem;color:#334155;margin-top:4px'>Source: {_html.escape(_yld_src)}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+        st.caption(
+            f"pricePerShare read at {_erc4626_data.get('timestamp', '')} · "
+            "📡 Live = direct RPC call to vault contract · 📊 Estimated = DeFiLlama fallback. "
+            "pps > 1.0 means yield has accrued since vault inception."
+        )
+    else:
+        st.info("ERC-4626 vault data unavailable. Check RPC connectivity.")
+except Exception as _e4626:
+    st.warning(f"ERC-4626 vault read error: {_e4626}")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 

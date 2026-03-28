@@ -433,6 +433,85 @@ with st.expander("Connect a wallet (read-only)"):
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
+# ─── Zerion Wallet Positions (#111) ───────────────────────────────────────────
+
+render_section_header("Wallet Positions", "Live DeFi portfolio via Zerion — chain breakdown & top positions")
+
+try:
+    _zerion_addr = st.session_state.get("defi_wallet_address_valid")
+    if _zerion_addr:
+        with st.spinner("Fetching wallet portfolio from Zerion…"):
+            try:
+                from scanners.wallet import fetch_zerion_portfolio
+                _zp = fetch_zerion_portfolio(_zerion_addr)
+                _zp_err = _zp.get("error")
+                if _zp_err:
+                    st.warning(f"Zerion: {_zp_err}")
+                else:
+                    # Summary metric
+                    _z_total = _zp.get("total_value_usd", 0.0)
+                    st.metric("Total Wallet Value (USD)", f"${_z_total:,.2f}")
+
+                    # Chain breakdown chart
+                    _chain_bd = _zp.get("chain_breakdown") or {}
+                    if _chain_bd:
+                        import plotly.express as px
+                        _chain_df = pd.DataFrame([
+                            {"Chain": k, "Value (USD)": v}
+                            for k, v in _chain_bd.items() if v > 0
+                        ])
+                        if not _chain_df.empty:
+                            _fig_chain = px.pie(
+                                _chain_df, names="Chain", values="Value (USD)",
+                                title="Chain Breakdown",
+                                color_discrete_sequence=px.colors.sequential.Plasma_r,
+                            )
+                            _fig_chain.update_layout(
+                                paper_bgcolor="rgba(0,0,0,0)",
+                                plot_bgcolor="rgba(0,0,0,0)",
+                                font_color="#94a3b8",
+                                margin=dict(l=20, r=20, t=40, b=20),
+                                height=280,
+                                showlegend=True,
+                            )
+                            st.plotly_chart(_fig_chain, use_container_width=True, config={"displayModeBar": False})
+
+                    # Top 10 positions table
+                    _z_positions = (_zp.get("positions") or [])[:10]
+                    if _z_positions:
+                        st.markdown("**Top 10 Positions**")
+                        _z_rows = []
+                        for _zpos in _z_positions:
+                            _chg = _zpos.get("change_1d_pct", 0)
+                            _chg_str = f"{_chg:+.2f}%" if _chg else "—"
+                            _z_rows.append({
+                                "Asset":     _zpos.get("name", "—"),
+                                "Chain":     _zpos.get("chain", "—"),
+                                "Value USD": f"${_zpos.get('value_usd', 0):,.2f}",
+                                "Quantity":  f"{_zpos.get('quantity', 0):,.4f}",
+                                "Price":     f"${_zpos.get('price', 0):,.4f}" if _zpos.get("price") else "—",
+                                "1d Change": _chg_str,
+                            })
+                        st.dataframe(pd.DataFrame(_z_rows), use_container_width=True, hide_index=True)
+
+                    # DeFi protocols
+                    _protos = _zp.get("defi_protocols") or []
+                    if _protos:
+                        st.caption(f"DeFi protocols detected: {', '.join(_protos)}")
+
+                    st.caption(f"Data from Zerion · Read-only · Refreshes every 5 min · {_zp.get('timestamp', '')}")
+            except ImportError:
+                st.info("Zerion module unavailable.")
+            except Exception as _ze:
+                st.error(f"Zerion portfolio error: {_ze}")
+    else:
+        st.info("Connect wallet to see your DeFi positions. Enter your EVM address in the sidebar Wallet Import section.")
+except Exception as _outer_e:
+    st.warning(f"Wallet positions section error: {_outer_e}")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
 # ─── Positions Overview ───────────────────────────────────────────────────────
 
 pnl_results: list = []  # populated inside the positions block; defined here to avoid UnboundLocalError

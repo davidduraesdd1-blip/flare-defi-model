@@ -1221,3 +1221,172 @@ def fetch_tvl_change_alerts(threshold_pct: float = 5.0) -> list[dict]:
 
     alerts.sort(key=lambda x: x["change_pct"])   # most severe first
     return alerts
+
+
+# ── 16. ERC-4626 Vault Reads (#103) ───────────────────────────────────────────
+
+# Try to connect web3 once at module import; _WEB3_AVAIL stays False if unavailable.
+try:
+    from web3 import Web3 as _Web3
+    _W3 = _Web3(_Web3.HTTPProvider("https://eth.llamarpc.com", request_kwargs={"timeout": 8}))
+    _WEB3_AVAIL = _W3.is_connected()
+except Exception:
+    _Web3       = None   # type: ignore[assignment]
+    _W3         = None
+    _WEB3_AVAIL = False
+
+# ERC-4626 minimal ABI — pricePerShare, totalAssets, decimals
+_ERC4626_ABI = [
+    {"inputs": [], "name": "pricePerShare",
+     "outputs": [{"type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "totalAssets",
+     "outputs": [{"type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "decimals",
+     "outputs": [{"type": "uint8"}], "stateMutability": "view", "type": "function"},
+    # convertToAssets(1e18) — Aave v3 aTokens use this instead of pricePerShare
+    {"inputs": [{"name": "shares", "type": "uint256"}],
+     "name": "convertToAssets",
+     "outputs": [{"type": "uint256"}], "stateMutability": "view", "type": "function"},
+]
+
+# Major ERC-4626 compatible vaults on Ethereum mainnet (verified addresses)
+_ERC4626_VAULTS: dict[str, dict] = {
+    "Morpho USDC (Re7)": {
+        "address":       "0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458",
+        "decimals":      6,
+        "asset_symbol":  "USDC",
+        "yield_source":  "morpho_vault",
+    },
+    "Morpho WETH (Gauntlet)": {
+        "address":       "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
+        "decimals":      18,
+        "asset_symbol":  "WETH",
+        "yield_source":  "morpho_vault",
+    },
+    "Aave aUSDC v3": {
+        "address":       "0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c",
+        "decimals":      6,
+        "asset_symbol":  "USDC",
+        "yield_source":  "aave_v3",
+    },
+    "Aave aWETH v3": {
+        "address":       "0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8",
+        "decimals":      18,
+        "asset_symbol":  "WETH",
+        "yield_source":  "aave_v3",
+    },
+}
+
+_erc4626_cache = {"ts": 0, "data": None}
+_TTL_ERC4626   = 300   # 5 minutes
+
+
+def fetch_erc4626_yield_data() -> dict:
+    """Read live pricePerShare from major ERC-4626 yield vaults via web3.py.
+
+    If web3 is unavailable or all RPC calls fail, falls back to DeFiLlama
+    pool data for Morpho and Aave.
+
+    Returns:
+        {
+          vault_name: {
+            "price_per_share": float,
+            "total_assets_usd": float,   # 0 when unavailable
+            "yield_source": str,
+            "data_source": "vault_read" | "defillama_fallback",
+          },
+          "timestamp": str,
+        }
+    """
+    now = time.time()
+    if _erc4626_cache["data"] is not None and now - _erc4626_cache["ts"] < _TTL_ERC4626:
+        return _erc4626_cache["data"]
+
+    result: dict = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+    if _WEB3_AVAIL and _W3 and _Web3:
+        for vault_name, cfg in _ERC4626_VAULTS.items():
+            addr = cfg.get("address", "")
+            if not addr:
+                continue
+            dec  = cfg.get("decimals", 18)
+            try:
+                cs_addr  = _Web3.to_checksum_address(addr)
+                contract = _W3.eth.contract(address=cs_addr, abi=_ERC4626_ABI)
+
+                # Try pricePerShare first, then convertToAssets(10**dec)
+                pps_raw = None
+                try:
+                    pps_raw = contract.functions.pricePerShare().call()
+                except Exception:
+                    pass
+                if pps_raw is None:
+                    try:
+                        pps_raw = contract.functions.convertToAssets(10 ** dec).call()
+                    except Exception:
+                        pps_raw = 10 ** dec   # fallback: par (1:1)
+
+                pps = pps_raw / (10 ** dec)
+
+                # totalAssets (optional — swallow errors)
+                total_assets_raw = 0
+                try:
+                    total_assets_raw = contract.functions.totalAssets().call()
+                except Exception:
+                    pass
+                total_assets = total_assets_raw / (10 ** dec)
+
+                result[vault_name] = {
+                    "price_per_share": round(pps, 8),
+                    "total_assets_usd": round(total_assets, 2),
+                    "yield_source": cfg.get("yield_source", "vault_read"),
+                    "data_source": "vault_read",
+                }
+                logger.debug("[ERC4626] %s pps=%.6f totalAssets=%.0f", vault_name, pps, total_assets)
+            except Exception as e:
+                logger.debug("[ERC4626] %s read failed: %s", vault_name, e)
+                result[vault_name] = {
+                    "price_per_share": 1.0,
+                    "total_assets_usd": 0.0,
+                    "yield_source": cfg.get("yield_source", "vault_read"),
+                    "data_source": "unavailable",
+                }
+
+        logger.info("[ERC4626] %d vault(s) read via web3", len(_ERC4626_VAULTS))
+
+    else:
+        # Fallback: DeFiLlama pool data for Morpho and Aave
+        logger.info("[ERC4626] web3 unavailable — using DeFiLlama fallback")
+        try:
+            pools = _get_llama_pools()
+            _FALLBACK_SLUGS = {
+                "morpho": "Morpho (DeFiLlama)",
+                "aave-v3": "Aave v3 (DeFiLlama)",
+            }
+            for proj_key, label in _FALLBACK_SLUGS.items():
+                best_apy = 0.0
+                best_tvl = 0.0
+                for p in pools:
+                    proj  = (p.get("project") or "").lower()
+                    chain = (p.get("chain")   or "").lower()
+                    if proj != proj_key or chain != "ethereum":
+                        continue
+                    apy = float(p.get("apy") or 0)
+                    tvl = float(p.get("tvlUsd") or 0)
+                    if apy > best_apy:
+                        best_apy = apy
+                        best_tvl = tvl
+                if best_apy > 0:
+                    result[label] = {
+                        "price_per_share": round(1.0 + best_apy / 100 / 365, 8),
+                        "total_assets_usd": round(best_tvl, 2),
+                        "yield_source": proj_key,
+                        "data_source": "defillama_fallback",
+                    }
+        except Exception as e:
+            logger.warning("[ERC4626] DeFiLlama fallback failed: %s", e)
+
+    result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _erc4626_cache["ts"]   = time.time()
+    _erc4626_cache["data"] = result
+    return result
