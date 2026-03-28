@@ -38,6 +38,21 @@ import streamlit as st
 
 page_setup("Dashboard · Flare DeFi")
 
+# ── Global DeFi CSS (#59 UI/UX Refresh) ──────────────────────────────────────
+DEFI_CSS = """
+<style>
+.defi-card { background: #1a1a2e; border: 1px solid #16213e; border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+.yield-high { color: #00e676; font-weight: bold; }
+.yield-medium { color: #ffab40; font-weight: bold; }
+.yield-low { color: #78909c; }
+.risk-low { background: #1b5e20; color: #a5d6a7; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; }
+.risk-medium { background: #e65100; color: #ffe0b2; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; }
+.risk-high { background: #b71c1c; color: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; }
+.protocol-badge { background: #0d47a1; color: #bbdefb; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; }
+</style>
+"""
+st.markdown(DEFI_CSS, unsafe_allow_html=True)
+
 ctx           = render_sidebar()
 profile       = ctx["profile"]
 profile_cfg   = ctx["profile_cfg"]

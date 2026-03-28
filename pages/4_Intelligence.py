@@ -24,7 +24,8 @@ profile   = ctx["profile"]
 pro_mode  = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 demo_mode = ctx.get("demo_mode", False)  # #67 Demo/Sandbox mode
 
-st.markdown("# Intelligence")
+st.title("🧠 Intelligence")
+st.caption("Ecosystem monitor, governance alerts, AI model accuracy, and protocol revenue health")
 st.markdown(
     "<div style='color:#475569; font-size:0.88rem; margin-bottom:24px;'>"
     "Ecosystem monitor · new protocols · news · AI model accuracy</div>",
@@ -160,7 +161,8 @@ if demo_mode:
     )
     st.stop()
 
-digest = load_monitor_digest()
+with st.spinner("Analyzing on-chain data..."):
+    digest = load_monitor_digest()
 if not digest:
     st.info(
         "No monitor data yet. Trigger manually: "
@@ -868,7 +870,7 @@ if _gov_proposals:
         "Source: Snapshot GraphQL · cached 1 hour."
     )
 else:
-    st.info("No active governance proposals at this time.")
+    st.success("✓ No active governance votes affecting APY right now.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -1071,3 +1073,187 @@ if _intent_input:
                     st.markdown(f"Claude classified as: **{_intent_map[_ai_intent]['label']}**")
             except Exception:
                 pass
+
+
+# ─── Protocol Revenue Health (#57) ───────────────────────────────────────────
+
+if pro_mode:
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    render_section_header(
+        "Protocol Revenue Health",
+        "24h vs 30-day average fee revenue — real demand signal for each protocol",
+    )
+
+    try:
+        from scanners.defillama import fetch_protocol_revenue as _fetch_pr
+
+        with st.spinner("Loading protocol fee revenue data…"):
+            if demo_mode:
+                _rev_data = {
+                    "aave-v3":      {"fees_24h": 820_000, "fees_30d": 21_000_000, "trend": 1.17, "health": "GREEN"},
+                    "lido":         {"fees_24h": 1_200_000, "fees_30d": 39_000_000, "trend": 0.92, "health": "GREEN"},
+                    "uniswap":      {"fees_24h": 3_500_000, "fees_30d": 130_000_000, "trend": 0.81, "health": "GREEN"},
+                    "compound-v3":  {"fees_24h": 95_000, "fees_30d": 3_500_000, "trend": 0.81, "health": "GREEN"},
+                    "curve-dex":    {"fees_24h": 210_000, "fees_30d": 8_500_000, "trend": 0.74, "health": "YELLOW"},
+                    "pendle":       {"fees_24h": 180_000, "fees_30d": 9_000_000, "trend": 0.60, "health": "YELLOW"},
+                    "morpho":       {"fees_24h": 55_000, "fees_30d": 900_000, "trend": 1.83, "health": "GREEN"},
+                    "aerodrome-v2": {"fees_24h": 420_000, "fees_30d": 11_000_000, "trend": 1.15, "health": "GREEN"},
+                    "timestamp":    "2026-03-27T00:00:00Z",
+                    "errors":       [],
+                }
+            else:
+                _rev_data = _fetch_pr()
+
+        _rev_rows = []
+        for _slug, _rdata in _rev_data.items():
+            if _slug in ("timestamp", "errors") or not isinstance(_rdata, dict):
+                continue
+            _f24 = _rdata.get("fees_24h", 0)
+            _f30 = _rdata.get("fees_30d", 0)
+            _trend = _rdata.get("trend", 0)
+            _health = _rdata.get("health", "RED")
+            _hcolor = "#22c55e" if _health == "GREEN" else ("#f59e0b" if _health == "YELLOW" else "#ef4444")
+            _rev_rows.append({
+                "Protocol":  _slug.replace("-", " ").title(),
+                "24h Fees":  (f"${_f24/1e6:.2f}M" if _f24 >= 1e6 else f"${_f24:,.0f}"),
+                "30d Fees":  (f"${_f30/1e6:.1f}M" if _f30 >= 1e6 else f"${_f30:,.0f}"),
+                "Trend":     f"{_trend:.2f}x",
+                "_health":   _health,
+                "_hcolor":   _hcolor,
+            })
+
+        if _rev_rows:
+            for _rr in _rev_rows:
+                _hbadge = (
+                    f"<span style='background:rgba(34,197,94,0.12);color:#22c55e;"
+                    f"padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600'>{_rr['_health']}</span>"
+                    if _rr["_health"] == "GREEN" else
+                    f"<span style='background:rgba(245,158,11,0.12);color:#f59e0b;"
+                    f"padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600'>{_rr['_health']}</span>"
+                    if _rr["_health"] == "YELLOW" else
+                    f"<span style='background:rgba(239,68,68,0.12);color:#ef4444;"
+                    f"padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600'>{_rr['_health']}</span>"
+                )
+                st.markdown(
+                    f"<div style='background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);"
+                    f"border-left:3px solid {_rr['_hcolor']};border-radius:6px;"
+                    f"padding:8px 14px;margin-bottom:6px;font-size:0.85rem;"
+                    f"display:flex;justify-content:space-between;align-items:center'>"
+                    f"<div>"
+                    f"<b style='color:#f1f5f9'>{_html.escape(_rr['Protocol'])}</b>"
+                    f"<span style='color:#64748b;font-size:0.78rem;margin-left:10px'>"
+                    f"24h: {_html.escape(_rr['24h Fees'])} · 30d: {_html.escape(_rr['30d Fees'])} · "
+                    f"Trend: {_html.escape(_rr['Trend'])}</span>"
+                    f"</div>"
+                    f"<div>{_hbadge}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            st.caption(
+                "Fee revenue = real demand for the protocol's services. "
+                "Declining fees can signal reduced usage before TVL drops. "
+                "Trend: 24h fees vs 30-day daily average. Source: DeFiLlama · cached 1h."
+            )
+        else:
+            st.info("Protocol revenue data unavailable. Check API connectivity.")
+
+    except Exception as _pr_err:
+        st.caption(f"Protocol revenue data unavailable: {_pr_err}")
+
+
+# ─── RWA Credit Protocol Health (#58) ────────────────────────────────────────
+
+if pro_mode:
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    render_section_header(
+        "RWA Credit Protocol Health",
+        "Centrifuge · Maple Finance · Clearpool · Goldfinch — TVL trends and health signals",
+    )
+
+    try:
+        from scanners.defi_protocols import fetch_rwa_credit_health as _fetch_rwa
+
+        with st.spinner("Loading RWA credit protocol data…"):
+            if demo_mode:
+                _rwa_data = {
+                    "centrifuge": {
+                        "tvl_usd": 340_000_000, "tvl_7d_change_pct": 2.1,
+                        "tvl_30d_change_pct": 8.4, "chains": ["Ethereum", "Centrifuge"],
+                        "health": "GROWING",
+                    },
+                    "maple": {
+                        "tvl_usd": 190_000_000, "tvl_7d_change_pct": -1.2,
+                        "tvl_30d_change_pct": -3.5, "chains": ["Ethereum", "Solana"],
+                        "health": "STABLE",
+                    },
+                    "clearpool": {
+                        "tvl_usd": 46_000_000, "tvl_7d_change_pct": 0.8,
+                        "tvl_30d_change_pct": -1.2, "chains": ["Ethereum", "Flare"],
+                        "health": "STABLE",
+                    },
+                    "goldfinch": {
+                        "tvl_usd": 82_000_000, "tvl_7d_change_pct": -3.1,
+                        "tvl_30d_change_pct": -12.5, "chains": ["Ethereum"],
+                        "health": "DECLINING",
+                    },
+                    "timestamp": "2026-03-27T00:00:00Z",
+                }
+            else:
+                _rwa_data = _fetch_rwa()
+
+        _HEALTH_COLORS = {"GROWING": "#22c55e", "STABLE": "#f59e0b", "DECLINING": "#ef4444"}
+        _HEALTH_BADGES = {
+            "GROWING":   "background:rgba(34,197,94,0.12);color:#22c55e",
+            "STABLE":    "background:rgba(245,158,11,0.12);color:#f59e0b",
+            "DECLINING": "background:rgba(239,68,68,0.12);color:#ef4444",
+        }
+
+        _rwa_cols = st.columns(2)
+        _col_idx  = 0
+        for _rwa_name, _rwa_entry in _rwa_data.items():
+            if _rwa_name == "timestamp" or not isinstance(_rwa_entry, dict):
+                continue
+            _tvl     = _rwa_entry.get("tvl_usd", 0)
+            _c7d     = _rwa_entry.get("tvl_7d_change_pct", 0)
+            _c30d    = _rwa_entry.get("tvl_30d_change_pct", 0)
+            _chains  = _rwa_entry.get("chains", [])
+            _health  = _rwa_entry.get("health", "STABLE")
+            _hcol    = _HEALTH_COLORS.get(_health, "#9ca3af")
+            _hbg     = _HEALTH_BADGES.get(_health, "background:rgba(156,163,175,0.12);color:#9ca3af")
+            _tvl_str = (f"${_tvl/1e9:.2f}B" if _tvl >= 1e9
+                        else f"${_tvl/1e6:.1f}M" if _tvl >= 1e6
+                        else f"${_tvl:,.0f}")
+            _c7_str    = f"{_c7d:+.1f}%"
+            _c30_str   = f"{_c30d:+.1f}%"
+            _c7_color  = "#22c55e" if _c7d >= 0 else "#ef4444"
+            _c30_color = "#22c55e" if _c30d >= 0 else "#ef4444"
+            _chains_str = ", ".join(_chains[:3]) if _chains else "—"
+
+            with _rwa_cols[_col_idx % 2]:
+                st.markdown(
+                    f"<div style='background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.07);"
+                    f"border-left:3px solid {_hcol};border-radius:8px;padding:14px 16px;margin-bottom:10px'>"
+                    f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'>"
+                    f"<span style='font-weight:700;font-size:0.95rem;color:#f1f5f9'>"
+                    f"{_html.escape(_rwa_name.replace('_', ' ').title())}</span>"
+                    f"<span style='font-size:0.78rem;font-weight:600;padding:2px 8px;"
+                    f"border-radius:4px;{_hbg}'>{_health}</span>"
+                    f"</div>"
+                    f"<div style='font-size:1.25rem;font-weight:700;color:#e2e8f0;margin-bottom:6px'>{_tvl_str}</div>"
+                    f"<div style='display:flex;gap:16px;font-size:0.80rem;color:#64748b'>"
+                    f"<span>7d: <span style='color:{_c7_color}'>{_c7_str}</span></span>"
+                    f"<span>30d: <span style='color:{_c30_color}'>{_c30_str}</span></span>"
+                    f"<span>Chains: {_html.escape(_chains_str)}</span>"
+                    f"</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            _col_idx += 1
+
+        st.caption(
+            "Health: GROWING = 30d TVL +5% · DECLINING = 30d TVL -10% · STABLE = in between. "
+            "Source: DeFiLlama protocol API · Cached 15 min."
+        )
+
+    except Exception as _rwa_err:
+        st.caption(f"RWA credit data unavailable: {_rwa_err}")

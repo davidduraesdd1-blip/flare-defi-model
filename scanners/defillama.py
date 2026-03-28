@@ -717,6 +717,93 @@ def fetch_llama_yield_pools(
     return result
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PROTOCOL REVENUE HEALTH  (#57)
+# DeFiLlama fees summary endpoint for 24h/30d fee revenue trends
+# ─────────────────────────────────────────────────────────────────────────────
+
+_REVENUE_TTL = 3600  # 1 hour
+
+_DEFAULT_REVENUE_SLUGS = [
+    "aave-v3", "lido", "uniswap", "compound-v3",
+    "curve-dex", "pendle", "morpho", "aerodrome-v2",
+]
+
+
+def fetch_protocol_revenue(protocol_slugs: list = None) -> dict:
+    """Fetch 24h and 30d fee/revenue data from DeFiLlama for key DeFi protocols.
+
+    Uses DeFiLlama fees summary endpoint:
+      GET https://api.llama.fi/summary/fees/{slug}?dataType=dailyFees
+
+    For each protocol computes:
+      trend = total24h / (total30d / 30)  — ratio vs 30-day daily avg
+      health: GREEN if trend > 0.9, YELLOW if trend > 0.5, RED otherwise
+
+    Returns:
+      {
+        "aave-v3": {"fees_24h": float, "fees_30d": float, "trend": float, "health": str},
+        ...
+        "timestamp": str,
+        "errors": [str],  -- slugs that returned 404 or other errors
+      }
+    """
+    cache_key = "protocol_revenue"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and now - cached.get("_ts", 0) < _REVENUE_TTL:
+            return {k: v for k, v in cached.items() if k != "_ts"}
+
+    slugs = protocol_slugs or _DEFAULT_REVENUE_SLUGS
+    result: dict = {"timestamp": "", "errors": []}
+
+    for slug in slugs:
+        try:
+            data = _get(f"{_DEFILLAMA_API}/summary/fees/{slug}?dataType=dailyFees")
+            if data is None:
+                result["errors"].append(slug)
+                continue
+
+            fees_24h = float(data.get("total24h") or 0)
+            fees_30d = float(data.get("total30d") or 0)
+
+            if fees_30d > 0:
+                daily_avg_30d = fees_30d / 30.0
+                trend = fees_24h / daily_avg_30d if daily_avg_30d > 0 else 0.0
+            else:
+                trend = 0.0
+
+            if trend > 0.9:
+                health = "GREEN"
+            elif trend > 0.5:
+                health = "YELLOW"
+            else:
+                health = "RED"
+
+            result[slug] = {
+                "fees_24h": round(fees_24h, 2),
+                "fees_30d": round(fees_30d, 2),
+                "trend":    round(trend, 4),
+                "health":   health,
+            }
+        except Exception as e:
+            logger.debug("[ProtocolRevenue] %s error: %s", slug, e)
+            result["errors"].append(slug)
+
+    result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    with _cache_lock:
+        _cache[cache_key] = {**result, "_ts": now}
+
+    logger.info(
+        "[ProtocolRevenue] fetched %d protocols, %d errors",
+        len([k for k in result if k not in ("timestamp", "errors")]),
+        len(result["errors"]),
+    )
+    return result
+
+
 def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
     """
     Fetch 7-day TVL change for target chains as a bridge flow proxy.

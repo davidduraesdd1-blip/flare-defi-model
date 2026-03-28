@@ -24,7 +24,8 @@ page_setup("Planning · Flare DeFi")
 _ctx      = render_sidebar()
 _pro_mode = _ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 
-st.markdown("# Planning Tools")
+st.title("📐 Planning Tools")
+st.caption("Model income scenarios, lock fixed rates with Spectra, delegate to FTSO, and plan FAssets allocations")
 st.markdown(
     "<div style='color:#475569; font-size:0.88rem; margin-bottom:24px;'>"
     "Income planner · fixed-rate lock · FTSO delegation · FAssets</div>",
