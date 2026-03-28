@@ -45,6 +45,18 @@ from config import (
 from utils.file_io import atomic_json_write
 
 
+# ─── API Status Helper (#17) ──────────────────────────────────────────────────
+
+@st.cache_data(ttl=300)
+def _get_api_status() -> dict:
+    """Return API connectivity status dict. Cached 5 minutes to avoid startup spam."""
+    try:
+        from macro_feeds import validate_api_connections
+        return validate_api_connections()
+    except Exception:
+        return {}
+
+
 # ─── Live Price Loader (bypasses stale scan data) ─────────────────────────────
 
 @st.cache_data(ttl=120)
@@ -734,6 +746,38 @@ def render_sidebar() -> dict:
                 "⚠️ DEMO MODE — synthetic data only</div>",
                 unsafe_allow_html=True,
             )
+
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+        # ── API Status Dots (#17) ──────────────────────────────────────────────
+        try:
+            _api_status = _get_api_status()
+            _dot_parts = []
+            for _svc, _status in _api_status.items():
+                if _svc.startswith("_"):
+                    continue
+                if _status in ("ok", "configured"):
+                    _dot = "<span style='color:#22c55e;font-size:0.65rem;'>●</span>"
+                elif _status in ("no key", "community (may be blocked)"):
+                    _dot = "<span style='color:#64748b;font-size:0.65rem;'>●</span>"
+                else:
+                    _dot = "<span style='color:#ef4444;font-size:0.65rem;'>●</span>"
+                _dot_parts.append(
+                    f"<span title='{_svc}: {_status}'>{_dot}"
+                    f"<span style='font-size:0.60rem;color:#475569;margin-left:2px;'>{_svc}</span></span>"
+                )
+            if _dot_parts:
+                st.markdown(
+                    "<div style='font-size:0.65rem; color:#334155; line-height:1.6;'>"
+                    "<div style='font-size:0.60rem; text-transform:uppercase; "
+                    "letter-spacing:0.8px; color:#475569; margin-bottom:3px;'>API Status</div>"
+                    "<div style='display:flex; flex-wrap:wrap; gap:6px;'>"
+                    + " ".join(_dot_parts) +
+                    "</div></div>",
+                    unsafe_allow_html=True,
+                )
+        except Exception:
+            pass
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
         st.markdown(

@@ -17,23 +17,63 @@ from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
+
+# ─── Token Bucket Rate Limiter (#11) ─────────────────────────────────────────
+
+class RateLimiter:
+    """Thread-safe token bucket rate limiter for API calls."""
+
+    def __init__(self, calls_per_second: float = 1.0):
+        self._rate = max(calls_per_second, 0.01)
+        self._tokens = self._rate
+        self._last_refill = time.time()
+        self._lock = threading.Lock()
+
+    def acquire(self, timeout: float = 30.0) -> bool:
+        """
+        Block until a token is available.  Returns True on success, False on timeout.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            with self._lock:
+                now = time.time()
+                elapsed = now - self._last_refill
+                self._tokens = min(self._rate, self._tokens + elapsed * self._rate)
+                self._last_refill = now
+                if self._tokens >= 1.0:
+                    self._tokens -= 1.0
+                    return True
+            time.sleep(0.05)
+        return False
+
+
 # ─── Retry-aware shared session (#12) ────────────────────────────────────────
-_retry = Retry(
-    total=3,
-    backoff_factor=1.0,
-    status_forcelist=[429, 500, 502, 503, 504],
-    allowed_methods=["GET", "POST"],
-    raise_on_status=False,
-)
-_adapter = HTTPAdapter(max_retries=_retry)
-_SESSION = requests.Session()
-_SESSION.mount("https://", _adapter)
-_SESSION.mount("http://", _adapter)
-_SESSION.headers.update({
-    "Accept": "application/json",
-    "Accept-Encoding": "gzip, deflate",
-    "User-Agent": "Flare-DeFi-Model/1.0",
-})
+
+def _build_session() -> requests.Session:
+    """Build a requests.Session with retry/backoff and a browser-like User-Agent."""
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    session.headers.update({
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip, deflate",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36"
+        ),
+    })
+    return session
+
+
+_SESSION = _build_session()
 
 # ─── SSRF allowlist (#10) ─────────────────────────────────────────────────────
 _ALLOWED_HOSTS: frozenset = frozenset({
@@ -77,27 +117,13 @@ def is_safe_url(url: str) -> bool:
         return False
 
 
-# ─── Rate Limiter (#11) ───────────────────────────────────────────────────────
-class _RateLimiter:
-    """Thread-safe token bucket rate limiter."""
-    def __init__(self, calls_per_second: float = 2.0):
-        self._interval = 1.0 / max(calls_per_second, 0.01)
-        self._lock     = threading.Lock()
-        self._last     = 0.0
-
-    def acquire(self) -> None:
-        with self._lock:
-            now  = time.time()
-            wait = self._interval - (now - self._last)
-            if wait > 0:
-                time.sleep(wait)
-            self._last = time.time()
-
-
-defillama_limiter  = _RateLimiter(3.0)
-coingecko_limiter  = _RateLimiter(0.5)
-deribit_limiter    = _RateLimiter(5.0)
-default_limiter    = _RateLimiter(2.0)
+# ─── Module-level rate limiter instances ─────────────────────────────────────
+defillama_limiter  = RateLimiter(calls_per_second=1.0)
+coingecko_limiter  = RateLimiter(calls_per_second=0.4)
+deribit_limiter    = RateLimiter(calls_per_second=5.0)
+default_limiter    = RateLimiter(calls_per_second=2.0)
+fred_limiter       = RateLimiter(calls_per_second=2.0)
+coinmetrics_limiter = RateLimiter(calls_per_second=0.5)
 
 
 # ─── HTTP helpers ─────────────────────────────────────────────────────────────
