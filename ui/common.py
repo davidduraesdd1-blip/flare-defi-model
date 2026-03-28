@@ -15,6 +15,10 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
+# OPT-41: module-level TTL cache for get_feedback_dashboard() to avoid re-reading
+# history.json + recomputing accuracy metrics on every sidebar render (~300ms saved).
+_FEEDBACK_CACHE: dict = {"data": None, "expires": 0.0}
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ─── Security Audit Logger (#15) ────────────────────────────────────────────
@@ -561,6 +565,41 @@ _CSS_DARK = """
 """
 
 
+# ─── Scan poll fragment (OPT-43) ─────────────────────────────────────────────
+# Defined at module level so Streamlit can track it across renders.
+# Called from render_sidebar() when _scanning=True.
+# run_every=0.5 auto-reruns only this fragment (not the full page) on each tick,
+# avoiding the old time.sleep(0.5) + full st.rerun() pattern.
+
+@st.fragment(run_every=0.5)
+def _scan_progress_fragment() -> None:
+    """Poll for scan completion every 0.5 s using a Streamlit fragment.
+
+    When the scan finishes: clears the history cache and triggers a full rerun
+    so all pages see fresh data.  When the deadline expires, marks scan as done.
+    """
+    if not st.session_state.get("_scanning"):
+        return  # scan already finished — fragment is a no-op
+    try:
+        with open(HISTORY_FILE, encoding="utf-8") as _ff:
+            _hist_ts = (json.load(_ff).get("latest") or {}).get("completed_at") or ""
+    except Exception:
+        _hist_ts = ""
+    if _hist_ts and _hist_ts != st.session_state.get("_scan_baseline", ""):
+        st.session_state._scanning = False
+        # Targeted clear: only invalidate scan data (OPT-44)
+        try:
+            _load_history_file.clear()
+        except Exception:
+            pass
+        st.rerun()
+    elif time.time() < st.session_state.get("_scan_deadline", 0):
+        st.caption("⏳ Scanning… auto-reloading when done.")
+    else:
+        st.session_state._scanning = False
+        st.caption("Scan timed out — click ↺ Reload.")
+
+
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 def render_sidebar() -> dict:
@@ -574,7 +613,11 @@ def render_sidebar() -> dict:
         st.session_state.last_auto_refresh = _now
     elif _now - st.session_state.last_auto_refresh > 300:
         st.session_state.last_auto_refresh = _now
-        st.cache_data.clear()
+        # OPT-44: targeted cache clear — only invalidate data that ages quickly.
+        # Do NOT clear _build_css (24h TTL), _get_api_status (5-min own TTL),
+        # or load_wallets/load_positions (user data that doesn't change on auto-refresh).
+        _load_history_file.clear()
+        load_live_prices.clear()
         st.rerun()
 
     with st.sidebar:
@@ -645,7 +688,9 @@ def render_sidebar() -> dict:
         with col_r:
             if st.button("↺ Reload", key="sidebar_refresh", use_container_width=True,
                          help="Reload the latest saved scan data from disk"):
-                st.cache_data.clear()
+                # OPT-44: targeted clear — reload scan data and live prices only
+                _load_history_file.clear()
+                load_live_prices.clear()
                 st.rerun()
         with col_s:
             if st.button("▶ Scan", key="sidebar_scan_now", use_container_width=True,
@@ -664,24 +709,12 @@ def render_sidebar() -> dict:
                 except Exception as _e:
                     st.error(f"Could not start scan: {_e}")
 
-        # ─── Scan completion polling ───────────────────────────────────────────
+        # ─── Scan completion polling (OPT-43) ─────────────────────────────────
+        # _scan_progress_fragment is a module-level @st.fragment(run_every=0.5).
+        # Only this fragment section rerenders on each 0.5 s tick — no full-page
+        # st.rerun() and no blocking time.sleep() in the main server thread.
         if st.session_state.get("_scanning"):
-            try:
-                with open(HISTORY_FILE, encoding="utf-8") as _f:
-                    _hist_ts = (json.load(_f).get("latest") or {}).get("completed_at") or ""
-            except Exception:
-                _hist_ts = ""
-            if _hist_ts and _hist_ts != st.session_state.get("_scan_baseline", ""):
-                st.session_state._scanning = False
-                st.cache_data.clear()
-                st.rerun()
-            elif time.time() < st.session_state.get("_scan_deadline", 0):
-                st.caption("⏳ Scanning… auto-reloading when done.")
-                time.sleep(0.5)   # short poll — avoid blocking the server thread for 2s on every rerender
-                st.rerun()
-            else:
-                st.session_state._scanning = False
-                st.caption("Scan timed out — click ↺ Reload.")
+            _scan_progress_fragment()
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -821,9 +854,16 @@ def render_sidebar() -> dict:
         )
 
     # Model weights (outside sidebar context)
+    # OPT-41: use module-level TTL cache to avoid re-reading history.json every render
     try:
         from ai.feedback_loop import get_feedback_dashboard
-        feedback = get_feedback_dashboard()
+        _now_ts = time.time()
+        if _FEEDBACK_CACHE["data"] is not None and _now_ts < _FEEDBACK_CACHE["expires"]:
+            feedback = _FEEDBACK_CACHE["data"]
+        else:
+            feedback = get_feedback_dashboard()
+            _FEEDBACK_CACHE["data"]    = feedback
+            _FEEDBACK_CACHE["expires"] = _now_ts + 300  # 5-minute TTL
         weights  = feedback.get("model_weights", {})
     except Exception:
         feedback = {"overall_health": 50, "per_profile": {}, "trend": "building", "model_weights": {}}

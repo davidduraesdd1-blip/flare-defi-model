@@ -18,6 +18,7 @@ import gc
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -325,6 +326,48 @@ _YIELD_TARGET_PROJECTS = {
 
 _YIELDS_POOLS_TTL = 900  # 15 min — pools update ~every 15 min on DeFiLlama
 
+# OPT-40: Shared raw pool fetch — single HTTP call, module-level TTL cache
+_raw_pools_cache: dict = {"ts": 0, "data": None}
+_raw_pools_lock = threading.Lock()
+
+
+def _fetch_raw_yield_pools() -> list:
+    """
+    Download the full yields.llama.fi/pools payload at most once per 15 minutes.
+
+    OPT-40: Both fetch_yields_pools() and fetch_llama_yield_pools() call this
+    private function so the ~20MB HTTP response is never duplicated within a
+    15-minute window regardless of call order.
+
+    Returns the raw pool list (thousands of dicts).  The caller is responsible
+    for filtering and discarding the list promptly to minimise peak RAM usage.
+    """
+    now = time.time()
+    # Fast path — check cache without acquiring lock first (TOCTOU is harmless here)
+    cached_snap = _raw_pools_cache
+    if cached_snap["data"] is not None and now - cached_snap["ts"] < _YIELDS_POOLS_TTL:
+        return cached_snap["data"]
+
+    with _raw_pools_lock:
+        # Re-check inside lock in case another thread updated while we waited
+        if _raw_pools_cache["data"] is not None and now - _raw_pools_cache["ts"] < _YIELDS_POOLS_TTL:
+            return _raw_pools_cache["data"]
+
+        try:
+            resp = _SESSION.get(f"{_DEFILLAMA_YIELDS}/pools", timeout=20)
+            resp.raise_for_status()
+            payload_data = resp.json().get("data", []) or []
+            del resp  # release raw ~20MB HTTP response immediately (#69)
+        except Exception as e:
+            logger.warning("[Yields] raw pools fetch failed: %s", e)
+            return _raw_pools_cache["data"] or []
+
+        if payload_data:
+            _raw_pools_cache["ts"]   = time.time()
+            _raw_pools_cache["data"] = payload_data
+
+        return payload_data
+
 
 def fetch_yields_pools(
     projects: Optional[set] = None,
@@ -350,17 +393,9 @@ def fetch_yields_pools(
 
     target = projects or _YIELD_TARGET_PROJECTS
 
-    try:
-        resp = _SESSION.get(f"{_DEFILLAMA_YIELDS}/pools", timeout=20)
-        resp.raise_for_status()
-        # Parse JSON and immediately extract only the "data" list.
-        # The full resp object (~20MB) is released as soon as we leave this block.
-        payload_data = resp.json().get("data", []) or []
-        raw_count = len(payload_data)
-        del resp  # release the raw ~20MB HTTP response immediately (#69)
-    except Exception as e:
-        logger.warning("[Yields] pools fetch failed: %s", e)
-        return []
+    # OPT-40: reuse shared raw fetch (avoids duplicate ~20MB download)
+    payload_data = _fetch_raw_yield_pools()
+    raw_count = len(payload_data)
 
     filtered = []
     for p in payload_data:
@@ -390,8 +425,6 @@ def fetch_yields_pools(
         if len(filtered) >= max_results:
             break
 
-    # Discard raw payload list — only the filtered result (~500KB) is cached (#69)
-    del payload_data
     gc.collect()
 
     with _cache_lock:
@@ -677,16 +710,11 @@ def fetch_llama_yield_pools(
         if cached and now - cached.get("_ts", 0) < _YIELDS_POOLS_TTL:
             return cached.get("data", [])
 
-    # Fetch the full ~20MB payload; filter inline and discard raw data immediately (#69).
-    try:
-        resp = _SESSION.get(f"{_DEFILLAMA_YIELDS}/pools", timeout=20)
-        resp.raise_for_status()
-        payload_data = resp.json().get("data", []) or []
-        raw_count = len(payload_data)
-        del resp  # release raw ~20MB HTTP response immediately
-    except Exception as e:
-        logger.warning("[LlamaYieldPools] fetch failed: %s", e)
+    # OPT-40: reuse shared raw fetch — avoids duplicate ~20MB download
+    payload_data = _fetch_raw_yield_pools()
+    if not payload_data:
         return []
+    raw_count = len(payload_data)
 
     filtered = []
     for p in payload_data:
@@ -711,8 +739,7 @@ def fetch_llama_yield_pools(
             "il_risk":  str(p.get("ilRisk") or "no"),
         })
 
-    # Discard raw payload list immediately; only store filtered result (#69)
-    del payload_data
+    # NOTE: payload_data is owned by _fetch_raw_yield_pools() cache — do not del it here
     gc.collect()
 
     # Sort by TVL descending and take top_n
@@ -767,30 +794,18 @@ def fetch_protocol_revenue(protocol_slugs: list = None) -> dict:
     slugs = protocol_slugs or _DEFAULT_REVENUE_SLUGS
     result: dict = {"timestamp": "", "errors": []}
 
-    for slug in slugs:
+    def _fetch_revenue_slug(slug: str) -> tuple:
+        """Fetch revenue for one slug. Returns (slug, entry_dict | None)."""
         try:
             data = _get(f"{_DEFILLAMA_API}/summary/fees/{slug}?dataType=dailyFees")
             if data is None:
-                result["errors"].append(slug)
-                continue
-
+                return slug, None
             fees_24h = float(data.get("total24h") or 0)
             fees_30d = float(data.get("total30d") or 0)
-
-            if fees_30d > 0:
-                daily_avg_30d = fees_30d / 30.0
-                trend = fees_24h / daily_avg_30d if daily_avg_30d > 0 else 0.0
-            else:
-                trend = 0.0
-
-            if trend > 0.9:
-                health = "GREEN"
-            elif trend > 0.5:
-                health = "YELLOW"
-            else:
-                health = "RED"
-
-            result[slug] = {
+            daily_avg_30d = fees_30d / 30.0 if fees_30d > 0 else 0.0
+            trend = fees_24h / daily_avg_30d if daily_avg_30d > 0 else 0.0
+            health = "GREEN" if trend > 0.9 else "YELLOW" if trend > 0.5 else "RED"
+            return slug, {
                 "fees_24h": round(fees_24h, 2),
                 "fees_30d": round(fees_30d, 2),
                 "trend":    round(trend, 4),
@@ -798,7 +813,22 @@ def fetch_protocol_revenue(protocol_slugs: list = None) -> dict:
             }
         except Exception as e:
             logger.debug("[ProtocolRevenue] %s error: %s", slug, e)
-            result["errors"].append(slug)
+            return slug, None
+
+    # OPT-34: Fetch all 8 slugs in parallel
+    with ThreadPoolExecutor(max_workers=min(8, len(slugs))) as ex:
+        future_to_slug = {ex.submit(_fetch_revenue_slug, s): s for s in slugs}
+        for future in as_completed(future_to_slug):
+            try:
+                slug, entry = future.result(timeout=15)
+                if entry is not None:
+                    result[slug] = entry
+                else:
+                    result["errors"].append(slug)
+            except Exception as e:
+                slug = future_to_slug[future]
+                logger.debug("[ProtocolRevenue] %s parallel error: %s", slug, e)
+                result["errors"].append(slug)
 
     result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 

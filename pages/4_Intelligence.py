@@ -17,6 +17,14 @@ from ui.common import (
 from scanners.defillama import fetch_governance_alerts, governance_fetch_failed
 from ai.intent_classifier import classify_defi_intent   # #87
 
+
+# OPT-42: Cache governance alerts — governance data updates at most hourly
+@st.cache_data(ttl=3600)
+def _cached_governance_alerts():
+    """Cached wrapper for fetch_governance_alerts(). TTL=1 hour."""
+    return fetch_governance_alerts()
+
+
 page_setup("Intelligence · Flare DeFi")
 
 ctx       = render_sidebar()
@@ -812,7 +820,7 @@ with st.spinner("Checking active governance proposals…"):
              "url": "https://snapshot.org/#/aerodrome.eth"},
         ]
     else:
-        _gov_proposals = fetch_governance_alerts()
+        _gov_proposals = _cached_governance_alerts()
 
 if _gov_proposals:
     _gov_apy_props   = [p for p in _gov_proposals if p.get("apy_impact")]

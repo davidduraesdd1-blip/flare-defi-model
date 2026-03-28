@@ -4,6 +4,7 @@ Opportunities — Full opportunity tables, starter portfolios, sparklines, optio
 
 import sys
 import html as _html
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -33,6 +34,38 @@ from scanners.defi_protocols import (
     fetch_token_unlock_alerts,          # #84
     fetch_erc4626_yield_data,           # #103
 )
+
+
+# ── OPT-39: module-level @st.cache_data wrappers ──────────────────────────────
+
+@st.cache_data(ttl=900)
+def _cached_yields_pools(**kwargs):
+    """Cached wrapper for fetch_yields_pools(). TTL=15 min."""
+    return fetch_yields_pools(**kwargs)
+
+
+@st.cache_data(ttl=600)
+def _cached_eigenlayer_lrt_yields():
+    """Cached wrapper for fetch_eigenlayer_lrt_yields(). TTL=10 min."""
+    return fetch_eigenlayer_lrt_yields()
+
+
+@st.cache_data(ttl=600)
+def _cached_kamino_yields():
+    """Cached wrapper for fetch_kamino_yields(). TTL=10 min."""
+    return fetch_kamino_yields()
+
+
+@st.cache_data(ttl=600)
+def _cached_meteora_yields():
+    """Cached wrapper for fetch_meteora_yields(). TTL=10 min."""
+    return fetch_meteora_yields()
+
+
+@st.cache_data(ttl=300)
+def _cached_erc4626_yield_data():
+    """Cached wrapper for fetch_erc4626_yield_data(). TTL=5 min."""
+    return fetch_erc4626_yield_data()
 from models.risk_models import (
     compute_pool_sharpe,                # #72
     compute_real_yield_ratio,           # #73
@@ -395,7 +428,7 @@ with st.spinner("Loading yield data from DeFiLlama..."):
              "apy": 38.7, "apyBase": 12.0, "apyReward": 26.7, "tvlUsd": 580_000_000, "audits": 2, "ilRisk": "yes"},
         ]
     else:
-        _mc_pools = fetch_yields_pools(min_tvl_usd=5_000_000, max_results=20)
+        _mc_pools = _cached_yields_pools(min_tvl_usd=5_000_000, max_results=20)
 
 if _mc_pools:
     # Beginner metric tooltips (#59)
@@ -747,7 +780,7 @@ with st.spinner("Loading restaking data…"):
         }
     else:
         try:
-            _lrt_data = fetch_eigenlayer_lrt_yields()
+            _lrt_data = _cached_eigenlayer_lrt_yields()
         except Exception:
             _lrt_data = {}
 
@@ -823,11 +856,11 @@ with st.spinner("Loading Solana DeFi data…"):
         }
     else:
         try:
-            _kamino  = fetch_kamino_yields()
+            _kamino  = _cached_kamino_yields()
         except Exception:
             _kamino  = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
         try:
-            _meteora = fetch_meteora_yields()
+            _meteora = _cached_meteora_yields()
         except Exception:
             _meteora = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
 
@@ -887,13 +920,24 @@ render_section_header(
 
 _alert_slugs = ["kinetic-finance", "clearpool-lending", "morpho", "aave-v3", "eigenlayer"]
 _tvl_alerts  = []
-for _slug in _alert_slugs:
+
+# OPT-38: Fetch all 5 TVL alerts in parallel
+def _fetch_tvl_alert(slug: str) -> dict | None:
     try:
-        _alert = fetch_tvl_change_alert(_slug, threshold_pct=5.0)
-        if _alert.get("current_tvl", 0) > 0:
-            _tvl_alerts.append(_alert)
+        alert = fetch_tvl_change_alert(slug, threshold_pct=5.0)
+        return alert if alert.get("current_tvl", 0) > 0 else None
     except Exception:
-        pass
+        return None
+
+with ThreadPoolExecutor(max_workers=min(5, len(_alert_slugs))) as _tvl_ex:
+    _tvl_futures = {_tvl_ex.submit(_fetch_tvl_alert, s): s for s in _alert_slugs}
+    for _tvl_fut in as_completed(_tvl_futures):
+        try:
+            _result = _tvl_fut.result(timeout=15)
+            if _result is not None:
+                _tvl_alerts.append(_result)
+        except Exception:
+            pass
 
 if _tvl_alerts:
     for _al in _tvl_alerts:
@@ -1298,7 +1342,7 @@ try:
         }
     else:
         with st.spinner("Reading vault prices from Ethereum RPC…"):
-            _erc4626_data = fetch_erc4626_yield_data()
+            _erc4626_data = _cached_erc4626_yield_data()
 
     _vault_cards = [(k, v) for k, v in _erc4626_data.items() if k != "timestamp" and isinstance(v, dict)]
     _vault_cards.sort(key=lambda x: x[1].get("price_per_share", 1.0), reverse=True)
