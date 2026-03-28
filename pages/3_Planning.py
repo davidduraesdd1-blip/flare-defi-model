@@ -742,7 +742,8 @@ else:
     else:
         st.error(_il_res2.get("error", "Calculation error"))
 
-    if "error" not in _il_res2:
+    # Guard: only access _il_res2 when it was actually computed (i.e. _il_valid was True)
+    if _il_valid and "error" not in _il_res2:
         st.caption(
             f"IL formula: 2×√k/(1+k) − 1 where k = 1 + price_change. "
             f"Breakeven APY = {_il_res2.get('breakeven_fee_apy', 0):.1f}% (needed to offset IL over {_il_hold_yrs:.1f}y). "
