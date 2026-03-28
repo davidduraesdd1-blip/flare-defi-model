@@ -567,6 +567,7 @@ def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
     }
     """
     import datetime as _dt
+    fetch_error = False
     try:
         resp = _SESSION.post(
             _SNAPSHOT_URL,
@@ -600,11 +601,24 @@ def fetch_governance_alerts(spaces: Optional[List[str]] = None) -> List[dict]:
     except Exception as e:
         logger.warning("[Governance] Snapshot fetch failed: %s", e)
         proposals = []
+        fetch_error = True
 
     with _cache_lock:
-        _cache[cache_key] = {"data": proposals, "_ts": now}
+        _cache[cache_key] = {"data": proposals, "_fetch_error": fetch_error, "_ts": now}
 
     return proposals
+
+
+def governance_fetch_failed() -> bool:
+    """Return True if the last fetch_governance_alerts() call failed (API error).
+
+    Allows callers to distinguish between 'no active proposals' and 'fetch error'.
+    """
+    with _cache_lock:
+        cached = _cache.get("governance_alerts")
+        if cached is None:
+            return False  # never fetched yet — not an error
+        return bool(cached.get("_fetch_error", False))
 
 
 def fetch_snapshot_proposals(

@@ -14,7 +14,7 @@ from ui.common import (
     page_setup, render_sidebar, load_monitor_digest, render_section_header, _ts_fmt,
     load_latest,
 )
-from scanners.defillama import fetch_governance_alerts
+from scanners.defillama import fetch_governance_alerts, governance_fetch_failed
 from ai.intent_classifier import classify_defi_intent   # #87
 
 page_setup("Intelligence · Flare DeFi")
@@ -870,7 +870,13 @@ if _gov_proposals:
         "Source: Snapshot GraphQL · cached 1 hour."
     )
 else:
-    st.success("✓ No active governance votes affecting APY right now.")
+    # Only show the "all clear" message when the fetch actually succeeded and
+    # returned an empty list.  If the Snapshot API was unreachable we show a
+    # neutral info message instead of a false positive "no votes" confirmation.
+    if _gov_demo or not governance_fetch_failed():
+        st.success("✓ No active governance votes affecting APY right now.")
+    else:
+        st.info("Governance data temporarily unavailable (Snapshot API). Check back later.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 

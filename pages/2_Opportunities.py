@@ -21,6 +21,7 @@ from scanners.defillama import (
     fetch_yields_pools, fetch_protocol_risk_score, fetch_tvl_change_alert,
     fetch_governance_alerts, fetch_bridge_flows,
     fetch_llama_yield_pools,            # #68 global yield pools
+    governance_fetch_failed,
 )
 from scanners.defi_protocols import (
     fetch_ethena_yield,                 # #76
@@ -967,7 +968,12 @@ if _proposals:
         "Source: Snapshot GraphQL · cached 1 hour."
     )
 else:
-    st.success("✓ No active governance votes affecting APY right now.")
+    # Only show the "all clear" message when the fetch succeeded and returned
+    # an empty list.  On API error, show a neutral info message instead.
+    if demo_mode or not governance_fetch_failed():
+        st.success("✓ No active governance votes affecting APY right now.")
+    else:
+        st.info("Governance data temporarily unavailable (Snapshot API). Check back later.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
