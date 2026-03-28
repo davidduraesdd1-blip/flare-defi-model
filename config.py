@@ -487,6 +487,7 @@ COINGECKO_API_KEY: str | None = os.environ.get("DEFI_COINGECKO_API_KEY")
 COINMETRICS_API_KEY: str | None = os.environ.get("DEFI_COINMETRICS_API_KEY")  # coinmetrics.io free community key
 
 FEATURES: dict = {
+    # Legacy keys — kept for backward compatibility
     "ai_analysis":      bool(ANTHROPIC_API_KEY),
     "coingecko_pro":    bool(COINGECKO_API_KEY),
     "coinmetrics":      bool(COINMETRICS_API_KEY),
@@ -496,6 +497,14 @@ FEATURES: dict = {
     "hyperliquid":      True,        # free public API
     "defillama":        True,        # free public API
     "coingecko_free":   True,        # always available
+    # Batch 8 feature flags — auto-enabled by API key presence
+    "anthropic_ai":     bool(ANTHROPIC_API_KEY),
+    "fred":             bool(os.environ.get("FRED_API_KEY", "")),
+    "coinmetrics_pro":  bool(COINMETRICS_API_KEY),
+    "zerion":           bool(os.environ.get("ZERION_API_KEY", "")),
+    "web3":             False,       # updated at runtime after web3 import
+    "demo_mode":        False,       # runtime flag
+    "pro_mode":         False,       # runtime flag
 }
 
 

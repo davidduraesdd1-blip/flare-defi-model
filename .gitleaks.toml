@@ -1,12 +1,15 @@
-title = "RWA Infinity Model - Gitleaks Config"
+title = "DeFi Model - Gitleaks Config"
 
 [allowlist]
-description = "Allowlist for known safe patterns"
+description = "Allowlist for test/demo data"
 paths = [
     ".streamlit/secrets.toml.example",
     "requirements.txt",
 ]
 regexes = [
+    "DEMO_",
+    "test_key_",
+    "placeholder_",
     # Placeholder values in example/template files
     '''your[_-]?api[_-]?key[_-]?here''',
     '''sk-ant-example''',

@@ -1061,8 +1061,9 @@ if _intent_input:
         st.info("No matching opportunities found in current scan. Try running a scan first.")
 
     # Optional: Claude AI classification for ambiguous intents
-    _ai_key = __import__("os").environ.get("ANTHROPIC_API_KEY", "")
-    if _ai_key and _used_default:
+    from config import FEATURES as _FEATURES
+    if _FEATURES.get("anthropic_ai") and _used_default:
+        _ai_key = __import__("os").environ.get("ANTHROPIC_API_KEY", "")
         with st.spinner("Asking Claude to classify intent…"):
             try:
                 import anthropic as _anth
