@@ -26,10 +26,14 @@ from scanners.defi_protocols import (
     fetch_ethena_yield,                 # #76
     fetch_aerodrome_pools,              # #77
     fetch_morpho_vaults,                # #77
+    fetch_eigenlayer_lrt_yields,        # #71
+    fetch_kamino_yields,                # #78
+    fetch_meteora_yields,               # #78
 )
 from models.risk_models import (
     compute_pool_sharpe,                # #72
     compute_real_yield_ratio,           # #73
+    compute_protocol_risk_score,        # #80
 )
 
 page_setup("Opportunities · Flare DeFi")
@@ -408,12 +412,27 @@ if _mc_pools:
         _ry    = min(100, round(_fee / _total * 100)) if _total > 0 else 0
         # Real Yield classification (#73)
         _real_info = compute_real_yield_ratio(total_apy=_total, emission_apy=_rew)
+        # Protocol risk score (#80)
+        _mc_rs = compute_protocol_risk_score(
+            protocol_name=str(p.get("project", "")),
+            tvl_usd=float(p.get("tvlUsd") or 0),
+            chain=str(p.get("chain", "ethereum")),
+        )
+        _rs_val   = _mc_rs["risk_score"]
+        _rs_label = _mc_rs["risk_label"]
+        _rs_color = (
+            "#22c55e" if _rs_val < 25 else
+            "#f59e0b" if _rs_val < 50 else
+            "#f97316" if _rs_val < 75 else
+            "#ef4444"
+        )
         _row = {
             "Protocol":    p.get("project", "—").replace("-", " ").title(),
             "Chain":       p.get("chain", "—"),
             "Pool":        p.get("symbol", "—"),
             "APY %":       f"{_total:.1f}%",
             "TVL":         f"${float(p.get('tvlUsd', 0))/1e6:.0f}M" if p.get("tvlUsd", 0) >= 1e6 else f"${p.get('tvlUsd', 0):,.0f}",
+            "Risk Score":  f"{_rs_val} ({_rs_label})",
         }
         if _pro_mode:
             _row["Base APY"]   = f"{_fee:.1f}%"
@@ -683,6 +702,155 @@ if _pro_mode:
     else:
         st.info("Run a scan to populate yield curve data.")
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Restaking & LRT (#71) ────────────────────────────────────────────────────
+
+render_section_header(
+    "Restaking & LRT",
+    "EigenLayer native restaking and Liquid Restaking Tokens — APY and TVL from DeFiLlama",
+)
+
+with st.spinner("Loading restaking data…"):
+    if demo_mode:
+        _lrt_data = {
+            "eigenlayer_native": {"apy": 4.8, "tvl_usd": 12_500_000_000, "source": "demo"},
+            "etherfi_weETH":     {"apy": 5.6, "tvl_usd":  6_200_000_000, "source": "demo"},
+            "renzo_ezETH":       {"apy": 4.9, "tvl_usd":  1_800_000_000, "source": "demo"},
+            "kelp_rsETH":        {"apy": 4.7, "tvl_usd":    950_000_000, "source": "demo"},
+            "timestamp":         "2026-03-27T00:00:00Z",
+        }
+    else:
+        try:
+            _lrt_data = fetch_eigenlayer_lrt_yields()
+        except Exception:
+            _lrt_data = {}
+
+_LRT_LABELS = {
+    "eigenlayer_native": ("EigenLayer Native", "#8b5cf6"),
+    "etherfi_weETH":     ("ether.fi weETH",    "#3b82f6"),
+    "renzo_ezETH":       ("Renzo ezETH",        "#ec4899"),
+    "kelp_rsETH":        ("Kelp rsETH",         "#14b8a6"),
+}
+
+_lrt_cards = []
+for _key, (_label, _col) in _LRT_LABELS.items():
+    _entry = _lrt_data.get(_key) or {}
+    _apy   = float(_entry.get("apy", 0))
+    _tvl   = float(_entry.get("tvl_usd", 0))
+    _src   = _entry.get("source", "unavailable")
+    if _apy > 0 or _tvl > 0:
+        _lrt_cards.append({"key": _key, "label": _label, "color": _col,
+                            "apy": _apy, "tvl": _tvl, "source": _src})
+
+_lrt_cards.sort(key=lambda x: x["apy"], reverse=True)
+
+if _lrt_cards:
+    _lrt_ncols = min(len(_lrt_cards), 4)
+    _lrt_cols  = st.columns(_lrt_ncols)
+    for _lci, _lc in enumerate(_lrt_cards):
+        with _lrt_cols[_lci % _lrt_ncols]:
+            _tvl_str = (
+                f"${_lc['tvl']/1e9:.2f}B" if _lc["tvl"] >= 1e9
+                else f"${_lc['tvl']/1e6:.0f}M" if _lc["tvl"] >= 1e6
+                else f"${_lc['tvl']:,.0f}"
+            )
+            st.markdown(
+                f"<div style='background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.07);"
+                f"border-left:3px solid {_lc['color']};border-radius:8px;padding:12px 14px;margin-bottom:8px'>"
+                f"<div style='font-weight:700;font-size:0.92rem;color:#e2e8f0;margin-bottom:4px'>{_lc['label']}</div>"
+                f"<div style='font-size:1.25rem;font-weight:700;color:#22c55e'>{_lc['apy']:.2f}% APY</div>"
+                f"<div style='font-size:0.78rem;color:#64748b;margin-top:3px'>TVL: {_tvl_str}</div>"
+                f"<div style='font-size:0.72rem;color:#f59e0b;margin-top:6px;border-top:1px solid rgba(255,255,255,0.05);padding-top:5px'>"
+                f"⚠ Smart contract risk + slashing risk</div>"
+                f"<div style='font-size:0.67rem;color:#334155;margin-top:2px'>Source: {_lc['source']}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+else:
+    st.info("Restaking data unavailable. Check API connectivity.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Solana DeFi — Kamino + Meteora (#78) ─────────────────────────────────────
+
+render_section_header(
+    "Solana DeFi",
+    "Kamino Finance lending vaults and Meteora DLMM pools — top yields on Solana via DeFiLlama",
+)
+
+with st.spinner("Loading Solana DeFi data…"):
+    if demo_mode:
+        _kamino = {
+            "pools": [
+                {"symbol": "USDC", "apy": 18.5, "tvl_usd": 42_000_000, "chain": "Solana", "project": "kamino-lending"},
+                {"symbol": "SOL",  "apy": 12.3, "tvl_usd": 28_000_000, "chain": "Solana", "project": "kamino-lending"},
+            ],
+            "total_tvl": 70_000_000, "timestamp": "2026-03-27T00:00:00Z",
+        }
+        _meteora = {
+            "pools": [
+                {"symbol": "SOL-USDC", "apy": 142.0, "tvl_usd": 8_500_000, "chain": "Solana", "project": "meteora-dlmm"},
+                {"symbol": "JUP-USDC", "apy": 87.4,  "tvl_usd": 3_200_000, "chain": "Solana", "project": "meteora-dlmm"},
+            ],
+            "total_tvl": 11_700_000, "timestamp": "2026-03-27T00:00:00Z",
+        }
+    else:
+        try:
+            _kamino  = fetch_kamino_yields()
+        except Exception:
+            _kamino  = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
+        try:
+            _meteora = fetch_meteora_yields()
+        except Exception:
+            _meteora = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
+
+_sol_col1, _sol_col2 = st.columns(2)
+
+with _sol_col1:
+    st.markdown("**Kamino Finance (Solana)**")
+    _kamino_pools = (_kamino or {}).get("pools") or []
+    if _kamino_pools:
+        _k_rows = []
+        for _kp in _kamino_pools:
+            _k_rows.append({
+                "Symbol":   _kp.get("symbol", "—"),
+                "Protocol": (_kp.get("project") or "").replace("-", " ").title(),
+                "APY %":    f"{float(_kp.get('apy', 0)):.2f}%",
+                "TVL":      (f"${float(_kp.get('tvl_usd', 0))/1e6:.1f}M"
+                             if float(_kp.get('tvl_usd', 0)) >= 1e6
+                             else f"${float(_kp.get('tvl_usd', 0)):,.0f}"),
+                "Chain":    _kp.get("chain", "Solana"),
+            })
+        st.dataframe(pd.DataFrame(_k_rows), use_container_width=True, hide_index=True)
+        _k_tvl = float((_kamino or {}).get("total_tvl") or 0)
+        st.caption(f"Total Kamino TVL scanned: ${_k_tvl/1e6:.1f}M")
+    else:
+        st.info("Kamino data unavailable.")
+
+with _sol_col2:
+    st.markdown("**Meteora DLMM (Solana)**")
+    _meteora_pools = (_meteora or {}).get("pools") or []
+    if _meteora_pools:
+        _m_rows = []
+        for _mp in _meteora_pools:
+            _m_rows.append({
+                "Symbol":   _mp.get("symbol", "—"),
+                "Protocol": (_mp.get("project") or "").replace("-", " ").title(),
+                "APY %":    f"{float(_mp.get('apy', 0)):.2f}%",
+                "TVL":      (f"${float(_mp.get('tvl_usd', 0))/1e6:.1f}M"
+                             if float(_mp.get('tvl_usd', 0)) >= 1e6
+                             else f"${float(_mp.get('tvl_usd', 0)):,.0f}"),
+                "Chain":    _mp.get("chain", "Solana"),
+            })
+        st.dataframe(pd.DataFrame(_m_rows), use_container_width=True, hide_index=True)
+        _m_tvl = float((_meteora or {}).get("total_tvl") or 0)
+        st.caption(f"Total Meteora TVL scanned: ${_m_tvl/1e6:.1f}M · Outliers >10,000% APY excluded.")
+    else:
+        st.info("Meteora data unavailable.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
 # ── TVL Change Alerts (#79) ───────────────────────────────────────────────

@@ -15,6 +15,7 @@ from ui.common import (
     load_latest,
 )
 from scanners.defillama import fetch_governance_alerts
+from ai.intent_classifier import classify_defi_intent   # #87
 
 page_setup("Intelligence · Flare DeFi")
 
@@ -28,6 +29,104 @@ st.markdown(
     "Ecosystem monitor · new protocols · news · AI model accuracy</div>",
     unsafe_allow_html=True,
 )
+
+
+# ─── DeFi Assistant (#87) ─────────────────────────────────────────────────────
+
+render_section_header("DeFi Assistant", "Ask any DeFi question — AI detects your intent and surfaces relevant data")
+
+try:
+    _defi_query = st.text_input(
+        "Ask about DeFi (e.g. 'best place to stake ETH', 'how to LP on Aerodrome', 'compare restaking yields')",
+        key="defi_assistant_query",
+        placeholder="Type your DeFi question here…",
+    )
+
+    if _defi_query and _defi_query.strip():
+        with st.spinner("Classifying intent…"):
+            _intent_result = classify_defi_intent(_defi_query.strip())
+
+        _primary    = _intent_result.get("primary", "OTHER")
+        _secondary  = _intent_result.get("secondary")
+        _conf       = _intent_result.get("confidence", 0.0)
+        _action     = _intent_result.get("suggested_action", "")
+        _src        = _intent_result.get("source", "keyword_fallback")
+        _src_label  = "Claude AI" if _src == "claude_haiku" else "keyword matching"
+
+        _conf_pct   = round(_conf * 100)
+        _intent_col = {
+            "SWAP":             "#3b82f6",
+            "PROVIDE_LIQUIDITY":"#22c55e",
+            "STAKE":            "#8b5cf6",
+            "BORROW":           "#f59e0b",
+            "LEND":             "#14b8a6",
+            "CLAIM_REWARDS":    "#84cc16",
+            "BRIDGE":           "#ec4899",
+            "PORTFOLIO_CHECK":  "#64748b",
+            "YIELD_HUNT":       "#f97316",
+            "RISK_ASSESSMENT":  "#ef4444",
+            "OTHER":            "#475569",
+        }.get(_primary, "#475569")
+
+        _sec_str = f" · secondary: **{_secondary}**" if _secondary else ""
+        st.markdown(
+            f"<div style='background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.07);"
+            f"border-left:3px solid {_intent_col};border-radius:8px;padding:12px 16px;margin:8px 0'>"
+            f"<div style='margin-bottom:6px'>"
+            f"Intent detected: <span style='font-weight:700;color:{_intent_col};font-size:1.05rem'>"
+            f"{_primary}</span> ({_conf_pct}% confidence){_sec_str}"
+            f"<span style='float:right;font-size:0.68rem;color:#334155'>via {_src_label}</span>"
+            f"</div>"
+            f"<div style='color:#c4cbdb;font-size:0.87rem'>{_html.escape(_action)}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Context-relevant data based on intent
+        if _primary in ("STAKE", "YIELD_HUNT", "LEND"):
+            st.markdown(
+                "<div style='color:#475569;font-size:0.80rem;margin:10px 0 4px'>"
+                "Relevant: top yield opportunities — check the Opportunities tab for live APY data.</div>",
+                unsafe_allow_html=True,
+            )
+            try:
+                from scanners.defillama import fetch_yields_pools as _fetch_yp
+                _assist_pools = _fetch_yp(min_tvl_usd=10_000_000, max_results=5)
+                if _assist_pools:
+                    _assist_rows = []
+                    for _ap in _assist_pools[:5]:
+                        _assist_rows.append({
+                            "Protocol": str(_ap.get("project", "—")).replace("-", " ").title(),
+                            "Pool":     _ap.get("symbol", "—"),
+                            "Chain":    _ap.get("chain", "—"),
+                            "APY %":    f"{float(_ap.get('apy') or 0):.2f}%",
+                            "TVL":      (f"${float(_ap.get('tvlUsd',0))/1e6:.0f}M"
+                                         if float(_ap.get('tvlUsd',0)) >= 1e6
+                                         else f"${float(_ap.get('tvlUsd',0)):,.0f}"),
+                        })
+                    st.dataframe(pd.DataFrame(_assist_rows), use_container_width=True, hide_index=True)
+            except Exception:
+                pass
+
+        elif _primary == "PROVIDE_LIQUIDITY":
+            st.info("Head to the **Opportunities** tab — use the Multi-Chain Pools and Solana DeFi sections to compare LP yields.")
+
+        elif _primary in ("BORROW",):
+            st.info("Compare borrow rates in the Multi-Chain Pools section (Opportunities tab). Aave v3 and Morpho are shown there.")
+
+        elif _primary == "PORTFOLIO_CHECK":
+            st.info("Your portfolio is on the **Portfolio** tab (tab 1).")
+
+        elif _primary == "RISK_ASSESSMENT":
+            st.info("Protocol risk scores are shown in the Opportunities tab — look for the 'Risk Score' column in the Multi-Chain Pools table.")
+
+        elif _primary == "BRIDGE":
+            st.info("Use Li.Fi or Stargate for cross-chain transfers. TVL and bridge flow data is in the Opportunities tab (TVL Change Alerts section).")
+
+except Exception as _assist_exc:
+    st.info("DeFi Assistant unavailable. Check logs for details.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
 # ─── What's New ───────────────────────────────────────────────────────────────

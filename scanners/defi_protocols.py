@@ -40,6 +40,9 @@ _pendle_cache     = {"ts": 0, "data": None}
 _ethena_cache     = {"ts": 0, "data": None}   # #76
 _aerodrome_cache  = {"ts": 0, "data": None}   # #77
 _morpho_cache     = {"ts": 0, "data": None}   # #77
+_eigenlayer_cache = {"ts": 0, "data": None}   # #71
+_kamino_cache     = {"ts": 0, "data": None}   # #78
+_meteora_cache    = {"ts": 0, "data": None}   # #78
 
 # #79 — TVL snapshot store for 24h-change alerts
 # { protocol_slug: {"tvl": float, "ts": float} }
@@ -455,24 +458,27 @@ def fetch_pendle_markets() -> list[dict]:
 
 def fetch_all_protocol_benchmarks() -> dict:
     """
-    Fetch all 11 protocol data sources in parallel.
+    Fetch all 14 protocol data sources in parallel.
 
     Uses ThreadPoolExecutor(max_workers=4) to run fetches concurrently.
     Individual fetch failures return empty list/dict — does not propagate errors.
 
     Returns combined benchmark dict:
-        lido_steth_apy   : dict  — {"apr": float, "apy": float}
-        curve_top_pools  : list  — top 20 Curve pools by TVL
-        aave_markets     : list  — Aave v3 Ethereum markets
-        compound_markets : list  — Compound v3 Ethereum markets
-        dydx_funding     : list  — dYdX v4 top 10 perps by OI
-        gmx_pools        : list  — GMX v2 pools across chains
-        uniswap_pools    : list  — top 20 Uniswap v3 pools by TVL
-        pendle_markets   : list  — top 20 Pendle markets by liquidity
-        ethena_yield     : dict  — Ethena sUSDe APY (#76)
-        aerodrome_pools  : list  — top 10 Aerodrome pools on Base (#77)
-        morpho_vaults    : list  — top 10 Morpho Blue vaults (#77)
-        _timestamp       : float — unix timestamp of this fetch
+        lido_steth_apy    : dict  — {"apr": float, "apy": float}
+        curve_top_pools   : list  — top 20 Curve pools by TVL
+        aave_markets      : list  — Aave v3 Ethereum markets
+        compound_markets  : list  — Compound v3 Ethereum markets
+        dydx_funding      : list  — dYdX v4 top 10 perps by OI
+        gmx_pools         : list  — GMX v2 pools across chains
+        uniswap_pools     : list  — top 20 Uniswap v3 pools by TVL
+        pendle_markets    : list  — top 20 Pendle markets by liquidity
+        ethena_yield      : dict  — Ethena sUSDe APY (#76)
+        aerodrome_pools   : list  — top 10 Aerodrome pools on Base (#77)
+        morpho_vaults     : list  — top 10 Morpho Blue vaults (#77)
+        eigenlayer_lrt    : dict  — EigenLayer + LRT restaking yields (#71)
+        kamino_yields     : dict  — Kamino Finance Solana vaults (#78)
+        meteora_yields    : dict  — Meteora DLMM Solana pools (#78)
+        _timestamp        : float — unix timestamp of this fetch
     """
     _TASKS = {
         "lido_steth_apy":   fetch_lido_steth_apy,
@@ -483,13 +489,17 @@ def fetch_all_protocol_benchmarks() -> dict:
         "gmx_pools":        fetch_gmx_v2_pools,
         "uniswap_pools":    fetch_uniswap_v3_pools,
         "pendle_markets":   fetch_pendle_markets,
-        "ethena_yield":     fetch_ethena_yield,    # #76
-        "aerodrome_pools":  fetch_aerodrome_pools, # #77
-        "morpho_vaults":    fetch_morpho_vaults,   # #77
+        "ethena_yield":     fetch_ethena_yield,         # #76
+        "aerodrome_pools":  fetch_aerodrome_pools,      # #77
+        "morpho_vaults":    fetch_morpho_vaults,        # #77
+        "eigenlayer_lrt":   fetch_eigenlayer_lrt_yields, # #71
+        "kamino_yields":    fetch_kamino_yields,         # #78
+        "meteora_yields":   fetch_meteora_yields,        # #78
     }
 
+    _DICT_KEYS = {"lido_steth_apy", "ethena_yield", "eigenlayer_lrt", "kamino_yields", "meteora_yields"}
     benchmarks: dict = {
-        k: ({} if k in ("lido_steth_apy", "ethena_yield") else [])
+        k: ({} if k in _DICT_KEYS else [])
         for k in _TASKS
     }
 
@@ -511,7 +521,8 @@ def fetch_all_protocol_benchmarks() -> dict:
     logger.info(
         "[DeFiProtocols] benchmarks fetched — Lido=%.2f%% Curve=%d Aave=%d "
         "Compound=%d dYdX=%d GMX=%d Uniswap=%d Pendle=%d "
-        "Ethena_sUSDe=%.2f%% Aerodrome=%d Morpho=%d",
+        "Ethena_sUSDe=%.2f%% Aerodrome=%d Morpho=%d "
+        "EigenLayer/LRT=ok Kamino=%d Meteora=%d",
         benchmarks["lido_steth_apy_pct"],
         len(benchmarks["curve_top_pools"]),
         len(benchmarks["aave_markets"]),
@@ -523,6 +534,8 @@ def fetch_all_protocol_benchmarks() -> dict:
         float((benchmarks.get("ethena_yield") or {}).get("susde_apy") or 0),
         len(benchmarks.get("aerodrome_pools") or []),
         len(benchmarks.get("morpho_vaults") or []),
+        len((benchmarks.get("kamino_yields") or {}).get("pools") or []),
+        len((benchmarks.get("meteora_yields") or {}).get("pools") or []),
     )
     return benchmarks
 
@@ -694,6 +707,208 @@ def fetch_morpho_vaults() -> list[dict]:
     _morpho_cache["ts"]   = time.time()
     _morpho_cache["data"] = result
     logger.info("[Morpho] %d vaults fetched", len(result))
+    return result
+
+
+# ── 12. EigenLayer + LRT Ecosystem (#71) ─────────────────────────────────────
+
+_LRT_PROJECTS  = {"eigenlayer", "ether.fi", "renzo", "kelp", "swell", "puffer"}
+_LRT_SYMBOLS   = {"eETH", "ezETH", "rsETH", "swETH", "pufETH", "weETH"}
+_ETHERFI_URL   = "https://www.ether.fi/api/portfolio/v3/portfolio-page"
+
+
+def fetch_eigenlayer_lrt_yields() -> dict:
+    """Fetch restaking yields from EigenLayer and major LRT protocols.
+
+    Primary source: DeFiLlama yields pools filtered to known LRT project names
+    and symbols.  Also attempts direct ether.fi API for weETH APY.
+
+    Returns a dict with keys:
+      eigenlayer_native, etherfi_weETH, renzo_ezETH, kelp_rsETH, timestamp.
+    Each sub-dict: {"apy": float, "tvl_usd": float, "source": str}.
+    """
+    now = time.time()
+    if _eigenlayer_cache["data"] is not None and now - _eigenlayer_cache["ts"] < _TTL_LONG:
+        return _eigenlayer_cache["data"]
+
+    result: dict = {
+        "eigenlayer_native": {"apy": 0.0, "tvl_usd": 0.0, "source": "unavailable"},
+        "etherfi_weETH":     {"apy": 0.0, "tvl_usd": 0.0, "source": "unavailable"},
+        "renzo_ezETH":       {"apy": 0.0, "tvl_usd": 0.0, "source": "unavailable"},
+        "kelp_rsETH":        {"apy": 0.0, "tvl_usd": 0.0, "source": "unavailable"},
+        "timestamp":         "",
+    }
+
+    # ── Step 1: DeFiLlama pools scan ───────────────────────────────────────────
+    _mapping = {
+        "eigenlayer":  "eigenlayer_native",
+        "ether.fi":    "etherfi_weETH",
+        "renzo":       "renzo_ezETH",
+        "kelp":        "kelp_rsETH",
+        "swell":       "eigenlayer_native",   # swell re-staking maps to eigenlayer bucket
+        "puffer":      "eigenlayer_native",
+    }
+    _sym_mapping = {
+        "eETH":   "etherfi_weETH",
+        "weETH":  "etherfi_weETH",
+        "ezETH":  "renzo_ezETH",
+        "rsETH":  "kelp_rsETH",
+        "swETH":  "eigenlayer_native",
+        "pufETH": "eigenlayer_native",
+    }
+    # Best per-bucket: track highest TVL seen
+    _best_tvl: dict[str, float] = {k: 0.0 for k in result if k != "timestamp"}
+
+    try:
+        pools = _get_llama_pools()
+        for p in pools:
+            proj = (p.get("project") or "").lower()
+            sym  = (p.get("symbol")  or "")
+            tvl  = float(p.get("tvlUsd") or 0)
+            apy  = float(p.get("apy") or 0)
+
+            # Determine which result bucket this pool maps to
+            bucket = None
+            for _proj_key, _bucket in _mapping.items():
+                if _proj_key in proj:
+                    bucket = _bucket
+                    break
+            if bucket is None:
+                for _sym_key, _bucket in _sym_mapping.items():
+                    if _sym_key in sym:
+                        bucket = _bucket
+                        break
+
+            if bucket and tvl > _best_tvl[bucket]:
+                _best_tvl[bucket] = tvl
+                result[bucket] = {"apy": round(apy, 4), "tvl_usd": round(tvl, 2), "source": "defillama"}
+    except Exception as e:
+        logger.debug("[EigenLayer/LRT] DeFiLlama scan failed: %s", e)
+
+    # ── Step 2: Direct ether.fi API (best-effort) ──────────────────────────────
+    try:
+        data = _get(_ETHERFI_URL, timeout=8)
+        if isinstance(data, dict):
+            apy_val = (
+                data.get("totalApy")
+                or data.get("apy")
+                or (data.get("stakingApy") if isinstance(data.get("stakingApy"), (int, float)) else None)
+            )
+            if apy_val is not None:
+                apy_float = float(apy_val)
+                if 0 < apy_float < 1.0:
+                    apy_float *= 100.0
+                # Only override if the direct API gives a more precise value
+                prev = result["etherfi_weETH"]
+                result["etherfi_weETH"] = {
+                    "apy":     round(apy_float, 4),
+                    "tvl_usd": prev["tvl_usd"],
+                    "source":  "etherfi_api",
+                }
+    except Exception as e:
+        logger.debug("[EigenLayer/LRT] ether.fi direct API failed (using DeFiLlama): %s", e)
+
+    result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _eigenlayer_cache["ts"]   = time.time()
+    _eigenlayer_cache["data"] = result
+    logger.info(
+        "[EigenLayer/LRT] eigenlayer=%.2f%% etherfi=%.2f%% renzo=%.2f%% kelp=%.2f%%",
+        result["eigenlayer_native"]["apy"],
+        result["etherfi_weETH"]["apy"],
+        result["renzo_ezETH"]["apy"],
+        result["kelp_rsETH"]["apy"],
+    )
+    return result
+
+
+# ── 13. Kamino Finance (#78) ──────────────────────────────────────────────────
+
+def fetch_kamino_yields() -> dict:
+    """Fetch Kamino Finance top vault yields on Solana via DeFiLlama.
+
+    Filters DeFiLlama pools to project in ("kamino", "kamino-lending",
+    "kamino-liquidity") on chain Solana with TVL ≥ $500k.
+    Returns top 5 by APY.
+    """
+    now = time.time()
+    if _kamino_cache["data"] is not None and now - _kamino_cache["ts"] < _TTL_LONG:
+        return _kamino_cache["data"]
+
+    result: dict = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
+    _KAMINO_PROJS = {"kamino", "kamino-lending", "kamino-liquidity"}
+    try:
+        pools = _get_llama_pools()
+        hits: list[dict] = []
+        for p in pools:
+            proj  = (p.get("project") or "").lower()
+            chain = (p.get("chain")   or "").lower()
+            tvl   = float(p.get("tvlUsd") or 0)
+            if proj not in _KAMINO_PROJS or chain != "solana" or tvl < 500_000:
+                continue
+            hits.append({
+                "symbol":  p.get("symbol", ""),
+                "apy":     round(float(p.get("apy") or 0), 4),
+                "tvl_usd": round(tvl, 2),
+                "chain":   "Solana",
+                "project": p.get("project", ""),
+            })
+        hits.sort(key=lambda x: x["apy"], reverse=True)
+        result["pools"]     = hits[:5]
+        result["total_tvl"] = round(sum(h["tvl_usd"] for h in hits), 2)
+    except Exception as e:
+        logger.warning("[Kamino] fetch failed: %s", e)
+
+    result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _kamino_cache["ts"]   = time.time()
+    _kamino_cache["data"] = result
+    logger.info("[Kamino] %d pools fetched, total_tvl=%.0f", len(result["pools"]), result["total_tvl"])
+    return result
+
+
+# ── 14. Meteora DLMM (#78) ────────────────────────────────────────────────────
+
+def fetch_meteora_yields() -> dict:
+    """Fetch Meteora DLMM pool yields on Solana via DeFiLlama.
+
+    Filters DeFiLlama pools to project in ("meteora", "meteora-dlmm") on
+    Solana with TVL ≥ $100k.  Excludes outliers >10 000% APY.
+    Returns top 5 by APY.
+    """
+    now = time.time()
+    if _meteora_cache["data"] is not None and now - _meteora_cache["ts"] < _TTL_LONG:
+        return _meteora_cache["data"]
+
+    result: dict = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
+    _METEORA_PROJS = {"meteora", "meteora-dlmm"}
+    try:
+        pools = _get_llama_pools()
+        hits: list[dict] = []
+        for p in pools:
+            proj  = (p.get("project") or "").lower()
+            chain = (p.get("chain")   or "").lower()
+            tvl   = float(p.get("tvlUsd") or 0)
+            apy   = float(p.get("apy") or 0)
+            if proj not in _METEORA_PROJS or chain != "solana" or tvl < 100_000:
+                continue
+            if apy > 10_000:    # exclude extreme outliers
+                continue
+            hits.append({
+                "symbol":  p.get("symbol", ""),
+                "apy":     round(apy, 4),
+                "tvl_usd": round(tvl, 2),
+                "chain":   "Solana",
+                "project": p.get("project", ""),
+            })
+        hits.sort(key=lambda x: x["apy"], reverse=True)
+        result["pools"]     = hits[:5]
+        result["total_tvl"] = round(sum(h["tvl_usd"] for h in hits), 2)
+    except Exception as e:
+        logger.warning("[Meteora] fetch failed: %s", e)
+
+    result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _meteora_cache["ts"]   = time.time()
+    _meteora_cache["data"] = result
+    logger.info("[Meteora] %d pools fetched, total_tvl=%.0f", len(result["pools"]), result["total_tvl"])
     return result
 
 

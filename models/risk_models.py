@@ -979,3 +979,234 @@ def calc_concentrated_lp_efficiency(
         "label":              label,
         "in_range":           True,
     }
+
+
+# ─── Protocol Risk Scoring (#80) ─────────────────────────────────────────────
+
+_PROTOCOL_AUDITS: dict[str, int] = {
+    "aave":       4,
+    "compound":   3,
+    "uniswap":    3,
+    "curve":      2,
+    "maker":      4,
+    "lido":       3,
+    "pendle":     2,
+    "morpho":     2,
+    "aerodrome":  1,
+    "kamino":     2,
+    "meteora":    1,
+    "eigenlayer": 2,
+    "ether.fi":   1,
+    "renzo":      1,
+}
+
+_PROTOCOL_EXPLOITS: dict[str, bool] = {
+    "curve": True,   # 2023 reentrancy exploit
+    "euler": True,   # 2023 flash loan exploit
+}
+
+
+def compute_protocol_risk_score(
+    protocol_name: str,
+    tvl_usd: float,
+    audit_count: int = 0,
+    exploit_history: bool = False,
+    chain: str = "ethereum",
+    pool_age_days: int = 0,
+) -> dict:
+    """Compute 0-100 risk score for a DeFi protocol (higher = riskier).
+
+    Risk components (sum to 100 base, normalised):
+      1. TVL score      (0-25)
+      2. Audit score    (0-25)
+      3. Exploit history(0-25)
+      4. Chain risk     (0-15)
+      5. Age score      (0-10)
+
+    Auto-looks up audit_count and exploit_history from known-protocol
+    databases if not overridden by the caller.
+
+    Returns:
+        {
+            "risk_score":  int,            # 0-100
+            "risk_label":  "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+            "components":  {"tvl": int, "audit": int, "exploit": int, "chain": int, "age": int},
+        }
+    """
+    name_lower = (protocol_name or "").lower()
+
+    # Auto-lookup from known databases if defaults were passed
+    if audit_count == 0:
+        for key, val in _PROTOCOL_AUDITS.items():
+            if key in name_lower:
+                audit_count = val
+                break
+    if not exploit_history:
+        for key, val in _PROTOCOL_EXPLOITS.items():
+            if key in name_lower and val:
+                exploit_history = True
+                break
+
+    # ── 1. TVL score (0–25) ───────────────────────────────────────────────────
+    tvl = max(0.0, float(tvl_usd or 0))
+    if tvl >= 1_000_000_000:
+        tvl_score = 0
+    elif tvl >= 100_000_000:
+        tvl_score = 5
+    elif tvl >= 10_000_000:
+        tvl_score = 12
+    else:
+        tvl_score = 25
+
+    # ── 2. Audit score (0–25) ─────────────────────────────────────────────────
+    if audit_count >= 2:
+        audit_score = 0
+    elif audit_count == 1:
+        audit_score = 10
+    else:
+        audit_score = 25
+
+    # ── 3. Exploit history (0–25) ─────────────────────────────────────────────
+    exploit_score = 25 if exploit_history else 0
+
+    # ── 4. Chain risk (0–15) ──────────────────────────────────────────────────
+    chain_lower = (chain or "").lower()
+    if "ethereum" in chain_lower:
+        chain_score = 0
+    elif any(c in chain_lower for c in ("arbitrum", "optimism", "base")):
+        chain_score = 3
+    elif "solana" in chain_lower:
+        chain_score = 5
+    elif "bsc" in chain_lower or "binance" in chain_lower:
+        chain_score = 8
+    else:
+        chain_score = 15
+
+    # ── 5. Age score (0–10) ───────────────────────────────────────────────────
+    age_days = max(0, int(pool_age_days or 0))
+    if age_days >= 730:    # >2 years
+        age_score = 0
+    elif age_days >= 365:  # 1-2 years
+        age_score = 3
+    elif age_days >= 180:  # 6-12 months
+        age_score = 6
+    else:
+        age_score = 10
+
+    risk_score = tvl_score + audit_score + exploit_score + chain_score + age_score
+    risk_score = max(0, min(100, risk_score))
+
+    if risk_score < 25:
+        risk_label = "LOW"
+    elif risk_score < 50:
+        risk_label = "MEDIUM"
+    elif risk_score < 75:
+        risk_label = "HIGH"
+    else:
+        risk_label = "CRITICAL"
+
+    return {
+        "risk_score": risk_score,
+        "risk_label": risk_label,
+        "components": {
+            "tvl":     tvl_score,
+            "audit":   audit_score,
+            "exploit": exploit_score,
+            "chain":   chain_score,
+            "age":     age_score,
+        },
+    }
+
+
+# ─── Concentrated LP Optimizer Metrics (#83) ─────────────────────────────────
+
+def compute_concentrated_lp_metrics(
+    current_price: float,
+    lower_tick_price: float,
+    upper_tick_price: float,
+    fee_apy: float,
+    holding_period_days: int = 30,
+) -> dict:
+    """Compute Uniswap v3 concentrated LP efficiency metrics.
+
+    Parameters
+    ----------
+    current_price      : current asset price
+    lower_tick_price   : lower bound of the LP range
+    upper_tick_price   : upper bound of the LP range
+    fee_apy            : pool fee APY in percent (e.g. 45.0 for 45%)
+    holding_period_days: how many days the position is held
+
+    Returns a dict with:
+        range_width_pct, capital_efficiency, il_if_hits_upper,
+        il_if_hits_lower, fee_income_pct, in_range_probability_pct,
+        estimated_net_return_pct, recommendation.
+    """
+    try:
+        cp  = max(float(current_price),       1e-12)
+        lo  = max(float(lower_tick_price),    1e-12)
+        hi  = max(float(upper_tick_price),    1e-12)
+        if hi <= lo:
+            return {"error": "upper price must be greater than lower price"}
+        if cp <= 0:
+            return {"error": "current price must be positive"}
+
+        fee  = max(0.0, float(fee_apy))
+        days = max(1,   int(holding_period_days))
+
+        # Range width as % of current price
+        range_width_pct = round((hi - lo) / cp * 100, 2)
+
+        # Capital efficiency multiplier: sqrt(upper/lower) / (sqrt(upper/lower) - 1)
+        sqrt_ratio = math.sqrt(hi / lo)
+        capital_efficiency = round(sqrt_ratio / max(sqrt_ratio - 1, 1e-12), 2)
+
+        # IL at boundaries using standard IL formula
+        # il = 2*sqrt(k) / (1+k) - 1   where k = boundary/current_price
+        def _il(k: float) -> float:
+            return round(2 * math.sqrt(k) / (1 + k) - 1, 6)
+
+        il_upper = _il(hi / cp)
+        il_lower = _il(lo / cp)
+
+        # Fee income estimate
+        fee_income_pct = round(fee / 365 * days * capital_efficiency, 4)
+
+        # In-range probability: simple estimate capped at 100%
+        daily_vol_proxy = cp * 0.02     # 2% daily vol assumption
+        sigma_over_period = daily_vol_proxy * math.sqrt(days)
+        half_range = (hi - lo) / 2
+        in_range_raw = min(1.0, half_range / max(sigma_over_period, 1e-12))
+        in_range_probability_pct = round(in_range_raw * 100, 1)
+
+        # IL at midpoint of range
+        mid = (hi + lo) / 2
+        il_mid = _il(mid / cp)
+
+        # Net return estimate
+        estimated_net_return_pct = round(
+            fee_income_pct + il_mid * (1 - in_range_raw) * 100, 4
+        )
+
+        # Recommendation
+        if range_width_pct < 5:
+            recommendation = "Very tight range: maximum capital efficiency but high rebalancing risk"
+        elif range_width_pct < 15:
+            recommendation = "Tight range: high fees but frequent rebalancing expected"
+        elif range_width_pct < 40:
+            recommendation = "Moderate range: balanced efficiency vs rebalancing cost"
+        else:
+            recommendation = "Wide range: low rebalancing risk but reduced capital efficiency"
+
+        return {
+            "range_width_pct":           range_width_pct,
+            "capital_efficiency":        capital_efficiency,
+            "il_if_hits_upper":          il_upper,
+            "il_if_hits_lower":          il_lower,
+            "fee_income_pct":            fee_income_pct,
+            "in_range_probability_pct":  in_range_probability_pct,
+            "estimated_net_return_pct":  estimated_net_return_pct,
+            "recommendation":            recommendation,
+        }
+    except Exception as e:
+        return {"error": str(e)}

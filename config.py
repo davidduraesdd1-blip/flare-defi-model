@@ -530,4 +530,6 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "ethena.fi",                    # Ethena sUSDe yield (#76)
     "hub.snapshot.org",             # Snapshot governance GraphQL (#74)
     "www.deribit.com",              # Deribit options chain (macro_feeds.py)
+    "www.ether.fi",                 # ether.fi direct APY API (#71)
+    "app.renzoprotocol.com",        # Renzo protocol points API (#71)
 })
