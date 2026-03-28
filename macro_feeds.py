@@ -13,17 +13,10 @@ import datetime as _dt
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-import requests
-
 logger = logging.getLogger(__name__)
 
-_SESSION = requests.Session()
-_SESSION.headers.update({
-    "Accept-Encoding": "gzip, deflate",
-    "Connection":      "keep-alive",
-    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept":          "application/json",
-})
+# Use the shared retry-aware session and rate limiters from utils.http (#11 / #12)
+from utils.http import _SESSION, fred_limiter as _FRED_LIMITER, coinmetrics_limiter as _COINMETRICS_LIMITER, defillama_limiter as _DEFILLAMA_LIMITER, coingecko_limiter as _COINGECKO_LIMITER
 
 _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()
@@ -71,6 +64,7 @@ _FRED_FALLBACKS = {
 def _fetch_single_fred(key: str, series_id: str) -> tuple[str, float | None]:
     """Fetch a single FRED series CSV and return (key, latest_value)."""
     url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+    _FRED_LIMITER.acquire()
     try:
         resp = _SESSION.get(url, timeout=10)
         if resp.status_code == 200:
@@ -288,6 +282,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         params_extra = {}
 
     try:
+        _COINMETRICS_LIMITER.acquire()
         resp = _SESSION.get(
             base_url,
             params={
@@ -393,6 +388,8 @@ def fetch_deribit_options_chain(currency: str = "BTC") -> dict:
     """
     def _fetch():
         try:
+            from utils.http import deribit_limiter as _DERIBIT_LIMITER
+            _DERIBIT_LIMITER.acquire()
             resp = _SESSION.get(
                 "https://www.deribit.com/api/v2/public/get_book_summary_by_currency",
                 params={"currency": currency, "kind": "option"},
@@ -613,3 +610,58 @@ def fetch_all_macro_data() -> dict[str, Any]:
             **_YF_FALLBACKS,
         }
     return cached
+
+
+# ── API Key Validation (#17) ───────────────────────────────────────────────────
+
+def validate_api_connections() -> dict:
+    """
+    Quick connectivity test for all configured API endpoints.
+    Returns a dict mapping service name → status string:
+      "ok"          — connected successfully
+      "configured"  — API key is set (no live check for key-only services)
+      "error"       — connection failed
+      "no key"      — API key not configured
+      "community (may be blocked)" — community endpoint, no auth key
+    """
+    import os as _os
+    results: dict = {}
+
+    # DeFiLlama (free, no key)
+    try:
+        r = _SESSION.get("https://api.llama.fi/protocols", timeout=5)
+        results["defillama"] = "ok" if r.status_code == 200 else f"HTTP {r.status_code}"
+    except Exception:
+        results["defillama"] = "error"
+
+    # CoinGecko (free tier)
+    try:
+        r = _SESSION.get("https://api.coingecko.com/api/v3/ping", timeout=5)
+        results["coingecko"] = "ok" if r.status_code == 200 else f"HTTP {r.status_code}"
+    except Exception:
+        results["coingecko"] = "error"
+
+    # FRED (no key for public CSV endpoint)
+    try:
+        r = _SESSION.get(
+            "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10",
+            timeout=5,
+        )
+        results["fred"] = "ok" if r.status_code == 200 else f"HTTP {r.status_code}"
+    except Exception:
+        results["fred"] = "error"
+
+    # CoinMetrics
+    coinmetrics_key = _os.environ.get("DEFI_COINMETRICS_API_KEY", "").strip()
+    results["coinmetrics"] = "configured" if coinmetrics_key else "community (may be blocked)"
+
+    # Anthropic
+    anthropic_key = _os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    results["anthropic"] = "configured" if anthropic_key else "no key"
+
+    # CoinGecko Pro
+    coingecko_pro_key = _os.environ.get("DEFI_COINGECKO_API_KEY", "").strip()
+    results["coingecko_pro"] = "configured" if coingecko_pro_key else "no key"
+
+    results["_timestamp"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
+    return results

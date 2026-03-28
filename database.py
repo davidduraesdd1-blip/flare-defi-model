@@ -426,6 +426,29 @@ def get_ai_feedback(profile: str = None, days: int = 90) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+# ─── DB Integrity Check (#14) ─────────────────────────────────────────────────
+
+def check_db_integrity(db_path: str = None) -> bool:
+    """
+    Run PRAGMA quick_check on the app database.
+    Returns True if the database passes the check, False otherwise.
+    Called at startup via st.cache_resource in app.py.
+    """
+    if db_path is None:
+        db_path = str(DB_FILE)
+    try:
+        conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10)
+        result = conn.execute("PRAGMA quick_check").fetchone()
+        conn.close()
+        ok = result is not None and result[0] == "ok"
+        if not ok:
+            logger.warning("[DB] Integrity check failed: %s", result)
+        return ok
+    except Exception as e:
+        logger.warning("[DB] Integrity check failed: %s", e)
+        return False
+
+
 # ─── Auto-init ────────────────────────────────────────────────────────────────
 # Schema is initialised lazily on the first DB operation via _get_conn_and_init()
 # (upgrade #31). This prevents blocking app startup if the DB file is locked or

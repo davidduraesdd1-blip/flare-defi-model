@@ -36,7 +36,27 @@ from ui.common import (
 )
 import streamlit as st
 
+
+# ─── DB Integrity Check at Startup (#14) ──────────────────────────────────────
+@st.cache_resource
+def _startup_db_check() -> bool:
+    """Run DB integrity check once per process startup."""
+    try:
+        from database import check_db_integrity
+        return check_db_integrity()
+    except Exception:
+        return True   # don't block startup on import error
+
+
 page_setup("Dashboard · Flare DeFi")
+
+_db_ok = _startup_db_check()
+if not _db_ok:
+    st.warning(
+        "Database integrity check failed — the SQLite file may be corrupted. "
+        "Delete data/defi_model.db and restart to rebuild.",
+        icon="⚠️",
+    )
 
 # ── Global DeFi CSS (#59 UI/UX Refresh) ──────────────────────────────────────
 DEFI_CSS = """

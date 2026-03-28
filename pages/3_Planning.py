@@ -24,6 +24,22 @@ page_setup("Planning · Flare DeFi")
 _ctx      = render_sidebar()
 _pro_mode = _ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 
+
+# ─── Input Validation Helpers (#13) ──────────────────────────────────────────
+
+def _validate_positive(value: float, name: str) -> tuple[bool, str]:
+    """Return (True, '') if value > 0, else (False, error message)."""
+    if value <= 0:
+        return False, f"{name} must be positive"
+    return True, ""
+
+
+def _validate_range(value: float, min_v: float, max_v: float, name: str) -> tuple[bool, str]:
+    """Return (True, '') if min_v <= value <= max_v, else (False, error message)."""
+    if not (min_v <= value <= max_v):
+        return False, f"{name} must be between {min_v} and {max_v}"
+    return True, ""
+
 st.title("📐 Planning Tools")
 st.caption("Model income scenarios, lock fixed rates with Spectra, delegate to FTSO, and plan FAssets allocations")
 st.markdown(
@@ -638,84 +654,102 @@ with _il_c2:
         value=1.0, step=0.25, format="%.2f", key="il_hold_yrs",
     )
 
-# Use compute_il_vs_hodl for the new formula-based approach (#75)
-_price_ratio_change = _il_price_chg / 100.0
-_fees_earned_usd    = _il_invest * (_il_pool_apy / 100.0) * _il_hold_yrs
+# ── Input validation (#13) ───────────────────────────────────────────────────
+_il_valid = True
+_ok, _msg = _validate_positive(_il_invest, "Initial LP value")
+if not _ok:
+    st.error(_msg)
+    _il_valid = False
+# Price change must be > -100% (ratio > -1.0) to avoid division-by-zero in IL formula
+if _il_price_chg / 100.0 <= -1.0:
+    st.error("Price change cannot be -100% or less (pool would be fully drained)")
+    _il_valid = False
+_ok3, _msg3 = _validate_range(_il_pool_apy, 0.0, 10_000.0, "Pool APY")
+if not _ok3:
+    st.error(_msg3)
+    _il_valid = False
 
-_il_res2 = compute_il_vs_hodl(
-    price_ratio_change=_price_ratio_change,
-    initial_value=_il_invest,
-    fees_earned=_fees_earned_usd,
-    holding_period_years=_il_hold_yrs,
-)
+if not _il_valid:
+    st.caption("Fix the input errors above to see the IL calculation.")
+else:
+    # Use compute_il_vs_hodl for the new formula-based approach (#75)
+    _price_ratio_change = _il_price_chg / 100.0
+    _fees_earned_usd    = _il_invest * (_il_pool_apy / 100.0) * _il_hold_yrs
 
-if "error" not in _il_res2:
-    _il_m1, _il_m2, _il_m3, _il_m4 = st.columns(4)
-    _il_m1.metric("LP Position Value",    f"${_il_res2['lp_value']:,.2f}")
-    _il_m2.metric("HODL Value",           f"${_il_res2['hodl_value']:,.2f}")
-    _il_m3.metric("Impermanent Loss",     f"${_il_res2['il_usd']:,.2f}",
-                  delta=f"{_il_res2['il_pct']:.2f}%",
-                  delta_color="inverse")
-    _il_m4.metric("Net vs HODL (w/ fees)", f"${_il_res2['net_vs_hodl_usd']:,.2f}",
-                  delta=f"{_il_res2['net_vs_hodl_usd']:+.2f}$",
-                  delta_color="normal")
+    _il_res2 = compute_il_vs_hodl(
+        price_ratio_change=_price_ratio_change,
+        initial_value=_il_invest,
+        fees_earned=_fees_earned_usd,
+        holding_period_years=_il_hold_yrs,
+    )
 
-    # APY coverage check
-    _bkeven = _il_res2["breakeven_fee_apy"]
-    _il_abs_pct = abs(_il_res2["il_pct"])
-    if _il_res2["fees_cover_il"]:
-        st.success(
-            f"Pool APY ({_il_pool_apy:.1f}%) covers IL ({_il_abs_pct:.2f}%). "
-            f"LP beats HODL by ${_il_res2['net_vs_hodl_usd']:+.2f} after {_il_hold_yrs:.2f}y."
+    if "error" not in _il_res2:
+        _il_m1, _il_m2, _il_m3, _il_m4 = st.columns(4)
+        _il_m1.metric("LP Position Value",    f"${_il_res2['lp_value']:,.2f}")
+        _il_m2.metric("HODL Value",           f"${_il_res2['hodl_value']:,.2f}")
+        _il_m3.metric("Impermanent Loss",     f"${_il_res2['il_usd']:,.2f}",
+                      delta=f"{_il_res2['il_pct']:.2f}%",
+                      delta_color="inverse")
+        _il_m4.metric("Net vs HODL (w/ fees)", f"${_il_res2['net_vs_hodl_usd']:,.2f}",
+                      delta=f"{_il_res2['net_vs_hodl_usd']:+.2f}$",
+                      delta_color="normal")
+
+        # APY coverage check
+        _bkeven = _il_res2["breakeven_fee_apy"]
+        _il_abs_pct = abs(_il_res2["il_pct"])
+        if _il_res2["fees_cover_il"]:
+            st.success(
+                f"Pool APY ({_il_pool_apy:.1f}%) covers IL ({_il_abs_pct:.2f}%). "
+                f"LP beats HODL by ${_il_res2['net_vs_hodl_usd']:+.2f} after {_il_hold_yrs:.2f}y."
+            )
+        else:
+            _gap = _bkeven - _il_pool_apy
+            st.warning(
+                f"Pool APY ({_il_pool_apy:.1f}%) does NOT cover IL ({_il_abs_pct:.2f}%). "
+                f"You need at least {_bkeven:.1f}% APY to break even (gap: {_gap:.1f}%)."
+            )
+
+        # Also show the traditional calc using price ratios
+        with st.expander("Advanced: entry/current price ratio method"):
+            _il2c1, _il2c2 = st.columns(2)
+            with _il2c1:
+                _il_entry  = st.number_input("Entry price ratio (token1/token0)", min_value=0.0001,
+                                              value=1.0, step=0.01, format="%.4f", key="il_entry")
+                _il_current = st.number_input("Current price ratio", min_value=0.0001,
+                                               value=1.2, step=0.01, format="%.4f", key="il_current")
+            with _il2c2:
+                _il_invest_adv = st.number_input("Initial LP value ($) [advanced]", min_value=1.0,
+                                                   value=1000.0, step=100.0, format="%.0f", key="il_invest_adv")
+                _il_fees_adv   = st.number_input("Fees earned ($) [advanced]", min_value=0.0,
+                                                   value=0.0, step=10.0, format="%.2f", key="il_fees_adv")
+            _il_res_adv = calc_il_vs_hodl(
+                entry_price_ratio=_il_entry,
+                current_price_ratio=_il_current,
+                initial_usd=_il_invest_adv,
+                fee_income_usd=_il_fees_adv,
+            )
+            if "error" not in _il_res_adv:
+                _adv_cols = st.columns(4)
+                _adv_cols[0].metric("LP Value", f"${_il_res_adv['lp_value_usd']:,.2f}")
+                _adv_cols[1].metric("HODL Value", f"${_il_res_adv['hodl_value_usd']:,.2f}")
+                _adv_cols[2].metric("IL $", f"${_il_res_adv['il_usd']:,.2f}")
+                _adv_cols[3].metric("Net vs HODL", f"${_il_res_adv['net_vs_hodl_usd']:,.2f}")
+                if _il_res_adv["fees_offset_il"]:
+                    st.success(f"Fees (${_il_fees_adv:.2f}) offset IL.")
+                else:
+                    st.warning(f"Need ${abs(_il_res_adv['il_usd']) - _il_fees_adv:.2f} more in fees.")
+                st.caption(f"Price ratio changed {_il_res_adv['price_ratio_change']:+.1f}% since entry.")
+    else:
+        st.error(_il_res2.get("error", "Calculation error"))
+
+    if "error" not in _il_res2:
+        st.caption(
+            f"IL formula: 2×√k/(1+k) − 1 where k = 1 + price_change. "
+            f"Breakeven APY = {_il_res2.get('breakeven_fee_apy', 0):.1f}% (needed to offset IL over {_il_hold_yrs:.1f}y). "
+            "Not financial advice."
         )
     else:
-        _gap = _bkeven - _il_pool_apy
-        st.warning(
-            f"Pool APY ({_il_pool_apy:.1f}%) does NOT cover IL ({_il_abs_pct:.2f}%). "
-            f"You need at least {_bkeven:.1f}% APY to break even (gap: {_gap:.1f}%)."
-        )
-
-    # Also show the traditional calc using price ratios
-    with st.expander("Advanced: entry/current price ratio method"):
-        _il2c1, _il2c2 = st.columns(2)
-        with _il2c1:
-            _il_entry  = st.number_input("Entry price ratio (token1/token0)", min_value=0.0001,
-                                          value=1.0, step=0.01, format="%.4f", key="il_entry")
-            _il_current = st.number_input("Current price ratio", min_value=0.0001,
-                                           value=1.2, step=0.01, format="%.4f", key="il_current")
-        with _il2c2:
-            _il_invest_adv = st.number_input("Initial LP value ($) [advanced]", min_value=1.0,
-                                               value=1000.0, step=100.0, format="%.0f", key="il_invest_adv")
-            _il_fees_adv   = st.number_input("Fees earned ($) [advanced]", min_value=0.0,
-                                               value=0.0, step=10.0, format="%.2f", key="il_fees_adv")
-        _il_res_adv = calc_il_vs_hodl(
-            entry_price_ratio=_il_entry,
-            current_price_ratio=_il_current,
-            initial_usd=_il_invest_adv,
-            fee_income_usd=_il_fees_adv,
-        )
-        if "error" not in _il_res_adv:
-            _adv_cols = st.columns(4)
-            _adv_cols[0].metric("LP Value", f"${_il_res_adv['lp_value_usd']:,.2f}")
-            _adv_cols[1].metric("HODL Value", f"${_il_res_adv['hodl_value_usd']:,.2f}")
-            _adv_cols[2].metric("IL $", f"${_il_res_adv['il_usd']:,.2f}")
-            _adv_cols[3].metric("Net vs HODL", f"${_il_res_adv['net_vs_hodl_usd']:,.2f}")
-            if _il_res_adv["fees_offset_il"]:
-                st.success(f"Fees (${_il_fees_adv:.2f}) offset IL.")
-            else:
-                st.warning(f"Need ${abs(_il_res_adv['il_usd']) - _il_fees_adv:.2f} more in fees.")
-            st.caption(f"Price ratio changed {_il_res_adv['price_ratio_change']:+.1f}% since entry.")
-else:
-    st.error(_il_res2.get("error", "Calculation error"))
-
-if "error" not in _il_res2:
-    st.caption(
-        f"IL formula: 2×√k/(1+k) − 1 where k = 1 + price_change. "
-        f"Breakeven APY = {_il_res2.get('breakeven_fee_apy', 0):.1f}% (needed to offset IL over {_il_hold_yrs:.1f}y). "
-        "Not financial advice."
-    )
-else:
-    st.caption("IL formula: 2×√k/(1+k) − 1 where k = 1 + price_change. Not financial advice.")
+        st.caption("IL formula: 2×√k/(1+k) − 1 where k = 1 + price_change. Not financial advice.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -739,12 +773,25 @@ with _clp_c2:
     _clp_vol   = st.number_input("Daily volatility % (estimate)", min_value=0.01,
                                   value=3.0, step=0.5, format="%.1f", key="clp_vol")
 
-_clp_res = calc_concentrated_lp_efficiency(
+# ── Input validation (#13): lower bound must be < upper bound ─────────────────
+_clp_valid = True
+if _clp_lower >= _clp_upper:
+    st.error(
+        f"Range lower bound (${_clp_lower:.4f}) must be less than "
+        f"upper bound (${_clp_upper:.4f})"
+    )
+    _clp_valid = False
+_ok_p, _msg_p = _validate_positive(_clp_price, "Current token price")
+if not _ok_p:
+    st.error(_msg_p)
+    _clp_valid = False
+
+_clp_res = {} if not _clp_valid else calc_concentrated_lp_efficiency(
     price=_clp_price, lower_tick_price=_clp_lower,
     upper_tick_price=_clp_upper, volatility_pct_daily=_clp_vol,
 )
 
-if "error" not in _clp_res:
+if _clp_valid and "error" not in _clp_res and _clp_res:
     _clp_cols = st.columns(4)
     _clp_cols[0].metric("In-Range Probability (7d)", f"{_clp_res['in_range_pct']:.0f}%")
     _clp_cols[1].metric("Capital Efficiency", f"{_clp_res['capital_efficiency_x']:.1f}×")
@@ -755,7 +802,7 @@ if "error" not in _clp_res:
                 f"At {_clp_vol}% daily vol, expect to rebalance approx every {_clp_res['est_days_in_range']:.0f} days.")
     else:
         st.error("⚠️ Current price is outside your specified range — position earns no fees.")
-elif "error" in _clp_res:
+elif _clp_valid and "error" in _clp_res:
     st.warning(_clp_res["error"])
 
 
@@ -824,6 +871,21 @@ _opt_upper = st.number_input(
     value=float(st.session_state.get("opt83_upper_val", _opt_upper_default)),
     step=_opt_price * 0.01, format="%.4f", key="opt83_upper",
 )
+
+# ── Input validation (#13) ────────────────────────────────────────────────────
+_opt_input_ok = True
+if _opt_lower >= _opt_upper:
+    st.error(
+        f"Range lower bound (${_opt_lower:.4f}) must be less than "
+        f"upper bound (${_opt_upper:.4f})"
+    )
+    _opt_input_ok = False
+elif not (0 <= _opt_fee <= 1000):
+    st.error("Pool fee APY must be between 0 and 1000%")
+    _opt_input_ok = False
+
+if not _opt_input_ok:
+    st.stop()
 
 try:
     _opt_res = compute_concentrated_lp_metrics(

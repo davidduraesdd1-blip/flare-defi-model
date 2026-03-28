@@ -20,16 +20,10 @@ import threading
 import time
 from typing import Dict, List, Optional
 
-import requests
-
 logger = logging.getLogger(__name__)
 
-_SESSION = requests.Session()
-_SESSION.headers.update({
-    "Accept": "application/json",
-    "Accept-Encoding": "gzip, deflate",
-    "User-Agent": "FlareDeFiModel/1.0",
-})
+# Use the shared retry-aware session and rate limiter from utils.http (#11 / #12)
+from utils.http import _SESSION, defillama_limiter
 
 _DEFILLAMA_API    = "https://api.llama.fi"
 _DEFILLAMA_YIELDS = "https://yields.llama.fi"
@@ -56,7 +50,8 @@ _CHAIN_TVL_TTL    = 1800   # 30 minutes
 
 
 def _get(url: str, timeout: int = _REQUEST_TIMEOUT) -> Optional[dict]:
-    """Simple GET with error handling."""
+    """Rate-limited GET with error handling (#11)."""
+    defillama_limiter.acquire()
     try:
         resp = _SESSION.get(url, timeout=timeout)
         if resp.status_code == 200:

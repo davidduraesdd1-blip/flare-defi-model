@@ -23,6 +23,14 @@ from ui.common import (
     compute_position_pnl, render_opportunity_card, render_section_header,
     _ts_fmt, load_live_prices, risk_score_to_grade, render_ftso_il_calculator,
 )
+
+
+def _sanitize_address(addr: str) -> str:
+    """Sanitize a user-supplied Ethereum address (#13)."""
+    import re
+    # Allow only hex chars and 0x prefix; strip everything else
+    cleaned = re.sub(r"[^0-9a-fA-Fx]", "", addr)
+    return cleaned[:42]  # Ethereum address max length
 from config import PROTOCOLS, TOKENS, INCENTIVE_PROGRAM, RISK_PROFILES, FALLBACK_PRICES
 
 page_setup("Portfolio · Flare DeFi")
@@ -333,10 +341,11 @@ with st.expander("Connect a wallet (read-only)"):
         new_label = st.text_input("Label",   placeholder="Main Wallet",  label_visibility="collapsed", key="new_wallet_label")
     with cb:
         if st.button("Add", key="add_wallet_btn", use_container_width=True):
-            if new_addr and len(new_addr) == 42 and new_addr.startswith("0x"):
+            _clean_addr = _sanitize_address(new_addr.strip()) if new_addr else ""
+            if _clean_addr and len(_clean_addr) == 42 and _clean_addr.startswith("0x"):
                 try:
                     from web3 import Web3
-                    checksum_addr = Web3.to_checksum_address(new_addr)
+                    checksum_addr = Web3.to_checksum_address(_clean_addr)
                     label = new_label.strip() or f"{checksum_addr[:6]}…{checksum_addr[-4:]}"
                     saved_wallets.append({"label": label, "address": checksum_addr})
                     save_wallets(saved_wallets)
