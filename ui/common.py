@@ -782,7 +782,7 @@ def render_sidebar() -> dict:
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
         # ── Per-User API Keys (#18) ────────────────────────────────────────────
-        with st.sidebar.expander("🔑 API Keys (Session Only)", expanded=False):
+        with st.expander("🔑 API Keys (Session Only)", expanded=False):
             st.caption("Keys stored in session only — cleared on page refresh.")
             _user_cg = st.text_input("CoinGecko Pro Key", type="password", key="defi_user_cg_key")
             _user_cm = st.text_input("CoinMetrics Key", type="password", key="defi_user_cm_key")
