@@ -15,19 +15,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from typing import Any
 
-import requests
-
 logger = logging.getLogger(__name__)
+
+# Use shared retry-aware session from utils.http (#12 — defi_protocols.py migrated in Batch 6 post-audit)
+from utils.http import _SESSION, default_limiter as _DEFAULT_LIMITER
 
 _TTL_SHORT = 300   # 5 minutes
 _TTL_LONG  = 900   # 15 minutes
-
-_SESSION = requests.Session()
-_SESSION.headers.update({
-    "Accept": "application/json",
-    "Accept-Encoding": "gzip, deflate",
-    "User-Agent": "DeFiYieldModel/1.0",
-})
 
 # ── Module-level TTL caches ────────────────────────────────────────────────────
 _curve_cache      = {"ts": 0, "data": None}

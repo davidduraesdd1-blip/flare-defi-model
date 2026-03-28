@@ -26,11 +26,21 @@ from ui.common import (
 
 
 def _sanitize_address(addr: str) -> str:
-    """Sanitize a user-supplied Ethereum address (#13)."""
+    """Sanitize a user-supplied Ethereum address (#13).
+
+    Strips all non-hex characters, then re-attaches the 0x prefix so that
+    an 'x' mid-string (e.g. '0xABCxDEF...') cannot survive and produce an
+    address that passes the length check but contains an invalid character.
+    """
     import re
-    # Allow only hex chars and 0x prefix; strip everything else
-    cleaned = re.sub(r"[^0-9a-fA-Fx]", "", addr)
-    return cleaned[:42]  # Ethereum address max length
+    stripped = addr.strip()
+    # Detect and remove 0x prefix before hex-only filtering
+    has_prefix = stripped.lower().startswith("0x")
+    hex_part = stripped[2:] if has_prefix else stripped
+    # Keep only valid hex characters (no 'x' allowed here)
+    hex_cleaned = re.sub(r"[^0-9a-fA-F]", "", hex_part)
+    # Re-attach prefix and truncate to 42 chars (0x + 40 hex = 42)
+    return ("0x" + hex_cleaned)[:42]
 from config import PROTOCOLS, TOKENS, INCENTIVE_PROGRAM, RISK_PROFILES, FALLBACK_PRICES
 
 page_setup("Portfolio · Flare DeFi")
