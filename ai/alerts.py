@@ -10,7 +10,6 @@ import re
 import smtplib
 import ssl
 import logging
-import requests
 from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -127,7 +126,7 @@ def send_telegram_alert(message: str, config: dict) -> bool:
         return False
     try:
         url = f"https://api.telegram.org/bot{cfg['bot_token']}/sendMessage"
-        r = requests.post(
+        r = _SESSION.post(
             url,
             json={"chat_id": cfg["chat_id"], "text": message, "parse_mode": "HTML"},
             timeout=10,
@@ -157,7 +156,7 @@ def send_discord_alert(message: str, config: dict) -> bool:
     try:
         # Discord embeds markdown-ish formatting; wrap in a code block for readability
         payload = {"content": f"```\n{message[:1990]}\n```"}
-        r = requests.post(url, json=payload, timeout=10)
+        r = _SESSION.post(url, json=payload, timeout=10)
         if r.status_code in (200, 204):
             logger.info("Discord alert sent.")
             return True
@@ -198,7 +197,7 @@ def send_webhook_alert(subject: str, message: str, config: dict) -> bool:
             headers["X-Flare-Signature"] = sig
         else:
             body = json.dumps(payload, separators=(",", ":")).encode()
-        r = requests.post(url, data=body, headers=headers, timeout=10)
+        r = _SESSION.post(url, data=body, headers=headers, timeout=10)
         if r.ok:
             logger.info("Webhook alert sent.")
             return True
