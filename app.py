@@ -239,11 +239,32 @@ else:
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 render_section_header("FXRP Ecosystem", "FAssets live metrics · March 2026")
 _fxrp_cols = st.columns(4)
+
+# Wire live values where available; fall back to known estimates.
+_fxrp_circ_raw = (
+    latest.get("fasset", {}).get("assets", {}).get("FXRP", {}).get("circulating") or 0
+)
+if _fxrp_circ_raw >= 1_000_000:
+    _fxrp_minted_str = f"{_fxrp_circ_raw / 1_000_000:.1f}M+"
+elif _fxrp_circ_raw >= 1_000:
+    _fxrp_minted_str = f"{_fxrp_circ_raw / 1_000:.0f}K+"
+elif _fxrp_circ_raw > 0:
+    _fxrp_minted_str = f"{int(_fxrp_circ_raw):,}+"
+else:
+    _fxrp_minted_str = "~12.5M"   # baseline estimate when scan not yet run
+
+try:
+    from config import PROTOCOLS as _PROTOS
+    _live_protocol_count = len([p for p in _PROTOS.values() if p.get("live", True)])
+    _active_protocols_str = f"{_live_protocol_count}+"
+except Exception:
+    _active_protocols_str = "13+"
+
 _fxrp_stats = [
-    ("FXRP Minted",        "132M+",    "Total FXRP in circulation across all chains"),
-    ("In Active DeFi",     "~89%",     "Share of FXRP deployed in DeFi protocols"),
-    ("FAssets Incentives", "2.2B FLR", "Total rFLR distributing over 12 months"),
-    ("Active Protocols",   "13+",      "Flare DeFi protocols tracked by this model"),
+    ("FXRP Minted",        _fxrp_minted_str,     "Total FXRP in circulation (live from scan)"),
+    ("In Active DeFi",     "~89%",                "Share of FXRP deployed in DeFi protocols"),
+    ("FAssets Incentives", "2.2B FLR",            "Total rFLR distributing over 12 months"),
+    ("Active Protocols",   _active_protocols_str, "Flare DeFi protocols tracked by this model"),
 ]
 for col, (label, value, tip) in zip(_fxrp_cols, _fxrp_stats):
     with col:
