@@ -1283,8 +1283,112 @@ _ERC4626_VAULTS: dict[str, dict] = {
     },
 }
 
-_erc4626_cache = {"ts": 0, "data": None}
-_TTL_ERC4626   = 300   # 5 minutes
+_erc4626_cache     = {"ts": 0, "data": None}
+_multicall_cache   = {"ts": 0, "data": None}
+_TTL_ERC4626       = 300   # 5 minutes
+
+# ── Multicall3 (#109) ─────────────────────────────────────────────────────────
+_MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11"
+
+_MULTICALL3_ABI = [
+    {
+        "inputs": [
+            {
+                "components": [
+                    {"name": "target",       "type": "address"},
+                    {"name": "allowFailure", "type": "bool"},
+                    {"name": "callData",     "type": "bytes"},
+                ],
+                "name": "calls",
+                "type": "tuple[]",
+            }
+        ],
+        "name": "aggregate3",
+        "outputs": [
+            {
+                "components": [
+                    {"name": "success",    "type": "bool"},
+                    {"name": "returnData", "type": "bytes"},
+                ],
+                "name": "returnData",
+                "type": "tuple[]",
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function",
+    }
+]
+
+_TOTAL_ASSETS_ABI = [
+    {
+        "inputs": [],
+        "name": "totalAssets",
+        "outputs": [{"type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function",
+    }
+]
+
+
+def fetch_multicall_erc4626(vault_addresses: list) -> dict:
+    """Batch-read totalAssets from multiple ERC-4626 vaults via Multicall3.
+
+    Returns:
+        {"0xVault1": {"total_assets_usd": float, "success": bool}, ...}
+        or {} if web3 is unavailable or multicall fails.
+    """
+    if not _WEB3_AVAIL or not _W3 or not _Web3:
+        return {}
+
+    now = time.time()
+    if _multicall_cache["data"] is not None and now - _multicall_cache["ts"] < _TTL_ERC4626:
+        cached = _multicall_cache["data"]
+        # Return only entries for the requested addresses
+        return {k: v for k, v in cached.items() if k in vault_addresses}
+
+    try:
+        mc_addr = _Web3.to_checksum_address(_MULTICALL3_ADDRESS)
+        multicall = _W3.eth.contract(address=mc_addr, abi=_MULTICALL3_ABI)
+
+        # Build a temporary contract just for ABI encoding
+        _dummy_addr = _Web3.to_checksum_address("0x0000000000000000000000000000000000000001")
+        _ta_contract = _W3.eth.contract(address=_dummy_addr, abi=_TOTAL_ASSETS_ABI)
+        totalAssets_calldata = _ta_contract.encodeABI(fn_name="totalAssets")
+
+        calls = []
+        checksum_addrs = []
+        for addr in vault_addresses:
+            try:
+                cs = _Web3.to_checksum_address(addr)
+                calls.append((cs, True, totalAssets_calldata))
+                checksum_addrs.append(cs)
+            except Exception as e:
+                logger.debug("[Multicall3] Invalid address %s: %s", addr, e)
+
+        if not calls:
+            return {}
+
+        raw_results = multicall.functions.aggregate3(calls).call()
+
+        output: dict = {}
+        for cs_addr, (success, return_data) in zip(checksum_addrs, raw_results):
+            if success and return_data and len(return_data) >= 32:
+                try:
+                    total_assets_raw = int.from_bytes(return_data[:32], "big")
+                    output[cs_addr] = {"total_assets_usd": float(total_assets_raw), "success": True}
+                except Exception:
+                    output[cs_addr] = {"total_assets_usd": 0.0, "success": False}
+            else:
+                output[cs_addr] = {"total_assets_usd": 0.0, "success": False}
+
+        _multicall_cache["ts"]   = time.time()
+        _multicall_cache["data"] = output
+        logger.info("[Multicall3] Batch-read %d ERC-4626 vaults", len(output))
+        return output
+
+    except Exception as e:
+        logger.warning("[Multicall3] aggregate3 failed: %s", e)
+        return {}
 
 
 def fetch_erc4626_yield_data() -> dict:
@@ -1312,13 +1416,53 @@ def fetch_erc4626_yield_data() -> dict:
 
     _web3_succeeded = False  # track whether any vault read actually succeeded
     if _WEB3_AVAIL and _W3 and _Web3:
+        # ── Try Multicall3 batch first (#109) ────────────────────────────────
+        _vault_addrs = [cfg["address"] for cfg in _ERC4626_VAULTS.values() if cfg.get("address")]
+        _multicall_results = fetch_multicall_erc4626(_vault_addrs)
+        _multicall_succeeded = bool(_multicall_results)
+
         for vault_name, cfg in _ERC4626_VAULTS.items():
             addr = cfg.get("address", "")
             if not addr:
                 continue
-            dec  = cfg.get("decimals", 18)
+            dec = cfg.get("decimals", 18)
+
+            # Use multicall totalAssets result if available, skip individual call
             try:
-                cs_addr  = _Web3.to_checksum_address(addr)
+                cs_addr = _Web3.to_checksum_address(addr)
+            except Exception:
+                cs_addr = addr
+
+            if _multicall_succeeded and cs_addr in _multicall_results:
+                mc_entry = _multicall_results[cs_addr]
+                if mc_entry["success"]:
+                    # Still need pricePerShare individually (not in Multicall3 batch)
+                    # totalAssets comes from multicall, pps from individual call
+                    total_assets = mc_entry["total_assets_usd"] / (10 ** dec)
+                    pps_raw = None
+                    try:
+                        contract = _W3.eth.contract(address=cs_addr, abi=_ERC4626_ABI)
+                        try:
+                            pps_raw = contract.functions.pricePerShare().call()
+                        except Exception:
+                            pass
+                        if pps_raw is None:
+                            pps_raw = contract.functions.convertToAssets(10 ** dec).call()
+                    except Exception:
+                        pps_raw = 10 ** dec
+                    pps = (pps_raw or 10 ** dec) / (10 ** dec)
+                    result[vault_name] = {
+                        "price_per_share": round(pps, 8),
+                        "total_assets_usd": round(total_assets, 2),
+                        "yield_source": cfg.get("yield_source", "vault_read"),
+                        "data_source": "vault_read",
+                    }
+                    _web3_succeeded = True
+                    logger.debug("[ERC4626/MC] %s pps=%.6f totalAssets=%.0f", vault_name, pps, total_assets)
+                    continue  # skip individual fallback for this vault
+
+            # ── Individual call fallback (when multicall failed/skipped) ─────
+            try:
                 contract = _W3.eth.contract(address=cs_addr, abi=_ERC4626_ABI)
 
                 # Try pricePerShare first, then convertToAssets(10**dec)

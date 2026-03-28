@@ -47,6 +47,14 @@ from ui.common import (
 )
 import streamlit as st
 
+# ── Feature Flags (#21) ───────────────────────────────────────────────────────
+try:
+    from web3 import Web3  # noqa: F401
+    from config import FEATURES
+    FEATURES["web3"] = True
+except ImportError:
+    pass
+
 
 # ─── DB Integrity Check at Startup (#14) ──────────────────────────────────────
 @st.cache_resource
