@@ -7,6 +7,7 @@ Falls back to baseline research data when live APIs are unavailable.
 import re
 import time
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
@@ -135,24 +136,34 @@ _KTOKEN_ABI = [
 ]
 
 _w3_cache: Optional[Web3] = None
+_w3_cache_lock: threading.Lock = threading.Lock()
 
 def _get_web3() -> Optional[Web3]:
-    """Return a connected Web3 instance, trying each RPC URL in order. Result is cached."""
+    """Return a connected Web3 instance, trying each RPC URL in order. Result is cached.
+
+    Thread-safe: uses double-checked locking so only one thread attempts RPC connection
+    at a time, preventing duplicate connections when the scheduler runs parallel tasks.
+    """
     if not _WEB3_AVAILABLE:
         return None
     global _w3_cache
+    # Fast path — already initialised (no lock needed for read-only check)
     if _w3_cache is not None and _w3_cache.is_connected():
         return _w3_cache
-    for url in FLARE_RPC_URLS:
-        try:
-            w3 = Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": 8}))
-            if w3.is_connected():
-                _w3_cache = w3
-                return w3
-        except Exception:
-            continue
-    _w3_cache = None
-    return None
+    with _w3_cache_lock:
+        # Re-check inside lock in case another thread initialised while we waited
+        if _w3_cache is not None and _w3_cache.is_connected():
+            return _w3_cache
+        for url in FLARE_RPC_URLS:
+            try:
+                w3 = Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": 8}))
+                if w3.is_connected():
+                    _w3_cache = w3
+                    return w3
+            except Exception:
+                continue
+        _w3_cache = None
+        return None
 
 def _rate_to_apy(rate_per_block: int) -> float:
     """Convert Compound-style rate-per-block (1e18 mantissa) to annualised APY %."""
