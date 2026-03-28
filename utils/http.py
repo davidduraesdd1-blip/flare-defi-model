@@ -101,6 +101,7 @@ _ALLOWED_HOSTS: frozenset = frozenset({
     "api-v2.pendle.finance",      # Pendle pools (defi_protocols.py)
     "fred.stlouisfed.org",        # FRED CSV download (macro_feeds.py)
     "discord.com",                # Discord webhook alerts (ai/alerts.py)
+    "api.telegram.org",           # Telegram bot API (ai/alerts.py)
     "ethena.fi",                  # Ethena sUSDe yield (#76)
     "www.ether.fi",               # ether.fi direct APY API (#71)
     "app.renzoprotocol.com",      # Renzo protocol points API (#71)

@@ -105,6 +105,32 @@ with tab_webhook:
         "Secret stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
         unsafe_allow_html=True,
     )
+    # Batch 9: Quick direct-URL webhook test (Discord / Telegram / generic)
+    st.markdown("---")
+    st.markdown(
+        "<div style='color:#475569; font-size:0.82rem; margin-bottom:6px;'>"
+        "<b>Quick URL Test</b> — paste a Discord/Telegram/generic webhook URL below to send a test message directly. "
+        "Uses the DEFI_WEBHOOK_URL env var if left blank.</div>",
+        unsafe_allow_html=True,
+    )
+    _quick_url = st.text_input(
+        "Webhook URL for quick test",
+        placeholder="https://discord.com/api/webhooks/… or leave blank for env var",
+        key="batch9_quick_webhook_url",
+    )
+    if st.button("Send Quick Test", key="batch9_quick_webhook_btn"):
+        try:
+            from ai.alerts import send_url_webhook_alert
+            _ok = send_url_webhook_alert(
+                f"DeFi Model — Quick webhook test sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.",
+                webhook_url=_quick_url or None,
+            )
+            if _ok:
+                st.success("Quick test message sent!")
+            else:
+                st.error("Quick test failed — check URL and DEFI_WEBHOOK_URL env var.")
+        except Exception as _qe:
+            st.error(f"Quick test error: {_qe}")
 
 with tab_thresh:
     st.markdown(
