@@ -48,15 +48,15 @@ DEMO_MACRO = {
 
 DEMO_TOKEN_UNLOCKS = [
     {
-        "token": "JUP", "date": "2026-01-31", "amount_pct": 25.0,
+        "token": "JUP", "date": "2026-04-06", "amount_pct": 25.0,
         "type": "Team/Investors", "days_until": 10, "severity": "CRITICAL", "is_cliff": False,
     },
     {
-        "token": "PYTH", "date": "2025-05-20", "amount_pct": 8.0,
+        "token": "PYTH", "date": "2026-05-20", "amount_pct": 8.0,
         "type": "Early Contributors", "days_until": 54, "severity": "WARNING", "is_cliff": False,
     },
     {
-        "token": "OP", "date": "2025-05-31", "amount_pct": 5.0,
+        "token": "OP", "date": "2026-05-31", "amount_pct": 5.0,
         "type": "Core Contributors", "days_until": 65, "severity": "WARNING", "is_cliff": False,
     },
 ]

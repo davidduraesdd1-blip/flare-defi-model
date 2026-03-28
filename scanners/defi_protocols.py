@@ -461,20 +461,28 @@ _TOKEN_UNLOCK_SCHEDULE = {
     "ARB": [
         {"date": "2024-03-16", "amount_pct": 11.62, "type": "Investor/Team", "cliff": False},
         {"date": "2025-03-16", "amount_pct": 8.1,   "type": "Investor/Team", "cliff": False},
+        {"date": "2026-09-16", "amount_pct": 6.5,   "type": "Investor/Team", "cliff": False},
     ],
     "OP": [
         {"date": "2025-05-31", "amount_pct": 5.0, "type": "Core Contributors", "cliff": False},
+        {"date": "2026-05-31", "amount_pct": 5.0, "type": "Core Contributors", "cliff": False},
     ],
     "PENDLE": [
         {"date": "2025-06-30", "amount_pct": 3.5, "type": "Team", "cliff": False},
+        {"date": "2026-06-30", "amount_pct": 3.5, "type": "Team", "cliff": False},
     ],
     "WIF": [],  # Community token, no scheduled unlocks
     "JUP": [
         {"date": "2025-01-31", "amount_pct": 25.0, "type": "Team/Investors", "cliff": True},
         {"date": "2026-01-31", "amount_pct": 25.0, "type": "Team/Investors", "cliff": False},
+        {"date": "2027-01-31", "amount_pct": 25.0, "type": "Team/Investors", "cliff": False},
     ],
     "PYTH": [
         {"date": "2025-05-20", "amount_pct": 8.0, "type": "Early Contributors", "cliff": False},
+        {"date": "2026-05-20", "amount_pct": 8.0, "type": "Early Contributors", "cliff": False},
+    ],
+    "EIGEN": [
+        {"date": "2026-09-30", "amount_pct": 5.0, "type": "Investor", "cliff": False},
     ],
 }
 
