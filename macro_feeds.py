@@ -24,6 +24,20 @@ _TTL_1H  = 3600
 _TTL_30M = 1800
 
 
+def _get_runtime_key(key_name: str, default: str = "") -> str:
+    """
+    Return a per-user API key injected via the sidebar session-state expander (#18).
+    Falls back to ``default`` (typically an env-var value) when not set.
+    Safe to call outside a Streamlit context — returns ``default`` on any error.
+    """
+    try:
+        import streamlit as st
+        val = st.session_state.get(f"defi_runtime_{key_name}", "")
+        return val if val else default
+    except Exception:
+        return default
+
+
 def _cached_get(key: str, ttl: int, fetch_fn):
     with _CACHE_LOCK:
         hit = _CACHE.get(key)

@@ -16,6 +16,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
 
+from utils.http import _SESSION
+
 logger = logging.getLogger(__name__)
 
 from config import RISK_PROFILE_NAMES
@@ -204,6 +206,42 @@ def send_webhook_alert(subject: str, message: str, config: dict) -> bool:
         return False
     except Exception as e:
         logger.warning(f"Webhook alert failed: {e}")
+        return False
+
+
+def send_url_webhook_alert(message: str, webhook_url: str = None) -> bool:
+    """
+    Send an alert to a Discord or Telegram webhook URL directly (#18 / Batch 9).
+    ``webhook_url`` falls back to the DEFI_WEBHOOK_URL env var.
+    Returns True on success.
+    """
+    if not webhook_url:
+        webhook_url = os.environ.get("DEFI_WEBHOOK_URL", "")
+    if not webhook_url:
+        return False
+    if not webhook_url.startswith("https://"):
+        logger.warning("send_url_webhook_alert: URL must use HTTPS — skipping")
+        return False
+
+    try:
+        from utils.http import is_safe_url
+        if not is_safe_url(webhook_url):
+            logger.warning("send_url_webhook_alert: URL not in SSRF allowlist — skipping")
+            return False
+
+        # Detect Discord vs Telegram by URL pattern
+        if "discord.com/api/webhooks" in webhook_url:
+            payload = {"content": message, "username": "DeFi Model"}
+        elif "api.telegram.org" in webhook_url:
+            chat_id = os.environ.get("DEFI_TELEGRAM_CHAT_ID", "")
+            payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
+        else:
+            payload = {"text": message}
+
+        r = _SESSION.post(webhook_url, json=payload, timeout=5)
+        return r.status_code in (200, 204)
+    except Exception as e:
+        logger.warning("URL webhook alert failed: %s", e)
         return False
 
 

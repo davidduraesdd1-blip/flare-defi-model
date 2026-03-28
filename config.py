@@ -485,6 +485,8 @@ DEFI_SENTRY_DSN: str = os.environ.get("DEFI_SENTRY_DSN", "")
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")
 COINGECKO_API_KEY: str | None = os.environ.get("DEFI_COINGECKO_API_KEY")
 COINMETRICS_API_KEY: str | None = os.environ.get("DEFI_COINMETRICS_API_KEY")  # coinmetrics.io free community key
+DEFI_WEBHOOK_URL: str = os.environ.get("DEFI_WEBHOOK_URL", "")       # Discord / Telegram / generic webhook
+DEFI_TELEGRAM_CHAT_ID: str = os.environ.get("DEFI_TELEGRAM_CHAT_ID", "")  # Telegram chat ID for webhook delivery
 
 FEATURES: dict = {
     # Legacy keys — kept for backward compatibility
@@ -544,4 +546,6 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "app.renzoprotocol.com",        # Renzo protocol points API (#71)
     "bridges.llama.fi",             # DeFiLlama bridge flows API (#85)
     "api.zerion.io",                # Zerion wallet portfolio API (#111)
+    "api.telegram.org",             # Telegram bot API — webhook alert delivery (#18)
+    "discord.com",                  # Discord webhook alerts (#18)
 })
