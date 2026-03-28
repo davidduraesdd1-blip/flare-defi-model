@@ -105,6 +105,7 @@ _ALLOWED_HOSTS: frozenset = frozenset({
     "www.ether.fi",               # ether.fi direct APY API (#71)
     "app.renzoprotocol.com",      # Renzo protocol points API (#71)
     "bridges.llama.fi",           # DeFiLlama bridge flows API (#85)
+    "api.zerion.io",              # Zerion wallet portfolio API (#111)
 })
 
 

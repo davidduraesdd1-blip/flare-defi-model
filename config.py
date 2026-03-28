@@ -481,6 +481,7 @@ INITIAL_POSITIONS = [
 # ─────────────────────────────────────────────────────────────────────────────
 
 SENTRY_DSN: str | None = os.environ.get("DEFI_SENTRY_DSN")
+DEFI_SENTRY_DSN: str = os.environ.get("DEFI_SENTRY_DSN", "")
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")
 COINGECKO_API_KEY: str | None = os.environ.get("DEFI_COINGECKO_API_KEY")
 COINMETRICS_API_KEY: str | None = os.environ.get("DEFI_COINMETRICS_API_KEY")  # coinmetrics.io free community key
@@ -533,4 +534,5 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "www.ether.fi",                 # ether.fi direct APY API (#71)
     "app.renzoprotocol.com",        # Renzo protocol points API (#71)
     "bridges.llama.fi",             # DeFiLlama bridge flows API (#85)
+    "api.zerion.io",                # Zerion wallet portfolio API (#111)
 })
