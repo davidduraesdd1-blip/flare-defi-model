@@ -24,9 +24,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-import requests
-
 from utils.file_io import atomic_json_write
+from utils.http import _SESSION
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +90,7 @@ def fetch_defillama_protocols() -> dict:
     """
     result = {"new_protocols": [], "known_tvl": {}, "error": None}
     try:
-        resp = requests.get(f"{_DEFILLAMA_API}/protocols", timeout=25)
+        resp = _SESSION.get(f"{_DEFILLAMA_API}/protocols", timeout=25)
         resp.raise_for_status()
         protocols = resp.json()
     except Exception as e:
@@ -153,7 +152,7 @@ def fetch_coingecko_flare_tokens() -> dict:
     """
     result = {"new_tokens": [], "error": None}
     try:
-        resp = requests.get(
+        resp = _SESSION.get(
             f"{_COINGECKO_API}/coins/list",
             params={"include_platform": "true"},
             timeout=35,
