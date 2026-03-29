@@ -51,7 +51,7 @@ def black_scholes(
     """
     if T <= 0 or S <= 0 or K <= 0:
         return (0.0, 0.0, 0.0, 0.0, 0.0)
-    if sigma <= 0:
+    if sigma <= 0 or not np.isfinite(sigma):
         # Zero vol: price equals intrinsic value, no time value
         intrinsic = max(0.0, S - K) if option_type == "call" else max(0.0, K - S)
         delta = (1.0 if S > K else 0.0) if option_type == "call" else (-1.0 if S < K else 0.0)
@@ -145,7 +145,7 @@ def covered_call_analysis(spot: float, token: str, vol: float, expiry_days: int 
     call   = price_option(token, spot, strike, expiry_days, vol, "call")
 
     premium_pct    = call.price / spot * 100
-    annualised_pct = premium_pct * (365 / expiry_days) if expiry_days > 0 else 0.0
+    annualised_pct = round(((1 + premium_pct / 100) ** (365.0 / expiry_days) - 1) * 100, 1) if expiry_days > 0 else 0.0
 
     return {
         "strategy":       "Covered Call",

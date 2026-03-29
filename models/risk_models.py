@@ -228,13 +228,14 @@ def compute_real_yield_ratio(total_apy: float, emission_apy: float) -> dict:
 
 def kelly_fraction(win_prob: float, win_pct: float, loss_pct: float) -> float:
     """
-    Kelly f* = (win_prob * win_pct - loss_prob * loss_pct) / win_pct
+    Kelly f* = (win_prob * win_pct - loss_prob * loss_pct) / (win_pct * loss_pct)
+    Correct form for asymmetric payoffs where win and loss magnitudes differ.
     Returns suggested fraction of capital as a decimal (capped at 0.25 for safety).
     """
     loss_prob = 1 - win_prob
-    if win_pct <= 0:
+    if win_pct <= 0 or loss_pct <= 0:
         return 0.0
-    k = (win_prob * win_pct - loss_prob * loss_pct) / win_pct
+    k = (win_prob * win_pct - loss_prob * loss_pct) / (win_pct * loss_pct)
     k = max(0.0, min(k, MAX_KELLY_FRACTION))   # cap Kelly fraction for safety
     return round(k, 4)
 

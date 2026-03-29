@@ -598,6 +598,7 @@ def _scan_progress_fragment() -> None:
         # Targeted clear: only invalidate scan data (OPT-44)
         try:
             _load_history_file.clear()
+            _get_history_cache()["data"] = None   # coherence: clear shared resource cache too
         except Exception:
             pass
         st.rerun()
@@ -625,6 +626,7 @@ def render_sidebar() -> dict:
         # Do NOT clear _build_css (24h TTL), _get_api_status (5-min own TTL),
         # or load_wallets/load_positions (user data that doesn't change on auto-refresh).
         _load_history_file.clear()
+        _get_history_cache()["data"] = None   # coherence: clear shared resource cache too
         load_live_prices.clear()
         st.rerun()
 
@@ -698,6 +700,7 @@ def render_sidebar() -> dict:
                          help="Reload the latest saved scan data from disk"):
                 # OPT-44: targeted clear — reload scan data and live prices only
                 _load_history_file.clear()
+                _get_history_cache()["data"] = None   # coherence: clear shared resource cache too
                 load_live_prices.clear()
                 st.rerun()
         with col_s:
