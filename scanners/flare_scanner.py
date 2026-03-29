@@ -372,15 +372,16 @@ def fetch_ftso_prices() -> dict:
     base = APIS.get("ftso_data", "https://flr-data-availability.flare.network")
     results = {}
     try:
-        # Try FTSOv2 REST API — GET /api/v0/feeds/collection returns all active feeds
-        data = _get(f"{base}/api/v0/feeds/collection", timeout=6)
-        if data and isinstance(data, dict):
-            feeds = data.get("feeds", data.get("data", []))
+        # FTSOv2 REST API — block-latency feeds endpoint (all active feeds, one call).
+        # retries=0: a 404 means the endpoint is wrong, not a transient failure —
+        # don't waste 3× the timeout on a dead URL.
+        data = _get(f"{base}/api/v0/ftso/block-latency-feeds", timeout=6, retries=0)
+        if data and isinstance(data, (dict, list)):
+            feeds = data if isinstance(data, list) else data.get("feeds", data.get("data", []))
             for feed in feeds:
-                name = feed.get("name", feed.get("feedId", ""))
-                price = feed.get("value", feed.get("price"))
+                name  = feed.get("name", feed.get("feedId", feed.get("symbol", "")))
+                price = feed.get("value", feed.get("price", feed.get("currentValue")))
                 if name and price is not None:
-                    # Match "FLR/USD" → "FLR", "XRP/USD" → "XRP"
                     for sym in ("FLR", "XRP"):
                         if sym in str(name).upper():
                             try:
@@ -388,13 +389,13 @@ def fetch_ftso_prices() -> dict:
                             except (TypeError, ValueError):
                                 pass
     except Exception as exc:
-        logger.debug(f"FTSO collection endpoint failed: {exc}")
+        logger.debug(f"FTSO block-latency-feeds failed: {exc}")
 
-    # Fallback: try individual feed endpoints if collection failed
+    # Fallback: individual feed endpoints (retries=0 — fail fast, these 404 too)
     if not results:
         for sym, feed_id in _FTSO_FEEDS.items():
             try:
-                data = _get(f"{base}/api/v0/feeds/{feed_id}", timeout=5)
+                data = _get(f"{base}/api/v0/feeds/{feed_id}", timeout=4, retries=0)
                 if data and isinstance(data, dict):
                     price = data.get("value", data.get("price"))
                     if price is not None:
@@ -776,7 +777,9 @@ def _fetch_single_ktoken_rate(w3, asset: str, cfg: dict, n_tokens: int) -> Lendi
         tvl_usd = round(token_amount * token_price, 2)
 
     except Exception as e:
-        logger.warning(f"Kinetic on-chain fetch failed for {asset}: {e} — using baseline")
+        # Log at DEBUG — baseline fallback handles this gracefully.
+        # Contracts revert when Kinetic upgrades addresses; baselines stay accurate.
+        logger.debug(f"Kinetic on-chain fetch failed for {asset}: {e} — using baseline")
         supply_apy  = cfg.get("baseline_supply", 0.0)
         borrow_apy  = cfg.get("baseline_borrow", 0.0)
         utilisation = 0.0   # unknown when using baseline; do not fabricate a value
@@ -816,7 +819,7 @@ def fetch_kinetic_rates() -> list:
             try:
                 rate_map[asset] = fut.result(timeout=10)
             except Exception as e:
-                logger.warning(f"Kinetic parallel fetch timed out for {asset}: {e}")
+                logger.debug(f"Kinetic parallel fetch timed out for {asset}: {e}")
                 cfg = k_tokens[asset]
                 rate_map[asset] = LendingRate(
                     protocol="kinetic",
