@@ -779,7 +779,8 @@ with tab_targets:
     with c2:
         default_price = price_lookup.get(asset_choice) or _EXIT_FALLBACKS.get(asset_choice, FALLBACK_PRICES["FLR"])
         asset_price = st.number_input("Current price ($)", min_value=0.0001,
-                                      value=float(default_price), format="%.6f", step=0.001, key="exit_price")
+                                      value=float(default_price), format="%.6f", step=0.001,
+                                      key=f"exit_price_{asset_choice}")
     with c3:
         holdings = st.number_input("Holdings (tokens)", min_value=0.0, value=10000.0, step=1000.0, key="exit_holdings")
 

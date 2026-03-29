@@ -70,27 +70,28 @@ def _get_llama_pools() -> list[dict]:
     Thread-safe: uses an Event sentinel so only the first thread performs the
     HTTP fetch while others block; eliminates the TOCTOU stampede where up to
     7 concurrent callers would each download the ~20MB response on a cold cache.
+
+    is_fetcher is determined INSIDE the lock so the decision is atomic.
     """
     now = time.time()
-    # Fast path: cache is warm, no lock needed for a quick timestamp check
     with _llama_pools_lock:
         if _llama_pools_cache["data"] is not None and now - _llama_pools_cache["ts"] < _TTL_LONG:
             return _llama_pools_cache["data"]
-        # Slow path: cache is stale; check if another thread is already fetching
         if not _llama_pools_event.is_set():
-            # Another thread is fetching — block until it finishes (max 30s)
-            pass
+            # Another thread already claimed the fetch — we will wait
+            is_fetcher = False
         else:
-            # We are the designated fetcher — clear the event to block others
+            # We claim the fetch by clearing the event before releasing the lock
             _llama_pools_event.clear()
+            is_fetcher = True
 
-    if not _llama_pools_event.is_set():
-        # Wait for the fetching thread to finish, then return cached data
+    if not is_fetcher:
+        # Block until the fetching thread finishes (max 30s), then return its result
         _llama_pools_event.wait(timeout=30)
         with _llama_pools_lock:
             return _llama_pools_cache["data"] or []
 
-    # We are the fetching thread (event was cleared by us above)
+    # We are the designated fetching thread
     try:
         resp = _SESSION.get(_LLAMA_YIELDS_URL, timeout=20)
         resp.raise_for_status()
