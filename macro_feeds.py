@@ -207,7 +207,7 @@ def fetch_macro_timeseries(days: int = 90) -> dict[str, Any]:
                 if series is not None:
                     out[key] = series
 
-        out.update({"_days": days, "_timestamp": _dt.datetime.utcnow().isoformat()})
+        out.update({"_days": days, "_timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat()})
         return out
 
     cached = _cached_get(f"macro_ts_{days}", _TTL_30M, _fetch)
@@ -435,7 +435,7 @@ def fetch_deribit_options_chain(currency: str = "BTC") -> dict:
             if not data:
                 return {"error": "empty response", "source": "deribit"}
 
-            now  = _dt.datetime.utcnow()
+            now  = _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
             spot = None
             oi_by_strike: dict = {}
             expiry_data:  dict = {}
@@ -543,7 +543,7 @@ def fetch_deribit_options_chain(currency: str = "BTC") -> dict:
                 "signal":          signal,
                 "spot_price":      spot,
                 "source":          "deribit",
-                "timestamp":       _dt.datetime.utcnow().isoformat(),
+                "timestamp":       _dt.datetime.now(_dt.timezone.utc).isoformat(),
                 "error":           None,
             }
         except Exception as e:

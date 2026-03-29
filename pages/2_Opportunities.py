@@ -66,6 +66,32 @@ def _cached_meteora_yields():
 def _cached_erc4626_yield_data():
     """Cached wrapper for fetch_erc4626_yield_data(). TTL=5 min."""
     return fetch_erc4626_yield_data()
+
+
+@st.cache_data(ttl=600)
+def _cached_ethena_yield():
+    """Cached wrapper for fetch_ethena_yield(). TTL=10 min."""
+    return fetch_ethena_yield()
+
+
+@st.cache_data(ttl=600)
+def _cached_aerodrome_pools():
+    """Cached wrapper for fetch_aerodrome_pools(). TTL=10 min."""
+    return fetch_aerodrome_pools()
+
+
+@st.cache_data(ttl=600)
+def _cached_morpho_vaults():
+    """Cached wrapper for fetch_morpho_vaults(). TTL=10 min."""
+    return fetch_morpho_vaults()
+
+
+@st.cache_data(ttl=3600)
+def _cached_token_unlock_alerts(within_days: int = 30):
+    """Cached wrapper for fetch_token_unlock_alerts(). TTL=1 hour (date-based data)."""
+    return fetch_token_unlock_alerts(within_days=within_days)
+
+
 from models.risk_models import (
     compute_pool_sharpe,                # #72
     compute_real_yield_ratio,           # #73
@@ -95,9 +121,9 @@ def _load_opp_data_cached(profile: str) -> dict:
     return _latest.get("models") or {}
 
 
-latest     = load_latest()
-runs       = load_history_runs()
 model_data = _load_opp_data_cached(profile)
+latest     = load_latest()   # uses _load_history_file cache — no duplicate disk read
+runs       = load_history_runs()
 
 st.title("🎯 Opportunities")
 st.caption("Real-time yield opportunities across 10,000+ DeFi pools • Auto-refreshed every 15 minutes")
@@ -966,8 +992,13 @@ render_section_header(
     "Active Snapshot votes that may impact yield parameters — sourced from Snapshot GraphQL",
 )
 
+@st.cache_data(ttl=3600)
+def _cached_governance_alerts_opp():
+    """Cached wrapper for fetch_governance_alerts(). TTL=1 hour."""
+    return fetch_governance_alerts()
+
 with st.spinner("Checking governance proposals…"):
-    _proposals = [] if demo_mode else fetch_governance_alerts()
+    _proposals = [] if demo_mode else _cached_governance_alerts_opp()
 
 if demo_mode:
     _proposals = [
@@ -1038,7 +1069,7 @@ with st.spinner("Loading token unlock schedule…"):
             _unlock_alerts = []
     else:
         try:
-            _unlock_alerts = fetch_token_unlock_alerts(within_days=30)
+            _unlock_alerts = _cached_token_unlock_alerts(within_days=30)
         except Exception:
             _unlock_alerts = []
 
@@ -1232,9 +1263,9 @@ with st.spinner("Loading cross-chain protocol data…"):
             {"symbol": "WETH vault",  "project": "morpho", "chain": "Ethereum", "apy": 4.2, "apy_7d": 4.1, "tvl_usd": 650_000_000},
         ]
     else:
-        _ethena = fetch_ethena_yield()
-        _aero   = fetch_aerodrome_pools()
-        _morpho = fetch_morpho_vaults()
+        _ethena = _cached_ethena_yield()
+        _aero   = _cached_aerodrome_pools()
+        _morpho = _cached_morpho_vaults()
 
 # Ethena sUSDe card
 _eth_apy = float(_ethena.get("susde_apy", 0))

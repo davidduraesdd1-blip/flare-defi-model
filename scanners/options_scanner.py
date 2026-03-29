@@ -5,6 +5,8 @@ data for the Black-Scholes options model.
 """
 
 import logging
+import time
+import threading
 import numpy as np
 from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
@@ -15,6 +17,11 @@ from scanners.flare_scanner import fetch_prices as _fetch_flare_prices
 from utils.http import http_get
 
 logger = logging.getLogger(__name__)
+
+# ─── Module-level TTL caches ──────────────────────────────────────────────────
+_vol_cache: dict = {}
+_vol_cache_lock = threading.Lock()
+_VOL_TTL = 1800   # 30 minutes — volatility changes slowly
 
 
 @dataclass
@@ -46,23 +53,34 @@ def fetch_historical_volatility(token_id: str = "ripple", days: int = 30) -> Opt
     """
     Calculate historical volatility from CoinGecko price history.
     Returns annualised volatility as a decimal.
+    Results cached for 30 minutes to avoid repeated API calls on each Streamlit rerun.
     """
+    cache_key = f"hv_{token_id}_{days}"
+    now = time.time()
+    with _vol_cache_lock:
+        hit = _vol_cache.get(cache_key)
+        if hit is not None and now - hit["ts"] < _VOL_TTL:
+            return hit["data"]
+
     url  = f"https://api.coingecko.com/api/v3/coins/{token_id}/market_chart"
     data = http_get(url, params={"vs_currency": "usd", "days": days}, timeout=10)
     if not data:
         return None
+    result: Optional[float] = None
     try:
         prices = [p[1] for p in data.get("prices", []) if p[1] > 0]
         if len(prices) < 2:
-            return None
-        log_returns = np.diff(np.log(prices))
-        daily_vol   = np.std(log_returns)
-        if not np.isfinite(daily_vol) or daily_vol == 0:
-            return None
-        return round(float(daily_vol * np.sqrt(365)), 4)
+            pass
+        else:
+            log_returns = np.diff(np.log(prices))
+            daily_vol   = np.std(log_returns)
+            if np.isfinite(daily_vol) and daily_vol != 0:
+                result = round(float(daily_vol * np.sqrt(365)), 4)
     except Exception as e:
         logger.debug(f"Historical vol calculation failed: {e}")
-        return None
+    with _vol_cache_lock:
+        _vol_cache[cache_key] = {"data": result, "ts": time.time()}
+    return result
 
 
 # ─── Volatility Data for Key Tokens ──────────────────────────────────────────
@@ -77,7 +95,15 @@ def _fetch_current_prices() -> dict:
     return {p.symbol: p.price_usd for p in prices if p.symbol in ("FLR", "XRP", "FXRP")}
 
 
+_vol_data_cache: dict = {"ts": 0, "data": None}
+_VOL_DATA_TTL = 1800   # 30 minutes
+
+
 def fetch_volatility_data() -> list:
+    now = time.time()
+    if _vol_data_cache["data"] is not None and now - _vol_data_cache["ts"] < _VOL_DATA_TTL:
+        return _vol_data_cache["data"]
+
     results = []
     live_prices = _fetch_current_prices()
 
@@ -130,6 +156,8 @@ def fetch_volatility_data() -> list:
             data_source=xrp_entry.data_source,
         ))
 
+    _vol_data_cache["ts"]   = time.time()
+    _vol_data_cache["data"] = results
     return results
 
 
