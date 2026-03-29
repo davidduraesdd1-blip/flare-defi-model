@@ -113,7 +113,7 @@ def fetch_sceptre_onchain_rate() -> Optional[float]:
             _sceptre_cache["data"] = None
             return None
         growth_30d = (rate_now - rate_past) / rate_past
-        apy = round(growth_30d * (365 / 30) * 100, 2)
+        apy = round(((1 + growth_30d) ** (365.0 / 30) - 1) * 100, 2)
         result = apy if 0.5 <= apy <= 50.0 else None   # sanity bounds
         _sceptre_cache["ts"]   = time.time()
         _sceptre_cache["data"] = result

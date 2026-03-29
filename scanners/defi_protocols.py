@@ -47,6 +47,8 @@ _tvl_snapshots_lock = threading.Lock()
 # Shared DeFiLlama yields cache — populated once, reused across multiple fetchers
 _llama_pools_cache = {"ts": 0, "data": None}
 _llama_pools_lock  = threading.Lock()
+_llama_pools_event = threading.Event()   # set when data is ready; prevents TOCTOU stampede
+_llama_pools_event.set()                  # initially set (no fetch in progress)
 _LLAMA_YIELDS_URL  = "https://yields.llama.fi/pools"
 
 
@@ -65,22 +67,35 @@ def _get(url: str, timeout: int = 10) -> Any:
 def _get_llama_pools() -> list[dict]:
     """
     Fetch all DeFiLlama yield pools with a shared 15-minute TTL cache.
-    Thread-safe via _llama_pools_lock.
-    Returns the raw data list (thousands of pools) for in-memory filtering.
+    Thread-safe: uses an Event sentinel so only the first thread performs the
+    HTTP fetch while others block; eliminates the TOCTOU stampede where up to
+    7 concurrent callers would each download the ~20MB response on a cold cache.
     """
     now = time.time()
+    # Fast path: cache is warm, no lock needed for a quick timestamp check
     with _llama_pools_lock:
         if _llama_pools_cache["data"] is not None and now - _llama_pools_cache["ts"] < _TTL_LONG:
             return _llama_pools_cache["data"]
-    # NOTE: The lock is released before the HTTP fetch to avoid blocking other
-    # threads during the ~20-second network call.  A second thread may also
-    # enter this branch concurrently (TOCTOU); this is intentional — the extra
-    # fetch is harmless and the last writer wins when updating the cache below.
+        # Slow path: cache is stale; check if another thread is already fetching
+        if not _llama_pools_event.is_set():
+            # Another thread is fetching — block until it finishes (max 30s)
+            pass
+        else:
+            # We are the designated fetcher — clear the event to block others
+            _llama_pools_event.clear()
+
+    if not _llama_pools_event.is_set():
+        # Wait for the fetching thread to finish, then return cached data
+        _llama_pools_event.wait(timeout=30)
+        with _llama_pools_lock:
+            return _llama_pools_cache["data"] or []
+
+    # We are the fetching thread (event was cleared by us above)
     try:
         resp = _SESSION.get(_LLAMA_YIELDS_URL, timeout=20)
         resp.raise_for_status()
         pools = resp.json().get("data", []) or []
-        if pools:  # only update cache when we received a non-empty response
+        if pools:
             with _llama_pools_lock:
                 _llama_pools_cache["ts"]   = time.time()
                 _llama_pools_cache["data"] = pools
@@ -89,6 +104,8 @@ def _get_llama_pools() -> list[dict]:
         logger.warning("[DeFiProtocols] DeFiLlama pools fetch failed: %s", e)
         with _llama_pools_lock:
             return _llama_pools_cache["data"] or []
+    finally:
+        _llama_pools_event.set()  # always unblock waiting threads
 
 
 # ── 1. Curve Finance ──────────────────────────────────────────────────────────

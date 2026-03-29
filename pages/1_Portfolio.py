@@ -463,13 +463,18 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 render_section_header("Wallet Positions", "Live DeFi portfolio via Zerion — chain breakdown & top positions")
 
+@st.cache_data(ttl=120)
+def _fetch_zerion_cached(addr: str) -> dict:
+    from scanners.wallet import fetch_zerion_portfolio
+    return fetch_zerion_portfolio(addr)
+
+
 try:
     _zerion_addr = st.session_state.get("defi_wallet_address_valid")
     if _zerion_addr:
         with st.spinner("Fetching wallet portfolio from Zerion…"):
             try:
-                from scanners.wallet import fetch_zerion_portfolio
-                _zp = fetch_zerion_portfolio(_zerion_addr)
+                _zp = _fetch_zerion_cached(_zerion_addr)
                 _zp_err = _zp.get("error")
                 if _zp_err:
                     st.warning(f"Zerion: {_zp_err}")

@@ -73,7 +73,7 @@ def fetch_historical_volatility(token_id: str = "ripple", days: int = 30) -> Opt
             pass
         else:
             log_returns = np.diff(np.log(prices))
-            daily_vol   = np.std(log_returns)
+            daily_vol   = np.std(log_returns, ddof=1)
             if np.isfinite(daily_vol) and daily_vol != 0:
                 result = round(float(daily_vol * np.sqrt(365)), 4)
     except Exception as e:
