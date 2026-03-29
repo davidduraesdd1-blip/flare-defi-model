@@ -885,64 +885,62 @@ elif not (0 <= _opt_fee <= 1000):
     st.error("Pool fee APY must be between 0 and 1000%")
     _opt_input_ok = False
 
-if not _opt_input_ok:
-    st.stop()
-
-try:
-    _opt_res = compute_concentrated_lp_metrics(
-        current_price=_opt_price,
-        lower_tick_price=_opt_lower,
-        upper_tick_price=_opt_upper,
-        fee_apy=_opt_fee,
-        holding_period_days=int(_opt_days),
-    )
-
-    if "error" in _opt_res:
-        st.warning(f"Input error: {_opt_res['error']}")
-    else:
-        _m1, _m2, _m3, _m4 = st.columns(4)
-        _m1.metric("Capital Efficiency", f"{_opt_res['capital_efficiency']:.1f}×")
-        _m2.metric("Range Width", f"{_opt_res['range_width_pct']:.1f}%")
-        _m3.metric("In-Range Probability", f"{_opt_res['in_range_probability_pct']:.0f}%")
-        _m4.metric(f"Fee Income ({int(_opt_days)}d)", f"{_opt_res['fee_income_pct']:.2f}%")
-
-        _m5, _m6, _m7 = st.columns(3)
-        _il_up_pct = _opt_res["il_if_hits_upper"] * 100
-        _il_lo_pct = _opt_res["il_if_hits_lower"] * 100
-        _m5.metric("IL if hits upper",   f"{_il_up_pct:.2f}%", delta_color="inverse")
-        _m6.metric("IL if hits lower",   f"{_il_lo_pct:.2f}%", delta_color="inverse")
-        _m7.metric("Est. Net Return",    f"{_opt_res['estimated_net_return_pct']:.2f}%")
-
-        st.markdown(
-            f"<div style='background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);"
-            f"border-radius:8px;padding:10px 14px;font-size:0.85rem;color:#c4cbdb;margin-top:8px'>"
-            f"💡 <b>Recommendation:</b> {_opt_res['recommendation']}</div>",
-            unsafe_allow_html=True,
+if _opt_input_ok:
+    try:
+        _opt_res = compute_concentrated_lp_metrics(
+            current_price=_opt_price,
+            lower_tick_price=_opt_lower,
+            upper_tick_price=_opt_upper,
+            fee_apy=_opt_fee,
+            holding_period_days=int(_opt_days),
         )
 
-        # Visual range bar
-        if _opt_lower < _opt_upper:
-            _range_span   = _opt_upper - _opt_lower
-            _cp_in_range  = _opt_lower <= _opt_price <= _opt_upper
-            _cp_pct       = min(100, max(0, (_opt_price - _opt_lower) / _range_span * 100)) if _range_span > 0 else 50
-            _bar_color    = "#22c55e" if _cp_in_range else "#ef4444"
-            _status_text  = "In range — fees accruing" if _cp_in_range else "OUT OF RANGE — no fees"
+        if "error" in _opt_res:
+            st.warning(f"Input error: {_opt_res['error']}")
+        else:
+            _m1, _m2, _m3, _m4 = st.columns(4)
+            _m1.metric("Capital Efficiency", f"{_opt_res['capital_efficiency']:.1f}×")
+            _m2.metric("Range Width", f"{_opt_res['range_width_pct']:.1f}%")
+            _m3.metric("In-Range Probability", f"{_opt_res['in_range_probability_pct']:.0f}%")
+            _m4.metric(f"Fee Income ({int(_opt_days)}d)", f"{_opt_res['fee_income_pct']:.2f}%")
+
+            _m5, _m6, _m7 = st.columns(3)
+            _il_up_pct = _opt_res["il_if_hits_upper"] * 100
+            _il_lo_pct = _opt_res["il_if_hits_lower"] * 100
+            _m5.metric("IL if hits upper",   f"{_il_up_pct:.2f}%", delta_color="inverse")
+            _m6.metric("IL if hits lower",   f"{_il_lo_pct:.2f}%", delta_color="inverse")
+            _m7.metric("Est. Net Return",    f"{_opt_res['estimated_net_return_pct']:.2f}%")
+
             st.markdown(
-                f"<div style='margin:12px 0 4px;font-size:0.75rem;color:#64748b'>Price position within range</div>",
-                unsafe_allow_html=True,
-            )
-            st.progress(int(_cp_pct) / 100)
-            st.markdown(
-                f"<div style='display:flex;justify-content:space-between;font-size:0.71rem;color:#475569;margin-top:-6px'>"
-                f"<span>${_opt_lower:.4f}</span>"
-                f"<span style='color:{_bar_color};font-weight:600'>${_opt_price:.4f} — {_status_text}</span>"
-                f"<span>${_opt_upper:.4f}</span>"
-                f"</div>",
+                f"<div style='background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);"
+                f"border-radius:8px;padding:10px 14px;font-size:0.85rem;color:#c4cbdb;margin-top:8px'>"
+                f"💡 <b>Recommendation:</b> {_opt_res['recommendation']}</div>",
                 unsafe_allow_html=True,
             )
 
-        with st.expander("How concentrated LP works"):
-            st.markdown("""
+            # Visual range bar
+            if _opt_lower < _opt_upper:
+                _range_span   = _opt_upper - _opt_lower
+                _cp_in_range  = _opt_lower <= _opt_price <= _opt_upper
+                _cp_pct       = min(100, max(0, (_opt_price - _opt_lower) / _range_span * 100)) if _range_span > 0 else 50
+                _bar_color    = "#22c55e" if _cp_in_range else "#ef4444"
+                _status_text  = "In range — fees accruing" if _cp_in_range else "OUT OF RANGE — no fees"
+                st.markdown(
+                    f"<div style='margin:12px 0 4px;font-size:0.75rem;color:#64748b'>Price position within range</div>",
+                    unsafe_allow_html=True,
+                )
+                st.progress(int(_cp_pct) / 100)
+                st.markdown(
+                    f"<div style='display:flex;justify-content:space-between;font-size:0.71rem;color:#475569;margin-top:-6px'>"
+                    f"<span>${_opt_lower:.4f}</span>"
+                    f"<span style='color:{_bar_color};font-weight:600'>${_opt_price:.4f} — {_status_text}</span>"
+                    f"<span>${_opt_upper:.4f}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            with st.expander("How concentrated LP works"):
+                st.markdown("""
 **Capital efficiency multiplier**: how much more capital-efficient this range is vs full-range V2.
 - A 5× multiplier means the same fees on 1/5th the capital.
 - Narrower range = higher efficiency but more frequent rebalancing when price exits.
@@ -956,6 +954,6 @@ holding period. Based on 2% assumed daily price volatility.
 **Fee income estimate** = (fee_apy / 365) × days × capital_efficiency_multiplier
 
 **Net return estimate** = fee_income + IL_midpoint × (1 - in_range_probability)
-            """)
-except Exception as _opt_exc:
-    st.warning(f"Concentrated LP calculator error: {_opt_exc}")
+                """)
+    except Exception as _opt_exc:
+        st.warning(f"Concentrated LP calculator error: {_opt_exc}")
