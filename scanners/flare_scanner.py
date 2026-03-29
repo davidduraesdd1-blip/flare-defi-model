@@ -242,6 +242,7 @@ class ScanResult:
 _price_cache: list = []
 _price_cache_ts: float = 0.0
 _PRICE_CACHE_TTL: int = 300   # seconds
+_price_cache_lock = threading.Lock()
 
 
 def _fetch_binance_24h_change() -> dict:
@@ -278,9 +279,10 @@ def fetch_prices() -> list:
     omits that field (common on the unauthenticated free tier).
     """
     global _price_cache, _price_cache_ts
-    if _price_cache and (time.time() - _price_cache_ts) < _PRICE_CACHE_TTL:
-        logger.debug("fetch_prices: returning cached prices (TTL not expired)")
-        return _price_cache
+    with _price_cache_lock:
+        if _price_cache and (time.time() - _price_cache_ts) < _PRICE_CACHE_TTL:
+            logger.debug("fetch_prices: returning cached prices (TTL not expired)")
+            return list(_price_cache)
 
     # Include SPRK (SparkDEX reward token) and ripple-usd (RLUSD) for reward APY + pool tracking (#68-70)
     ids = "flare-networks,ripple,tether,sparkdex-ai,ripple-usd,hyperliquid"
@@ -352,8 +354,9 @@ def fetch_prices() -> list:
             for sym, price in FALLBACK_PRICES.items()
         ]
 
-    _price_cache    = results
-    _price_cache_ts = time.time()
+    with _price_cache_lock:
+        _price_cache    = results
+        _price_cache_ts = time.time()
     return results
 
 # ─── FTSO Price Oracle Fetcher (Upgrade #3) ──────────────────────────────────
@@ -428,6 +431,7 @@ _DL_PROTOCOL_MAP = {
 _defillama_cache: dict = {}
 _defillama_cache_ts: float = 0.0
 _DEFILLAMA_CACHE_TTL: int = 300   # seconds
+_defillama_cache_lock = threading.Lock()
 
 
 def _fetch_defillama_raw() -> dict:
@@ -437,8 +441,9 @@ def _fetch_defillama_raw() -> dict:
       symbol, apy, apy_base, apy_reward, tvl_usd, il_7d
     """
     global _defillama_cache, _defillama_cache_ts
-    if _defillama_cache and (time.time() - _defillama_cache_ts) < _DEFILLAMA_CACHE_TTL:
-        return _defillama_cache
+    with _defillama_cache_lock:
+        if _defillama_cache and (time.time() - _defillama_cache_ts) < _DEFILLAMA_CACHE_TTL:
+            return dict(_defillama_cache)
 
     data = _get("https://yields.llama.fi/pools", timeout=15)
     result: dict = {}
@@ -464,8 +469,9 @@ def _fetch_defillama_raw() -> dict:
                 "tvl_usd":    _sf(pool.get("tvlUsd")),
                 "il_7d":      pool.get("il7d"),
             })
-        _defillama_cache    = result
-        _defillama_cache_ts = time.time()
+        with _defillama_cache_lock:
+            _defillama_cache    = result
+            _defillama_cache_ts = time.time()
         total = sum(len(v) for v in result.values())
         if total:
             logger.info(f"DeFiLlama: fetched {total} Flare pool(s) across {len(result)} protocol(s)")
@@ -590,6 +596,7 @@ _ALL_GT_DEX_IDS    = _SPARKDEX_DEX_IDS + _ENOSYS_DEX_IDS + _BLAZESWAP_DEX_IDS
 _gt_cache: dict = {}           # {dex_id: [raw pool data, ...]}
 _gt_cache_ts: float = 0.0
 _GT_CACHE_TTL: int = 600
+_gt_cache_lock = threading.Lock()
 
 
 def _prewarm_gt_cache() -> None:
@@ -599,8 +606,9 @@ def _prewarm_gt_cache() -> None:
     module-level cache so parallel threads can reuse without extra HTTP calls.
     """
     global _gt_cache, _gt_cache_ts
-    if _gt_cache and (time.time() - _gt_cache_ts) < _GT_CACHE_TTL:
-        return
+    with _gt_cache_lock:
+        if _gt_cache and (time.time() - _gt_cache_ts) < _GT_CACHE_TTL:
+            return
     result = {}
     for i, dex_id in enumerate(_ALL_GT_DEX_IDS):
         if i > 0:
@@ -613,8 +621,9 @@ def _prewarm_gt_cache() -> None:
             logger.warning(f"GeckoTerminal pre-warm {dex_id} failed")
         else:
             logger.debug(f"GT cache: {dex_id} → {len(result[dex_id])} pools")
-    _gt_cache = result
-    _gt_cache_ts = time.time()
+    with _gt_cache_lock:
+        _gt_cache = result
+        _gt_cache_ts = time.time()
 
 # Normalize GeckoTerminal token symbols to the names used elsewhere in the app
 _GT_TOKEN_NORM = {
