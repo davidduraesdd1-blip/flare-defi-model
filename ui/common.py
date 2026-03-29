@@ -1175,9 +1175,10 @@ def render_ftso_il_calculator(prices: list = None) -> None:
         current_ratio = current_a / current_b
         price_ratio   = current_ratio / entry_ratio if entry_ratio > 0 else 1.0
         il_pct        = calculate_il(price_ratio)
-        il_usd        = deposit * il_pct / 100
         hodl_val      = deposit * 0.5 * (current_a / entry_a) + deposit * 0.5 * (current_b / entry_b)
-        lp_val        = deposit - il_usd
+        # IL loss is relative to current hodl value, not original deposit
+        il_usd        = hodl_val * il_pct / 100
+        lp_val        = hodl_val - il_usd
         il_color      = "#10b981" if il_pct < 1 else ("#f59e0b" if il_pct < 5 else "#ef4444")
 
         is_ftso = bool(price_lkp.get(token_a_sym) or price_lkp.get(token_b_sym))

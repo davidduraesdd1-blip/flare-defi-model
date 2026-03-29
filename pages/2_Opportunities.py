@@ -117,15 +117,17 @@ demo_mode      = ctx.get("demo_mode", False)
 _pro_mode = st.session_state.get("defi_pro_mode", False)
 
 @st.cache_data(ttl=600)
-def _load_opp_data_cached(profile: str) -> dict:
+def _load_opp_data_cached() -> dict:
     """Load and return model_data for all profiles, keyed by profile name.
     Cached for 10 minutes to avoid duplicate queries for radar chart and table.
+    No profile argument — returns ALL profiles so the same cache entry is
+    reused regardless of which profile is currently selected.
     """
     _latest = load_latest()
     return _latest.get("models") or {}
 
 
-model_data = _load_opp_data_cached(profile)
+model_data = _load_opp_data_cached()
 latest     = load_latest()   # uses _load_history_file cache — no duplicate disk read
 runs       = load_history_runs()
 
