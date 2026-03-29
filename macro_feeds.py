@@ -330,7 +330,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             timeout=15,
         )
         if resp.status_code == 403 and not api_key:
-            return {"error": "HTTP 403 — Streamlit Cloud IP blocked by CoinMetrics. Add DEFI_COINMETRICS_API_KEY (free at coinmetrics.io) to use the authenticated endpoint instead.", "source": "coinmetrics"}
+            return {"error": "HTTP 403 — CoinMetrics community endpoint blocked from this IP. Data temporarily unavailable.", "source": "coinmetrics"}
         if resp.status_code != 200:
             return {"error": f"HTTP {resp.status_code}", "source": "coinmetrics"}
         rows = resp.json().get("data", [])
@@ -687,7 +687,7 @@ def validate_api_connections() -> dict:
 
     # CoinMetrics — check env var AND session-state runtime key (#18)
     coinmetrics_key = _get_runtime_key("coinmetrics_key", _os.environ.get("DEFI_COINMETRICS_API_KEY", "")).strip()
-    results["coinmetrics"] = "configured" if coinmetrics_key else "community (may be blocked)"
+    results["coinmetrics"] = "configured" if coinmetrics_key else "community (no key required)"
 
     # Anthropic
     anthropic_key = _os.environ.get("ANTHROPIC_API_KEY", "").strip()

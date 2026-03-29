@@ -551,7 +551,7 @@ except Exception as _bits_err:
 
 # ─── On-Chain Intelligence (Group 4) ─────────────────────────────────────────
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-render_section_header("On-Chain Intelligence", "CoinMetrics API · MVRV Z-Score · SOPR · add DEFI_COINMETRICS_API_KEY (free)")
+render_section_header("On-Chain Intelligence", "CoinMetrics Community API · MVRV Z-Score · SOPR · no API key required")
 
 try:
     import macro_feeds as _mf4
