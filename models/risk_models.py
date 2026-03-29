@@ -829,16 +829,22 @@ def compute_il_vs_hodl(
         return {"error": "price_ratio_change must be > -1 (price cannot go to zero or negative)"}
 
     # Standard IL formula
+    # il_factor = LP/HODL - 1  (ratio of LP value to HODL value, minus 1)
     il_factor = 2.0 * (k ** 0.5) / (1.0 + k) - 1.0   # typically negative
     il_pct    = round(il_factor * 100.0, 4)            # negative = loss vs hodl
 
-    lp_value   = round(initial_value * (1.0 + il_factor) + fees_earned, 2)
     hodl_value = round(initial_value * (k + 1.0) / 2.0, 2)
+    # LP value = HODL × (1 + il_factor) = initial × √k
+    # (il_factor is relative to HODL, not to initial deposit)
+    lp_value   = round(hodl_value * (1.0 + il_factor) + fees_earned, 2)
 
     # Breakeven fee APY: the annualised yield that exactly offsets IL
-    il_usd = abs(il_factor * initial_value)
-    if initial_value > 0 and holding_period_years > 0:
-        breakeven_fee_apy = round((il_usd / initial_value) / holding_period_years * 100, 2)
+    # IL loss in USD is relative to HODL value (what you'd have if you held)
+    il_usd = abs(il_factor * hodl_value)
+    # Breakeven APY is expressed as % of the LP value (the capital actually deployed)
+    lp_value_no_fees = hodl_value * (1.0 + il_factor)  # LP value before fees
+    if lp_value_no_fees > 0 and holding_period_years > 0:
+        breakeven_fee_apy = round((il_usd / lp_value_no_fees) / holding_period_years * 100, 2)
     else:
         breakeven_fee_apy = 0.0
 
