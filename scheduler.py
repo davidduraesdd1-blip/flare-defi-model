@@ -45,11 +45,18 @@ from ai.alerts                import check_and_send_alerts
 from utils.file_io            import atomic_json_write
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
-_log_file = Path(__file__).parent / "data" / "scheduler.log"
-_log_file.parent.mkdir(parents=True, exist_ok=True)
-_rotating = logging.handlers.RotatingFileHandler(
-    _log_file, mode="a", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
-)
+if sys.platform == "win32":
+    _log_dir = Path(__file__).parent / "data"
+    _log_dir.mkdir(parents=True, exist_ok=True)
+    _log_file = _log_dir / "scheduler.log"
+else:
+    _log_file = Path("/tmp/scheduler.log")
+try:
+    _rotating = logging.handlers.RotatingFileHandler(
+        _log_file, mode="a", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
+except Exception:
+    _rotating = logging.StreamHandler(sys.stdout)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(message)s",
