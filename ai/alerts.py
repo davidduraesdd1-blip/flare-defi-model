@@ -281,12 +281,17 @@ def test_discord(config: dict) -> tuple:
 
 def test_webhook(config: dict) -> tuple:
     """Send a test webhook. Returns (success: bool, message: str)."""
+    cfg = config.get("webhook", {})
+    if not cfg.get("enabled"):
+        return (False, "Webhook not enabled — toggle it on and save settings first.")
+    if not cfg.get("url"):
+        return (False, "No webhook URL configured — enter a URL above and save settings.")
     ok = send_webhook_alert(
         "⚡ Flare DeFi Model — Test Alert",
         f"Test sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}. Webhook is working.",
         config,
     )
-    return (ok, "Test webhook sent!" if ok else "Webhook failed — check URL and logs.")
+    return (ok, "Test webhook sent!" if ok else "Webhook POST failed — check the URL is reachable and returns 2xx.")
 
 
 def test_email(config: dict) -> tuple:

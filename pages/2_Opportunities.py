@@ -463,25 +463,31 @@ with st.spinner("Loading yield data from DeFiLlama..."):
         _mc_pools = _cached_yields_pools(min_tvl_usd=5_000_000, max_results=20)
 
 if _mc_pools:
-    # Beginner metric tooltips (#59)
+    # Beginner metric tooltips (#59) — show real computed stats from loaded data
     if not _pro_mode:
+        _best_apy  = max((float(p.get("apy") or 0) for p in _mc_pools), default=0)
+        _total_tvl = sum(float(p.get("tvlUsd") or 0) for p in _mc_pools)
+        _il_yes    = sum(1 for p in _mc_pools if (p.get("ilRisk") or "no").lower() not in ("no", "none", ""))
+        _tvl_disp  = (f"${_total_tvl/1e9:.1f}B" if _total_tvl >= 1e9
+                      else f"${_total_tvl/1e6:.0f}M" if _total_tvl >= 1e6
+                      else f"${_total_tvl:,.0f}")
         _tt_col1, _tt_col2, _tt_col3 = st.columns(3)
         with _tt_col1:
             st.metric(
-                "APY",
-                "?",
+                "Top APY",
+                f"{_best_apy:.1f}%",
                 help="Annual Percentage Yield — the yearly return you'd earn. Includes both trading fees and token rewards. Higher isn't always better — check the risk score.",
             )
         with _tt_col2:
             st.metric(
-                "TVL",
-                "?",
+                "Total TVL",
+                _tvl_disp,
                 help="Total Value Locked — how much money is deposited in this protocol. Higher TVL generally means more trust and liquidity.",
             )
         with _tt_col3:
             st.metric(
-                "IL Risk",
-                "?",
+                "IL Risk Pools",
+                f"{_il_yes} of {len(_mc_pools)}",
                 help="Impermanent Loss risk for liquidity providers. Stable pairs (USDC/USDT) have near-zero IL. Volatile pairs (ETH/USDC) can lose 5-20% vs just holding.",
             )
     # Display as table with pro/beginner columns
