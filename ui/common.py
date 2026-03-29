@@ -23,17 +23,25 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ─── Security Audit Logger (#15) ────────────────────────────────────────────
 # Dedicated logger for security-relevant events; does NOT propagate to root.
-_audit_handler = logging.FileHandler(
-    os.path.join(Path(__file__).parent.parent, "defi_audit.log"),
-    encoding="utf-8",
-)
-_audit_handler.setFormatter(logging.Formatter(
-    "%(asctime)s [AUDIT] %(message)s", datefmt="%Y-%m-%dT%H:%M:%SZ"
-))
+# Write to /tmp on Linux (Streamlit Cloud mounts /mount/src via NFS — file
+# creation on NFS can hang indefinitely, freezing the app before Streamlit starts).
 _audit_log = logging.getLogger("defi.audit")
-_audit_log.addHandler(_audit_handler)
 _audit_log.setLevel(logging.INFO)
 _audit_log.propagate = False
+try:
+    _audit_log_path = (
+        os.path.join("/tmp", "defi_audit.log")
+        if sys.platform != "win32"
+        else os.path.join(Path(__file__).parent.parent, "defi_audit.log")
+    )
+    _audit_handler = logging.FileHandler(_audit_log_path, encoding="utf-8")
+    _audit_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [AUDIT] %(message)s", datefmt="%Y-%m-%dT%H:%M:%SZ"
+    ))
+    _audit_log.addHandler(_audit_handler)
+except Exception:
+    # Fall back to stderr if file creation fails — never block startup
+    _audit_log.addHandler(logging.StreamHandler())
 
 
 def audit(event: str, **ctx) -> None:
