@@ -191,7 +191,7 @@ st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
 col_save, col_test_e, col_test_t = st.columns(3)
 
 with col_save:
-    if st.button("Save Settings", key="save_alerts", use_container_width=True):
+    if st.button("Save Settings", key="save_alerts", width="stretch"):
         new_config = {
             "email":    {"enabled": enabled, "address": email_addr, "smtp_server": smtp_srv,
                          "smtp_port": int(smtp_port), "username": smtp_user, "password": smtp_pass},
@@ -204,7 +204,7 @@ with col_save:
         st.success("Settings saved.")
 
 with col_test_e:
-    if st.button("Send Test Email", key="test_email_btn", use_container_width=True):
+    if st.button("Send Test Email", key="test_email_btn", width="stretch"):
         _test_cfg = {"email": {"enabled": enabled, "address": email_addr,
                                "smtp_server": smtp_srv, "smtp_port": int(smtp_port),
                                "username": smtp_user, "password": smtp_pass}}
@@ -212,19 +212,19 @@ with col_test_e:
         st.success(msg) if ok else st.error(msg)
 
 with col_test_t:
-    if st.button("Send Test Telegram", key="test_tg_btn", use_container_width=True):
+    if st.button("Send Test Telegram", key="test_tg_btn", width="stretch"):
         _test_cfg = {"telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id}}
         ok, msg = test_telegram(_test_cfg)
         st.success(msg) if ok else st.error(msg)
 
 col_test_d, col_test_w, _ = st.columns(3)
 with col_test_d:
-    if st.button("Test Discord", key="test_discord_btn", use_container_width=True):
+    if st.button("Test Discord", key="test_discord_btn", width="stretch"):
         _test_cfg = {"discord": {"enabled": discord_enabled, "webhook_url": discord_url}}
         ok, msg = test_discord(_test_cfg)
         st.success(msg) if ok else st.error(msg)
 with col_test_w:
-    if st.button("Test Webhook", key="test_webhook_btn", use_container_width=True):
+    if st.button("Test Webhook", key="test_webhook_btn", width="stretch"):
         _test_cfg = {"webhook": {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret}}
         ok, msg = test_webhook(_test_cfg)
         st.success(msg) if ok else st.error(msg)
@@ -343,7 +343,7 @@ else:
         file_name=fname,
         mime="text/html",
         key="pdf_export_btn",
-        use_container_width=True,
+        width="stretch",
     )
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -410,6 +410,6 @@ else:
             file_name=_csv_fname,
             mime="text/csv",
             key="tax_csv_btn",
-            use_container_width=True,
+            width="stretch",
         )
         st.caption(f"Top 5 opportunities per profile per scan · {len(_tax_runs)} scan(s) in history")

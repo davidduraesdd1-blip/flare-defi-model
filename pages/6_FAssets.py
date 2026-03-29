@@ -202,7 +202,7 @@ if len(_cr_vals) >= 2:
                    tickformat=".0f", ticksuffix="%", tickfont_size=11),
         showlegend=False,
     )
-    st.plotly_chart(_fig_cr, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(_fig_cr, width="stretch", config={"displayModeBar": False})
 else:
     st.caption("Collateral ratio history available after 2+ scans.")
 

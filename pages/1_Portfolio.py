@@ -86,7 +86,7 @@ if demo_mode:
                 }
                 for h in _demo_holdings
             ]
-            st.dataframe(pd.DataFrame(_demo_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_demo_rows), width="stretch", hide_index=True)
             st.metric("Total Portfolio Value", f"${_demo_total:,.0f}")
     except Exception as _e:
         st.info(f"Demo data unavailable: {_e}")
@@ -376,7 +376,7 @@ with st.expander("Connect a wallet (read-only)"):
     with cl:
         new_label = st.text_input("Label",   placeholder="Main Wallet",  label_visibility="collapsed", key="new_wallet_label")
     with cb:
-        if st.button("Add", key="add_wallet_btn", use_container_width=True):
+        if st.button("Add", key="add_wallet_btn", width="stretch"):
             _clean_addr = _sanitize_address(new_addr.strip()) if new_addr else ""
             if _clean_addr and len(_clean_addr) == 42 and _clean_addr.startswith("0x"):
                 try:
@@ -396,11 +396,11 @@ with st.expander("Connect a wallet (read-only)"):
         sel_idx = st.selectbox("Wallet", range(len(wallet_labels)), format_func=lambda i: wallet_labels[i], key="wallet_select")
         col_check, col_remove = st.columns([3, 1])
         with col_check:
-            if st.button("Check Balances", key="check_wallet_btn", use_container_width=True):
+            if st.button("Check Balances", key="check_wallet_btn", width="stretch"):
                 with st.spinner("Fetching on-chain balances…"):
                     try:
                         rows = _fetch_wallet_balances(saved_wallets[sel_idx]["address"])
-                        st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame(), use_container_width=True, hide_index=True)
+                        st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame(), width="stretch", hide_index=True)
                         if not rows:
                             st.info("No significant balances found.")
                     except ImportError:
@@ -408,7 +408,7 @@ with st.expander("Connect a wallet (read-only)"):
                     except Exception as e:
                         st.error(f"Error: {e}")
 
-            if st.button("🔍 Detect Positions", key="detect_pos_btn", use_container_width=True,
+            if st.button("🔍 Detect Positions", key="detect_pos_btn", width="stretch",
                          help="Auto-detect Kinetic lending, sFLR staking, and stXRP staking from wallet"):
                 with st.spinner("Scanning on-chain positions…"):
                     try:
@@ -437,7 +437,7 @@ with st.expander("Connect a wallet (read-only)"):
                         unsafe_allow_html=True,
                     )
                 with cb2:
-                    if st.button("Add", key=f"add_sug_{i}", use_container_width=True):
+                    if st.button("Add", key=f"add_sug_{i}", width="stretch"):
                         new_pos = dict(sug)
                         new_pos["id"] = f"pos_{int(datetime.now(timezone.utc).timestamp())}_{i}"
                         positions.append(new_pos)
@@ -448,7 +448,7 @@ with st.expander("Connect a wallet (read-only)"):
                 st.session_state["_pos_suggestions"] = []
                 st.rerun()
         with col_remove:
-            if st.button("Remove", key="remove_wallet_btn", use_container_width=True):
+            if st.button("Remove", key="remove_wallet_btn", width="stretch"):
                 if sel_idx < len(saved_wallets):
                     saved_wallets.pop(sel_idx)
                     save_wallets(saved_wallets)
@@ -500,7 +500,7 @@ try:
                                 height=280,
                                 showlegend=True,
                             )
-                            st.plotly_chart(_fig_chain, use_container_width=True, config={"displayModeBar": False})
+                            st.plotly_chart(_fig_chain, width="stretch", config={"displayModeBar": False})
 
                     # Top 10 positions table
                     _z_positions = (_zp.get("positions") or [])[:10]
@@ -518,7 +518,7 @@ try:
                                 "Price":     f"${_zpos.get('price', 0):,.4f}" if _zpos.get("price") else "—",
                                 "1d Change": _chg_str,
                             })
-                        st.dataframe(pd.DataFrame(_z_rows), use_container_width=True, hide_index=True)
+                        st.dataframe(pd.DataFrame(_z_rows), width="stretch", hide_index=True)
 
                     # DeFi protocols
                     _protos = _zp.get("defi_protocols") or []
@@ -580,7 +580,7 @@ if positions:
             data=_csv_bytes,
             file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
     with _exp_pdf:
         _pdf_bytes = _build_pdf_export(positions, pnl_results)
@@ -590,7 +590,7 @@ if positions:
                 data=_pdf_bytes,
                 file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.pdf",
                 mime="application/pdf",
-                use_container_width=True,
+                width="stretch",
             )
         else:
             st.caption("PDF: `pip install fpdf2`")
@@ -703,7 +703,7 @@ with st.expander("➕ Track a New Position"):
 
         notes = st.text_input("Notes (optional)")
 
-        if st.form_submit_button("Add Position", use_container_width=True):
+        if st.form_submit_button("Add Position", width="stretch"):
             if not pool_name:
                 st.error("Pool / Asset name is required.")
             elif float(deposit_usd) <= 0:
@@ -792,7 +792,7 @@ with tab_targets:
             gain = val - holdings * asset_price
             rows.append({"Target": label, "Price": f"${tp:.6f}",
                          "Value": f"${val:,.0f}", "Gain": f"+${gain:,.0f}", "Action": action})
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         st.caption("Planning targets only — not financial advice.")
 
 with tab_timeline:
@@ -822,7 +822,7 @@ with tab_timeline:
                 "Incentive":    "⚠️ YES" if is_incentive else "✅ Low",
                 "Exit By":      "Jun 2026" if is_incentive else "Flexible",
             })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         st.caption("DEX LP pools depend on RFLR incentives expiring ~July 2026. FlareDrop ended Jan 30 2026 — sFLR staking yields reduced. Lending positions have low incentive dependency.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -859,7 +859,7 @@ if positions:
             })
 
     if hodl_rows:
-        st.dataframe(pd.DataFrame(hodl_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(hodl_rows), width="stretch", hide_index=True)
         if total_hodl_val > 0:
             net_diff = (total_lp_val + sum(pnl_results[i]["fees_earned_est"] for i in range(len(positions)))) - total_hodl_val
             net_color = "#10b981" if net_diff >= 0 else "#ef4444"
@@ -965,7 +965,7 @@ if positions:
                 f"Proj. to Jul 2026": f"{proj_rflr:,.0f} FLR (≈${proj_usd:,.2f})",
             })
 
-        st.dataframe(pd.DataFrame(rflr_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rflr_rows), width="stretch", hide_index=True)
         st.caption(
             f"rFLR rewards estimated from entry APY minus ~5% base fees. FLR price: ${_FLR_PRICE:.4f}. "
             f"Incentive program ends July 1 2026 ({_days_to_jul2026} days). Claim via blazeswap.finance or enosys.finance."
@@ -1056,7 +1056,7 @@ if positions:
             margin=dict(l=60, r=20, t=20, b=40),
             height=290,
         )
-        st.plotly_chart(fig_nw, use_container_width=True)
+        st.plotly_chart(fig_nw, width="stretch")
         st.caption(
             f"Starting from ${total_dep_nw:,.0f}. LP curve uses top-3 avg APY ({avg_apy:.0f}%). "
             f"Post-incentive drops to ~{base_fee_apy:.0f}% (base fees only). Not financial advice."
@@ -1104,7 +1104,7 @@ if len(records) >= 2:
         height=260,
         showlegend=False,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 else:
     st.info("Need at least 2 scans to show the chart.")
 
@@ -1227,7 +1227,7 @@ else:
         margin=dict(l=20, r=20, t=20, b=80),
         height=max(240, 80 + 60 * n),
     )
-    st.plotly_chart(fig_corr, use_container_width=True)
+    st.plotly_chart(fig_corr, width="stretch")
 
     # Concentration risk warning
     high_corr_pairs = [
@@ -1348,7 +1348,7 @@ if positions and total_value > 0:
                 "$ Adjustment":  f"${abs(dollar_adj):,.0f}" if dollar_adj != 0 else "—",
             })
 
-        st.dataframe(pd.DataFrame(rebal_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rebal_rows), width="stretch", hide_index=True)
 
         # ── Step 4: Actionable suggestions ───────────────────────────────────
         if actions:
@@ -1487,7 +1487,7 @@ with _col_csv:
         data=_build_portfolio_csv(_export_holdings),
         file_name=f"portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
         key="batch9_csv_export",
     )
 with _col_txt:
@@ -1496,7 +1496,7 @@ with _col_txt:
         data=_build_portfolio_report(_export_holdings, _exp_total),
         file_name=f"portfolio_report_{datetime.now(timezone.utc).strftime('%Y%m%d')}.txt",
         mime="text/plain",
-        use_container_width=True,
+        width="stretch",
         key="batch9_txt_export",
     )
 if not _export_holdings:

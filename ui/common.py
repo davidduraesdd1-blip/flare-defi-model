@@ -642,7 +642,7 @@ def render_sidebar() -> dict:
             st.markdown("<div style='padding-top:6px;'></div>", unsafe_allow_html=True)
             if st.button("☀" if _is_light else "🌙", key="_theme_toggle",
                          help="Switch to light mode" if not _is_light else "Switch to dark mode",
-                         use_container_width=True):
+                         width="stretch"):
                 st.session_state["_theme"] = "dark" if _is_light else "light"
                 st.rerun()
 
@@ -686,14 +686,14 @@ def render_sidebar() -> dict:
 
         col_r, col_s = st.columns(2)
         with col_r:
-            if st.button("↺ Reload", key="sidebar_refresh", use_container_width=True,
+            if st.button("↺ Reload", key="sidebar_refresh", width="stretch",
                          help="Reload the latest saved scan data from disk"):
                 # OPT-44: targeted clear — reload scan data and live prices only
                 _load_history_file.clear()
                 load_live_prices.clear()
                 st.rerun()
         with col_s:
-            if st.button("▶ Scan", key="sidebar_scan_now", use_container_width=True,
+            if st.button("▶ Scan", key="sidebar_scan_now", width="stretch",
                          help="Run a fresh scan now (~30 seconds). Auto-reloads when done."):
                 try:
                     scheduler_path = str(Path(__file__).parent.parent / "scheduler.py")
