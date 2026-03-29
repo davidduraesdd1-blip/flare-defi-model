@@ -11,7 +11,7 @@ headless = true
 port = 8501
 enableCORS = false
 enableXsrfProtection = true
-enableSerializableSessionState = true
+# enableSerializableSessionState removed — not a valid Streamlit config key
 
 [browser]
 gatherUsageStats = false

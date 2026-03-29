@@ -34,6 +34,11 @@ from scanners.defi_protocols import (
     fetch_token_unlock_alerts,          # #84
     fetch_erc4626_yield_data,           # #103
 )
+from models.risk_models import (
+    compute_pool_sharpe,                # #72
+    compute_real_yield_ratio,           # #73
+    compute_protocol_risk_score,        # #80
+)
 
 
 # ── OPT-39: module-level @st.cache_data wrappers ──────────────────────────────
@@ -92,11 +97,10 @@ def _cached_token_unlock_alerts(within_days: int = 30):
     return fetch_token_unlock_alerts(within_days=within_days)
 
 
-from models.risk_models import (
-    compute_pool_sharpe,                # #72
-    compute_real_yield_ratio,           # #73
-    compute_protocol_risk_score,        # #80
-)
+@st.cache_data(ttl=3600)
+def _cached_governance_alerts_opp():
+    """Cached wrapper for fetch_governance_alerts(). TTL=1 hour."""
+    return fetch_governance_alerts()
 
 page_setup("Opportunities · Flare DeFi")
 
@@ -165,7 +169,7 @@ for p in RISK_PROFILE_NAMES:
                     "$ Amount":     f"${kf*portfolio_size:,.0f}" if portfolio_size > 0 else "—",
                     "IL Risk":      (opp.get("il_risk") or "—").upper(),
                 })
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         st.caption(pcfg.get("description", ""))
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -222,7 +226,7 @@ else:
                     height=90,
                     showlegend=False,
                 )
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
                 st.markdown(
                     f"<div style='text-align:center; font-size:0.75rem; color:{trend_color}; margin-top:-8px;'>"
                     f"{'▲' if latest_apy >= prev_apy else '▼'} {latest_apy:.1f}%</div>",
@@ -347,7 +351,7 @@ else:
             margin=dict(l=40, r=40, t=20, b=20),
             height=380,
         )
-        st.plotly_chart(fig_radar, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig_radar, width="stretch", config={"displayModeBar": False})
 
         # Summary comparison table
         _cmp_rows = []
@@ -368,7 +372,7 @@ else:
                     else "—"
                 ),
             })
-        st.dataframe(pd.DataFrame(_cmp_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_cmp_rows), width="stretch", hide_index=True)
         st.caption("Radar axes are normalised 0–10 within the selected set. IL Safety: None=10, Low=7, Medium=4, High=1.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -405,7 +409,7 @@ else:
                             "θ/day":      f"${op.get('theta', 0):.6f}",
                             "Vega":       f"{op.get('vega', 0):.6f}",
                         } for op in strat_data if isinstance(op, dict)]
-                        st.dataframe(pd.DataFrame(chain_rows), use_container_width=True, hide_index=True)
+                        st.dataframe(pd.DataFrame(chain_rows), width="stretch", hide_index=True)
                     continue
                 if isinstance(strat_data, dict):
                     plain    = strat_data.get("plain_english", "")
@@ -540,9 +544,9 @@ if _mc_pools:
         )
         _start     = (_page - 1) * _rows_per_page
         _paged_rows = _mc_rows[_start: _start + _rows_per_page]
-        st.dataframe(pd.DataFrame(_paged_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_paged_rows), width="stretch", hide_index=True)
     else:
-        st.dataframe(pd.DataFrame(_mc_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_mc_rows), width="stretch", hide_index=True)
 else:
     st.info("No opportunities matching your filters. Try lowering the minimum TVL filter or switching chains.")
 
@@ -647,7 +651,7 @@ if _pendle_display:
         _pendle_rows.append(_row)
 
     if _pendle_rows:
-        st.dataframe(pd.DataFrame(_pendle_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_pendle_rows), width="stretch", hide_index=True)
 
         # PT vs YT explainer
         with st.expander("How PT vs YT works"):
@@ -775,7 +779,7 @@ if _pro_mode:
                 height=400, margin=dict(l=40, r=20, t=20, b=40),
                 legend=dict(bgcolor="rgba(0,0,0,0)", font_size=10),
             )
-            st.plotly_chart(_fig_yc, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(_fig_yc, width="stretch", config={"displayModeBar": False})
             st.caption(
                 "Efficient frontier (dotted orange) = max APY at each risk level. "
                 "Points above frontier = exceptionally good risk-adjusted yield. "
@@ -907,7 +911,7 @@ with _sol_col1:
                              else f"${float(_kp.get('tvl_usd', 0)):,.0f}"),
                 "Chain":    _kp.get("chain", "Solana"),
             })
-        st.dataframe(pd.DataFrame(_k_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_k_rows), width="stretch", hide_index=True)
         _k_tvl = float((_kamino or {}).get("total_tvl") or 0)
         st.caption(f"Total Kamino TVL scanned: ${_k_tvl/1e6:.1f}M")
     else:
@@ -928,7 +932,7 @@ with _sol_col2:
                              else f"${float(_mp.get('tvl_usd', 0)):,.0f}"),
                 "Chain":    _mp.get("chain", "Solana"),
             })
-        st.dataframe(pd.DataFrame(_m_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_m_rows), width="stretch", hide_index=True)
         _m_tvl = float((_meteora or {}).get("total_tvl") or 0)
         st.caption(f"Total Meteora TVL scanned: ${_m_tvl/1e6:.1f}M · Outliers >10,000% APY excluded.")
     else:
@@ -991,11 +995,6 @@ render_section_header(
     "Governance Alerts",
     "Active Snapshot votes that may impact yield parameters — sourced from Snapshot GraphQL",
 )
-
-@st.cache_data(ttl=3600)
-def _cached_governance_alerts_opp():
-    """Cached wrapper for fetch_governance_alerts(). TTL=1 hour."""
-    return fetch_governance_alerts()
 
 with st.spinner("Checking governance proposals…"):
     _proposals = [] if demo_mode else _cached_governance_alerts_opp()
@@ -1099,7 +1098,7 @@ if _unlock_alerts:
             "Cliff?":     "Yes (all-at-once)" if _ul.get("is_cliff") else "No (linear)",
             "Severity":   _ul["severity"],
         })
-    st.dataframe(pd.DataFrame(_ul_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(_ul_rows), width="stretch", hide_index=True)
     st.caption(
         "Large unlocks can create sell pressure. "
         "Cliff unlocks (all-at-once) are higher risk than linear unlocks. "
@@ -1232,7 +1231,7 @@ if _gy_display:
             "IL Risk":    ("Yes" if _gp.get("il_risk", "no") not in ("no", "") else "No"),
         }
         _gy_rows.append(_row)
-    st.dataframe(pd.DataFrame(_gy_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(_gy_rows), width="stretch", hide_index=True)
     st.caption(
         "Sorted by Sharpe ratio (risk-adjusted). "
         "Quality: Excellent >2.0, Good 1-2, Fair 0.5-1, Poor <0.5. "
@@ -1328,7 +1327,7 @@ with _cc_col1:
                 "Sharpe": f"{_a_sh['sharpe']:.2f}",
                 "TVL":    f"${float(_ap.get('tvl_usd',0))/1e6:.0f}M",
             })
-        st.dataframe(pd.DataFrame(_aero_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_aero_rows), width="stretch", hide_index=True)
     else:
         st.info("Aerodrome data unavailable.")
 
@@ -1349,7 +1348,7 @@ with _cc_col2:
                 "Real Yield": _real["classification"].replace("_", " ").title(),
                 "TVL":     f"${float(_mp.get('tvl_usd',0))/1e6:.0f}M",
             })
-        st.dataframe(pd.DataFrame(_morpho_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_morpho_rows), width="stretch", hide_index=True)
     else:
         st.info("Morpho data unavailable.")
 
@@ -1480,7 +1479,7 @@ if _sp_pools:
                 height=60,
                 showlegend=False,
             )
-            st.plotly_chart(_fig_sp, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(_fig_sp, width="stretch", config={"displayModeBar": False})
             _dir_sym = "▲" if _trending_up else "▼"
             st.markdown(
                 f"<div style='text-align:center;font-size:0.73rem;color:{_sp_line_col};margin-top:-10px'>"

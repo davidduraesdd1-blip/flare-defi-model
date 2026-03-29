@@ -118,7 +118,7 @@ try:
                                          if float(_ap.get('tvlUsd',0)) >= 1e6
                                          else f"${float(_ap.get('tvlUsd',0)):,.0f}"),
                         })
-                    st.dataframe(pd.DataFrame(_assist_rows), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(_assist_rows), width="stretch", hide_index=True)
             except Exception:
                 pass
 
@@ -257,7 +257,7 @@ else:
                 )
                 if isinstance(data, dict)
             ]
-            st.dataframe(pd.DataFrame(tvl_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(tvl_rows), width="stretch", hide_index=True)
 
     # News
     news_items = digest.get("news_items") or []
@@ -416,7 +416,7 @@ if feedback:
         rows = [{"Profile": p.capitalize(), "Weight": f"{w:.4f}",
                  "Effect": "Boosted" if w > 1.0 else ("Reduced" if w < 0.9 else "Neutral")}
                 for p, w in weights.items()]
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -488,7 +488,7 @@ try:
                 xaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
-            st.plotly_chart(_fig, use_container_width=True)
+            st.plotly_chart(_fig, width="stretch")
         else:
             st.info("Loading macro timeseries… (yfinance required)")
     else:
@@ -633,7 +633,7 @@ try:
                 xaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
                 showlegend=False,
             )
-            st.plotly_chart(_fig_mz, use_container_width=True)
+            st.plotly_chart(_fig_mz, width="stretch")
 
         _ts4 = _oc4.get("timestamp", "")[:19]
         st.caption(f"Source: CoinMetrics Community · {_ts4} UTC · Cached 1h")
@@ -763,7 +763,7 @@ try:
                     xaxis=dict(tickangle=-45, gridcolor="rgba(255,255,255,0.05)"),
                     yaxis=dict(gridcolor="rgba(255,255,255,0.07)", title="OI (contracts)"),
                 )
-                st.plotly_chart(_fig5d, use_container_width=True)
+                st.plotly_chart(_fig5d, width="stretch")
 
         with _col5R:
             if _ts5d:
@@ -785,7 +785,7 @@ try:
                     xaxis=dict(title="Days to Expiry", gridcolor="rgba(255,255,255,0.05)"),
                     yaxis=dict(title="IV (%)", gridcolor="rgba(255,255,255,0.07)"),
                 )
-                st.plotly_chart(_fig5e, use_container_width=True)
+                st.plotly_chart(_fig5e, width="stretch")
 
         _ts5_txt = _oc5.get("timestamp", "")[:19]
         st.caption(f"Source: Deribit · {_ts5_txt} UTC · Cached 15 min")
@@ -959,7 +959,7 @@ else:
             )
 
     if _rows:
-        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True)
     st.caption("FTSO oracle prices refresh every 2 min. Divergence >2% may indicate arb opportunity. Source: Flare Data Availability Layer.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -1064,7 +1064,7 @@ if _intent_input:
 
     if _matched_opps:
         st.markdown(f"**Matching opportunities ({len(_matched_opps)}):**")
-        st.dataframe(pd.DataFrame(_matched_opps).drop_duplicates(), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_matched_opps).drop_duplicates(), width="stretch", hide_index=True)
     else:
         st.info("No matching opportunities found in current scan. Try running a scan first.")
 

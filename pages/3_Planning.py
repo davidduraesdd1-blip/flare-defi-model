@@ -119,7 +119,7 @@ with tab1:
             f"Capital needed to replace <b>${monthly_usd:,.2f}/month</b>:</div>",
             unsafe_allow_html=True,
         )
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         st.caption("Capital = Annual income ÷ APY. Diversify across 2–3 strategies.")
 
 
@@ -253,7 +253,7 @@ with tab3:
                 "Annual FLR (adj)":   f"{risk_flr:,.1f}",
                 "Notes":              p["note"],
             })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
         # Top recommendation
         top2 = [p for p in ftso_providers if not p["cap_warning"]][:2]
@@ -361,7 +361,7 @@ with tab5:
         il_comfort  = st.checkbox("I'm comfortable with impermanent loss risk", value=False, key="intent_il")
         exp_level   = st.selectbox("DeFi experience", ["Beginner", "Intermediate", "Advanced"], key="intent_exp")
 
-    if st.button("Build My Strategy", key="build_strategy_btn", use_container_width=True, type="primary"):
+    if st.button("Build My Strategy", key="build_strategy_btn", width="stretch", type="primary"):
         # Strategy engine: maps intent + parameters to Flare-native strategies
         _plans = []
         _warnings = []
@@ -596,7 +596,7 @@ with tab6:
         margin=dict(l=60, r=20, t=10, b=40),
         height=300,
     )
-    st.plotly_chart(_fig_cc, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(_fig_cc, width="stretch", config={"displayModeBar": False})
 
     # Compare multiple APY scenarios
     with st.expander("Compare APY scenarios"):
@@ -614,7 +614,7 @@ with tab6:
                 "Interest":       f"${_s_interest:,.0f}",
                 "ROI":            f"{(_s_bal - _total_invested) / _total_invested * 100:.1f}%" if _total_invested > 0 else "—",
             })
-        st.dataframe(pd.DataFrame(_scen_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_scen_rows), width="stretch", hide_index=True)
     st.caption(
         f"Assumes {_cc_compound.lower()} compounding · No fees deducted · "
         "Real DeFi yields fluctuate — use as a directional guide only. Not financial advice."
