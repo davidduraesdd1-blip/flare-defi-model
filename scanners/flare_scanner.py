@@ -20,7 +20,7 @@ except ImportError:
     Web3 = None  # type: ignore[assignment,misc]
     _WEB3_AVAILABLE = False
 
-from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS, FALLBACK_PRICES
+from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS, FALLBACK_PRICES, COINGECKO_API_KEY
 from utils.http import http_get as _get, http_post as _post
 
 logger = logging.getLogger(__name__)
@@ -282,12 +282,18 @@ def fetch_prices() -> list:
 
     # Include SPRK (SparkDEX reward token) and ripple-usd (RLUSD) for reward APY + pool tracking (#68-70)
     ids = "flare-networks,ripple,tether,sparkdex-ai,ripple-usd,hyperliquid"
-    url = f"{APIS['coingecko']}/simple/price"
+    # Use Pro endpoint + key when available; fall back to free-tier URL
+    if COINGECKO_API_KEY:
+        url = "https://pro-api.coingecko.com/api/v3/simple/price"
+        _cg_headers = {"x-cg-pro-api-key": COINGECKO_API_KEY}
+    else:
+        url = f"{APIS['coingecko']}/simple/price"
+        _cg_headers = None
     data = _get(url, params={
         "ids": ids,
         "vs_currencies": "usd",
         "include_24hr_change": "true"
-    })
+    }, headers=_cg_headers)
 
     results = []
 
@@ -991,7 +997,7 @@ def fetch_staking_yields() -> list:
     else:
         yields.append(StakingYield(
             protocol="spectra", token="PT-sFLR",
-            apy=10.79, apy_low=10.79, apy_high=19.59,
+            apy=18.60, apy_low=14.00, apy_high=24.00,  # updated Mar 2026 per config
             tvl_usd=291_762, data_source="research",
         ))
 

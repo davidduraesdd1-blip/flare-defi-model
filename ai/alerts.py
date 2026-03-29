@@ -41,41 +41,65 @@ def _is_valid_telegram_token(token: str) -> bool:
 # ─── Config I/O ───────────────────────────────────────────────────────────────
 
 def load_alerts_config() -> dict:
+    cfg: dict = {}
     if ALERTS_CONFIG_FILE.exists():
         try:
             with open(ALERTS_CONFIG_FILE, encoding="utf-8") as f:
-                return json.load(f)
+                cfg = json.load(f)
         except Exception as e:
             logger.warning(f"Could not load alerts config: {e}")
-    return {
-        "email": {
-            "enabled":     False,
-            "address":     "",
-            "smtp_server": "smtp.gmail.com",
-            "smtp_port":   587,
-            "username":    "",
-            "password":    "",
-        },
-        "telegram": {
-            "enabled":   False,
-            "bot_token": "",
-            "chat_id":   "",
-        },
-        # Feature 9: Discord and generic webhook support
-        "discord": {
-            "enabled":     False,
-            "webhook_url": "",
-        },
-        "webhook": {
-            "enabled":     False,
-            "url":         "",
-            "secret":      "",   # optional HMAC-SHA256 signing secret
-        },
-        "thresholds": {
-            "min_apy_alert":  150.0,
-            "new_arb_alert":  True,
-        },
-    }
+
+    # Seed from environment variables when sections are missing or tokens are empty.
+    # This allows Streamlit Cloud / .env-based deployments to send alerts without
+    # requiring the user to manually fill in the Settings page first.
+    _tg_token  = os.environ.get("DEFI_TELEGRAM_BOT_TOKEN", "")
+    _tg_chat   = os.environ.get("DEFI_TELEGRAM_CHAT_ID", "")
+    _dc_webhook = os.environ.get("DEFI_WEBHOOK_URL", "")
+
+    if not cfg:
+        cfg = {
+            "email": {
+                "enabled":     False,
+                "address":     "",
+                "smtp_server": "smtp.gmail.com",
+                "smtp_port":   587,
+                "username":    "",
+                "password":    "",
+            },
+            "telegram": {
+                "enabled":   bool(_tg_token and _tg_chat),
+                "bot_token": _tg_token,
+                "chat_id":   _tg_chat,
+            },
+            "discord": {
+                "enabled":     bool(_dc_webhook),
+                "webhook_url": _dc_webhook,
+            },
+            "webhook": {
+                "enabled":     False,
+                "url":         "",
+                "secret":      "",
+            },
+            "thresholds": {
+                "min_apy_alert":  150.0,
+                "new_arb_alert":  True,
+            },
+        }
+    else:
+        # Back-fill missing sections from env vars without overwriting user settings
+        tg = cfg.setdefault("telegram", {})
+        if not tg.get("bot_token") and _tg_token:
+            tg["bot_token"] = _tg_token
+            tg["chat_id"]   = _tg_chat
+            tg.setdefault("enabled", bool(_tg_token and _tg_chat))
+        dc = cfg.setdefault("discord", {})
+        if not dc.get("webhook_url") and _dc_webhook:
+            dc["webhook_url"] = _dc_webhook
+            dc.setdefault("enabled", bool(_dc_webhook))
+        cfg.setdefault("webhook",     {"enabled": False, "url": "", "secret": ""})
+        cfg.setdefault("thresholds",  {"min_apy_alert": 150.0, "new_arb_alert": True})
+
+    return cfg
 
 
 def save_alerts_config(config: dict) -> None:
