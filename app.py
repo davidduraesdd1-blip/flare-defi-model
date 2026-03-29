@@ -35,6 +35,11 @@ try:
             traces_sample_rate=0.05,
             profiles_sample_rate=0.0,
             before_send=_scrub_sentry_event,
+            # Ignore benign Streamlit-internal media-file expiry errors.
+            # These fire when a browser loads a stale Plotly chart URL after
+            # Streamlit's in-memory media store has already evicted the file.
+            # They are always "handled=yes" and never affect the user experience.
+            ignore_errors=["MediaFileStorageError"],
         )
 except ImportError:
     pass
