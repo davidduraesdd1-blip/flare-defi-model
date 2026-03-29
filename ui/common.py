@@ -1137,19 +1137,26 @@ def render_ftso_il_calculator(prices: list = None) -> None:
     c1, c2 = st.columns(2)
     with c1:
         token_a_sym = st.selectbox("Token A", known_tokens, key="il_token_a")
-        _default_a  = price_lkp.get(token_a_sym) or FALLBACK_PRICES.get(token_a_sym, 0.01)
-        entry_a = st.number_input("Token A entry price ($)", value=float(_default_a),
-                                  min_value=0.0001, format="%.6f", key="il_entry_a",
+        _default_a  = float(price_lkp.get(token_a_sym) or FALLBACK_PRICES.get(token_a_sym, 0.01))
+        # Key includes token symbol — changing pair creates a fresh widget with updated price
+        entry_a = st.number_input("Token A entry price ($)", value=_default_a,
+                                  min_value=0.0001, format="%.6f",
+                                  key=f"il_entry_a_{token_a_sym}",
                                   help="Uses FTSO live price when available")
-        current_a = st.number_input("Token A current price ($)", value=float(price_lkp.get(token_a_sym) or _default_a),
-                                    min_value=0.0001, format="%.6f", key="il_curr_a")
+        current_a = st.number_input("Token A current price ($)",
+                                    value=float(price_lkp.get(token_a_sym) or _default_a),
+                                    min_value=0.0001, format="%.6f",
+                                    key=f"il_curr_a_{token_a_sym}")
     with c2:
         token_b_sym = st.selectbox("Token B", ["USD0", "USDT0", "USDC.e", "WFLR", "sFLR", "FXRP", "wETH", "HLN"], key="il_token_b")
-        _default_b  = price_lkp.get(token_b_sym) or FALLBACK_PRICES.get(token_b_sym, 1.00)
-        entry_b = st.number_input("Token B entry price ($)", value=float(_default_b),
-                                  min_value=0.0001, format="%.6f", key="il_entry_b")
-        current_b = st.number_input("Token B current price ($)", value=float(price_lkp.get(token_b_sym) or _default_b),
-                                    min_value=0.0001, format="%.6f", key="il_curr_b")
+        _default_b  = float(price_lkp.get(token_b_sym) or FALLBACK_PRICES.get(token_b_sym, 1.00))
+        entry_b = st.number_input("Token B entry price ($)", value=_default_b,
+                                  min_value=0.0001, format="%.6f",
+                                  key=f"il_entry_b_{token_b_sym}")
+        current_b = st.number_input("Token B current price ($)",
+                                    value=float(price_lkp.get(token_b_sym) or _default_b),
+                                    min_value=0.0001, format="%.6f",
+                                    key=f"il_curr_b_{token_b_sym}")
 
     deposit = st.number_input("Deposit value ($)", min_value=1.0, value=1000.0, step=100.0, key="il_deposit")
 
