@@ -282,8 +282,13 @@ def fetch_prices() -> list:
 
     # Include SPRK (SparkDEX reward token) and ripple-usd (RLUSD) for reward APY + pool tracking (#68-70)
     ids = "flare-networks,ripple,tether,sparkdex-ai,ripple-usd,hyperliquid"
-    # Use Pro endpoint + key when available; fall back to free-tier URL
-    if COINGECKO_API_KEY:
+    # Use demo/pro API key when available for higher rate limits.
+    # CG- prefix = Demo key (api.coingecko.com + x-cg-demo-api-key header)
+    # Other prefix = Pro key (pro-api.coingecko.com + x-cg-pro-api-key header)
+    if COINGECKO_API_KEY and COINGECKO_API_KEY.startswith("CG-"):
+        url = f"{APIS['coingecko']}/simple/price"
+        _cg_headers = {"x-cg-demo-api-key": COINGECKO_API_KEY}
+    elif COINGECKO_API_KEY:
         url = "https://pro-api.coingecko.com/api/v3/simple/price"
         _cg_headers = {"x-cg-pro-api-key": COINGECKO_API_KEY}
     else:
