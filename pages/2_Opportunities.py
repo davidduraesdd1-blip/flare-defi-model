@@ -1187,7 +1187,7 @@ if _fg_pools:
                 "Fee %":       "{:.3f}%",
                 "APY est %":   "{:.1f}%",
             }),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         st.caption(
