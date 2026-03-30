@@ -1000,12 +1000,14 @@ def fetch_kamino_yields() -> dict:
 
 # ── 14. Meteora DLMM (#78) ────────────────────────────────────────────────────
 
-def fetch_meteora_yields() -> dict:
-    """Fetch Meteora DLMM pool yields on Solana via DeFiLlama.
+_METEORA_API_URL = "https://dlmm-api.meteora.ag/pair/all_with_pagination"
 
-    Filters DeFiLlama pools to project containing "meteora" on Solana with
-    TVL ≥ $50k.  Sorts by TVL descending (DLMM pools routinely show
-    >10 000% APY for concentrated ranges — TVL is a more stable ranking).
+def fetch_meteora_yields() -> dict:
+    """Fetch Meteora DLMM pool yields directly from Meteora's own API.
+
+    Uses Meteora's paginated pair endpoint sorted by liquidity descending.
+    DeFiLlama yields API does not reliably index Meteora DLMM pools.
+    Falls back to DeFiLlama substring search if the Meteora API fails.
     Returns top 5 by TVL.
     """
     now = time.time()
@@ -1014,30 +1016,57 @@ def fetch_meteora_yields() -> dict:
 
     result: dict = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
     try:
-        pools = _get_llama_pools()
+        # Primary: Meteora's own DLMM API — sorted by liquidity, top 20
+        resp = _SESSION.get(
+            _METEORA_API_URL,
+            params={"page": 0, "limit": 20, "sort_key": "liquidity", "order_by": "desc"},
+            timeout=20,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        pairs = data if isinstance(data, list) else data.get("pairs", data.get("data", []))
         hits: list[dict] = []
-        for p in pools:
-            proj  = (p.get("project") or "").lower()
-            chain = (p.get("chain")   or "").lower()
-            tvl   = float(p.get("tvlUsd") or 0)
-            apy   = float(p.get("apy") or 0)
-            # Broad match: meteora, meteora-dlmm, meteora-v2 etc.
-            if "meteora" not in proj or chain != "solana" or tvl < 50_000:
+        for p in (pairs or []):
+            name = p.get("name") or p.get("pair_name") or ""
+            tvl  = float(p.get("liquidity") or p.get("tvl") or p.get("tvlUsd") or 0)
+            apy  = float(p.get("apy") or p.get("apr") or 0)
+            if tvl < 50_000:
                 continue
-            # No APY cap — DLMM concentrated positions routinely show 10 000%+
             hits.append({
-                "symbol":  p.get("symbol", ""),
+                "symbol":  name,
                 "apy":     round(apy, 4),
                 "tvl_usd": round(tvl, 2),
                 "chain":   "Solana",
-                "project": p.get("project", ""),
+                "project": "meteora-dlmm",
             })
-        # Sort by TVL (most liquid first) — APY-sort would surface extreme outliers
         hits.sort(key=lambda x: x["tvl_usd"], reverse=True)
         result["pools"]     = hits[:5]
         result["total_tvl"] = round(sum(h["tvl_usd"] for h in hits), 2)
     except Exception as e:
-        logger.warning("[Meteora] fetch failed: %s", e)
+        logger.warning("[Meteora] primary API failed (%s) — trying DeFiLlama fallback", e)
+        # Fallback: DeFiLlama yields pool search
+        try:
+            pools = _get_llama_pools()
+            hits = []
+            for p in pools:
+                proj  = (p.get("project") or "").lower()
+                chain = (p.get("chain")   or "").lower()
+                tvl   = float(p.get("tvlUsd") or 0)
+                apy   = float(p.get("apy") or 0)
+                if "meteora" not in proj or chain != "solana" or tvl < 50_000:
+                    continue
+                hits.append({
+                    "symbol":  p.get("symbol", ""),
+                    "apy":     round(apy, 4),
+                    "tvl_usd": round(tvl, 2),
+                    "chain":   "Solana",
+                    "project": p.get("project", ""),
+                })
+            hits.sort(key=lambda x: x["tvl_usd"], reverse=True)
+            result["pools"]     = hits[:5]
+            result["total_tvl"] = round(sum(h["tvl_usd"] for h in hits), 2)
+        except Exception as e2:
+            logger.warning("[Meteora] DeFiLlama fallback also failed: %s", e2)
 
     result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     if result["pools"]:   # don't lock out retries on a failed/empty fetch
