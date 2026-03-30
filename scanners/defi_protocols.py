@@ -36,8 +36,9 @@ _ethena_cache     = {"ts": 0, "data": None}   # #76
 _aerodrome_cache  = {"ts": 0, "data": None}   # #77
 _morpho_cache     = {"ts": 0, "data": None}   # #77
 _eigenlayer_cache = {"ts": 0, "data": None}   # #71
-_kamino_cache     = {"ts": 0, "data": None}   # #78
-_meteora_cache    = {"ts": 0, "data": None}   # #78
+_kamino_cache       = {"ts": 0, "data": None}   # #78
+_meteora_cache      = {"ts": 0, "data": None}   # #78
+_flare_gecko_cache  = {"ts": 0, "data": None}   # Flare network GeckoTerminal discovery
 
 # #79 — TVL snapshot store for 24h-change alerts
 # { protocol_slug: {"tvl": float, "ts": float} }
@@ -1716,3 +1717,156 @@ def fetch_erc4626_yield_data() -> dict:
     _erc4626_cache["ts"]   = time.time()
     _erc4626_cache["data"] = result
     return result
+
+
+# ── 16. Flare Network GeckoTerminal Discovery ──────────────────────────────────
+# Scans ALL active pools on the Flare chain via GeckoTerminal, not just pre-known
+# protocols. Enables discovery of new DEXes and pools before DeFiLlama indexes them.
+
+import re as _re
+
+_FLARE_GECKO_TTL = 900   # 15 min
+
+# Known Flare protocol DEX slugs — used to flag genuinely new discoveries
+_KNOWN_FLARE_PROTOCOLS = {
+    "blazeswap", "enosys", "kinetic-finance", "sceptre-liquid",
+    "spectra-v2", "clearpool", "clearpool-lending",
+    "mystic-finance-lending", "upshift", "kinza-finance",
+    "firelight-finance", "kinza",
+}
+
+_GECKO_HEADERS = {"Accept": "application/json"}
+_GECKO_BASE    = "https://api.geckoterminal.com/api/v2"
+
+
+def fetch_flare_gecko_pools(pages: int = 5, min_tvl_usd: float = 5_000) -> list[dict]:
+    """
+    Discover ALL active pools on the Flare network via GeckoTerminal.
+
+    Scans up to `pages` pages (20 pools per page) sorted by 24h volume.
+    Returns a list of pool dicts sorted by TVL descending.
+
+    Each entry contains:
+        symbol, dex_id, dex_name, tvl_usd, vol_24h_usd,
+        fee_rate_pct, apy_est, chain, pool_address, is_new
+
+    `is_new` is True when the DEX is not in our _KNOWN_FLARE_PROTOCOLS set,
+    allowing the UI to surface newly-launched protocols automatically.
+    """
+    now = time.time()
+    if _flare_gecko_cache["ts"] and now - _flare_gecko_cache["ts"] < _FLARE_GECKO_TTL:
+        cached = _flare_gecko_cache.get("data")
+        if cached is not None:
+            return cached
+
+    dex_names: dict[str, str] = {}
+    all_pools: list[dict] = []
+
+    for page in range(1, pages + 1):
+        try:
+            resp = _SESSION.get(
+                f"{_GECKO_BASE}/networks/flare/pools",
+                params={"page": page, "sort": "h24_volume_usd_desc", "include": "dex"},
+                headers=_GECKO_HEADERS,
+                timeout=25,
+            )
+            if resp.status_code == 404:
+                logger.warning(
+                    "[FlareGecko] network slug 'flare' → 404 on page %d — "
+                    "GeckoTerminal may use a different slug for this chain", page
+                )
+                break
+            resp.raise_for_status()
+            payload = resp.json()
+
+            # Harvest DEX names from the included sidecar objects
+            for inc in (payload.get("included") or []):
+                if inc.get("type") == "dex":
+                    dex_id = inc["id"]
+                    dex_names[dex_id] = (
+                        (inc.get("attributes") or {}).get("name") or dex_id
+                    )
+
+            raw_pools = payload.get("data") or []
+            if not raw_pools:
+                logger.info("[FlareGecko] page %d returned 0 pools — stopping", page)
+                break
+
+            for pool in raw_pools:
+                attrs = pool.get("attributes") or {}
+                rels  = pool.get("relationships") or {}
+
+                name   = attrs.get("name") or ""
+                tvl    = float(attrs.get("reserve_in_usd") or 0)
+                vol24h = float((attrs.get("volume_usd") or {}).get("h24") or 0)
+
+                if tvl < min_tvl_usd:
+                    continue
+
+                # DEX identification
+                dex_rel  = (rels.get("dex") or {}).get("data") or {}
+                dex_id   = dex_rel.get("id") or "unknown"
+                dex_name = dex_names.get(dex_id) or dex_id
+
+                # Fee rate: prefer fee_tier field, then parse from pool name
+                fee_rate = 0.003  # 0.3% default for standard AMMs on Flare
+                raw_fee  = attrs.get("fee_tier")
+                if raw_fee is not None:
+                    try:
+                        fee_val = float(raw_fee)
+                        # GeckoTerminal stores fee_tier as basis points (300 = 0.3%)
+                        fee_rate = fee_val / 10_000 if fee_val > 1 else fee_val / 100
+                    except (ValueError, TypeError):
+                        pass
+                else:
+                    # Parse from name suffix e.g. "WFLR / USDT0 0.30%"
+                    fee_match = _re.search(r"(\d+\.?\d*)%", name)
+                    if fee_match:
+                        try:
+                            fee_rate = float(fee_match.group(1)) / 100
+                        except ValueError:
+                            pass
+
+                # Estimate LP APY = 24h volume × fee / TVL × 365
+                apy_est = 0.0
+                if tvl > 0 and vol24h > 0:
+                    apy_est = round(min((vol24h * fee_rate / tvl) * 365 * 100, 99_999), 2)
+
+                # Clean symbol: strip fee % suffix, normalise separator
+                symbol = _re.sub(r"\s+\d+\.?\d*%$", "", name).replace(" / ", "-").strip()
+
+                pool_id = pool.get("id") or ""
+                pool_address = attrs.get("address") or (
+                    pool_id.split("_", 1)[-1] if "_" in pool_id else pool_id
+                )
+
+                all_pools.append({
+                    "symbol":       symbol,
+                    "dex_id":       dex_id,
+                    "dex_name":     dex_name,
+                    "tvl_usd":      round(tvl, 2),
+                    "vol_24h_usd":  round(vol24h, 2),
+                    "fee_rate_pct": round(fee_rate * 100, 3),
+                    "apy_est":      apy_est,
+                    "chain":        "Flare",
+                    "pool_address": pool_address,
+                    "is_new":       dex_id.lower() not in _KNOWN_FLARE_PROTOCOLS,
+                })
+
+            logger.info("[FlareGecko] page %d — %d raw pools processed", page, len(raw_pools))
+
+        except Exception as exc:
+            logger.warning("[FlareGecko] page %d fetch error: %s", page, exc)
+            break
+
+    all_pools.sort(key=lambda x: x["tvl_usd"], reverse=True)
+
+    _flare_gecko_cache["ts"]   = time.time()
+    _flare_gecko_cache["data"] = all_pools
+
+    new_count = sum(1 for p in all_pools if p["is_new"])
+    logger.info(
+        "[FlareGecko] TOTAL: %d pools discovered on Flare, %d from unknown protocols",
+        len(all_pools), new_count,
+    )
+    return all_pools
