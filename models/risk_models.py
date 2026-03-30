@@ -229,13 +229,20 @@ def compute_real_yield_ratio(total_apy: float, emission_apy: float) -> dict:
 def kelly_fraction(win_prob: float, win_pct: float, loss_pct: float) -> float:
     """
     Kelly f* = (win_prob * win_pct - loss_prob * loss_pct) / (win_pct * loss_pct)
-    Correct form for asymmetric payoffs where win and loss magnitudes differ.
-    Returns suggested fraction of capital as a decimal (capped at 0.25 for safety).
+    Correct asymmetric form.  When loss_pct == 0 (zero IL risk, e.g. lending /
+    staking) the denominator is undefined — the bet is always +EV so Kelly
+    recommends betting the full bankroll; we use win_prob as a conservative
+    proxy before applying the hard cap.
+    Returns suggested fraction of capital as a decimal (capped at MAX_KELLY_FRACTION).
     """
     loss_prob = 1 - win_prob
-    if win_pct <= 0 or loss_pct <= 0:
+    if win_pct <= 0:
         return 0.0
-    k = (win_prob * win_pct - loss_prob * loss_pct) / (win_pct * loss_pct)
+    if loss_pct <= 0:
+        # Zero-loss scenario (lending / staking with no IL): f* → ∞, use win_prob
+        k = win_prob
+    else:
+        k = (win_prob * win_pct - loss_prob * loss_pct) / (win_pct * loss_pct)
     k = max(0.0, min(k, MAX_KELLY_FRACTION))   # cap Kelly fraction for safety
     return round(k, 4)
 
