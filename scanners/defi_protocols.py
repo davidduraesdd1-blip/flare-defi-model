@@ -93,7 +93,7 @@ def _get_llama_pools() -> list[dict]:
 
     # We are the designated fetching thread
     try:
-        resp = _SESSION.get(_LLAMA_YIELDS_URL, timeout=20)
+        resp = _SESSION.get(_LLAMA_YIELDS_URL, timeout=45)   # 20MB response; 45s on cloud
         resp.raise_for_status()
         pools = resp.json().get("data", []) or []
         if pools:
@@ -758,13 +758,13 @@ def fetch_aerodrome_pools() -> list[dict]:
         return _aerodrome_cache["data"]
 
     result: list[dict] = []
-    _AERO_PROJECTS = {"aerodrome-v2", "aerodrome", "aerodrome-finance"}
     try:
         pools = _get_llama_pools()
         for p in pools:
             proj  = (p.get("project") or "").lower()
             chain = (p.get("chain")   or "").lower()
-            if proj not in _AERO_PROJECTS or chain != "base":
+            # Broad match: catches aerodrome-v2, aerodrome, aerodrome-finance, aerodrome-cl etc.
+            if "aerodrome" not in proj or chain != "base":
                 continue
             tvl = float(p.get("tvlUsd") or 0)
             result.append({
@@ -781,8 +781,11 @@ def fetch_aerodrome_pools() -> list[dict]:
     except Exception as e:
         logger.warning("[Aerodrome] fetch failed: %s", e)
 
-    _aerodrome_cache["ts"]   = time.time()
-    _aerodrome_cache["data"] = result
+    # Only update cache on non-empty results; empty means DeFiLlama timed out —
+    # don't lock out retries for 15 minutes.
+    if result:
+        _aerodrome_cache["ts"]   = time.time()
+        _aerodrome_cache["data"] = result
     logger.info("[Aerodrome] %d pools fetched", len(result))
     return result
 
@@ -802,12 +805,12 @@ def fetch_morpho_vaults() -> list[dict]:
         return _morpho_cache["data"]
 
     result: list[dict] = []
-    _MORPHO_PROJECTS = {"morpho", "morpho-blue"}
     try:
         pools = _get_llama_pools()
         for p in pools:
             proj = (p.get("project") or "").lower()
-            if proj not in _MORPHO_PROJECTS:
+            # Broad match: catches morpho, morpho-blue, morpho-v2, morpho-blue-v3 etc.
+            if "morpho" not in proj:
                 continue
             tvl = float(p.get("tvlUsd") or 0)
             result.append({
@@ -824,8 +827,11 @@ def fetch_morpho_vaults() -> list[dict]:
     except Exception as e:
         logger.warning("[Morpho] fetch failed: %s", e)
 
-    _morpho_cache["ts"]   = time.time()
-    _morpho_cache["data"] = result
+    # Only update cache on non-empty results; empty means DeFiLlama timed out —
+    # don't lock out retries for 15 minutes.
+    if result:
+        _morpho_cache["ts"]   = time.time()
+        _morpho_cache["data"] = result
     logger.info("[Morpho] %d vaults fetched", len(result))
     return result
 
@@ -930,8 +936,13 @@ def fetch_eigenlayer_lrt_yields() -> dict:
         logger.debug("[EigenLayer/LRT] ether.fi direct API failed (using DeFiLlama): %s", e)
 
     result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    _eigenlayer_cache["ts"]   = time.time()
-    _eigenlayer_cache["data"] = result
+    _has_lrt_data = any(
+        v.get("apy", 0) > 0 or v.get("tvl_usd", 0) > 0
+        for k, v in result.items() if isinstance(v, dict)
+    )
+    if _has_lrt_data:   # don't lock out retries when DeFiLlama returned nothing
+        _eigenlayer_cache["ts"]   = time.time()
+        _eigenlayer_cache["data"] = result
     logger.info(
         "[EigenLayer/LRT] eigenlayer=%.2f%% etherfi=%.2f%% renzo=%.2f%% kelp=%.2f%%",
         result["eigenlayer_native"]["apy"],
@@ -956,7 +967,6 @@ def fetch_kamino_yields() -> dict:
         return _kamino_cache["data"]
 
     result: dict = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
-    _KAMINO_PROJS = {"kamino", "kamino-lending", "kamino-liquidity"}
     try:
         pools = _get_llama_pools()
         hits: list[dict] = []
@@ -964,7 +974,8 @@ def fetch_kamino_yields() -> dict:
             proj  = (p.get("project") or "").lower()
             chain = (p.get("chain")   or "").lower()
             tvl   = float(p.get("tvlUsd") or 0)
-            if proj not in _KAMINO_PROJS or chain != "solana" or tvl < 500_000:
+            # Broad match: kamino, kamino-lending, kamino-liquidity, kamino-v2 etc.
+            if "kamino" not in proj or chain != "solana" or tvl < 500_000:
                 continue
             hits.append({
                 "symbol":  p.get("symbol", ""),
@@ -980,8 +991,9 @@ def fetch_kamino_yields() -> dict:
         logger.warning("[Kamino] fetch failed: %s", e)
 
     result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    _kamino_cache["ts"]   = time.time()
-    _kamino_cache["data"] = result
+    if result["pools"]:   # don't lock out retries on a failed/empty fetch
+        _kamino_cache["ts"]   = time.time()
+        _kamino_cache["data"] = result
     logger.info("[Kamino] %d pools fetched, total_tvl=%.0f", len(result["pools"]), result["total_tvl"])
     return result
 
@@ -1000,7 +1012,6 @@ def fetch_meteora_yields() -> dict:
         return _meteora_cache["data"]
 
     result: dict = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
-    _METEORA_PROJS = {"meteora", "meteora-dlmm"}
     try:
         pools = _get_llama_pools()
         hits: list[dict] = []
@@ -1009,7 +1020,8 @@ def fetch_meteora_yields() -> dict:
             chain = (p.get("chain")   or "").lower()
             tvl   = float(p.get("tvlUsd") or 0)
             apy   = float(p.get("apy") or 0)
-            if proj not in _METEORA_PROJS or chain != "solana" or tvl < 100_000:
+            # Broad match: meteora, meteora-dlmm, meteora-v2 etc.
+            if "meteora" not in proj or chain != "solana" or tvl < 100_000:
                 continue
             if apy > 10_000:    # exclude extreme outliers
                 continue
@@ -1027,8 +1039,9 @@ def fetch_meteora_yields() -> dict:
         logger.warning("[Meteora] fetch failed: %s", e)
 
     result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    _meteora_cache["ts"]   = time.time()
-    _meteora_cache["data"] = result
+    if result["pools"]:   # don't lock out retries on a failed/empty fetch
+        _meteora_cache["ts"]   = time.time()
+        _meteora_cache["data"] = result
     logger.info("[Meteora] %d pools fetched, total_tvl=%.0f", len(result["pools"]), result["total_tvl"])
     return result
 
