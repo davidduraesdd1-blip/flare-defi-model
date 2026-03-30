@@ -33,6 +33,7 @@ from scanners.defi_protocols import (
     fetch_meteora_yields,               # #78
     fetch_token_unlock_alerts,          # #84
     fetch_erc4626_yield_data,           # #103
+    fetch_flare_gecko_pools,            # Flare network full discovery
 )
 from models.risk_models import (
     compute_pool_sharpe,                # #72
@@ -65,6 +66,12 @@ def _cached_kamino_yields():
 def _cached_meteora_yields():
     """Cached wrapper for fetch_meteora_yields(). TTL=10 min."""
     return fetch_meteora_yields()
+
+
+@st.cache_data(ttl=900)
+def _cached_flare_gecko_pools():
+    """Cached wrapper for fetch_flare_gecko_pools(). TTL=15 min."""
+    return fetch_flare_gecko_pools(pages=5, min_tvl_usd=5_000)
 
 
 @st.cache_data(ttl=300)
@@ -1118,6 +1125,99 @@ if _unlock_alerts:
     )
 else:
     st.success("✓ No major token unlocks in the next 30 days.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ── Flare Network Pool Discovery ───────────────────────────────────────────────
+# Scans GeckoTerminal for every active pool on Flare — including protocols
+# that DeFiLlama has not yet indexed — so nothing on-chain is missed.
+
+render_section_header(
+    "Flare Network — Full Pool Discovery",
+    "All active pools on Flare chain via GeckoTerminal · sorted by TVL · auto-discovers new protocols",
+)
+
+with st.spinner("Scanning Flare network pools…"):
+    try:
+        _fg_pools = _cached_flare_gecko_pools()
+    except Exception:
+        _fg_pools = []
+
+if _fg_pools:
+    # Split known vs newly discovered protocols
+    _fg_known = [p for p in _fg_pools if not p["is_new"]]
+    _fg_new   = [p for p in _fg_pools if p["is_new"]]
+
+    if _fg_new:
+        st.info(
+            f"**{len(_fg_new)} pool(s) from protocols not in our tracked list** — "
+            "these may be newly launched DEXes or vaults on Flare. "
+            "Expand below to review."
+        )
+
+    # ── Summary metrics row
+    _fg_total_tvl = sum(p["tvl_usd"] for p in _fg_pools)
+    _fg_dex_count = len({p["dex_id"] for p in _fg_pools})
+    _fg_c1, _fg_c2, _fg_c3, _fg_c4 = st.columns(4)
+    with _fg_c1:
+        st.metric("Pools found", len(_fg_pools))
+    with _fg_c2:
+        st.metric("Unique DEXes", _fg_dex_count)
+    with _fg_c3:
+        st.metric("Total TVL", f"${_fg_total_tvl/1e6:.1f}M")
+    with _fg_c4:
+        st.metric("New protocols", len({p["dex_id"] for p in _fg_new}))
+
+    # ── Full pool table in expander
+    with st.expander("All Flare pools (click to expand)", expanded=False):
+        _fg_df = pd.DataFrame([{
+            "Pool":        p["symbol"],
+            "DEX":         p["dex_name"],
+            "TVL ($)":     p["tvl_usd"],
+            "24h Vol ($)": p["vol_24h_usd"],
+            "Fee %":       p["fee_rate_pct"],
+            "APY est %":   p["apy_est"],
+            "New?":        "🆕" if p["is_new"] else "",
+        } for p in _fg_pools])
+        st.dataframe(
+            _fg_df.style.format({
+                "TVL ($)":     "${:,.0f}",
+                "24h Vol ($)": "${:,.0f}",
+                "Fee %":       "{:.3f}%",
+                "APY est %":   "{:.1f}%",
+            }),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.caption(
+            "APY estimated as (24h volume × fee rate / TVL) × 365. "
+            "Source: GeckoTerminal · refreshed every 15 min."
+        )
+
+    # ── New protocol alert cards (if any)
+    if _fg_new:
+        st.markdown("#### Newly Discovered Protocols")
+        for _p in _fg_new[:10]:
+            st.markdown(
+                f"<div class='opp-card' style='border-left:3px solid #f59e0b;'>"
+                f"<div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;'>"
+                f"<div><span style='font-weight:700; color:#f1f5f9;'>🆕 {_p['dex_name']}</span>"
+                f"<span style='color:#475569; margin:0 6px;'>·</span>"
+                f"<span style='color:#94a3b8; font-size:0.9rem;'>{_p['symbol']}</span></div>"
+                f"<div style='display:flex; gap:12px; font-size:0.82rem;'>"
+                f"<span style='color:#a78bfa; font-weight:700;'>{_p['apy_est']:.0f}% est. APY</span>"
+                f"<span style='color:#f1f5f9; font-weight:700;'>TVL ${_p['tvl_usd']/1e6:.2f}M</span>"
+                f"</div></div>"
+                f"<div style='color:#94a3b8; font-size:0.85rem; margin-top:6px;'>"
+                f"Pool address: <code>{_p['pool_address'][:12]}…</code> · "
+                f"24h vol: ${_p['vol_24h_usd']:,.0f} · Fee: {_p['fee_rate_pct']:.3f}%"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+        st.caption("New protocol = DEX slug not in our monitored list. Verify legitimacy before investing.")
+else:
+    st.info("No Flare pool data available — GeckoTerminal may be rate-limiting. Try again in 60 seconds.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 

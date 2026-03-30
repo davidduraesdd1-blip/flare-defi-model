@@ -47,21 +47,40 @@ def _validate_range(value: float, min_v: float, max_v: float, name: str) -> tupl
 @st.cache_data(ttl=900, show_spinner=False)
 def _load_live_apys() -> dict:
     """
-    Fetch live pool APYs from DeFiLlama and return as
+    Fetch live pool APYs from two sources and merge into
     {(project_slug, symbol_upper): apy} for use in strategy planner.
+
+    Source 1 — DeFiLlama yields API (indexed Flare + cross-chain protocols)
+    Source 2 — GeckoTerminal Flare network sweep (all on-chain pools, including
+               protocols DeFiLlama has not yet indexed)
+    DeFiLlama takes priority when both sources have a match.
     """
+    from scanners.defi_protocols import fetch_flare_gecko_pools
+    result: dict[tuple[str, str], float] = {}
+
+    # Source 2 first so DeFiLlama can overwrite where both have data
     try:
-        pools = fetch_yields_pools(min_tvl_usd=10_000)
-        result = {}
-        for p in pools:
+        for p in fetch_flare_gecko_pools(pages=3, min_tvl_usd=10_000):
+            dex = (p.get("dex_id") or "").lower()
+            sym = (p.get("symbol") or "").upper()
+            apy = float(p.get("apy_est") or 0)
+            if dex and sym and apy > 0:
+                result[(dex, sym)] = apy
+    except Exception:
+        pass
+
+    # Source 1 — DeFiLlama (higher confidence, overwrites GeckoTerminal)
+    try:
+        for p in fetch_yields_pools(min_tvl_usd=10_000):
             proj = (p.get("project") or "").lower()
             sym  = (p.get("symbol") or "").upper()
             apy  = float(p.get("apy") or 0)
             if proj and sym and apy > 0:
                 result[(proj, sym)] = apy
-        return result
     except Exception:
-        return {}
+        pass
+
+    return result
 
 
 def _resolve_apy(live_apys: dict, project: str, symbol_hint: str, fallback: float) -> float:
