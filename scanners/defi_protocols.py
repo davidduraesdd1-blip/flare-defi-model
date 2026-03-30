@@ -1815,7 +1815,7 @@ def fetch_flare_gecko_pools(pages: int = 5, min_tvl_usd: float = 5_000) -> list[
                     try:
                         fee_val = float(raw_fee)
                         # GeckoTerminal stores fee_tier as basis points (300 = 0.3%)
-                        fee_rate = fee_val / 10_000 if fee_val > 1 else fee_val / 100
+                        fee_rate = fee_val / 10_000 if fee_val >= 1 else fee_val / 100
                     except (ValueError, TypeError):
                         pass
                 else:
