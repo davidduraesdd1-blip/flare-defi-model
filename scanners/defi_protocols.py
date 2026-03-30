@@ -1028,9 +1028,8 @@ def _gecko_meteora_hits(dex_slug: str) -> list[dict]:
                 "chain":   "Solana",
                 "project": "meteora-dlmm",
             })
-        # WARNING so this is visible in Streamlit Cloud logs
-        logger.warning("[Meteora] dex=%s HTTP 200 — %d raw pools, %d above $10k TVL",
-                       dex_slug, len(raw_pools), len(hits))
+        logger.info("[Meteora] dex=%s → %d raw pools, %d above $10k TVL",
+                    dex_slug, len(raw_pools), len(hits))
         return hits
     except Exception as e:
         logger.warning("[Meteora] GeckoTerminal dex=%s failed: %s", dex_slug, e)
@@ -1092,7 +1091,7 @@ def fetch_meteora_yields() -> dict:
     """Fetch Meteora DLMM pool yields.
 
     Strategy (first success wins):
-      1. GeckoTerminal DEX endpoint — tries meteora-dlmm, meteora, meteora-amm slugs
+      1. GeckoTerminal DEX endpoint — "meteora" slug (confirmed working)
       2. GeckoTerminal network scan — pages 1-3 sorted by volume, filter by dex id
       3. DeFiLlama yields pool search — substring match on "meteora"
     Returns top 5 pools by TVL.
@@ -1104,16 +1103,17 @@ def fetch_meteora_yields() -> dict:
     result: dict = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
     hits: list[dict] = []
 
-    # ── Method 1: GeckoTerminal DEX endpoint (try every known slug) ──────────
-    for slug in ("meteora-dlmm", "meteora", "meteora-amm"):
+    # ── Method 1: GeckoTerminal DEX endpoint ─────────────────────────────────
+    # "meteora" confirmed working; "meteora-dlmm" always 404s from cloud
+    for slug in ("meteora", "meteora-amm"):
         hits = _gecko_meteora_hits(slug)
         if hits:
-            logger.warning("[Meteora] success via GeckoTerminal dex=%s (%d pools)", slug, len(hits))
+            logger.info("[Meteora] success via GeckoTerminal dex=%s (%d pools)", slug, len(hits))
             break
 
     # ── Method 2: GeckoTerminal network scan ─────────────────────────────────
     if not hits:
-        logger.warning("[Meteora] all DEX slugs empty — starting network scan")
+        logger.warning("[Meteora] DEX slugs returned nothing — trying network scan")
         hits = _gecko_meteora_network_scan()
 
     # ── Method 3: DeFiLlama fallback ─────────────────────────────────────────
@@ -1121,11 +1121,10 @@ def fetch_meteora_yields() -> dict:
         logger.warning("[Meteora] network scan empty — trying DeFiLlama")
         try:
             pools = _get_llama_pools()
-            solana_meteora = [p for p in pools
-                              if "meteora" in (p.get("project") or "").lower()
-                              and (p.get("chain") or "").lower() == "solana"]
-            logger.warning("[Meteora] DeFiLlama solana+meteora pools found: %d", len(solana_meteora))
-            for p in solana_meteora:
+            for p in pools:
+                if ("meteora" not in (p.get("project") or "").lower()
+                        or (p.get("chain") or "").lower() != "solana"):
+                    continue
                 tvl = float(p.get("tvlUsd") or 0)
                 if tvl < 10_000:
                     continue
@@ -1147,7 +1146,7 @@ def fetch_meteora_yields() -> dict:
     if result["pools"]:
         _meteora_cache["ts"]   = time.time()
         _meteora_cache["data"] = result
-    logger.warning("[Meteora] FINAL: %d pools, total_tvl=%.0f", len(result["pools"]), result["total_tvl"])
+    logger.info("[Meteora] %d pools fetched, total_tvl=%.0f", len(result["pools"]), result["total_tvl"])
     return result
 
 
