@@ -899,6 +899,10 @@ with st.spinner("Loading Solana DeFi data…"):
             _kamino  = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
         try:
             _meteora = _cached_meteora_yields()
+            # If Streamlit served a stale empty result, bust the cache and retry once
+            if not (_meteora or {}).get("pools"):
+                _cached_meteora_yields.clear()
+                _meteora = _cached_meteora_yields()
         except Exception:
             _meteora = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
 
@@ -942,7 +946,7 @@ with _sol_col2:
             })
         st.dataframe(pd.DataFrame(_m_rows), width="stretch", hide_index=True)
         _m_tvl = float((_meteora or {}).get("total_tvl") or 0)
-        st.caption(f"Total Meteora TVL scanned: ${_m_tvl/1e6:.1f}M · Outliers >10,000% APY excluded.")
+        st.caption(f"Total Meteora TVL scanned: ${_m_tvl/1e6:.1f}M · Sorted by TVL (largest pools first).")
     else:
         st.info("Meteora data unavailable.")
 
