@@ -1003,9 +1003,10 @@ def fetch_kamino_yields() -> dict:
 def fetch_meteora_yields() -> dict:
     """Fetch Meteora DLMM pool yields on Solana via DeFiLlama.
 
-    Filters DeFiLlama pools to project in ("meteora", "meteora-dlmm") on
-    Solana with TVL ≥ $100k.  Excludes outliers >10 000% APY.
-    Returns top 5 by APY.
+    Filters DeFiLlama pools to project containing "meteora" on Solana with
+    TVL ≥ $50k.  Sorts by TVL descending (DLMM pools routinely show
+    >10 000% APY for concentrated ranges — TVL is a more stable ranking).
+    Returns top 5 by TVL.
     """
     now = time.time()
     if _meteora_cache["data"] is not None and now - _meteora_cache["ts"] < _TTL_LONG:
@@ -1021,10 +1022,9 @@ def fetch_meteora_yields() -> dict:
             tvl   = float(p.get("tvlUsd") or 0)
             apy   = float(p.get("apy") or 0)
             # Broad match: meteora, meteora-dlmm, meteora-v2 etc.
-            if "meteora" not in proj or chain != "solana" or tvl < 100_000:
+            if "meteora" not in proj or chain != "solana" or tvl < 50_000:
                 continue
-            if apy > 10_000:    # exclude extreme outliers
-                continue
+            # No APY cap — DLMM concentrated positions routinely show 10 000%+
             hits.append({
                 "symbol":  p.get("symbol", ""),
                 "apy":     round(apy, 4),
@@ -1032,7 +1032,8 @@ def fetch_meteora_yields() -> dict:
                 "chain":   "Solana",
                 "project": p.get("project", ""),
             })
-        hits.sort(key=lambda x: x["apy"], reverse=True)
+        # Sort by TVL (most liquid first) — APY-sort would surface extreme outliers
+        hits.sort(key=lambda x: x["tvl_usd"], reverse=True)
         result["pools"]     = hits[:5]
         result["total_tvl"] = round(sum(h["tvl_usd"] for h in hits), 2)
     except Exception as e:
