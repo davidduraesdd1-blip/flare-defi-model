@@ -946,7 +946,7 @@ with _sol_col2:
             })
         st.dataframe(pd.DataFrame(_m_rows), width="stretch", hide_index=True)
         _m_tvl = float((_meteora or {}).get("total_tvl") or 0)
-        st.caption(f"Total Meteora TVL scanned: ${_m_tvl/1e6:.1f}M · Sorted by TVL (largest pools first).")
+        st.caption(f"Total Meteora TVL scanned: ${_m_tvl/1e6:.1f}M · APY estimated from 24h volume × fee rate. Source: GeckoTerminal.")
     else:
         st.info("Meteora data unavailable.")
 
