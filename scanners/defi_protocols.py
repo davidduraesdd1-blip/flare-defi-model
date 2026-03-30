@@ -1000,26 +1000,26 @@ def fetch_kamino_yields() -> dict:
 
 # ── 14. Meteora DLMM (#78) ────────────────────────────────────────────────────
 
-# Candidate URLs tried in order; first success wins
-_METEORA_API_URLS = [
-    "https://dlmm-api.meteora.ag/pair/all",
-    "https://app.meteora.ag/clmm-api/pair/all",
+# GeckoTerminal public API — no key required, aggregates Meteora DLMM on Solana
+# DEX slug candidates (tried in order until one returns pools)
+_GECKO_METEORA_URLS = [
+    "https://api.geckoterminal.com/api/v2/networks/solana/dexes/meteora-dlmm/pools",
+    "https://api.geckoterminal.com/api/v2/networks/solana/dexes/meteora/pools",
 ]
+_GECKO_HEADERS = {"Accept": "application/json;version=20230302"}
 
-def _parse_meteora_pairs(raw) -> list[dict]:
-    """Extract a list of pair dicts from whatever shape the Meteora API returns."""
-    if isinstance(raw, list):
-        return raw
-    for key in ("pairs", "data", "result", "pools"):
-        if isinstance(raw.get(key), list):
-            return raw[key]
-    return []
+# Average Meteora DLMM fee rate used to estimate APY from 24h volume
+_METEORA_FEE_RATE = 0.0025   # 0.25% — conservative midpoint across DLMM tiers
+
 
 def fetch_meteora_yields() -> dict:
-    """Fetch Meteora DLMM pool yields directly from Meteora's own API.
+    """Fetch Meteora DLMM pool yields via GeckoTerminal (no API key needed).
 
-    Tries each candidate URL in order; falls back to DeFiLlama if all fail.
-    Returns top 5 pools by TVL (DLMM APYs are too volatile to rank by APY).
+    GeckoTerminal aggregates Meteora DLMM pools on Solana and provides TVL
+    (reserve_in_usd) and 24h volume.  APY is estimated as:
+        APY = (vol_24h × fee_rate / TVL) × 365 × 100
+    Falls back to DeFiLlama substring search if GeckoTerminal fails.
+    Returns top 5 pools by TVL.
     """
     now = time.time()
     if _meteora_cache["data"] is not None and now - _meteora_cache["ts"] < _TTL_LONG:
@@ -1028,35 +1028,41 @@ def fetch_meteora_yields() -> dict:
     result: dict = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
     hits: list[dict] = []
 
-    # ── Primary: Meteora's own API ──────────────────────────────────────────
-    for url in _METEORA_API_URLS:
+    # ── Primary: GeckoTerminal ──────────────────────────────────────────────
+    for url in _GECKO_METEORA_URLS:
         try:
-            resp = _SESSION.get(url, timeout=25)
+            resp = _SESSION.get(
+                url,
+                params={"page": 1, "sort": "h24_volume_usd_desc"},
+                headers=_GECKO_HEADERS,
+                timeout=20,
+            )
             resp.raise_for_status()
-            pairs = _parse_meteora_pairs(resp.json())
-            for p in pairs:
-                name = p.get("name") or p.get("pair_name") or p.get("symbol") or ""
-                # liquidity field is sometimes a decimal string
-                tvl  = float(p.get("liquidity") or p.get("tvl") or p.get("tvlUsd") or 0)
-                apy  = float(p.get("apy") or p.get("apr") or 0)
+            for pool in (resp.json().get("data") or []):
+                attrs  = pool.get("attributes") or {}
+                name   = attrs.get("name") or ""
+                tvl    = float(attrs.get("reserve_in_usd") or 0)
+                vol24h = float((attrs.get("volume_usd") or {}).get("h24") or 0)
                 if tvl < 50_000:
                     continue
+                # Estimate APY from fees: (daily_fees / TVL) × 365 × 100
+                apy = round((vol24h * _METEORA_FEE_RATE / max(tvl, 1)) * 365 * 100, 4)
                 hits.append({
-                    "symbol":  name,
-                    "apy":     round(apy, 4),
+                    "symbol":  name.replace(" / ", "-"),
+                    "apy":     min(apy, 50_000),   # cap extreme estimates
                     "tvl_usd": round(tvl, 2),
                     "chain":   "Solana",
                     "project": "meteora-dlmm",
                 })
             if hits:
-                logger.info("[Meteora] got %d raw pairs from %s", len(hits), url)
-                break   # success — stop trying other URLs
+                logger.info("[Meteora] GeckoTerminal returned %d pools from %s", len(hits), url)
+                break
         except Exception as e:
-            logger.warning("[Meteora] %s failed: %s", url, e)
+            logger.warning("[Meteora] GeckoTerminal %s failed: %s", url, e)
 
     # ── Fallback: DeFiLlama yields pool search ──────────────────────────────
     if not hits:
-        logger.warning("[Meteora] all primary URLs failed — trying DeFiLlama fallback")
+        logger.warning("[Meteora] GeckoTerminal failed — trying DeFiLlama fallback")
         try:
             pools = _get_llama_pools()
             for p in pools:
