@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 from ui.common import page_setup, render_sidebar, render_section_header
 from config import FALLBACK_PRICES
+from scanners.defillama import fetch_yields_pools
 from models.risk_models import (
     calc_il_vs_hodl,
     calc_concentrated_lp_efficiency,
@@ -39,6 +40,50 @@ def _validate_range(value: float, min_v: float, max_v: float, name: str) -> tupl
     if not (min_v <= value <= max_v):
         return False, f"{name} must be between {min_v} and {max_v}"
     return True, ""
+
+
+# ─── Live APY Loader for Strategy Planner ────────────────────────────────────
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _load_live_apys() -> dict:
+    """
+    Fetch live pool APYs from DeFiLlama and return as
+    {(project_slug, symbol_upper): apy} for use in strategy planner.
+    """
+    try:
+        pools = fetch_yields_pools(min_tvl_usd=10_000)
+        result = {}
+        for p in pools:
+            proj = (p.get("project") or "").lower()
+            sym  = (p.get("symbol") or "").upper()
+            apy  = float(p.get("apy") or 0)
+            if proj and sym and apy > 0:
+                result[(proj, sym)] = apy
+        return result
+    except Exception:
+        return {}
+
+
+def _resolve_apy(live_apys: dict, project: str, symbol_hint: str, fallback: float) -> float:
+    """
+    Look up live APY from DeFiLlama pool data. Tries exact match first,
+    then partial match (handles token-order variants like WFLR-USDT0 vs USDT0-WFLR).
+    Falls back to the hardcoded value if no live data found.
+    """
+    proj = project.lower()
+    hint = symbol_hint.upper()
+    # Exact match
+    live = live_apys.get((proj, hint))
+    if live is not None and live > 0:
+        return round(live, 1)
+    # Partial / token-order-agnostic match
+    for (p, s), apy in live_apys.items():
+        if p == proj and apy > 0:
+            tokens_hint = set(hint.split("-"))
+            tokens_pool = set(s.split("-"))
+            if tokens_hint and tokens_hint == tokens_pool:
+                return round(apy, 1)
+    return fallback
 
 st.title("📐 Planning Tools")
 st.caption("Model income scenarios, lock fixed rates with Spectra, delegate to FTSO, and plan FAssets allocations")
@@ -361,95 +406,238 @@ with tab5:
         il_comfort  = st.checkbox("I'm comfortable with impermanent loss risk", value=False, key="intent_il")
         exp_level   = st.selectbox("DeFi experience", ["Beginner", "Intermediate", "Advanced"], key="intent_exp")
 
+    # Load live APYs from DeFiLlama (cached 15 min) — used to update hardcoded fallback APYs
+    _live_apys = _load_live_apys()
+    _apy_source = "live · DeFiLlama" if _live_apys else "estimated · DeFiLlama offline"
+
     if st.button("Build My Strategy", key="build_strategy_btn", width="stretch", type="primary"):
-        # Strategy engine: maps intent + parameters to Flare-native strategies
+        # Strategy engine: maps intent + all parameters to Flare-native strategies
         _plans = []
         _warnings = []
-        _is_low_risk  = "Low" in risk_tol
-        _is_high_risk = "High" in risk_tol
-        _long_horizon = time_horiz in ("6–12 months", "1–2 years", "2+ years")
+        _is_low_risk   = "Low"    in risk_tol
+        _is_high_risk  = "High"   in risk_tol
+        _is_med_risk   = "Medium" in risk_tol
+        _short_horizon = time_horiz in ("<3 months", "3–6 months")
+        _long_horizon  = time_horiz in ("6–12 months", "1–2 years", "2+ years")
+        _is_beginner   = exp_level == "Beginner"
+        _is_advanced   = exp_level == "Advanced"
 
         days_to_jul26 = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
         _incentive_ok = days_to_jul26 > 60
 
+        # ── Helper: alias for resolver with loaded live data ──────────────────
+        def _apy(project: str, symbol: str, fallback: float) -> float:
+            return _resolve_apy(_live_apys, project, symbol, fallback)
+
+        # ── Branch by intent, then adjust per risk / horizon / experience ─────
+
         if "XRP" in intent:
             _plans = [
-                {"protocol": "Upshift EarnXRP", "strategy": "FXRP Vault", "alloc_pct": 60, "apy_est": 7.0, "risk": "Low",
+                {"protocol": "Upshift EarnXRP", "strategy": "FXRP Vault", "alloc_pct": 60,
+                 "apy_est": _apy("upshift", "FXRP", 7.0), "risk": "Low",
                  "action": "Bridge XRP → FXRP via Flare. Deposit in Upshift EarnXRP vault for 4–10% APY with auto-compounding."},
-                {"protocol": "Enosys DEX",      "strategy": "FXRP-USD0 LP", "alloc_pct": 30, "apy_est": 45.0, "risk": "Medium",
+                {"protocol": "Enosys DEX",      "strategy": "FXRP-USD0 LP", "alloc_pct": 30,
+                 "apy_est": _apy("enosys", "FXRP-USD0", 45.0), "risk": "Medium",
                  "action": "Provide FXRP-USD0 liquidity on Enosys for high APY. Accept ~5–15% IL risk."},
-                {"protocol": "Kinetic Finance",  "strategy": "FXRP Lending", "alloc_pct": 10, "apy_est": 5.0, "risk": "Low",
+                {"protocol": "Kinetic Finance",  "strategy": "FXRP Lending", "alloc_pct": 10,
+                 "apy_est": _apy("kinetic-finance", "FXRP", 5.0), "risk": "Low",
                  "action": "Deposit FXRP on Kinetic for lending yield with no IL."},
             ]
+            # Advanced + long horizon: add FXRP-WFLR LP for extra yield
+            if _is_advanced and _long_horizon and il_comfort:
+                _plans[1]["alloc_pct"] = 20
+                _plans[2]["alloc_pct"] = 10
+                _plans.insert(2, {
+                    "protocol": "Enosys DEX", "strategy": "FXRP-WFLR LP", "alloc_pct": 10,
+                    "apy_est": _apy("enosys", "FXRP-WFLR", 78.0), "risk": "High",
+                    "action": "Two volatile assets — compounding IL risk but high reward. For advanced users only.",
+                })
+
         elif "BTC" in intent:
             _plans = [
-                {"protocol": "Flare FAssets",   "strategy": "FBTC (Coming Soon)", "alloc_pct": 100, "apy_est": 5.0, "risk": "Medium",
+                {"protocol": "Flare FAssets",   "strategy": "FBTC (Coming Soon)", "alloc_pct": 100,
+                 "apy_est": 5.0, "risk": "Medium",
                  "action": "Wait for FBTC launch (in development). Bridge BTC → FBTC → deploy in LP or lending. Monitor flare.network for launch date."},
             ]
             _warnings.append("FBTC is not yet live. Use sFLR staking or Kinetic lending in the meantime.")
+
         elif "Replace FlareDrop" in intent:
             _plans = [
-                {"protocol": "Kinetic Finance",  "strategy": "Stablecoin Lending", "alloc_pct": 40, "apy_est": 8.5, "risk": "Low",
+                {"protocol": "Kinetic Finance",  "strategy": "Stablecoin Lending", "alloc_pct": 40,
+                 "apy_est": _apy("kinetic-finance", "USDT0", 8.5), "risk": "Low",
                  "action": "Deposit USDT0 or USD0 on Kinetic for 8–12% APY with zero IL. Most stable income."},
-                {"protocol": "Clearpool",        "strategy": "X-Pool USD0",        "alloc_pct": 30, "apy_est": 11.5, "risk": "Low",
+                {"protocol": "Clearpool",        "strategy": "X-Pool USD0",        "alloc_pct": 30,
+                 "apy_est": _apy("clearpool-lending", "USD0", 11.5), "risk": "Low",
                  "action": "Institutional lending pool. 11–14% APY on USD0. Lower TVL than Kinetic — moderate smart-contract risk."},
-                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 20, "apy_est": 4.5, "risk": "Low",
+                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 20,
+                 "apy_est": _apy("sceptre-liquid", "SFLR", 4.5), "risk": "Low",
                  "action": "Stake FLR for sFLR to earn 4–5% APY + FTSO rewards. Capital grows with FLR price."},
-                {"protocol": "FTSO Delegation",  "strategy": "Vote Power",          "alloc_pct": 10, "apy_est": 4.3, "risk": "None",
+                {"protocol": "FTSO Delegation",  "strategy": "Vote Power",          "alloc_pct": 10,
+                 "apy_est": 4.3, "risk": "None",
                  "action": "Delegate remaining FLR vote power for 4.3% APY. Keep your FLR liquid."},
             ]
+            # If short horizon, shift more weight to liquid lending
+            if _short_horizon:
+                _plans[0]["alloc_pct"] = 55
+                _plans[1]["alloc_pct"] = 30
+                _plans[2]["alloc_pct"] = 15
+                _plans = _plans[:3]
+                _warnings.append("Short horizon: reduced sFLR allocation (staking rewards take time to compound).")
+
         elif "capital" in intent.lower() or "inflation" in intent.lower():
             _plans = [
-                {"protocol": "Kinetic Finance",  "strategy": "USDT0 Lending",      "alloc_pct": 50, "apy_est": 8.5, "risk": "Low",
+                {"protocol": "Kinetic Finance",  "strategy": "USDT0 Lending",      "alloc_pct": 50,
+                 "apy_est": _apy("kinetic-finance", "USDT0", 8.5), "risk": "Low",
                  "action": "Stable dollar-denominated yield. 8–12% beats inflation significantly."},
-                {"protocol": "Clearpool",        "strategy": "USDX T-Pool",        "alloc_pct": 30, "apy_est": 9.1, "risk": "Low",
+                {"protocol": "Clearpool",        "strategy": "USDX T-Pool",        "alloc_pct": 30,
+                 "apy_est": _apy("clearpool-lending", "USDX", 9.1), "risk": "Low",
                  "action": "T-bill backed pool. ~$38M TVL. 9–10% on stablecoins."},
-                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 20, "apy_est": 4.5, "risk": "Low",
+                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 20,
+                 "apy_est": _apy("sceptre-liquid", "SFLR", 4.5), "risk": "Low",
                  "action": "FLR upside + 4.5% staking yield as hedge against inflation."},
             ]
+            # Advanced + long horizon: add Enosys WFLR-USDT0 LP as inflation hedge with upside
+            if _is_advanced and _long_horizon and il_comfort:
+                _plans[0]["alloc_pct"] = 35
+                _plans[1]["alloc_pct"] = 25
+                _plans[2]["alloc_pct"] = 15
+                _plans.append({
+                    "protocol": "Enosys DEX", "strategy": "WFLR-USDT0 LP", "alloc_pct": 25,
+                    "apy_est": _apy("enosys", "WFLR-USDT0", 55.0), "risk": "Medium",
+                    "action": "One volatile asset (WFLR) + stablecoin. Better risk/reward than pure stablecoin. IL is moderate — FLR moves affect this position.",
+                })
+
         elif "Learn" in intent or "small" in intent.lower():
             _plans = [
-                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 50, "apy_est": 4.5, "risk": "None",
+                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 50,
+                 "apy_est": _apy("sceptre-liquid", "SFLR", 4.5), "risk": "None",
                  "action": "Safest way to earn: stake FLR → get sFLR. Learn how LSTs work with zero IL."},
-                {"protocol": "Kinetic Finance",  "strategy": "USDT0 Lending",      "alloc_pct": 30, "apy_est": 8.0, "risk": "Low",
+                {"protocol": "Kinetic Finance",  "strategy": "USDT0 Lending",      "alloc_pct": 30,
+                 "apy_est": _apy("kinetic-finance", "USDT0", 8.0), "risk": "Low",
                  "action": "Deposit a stablecoin and earn interest. No price risk."},
-                {"protocol": "Blazeswap",        "strategy": "sFLR-WFLR LP",       "alloc_pct": 20, "apy_est": 37.0, "risk": "Low",
+                {"protocol": "Blazeswap",        "strategy": "sFLR-WFLR LP",       "alloc_pct": 20,
+                 "apy_est": _apy("blazeswap", "SFLR-WFLR", 37.0), "risk": "Low",
                  "action": "Both tokens track FLR price — minimal IL. Good intro to liquidity providing."},
             ]
+
         elif _is_high_risk or "Maximise" in intent:
-            _plans = [
-                {"protocol": "Blazeswap",        "strategy": "WFLR-USD0 LP",       "alloc_pct": 40, "apy_est": 133.0, "risk": "High",
-                 "action": "Highest available APY on Flare. Full USD0 paired with WFLR — significant IL risk if FLR moves."},
-                {"protocol": "Enosys DEX",       "strategy": "FXRP-WFLR LP",       "alloc_pct": 30, "apy_est": 78.0,  "risk": "High",
-                 "action": "Two volatile assets — compounding IL risk but high reward."},
-                {"protocol": "Hyperliquid",      "strategy": "HLP Vault",          "alloc_pct": 20, "apy_est": 15.0,  "risk": "Medium",
-                 "action": "Cross-chain perps liquidity. Market-making yield. Lower IL than DEX LP."},
-                {"protocol": "Kinetic Finance",  "strategy": "Stablecoin Lending", "alloc_pct": 10, "apy_est": 8.5,   "risk": "Low",
-                 "action": "Stable income anchor for the portfolio."},
-            ]
+            # Full aggressive allocation — varies by experience
+            if _is_beginner:
+                # Beginners: cap at Medium risk even in Max yield intent
+                _plans = [
+                    {"protocol": "Enosys DEX",      "strategy": "WFLR-USDT0 LP",     "alloc_pct": 40,
+                     "apy_est": _apy("enosys", "WFLR-USDT0", 55.0), "risk": "Medium",
+                     "action": "One volatile asset + stablecoin on Enosys. Best risk-adjusted entry for beginners wanting Flare DEX yield. IL is moderate."},
+                    {"protocol": "Blazeswap",        "strategy": "sFLR-WFLR LP",      "alloc_pct": 25,
+                     "apy_est": _apy("blazeswap", "SFLR-WFLR", 37.0), "risk": "Low",
+                     "action": "Correlated pair — both tokens track FLR. Very low IL. Good stepping stone to higher-risk LPs."},
+                    {"protocol": "Kinetic Finance",  "strategy": "Stablecoin Lending","alloc_pct": 20,
+                     "apy_est": _apy("kinetic-finance", "USDT0", 8.5), "risk": "Low",
+                     "action": "Stablecoin anchor. Locks in base yield regardless of FLR price."},
+                    {"protocol": "Sceptre",          "strategy": "sFLR Staking",      "alloc_pct": 15,
+                     "apy_est": _apy("sceptre-liquid", "SFLR", 4.5), "risk": "None",
+                     "action": "Safe FLR exposure + staking yield. Reduce position risk while learning the ecosystem."},
+                ]
+                _warnings.append("Beginner mode: High-risk pools excluded. Gain experience with these positions before moving to FXRP-WFLR or WFLR-USD0 LP.")
+            elif _short_horizon:
+                # Short horizon: avoid long-tail IL risk from dual-volatile pairs
+                _plans = [
+                    {"protocol": "Blazeswap",        "strategy": "WFLR-USD0 LP",       "alloc_pct": 40,
+                     "apy_est": _apy("blazeswap", "WFLR-USD0", 133.0), "risk": "High",
+                     "action": "Highest available APY on Flare. WFLR paired with USD0 stablecoin — significant IL if FLR moves sharply in short term."},
+                    {"protocol": "Enosys DEX",       "strategy": "WFLR-USDT0 LP",     "alloc_pct": 30,
+                     "apy_est": _apy("enosys", "WFLR-USDT0", 55.0), "risk": "Medium",
+                     "action": "WFLR paired with USDT0 stablecoin on Enosys. Lower IL risk than dual-volatile FXRP-WFLR. Good for short to medium positions."},
+                    {"protocol": "Hyperliquid",      "strategy": "HLP Vault",          "alloc_pct": 20,
+                     "apy_est": _apy("hyperliquid", "HLP", 15.0), "risk": "Medium",
+                     "action": "Cross-chain perps liquidity. Market-making yield. No IL. Good for short time horizons."},
+                    {"protocol": "Kinetic Finance",  "strategy": "Stablecoin Lending", "alloc_pct": 10,
+                     "apy_est": _apy("kinetic-finance", "USDT0", 8.5), "risk": "Low",
+                     "action": "Stable income anchor. Fully liquid — exit any time."},
+                ]
+                _warnings.append("Short horizon: dual-volatile LP (FXRP-WFLR) replaced with WFLR-USDT0 to reduce IL exposure over short holding periods.")
+            else:
+                # Standard max yield (Intermediate or Advanced, long horizon)
+                _plans = [
+                    {"protocol": "Blazeswap",        "strategy": "WFLR-USD0 LP",       "alloc_pct": 35,
+                     "apy_est": _apy("blazeswap", "WFLR-USD0", 133.0), "risk": "High",
+                     "action": "Highest available APY on Flare. Full USD0 paired with WFLR — significant IL risk if FLR moves."},
+                    {"protocol": "Enosys DEX",       "strategy": "FXRP-WFLR LP",       "alloc_pct": 25,
+                     "apy_est": _apy("enosys", "FXRP-WFLR", 78.0), "risk": "High",
+                     "action": "Two volatile assets — compounding IL risk but high reward. Strongest Enosys yield pair."},
+                    {"protocol": "Enosys DEX",       "strategy": "WFLR-USDT0 LP",     "alloc_pct": 20,
+                     "apy_est": _apy("enosys", "WFLR-USDT0", 55.0), "risk": "Medium",
+                     "action": "WFLR paired with USDT0 stablecoin on Enosys. Lower IL than FXRP-WFLR — acts as a risk step-down within the DEX allocation."},
+                    {"protocol": "Hyperliquid",      "strategy": "HLP Vault",          "alloc_pct": 10,
+                     "apy_est": _apy("hyperliquid", "HLP", 15.0), "risk": "Medium",
+                     "action": "Cross-chain perps liquidity. Market-making yield. No IL."},
+                    {"protocol": "Kinetic Finance",  "strategy": "Stablecoin Lending", "alloc_pct": 10,
+                     "apy_est": _apy("kinetic-finance", "USDT0", 8.5), "risk": "Low",
+                     "action": "Stable income anchor for the portfolio."},
+                ]
             if _incentive_ok:
                 _warnings.append(f"⚠ rFLR incentives expire in {days_to_jul26} days — re-evaluate LP positions by May 2026.")
-        else:
-            # Medium / stable income default
-            _plans = [
-                {"protocol": "Kinetic Finance",  "strategy": "USDT0 Lending",      "alloc_pct": 35, "apy_est": 8.5,  "risk": "Low",
-                 "action": "Core stable income. 8–12% APY, no price risk."},
-                {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 25, "apy_est": 4.5,  "risk": "Low",
-                 "action": "FLR upside + staking yield. Low risk, liquid."},
-                {"protocol": "Blazeswap",        "strategy": "sFLR-WFLR LP",       "alloc_pct": 25, "apy_est": 37.0, "risk": "Low",
-                 "action": "Correlated pair LP — low IL, elevated APY."},
-                {"protocol": "Clearpool",        "strategy": "X-Pool USD0",        "alloc_pct": 15, "apy_est": 11.5, "risk": "Low",
-                 "action": "Institutional yield. Higher than Kinetic, slightly more complex."},
-            ]
 
-        # Adjust for IL comfort
+        else:
+            # Medium / stable income default — varies by horizon and experience
+            if _long_horizon and not _is_beginner and il_comfort:
+                # Longer horizon: include Enosys WFLR-USDT0 for extra yield
+                _plans = [
+                    {"protocol": "Kinetic Finance",  "strategy": "USDT0 Lending",      "alloc_pct": 30,
+                     "apy_est": _apy("kinetic-finance", "USDT0", 8.5), "risk": "Low",
+                     "action": "Core stable income. 8–12% APY, no price risk."},
+                    {"protocol": "Enosys DEX",       "strategy": "WFLR-USDT0 LP",     "alloc_pct": 25,
+                     "apy_est": _apy("enosys", "WFLR-USDT0", 55.0), "risk": "Medium",
+                     "action": "WFLR-USDT0 on Enosys — stablecoin-paired DEX LP with moderate IL. Best medium-risk entry for longer horizons."},
+                    {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 25,
+                     "apy_est": _apy("sceptre-liquid", "SFLR", 4.5), "risk": "Low",
+                     "action": "FLR upside + staking yield. Low risk, liquid."},
+                    {"protocol": "Blazeswap",        "strategy": "sFLR-WFLR LP",       "alloc_pct": 20,
+                     "apy_est": _apy("blazeswap", "SFLR-WFLR", 37.0), "risk": "Low",
+                     "action": "Correlated pair LP — low IL, elevated APY."},
+                ]
+                if not _is_beginner:
+                    _plans.append({
+                        "protocol": "Clearpool", "strategy": "X-Pool USD0", "alloc_pct": 0,
+                        "apy_est": _apy("clearpool-lending", "USD0", 11.5), "risk": "Low",
+                        "action": "Institutional yield. Higher than Kinetic, slightly more complex.",
+                    })
+                    # Rebalance to fit
+                    _plans = [p for p in _plans if p["alloc_pct"] > 0]
+            else:
+                _plans = [
+                    {"protocol": "Kinetic Finance",  "strategy": "USDT0 Lending",      "alloc_pct": 35,
+                     "apy_est": _apy("kinetic-finance", "USDT0", 8.5), "risk": "Low",
+                     "action": "Core stable income. 8–12% APY, no price risk."},
+                    {"protocol": "Sceptre",          "strategy": "sFLR Staking",       "alloc_pct": 25,
+                     "apy_est": _apy("sceptre-liquid", "SFLR", 4.5), "risk": "Low",
+                     "action": "FLR upside + staking yield. Low risk, liquid."},
+                    {"protocol": "Blazeswap",        "strategy": "sFLR-WFLR LP",       "alloc_pct": 25,
+                     "apy_est": _apy("blazeswap", "SFLR-WFLR", 37.0), "risk": "Low",
+                     "action": "Correlated pair LP — low IL, elevated APY."},
+                    {"protocol": "Clearpool",        "strategy": "X-Pool USD0",        "alloc_pct": 15,
+                     "apy_est": _apy("clearpool-lending", "USD0", 11.5), "risk": "Low",
+                     "action": "Institutional yield. Higher than Kinetic, slightly more complex."},
+                ]
+
+        # ── Adjust for IL comfort ──────────────────────────────────────────────
         if not il_comfort:
             _had_high = any(p["risk"] == "High" for p in _plans)
             _plans = [p for p in _plans if p["risk"] in ("None", "Low", "Medium")]
             if _had_high:
                 _warnings.append("High-IL strategies removed — toggle 'comfortable with IL' to unlock them.")
 
-        # Render the plan
+        # ── Normalise allocations to 100% after any filtering ─────────────────
+        _total_alloc_raw = sum(p["alloc_pct"] for p in _plans)
+        if _total_alloc_raw > 0 and _total_alloc_raw != 100:
+            for p in _plans:
+                p["alloc_pct"] = round(p["alloc_pct"] / _total_alloc_raw * 100)
+            # Fix rounding drift on last item
+            _diff = 100 - sum(p["alloc_pct"] for p in _plans)
+            if _plans:
+                _plans[-1]["alloc_pct"] += _diff
+
+        # ── Render the plan ───────────────────────────────────────────────────
         if _plans:
             total_alloc = sum(p["alloc_pct"] for p in _plans)
             st.markdown("### Your Personalised Strategy")
@@ -487,6 +675,7 @@ with tab5:
                 f"</div></div>",
                 unsafe_allow_html=True,
             )
+            st.caption(f"APY source: {_apy_source} · Refreshed every 15 min. Allocations are suggestions only. Not financial advice.")
 
         if _warnings:
             for w in _warnings:
