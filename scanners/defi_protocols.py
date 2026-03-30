@@ -1000,25 +1000,93 @@ def fetch_kamino_yields() -> dict:
 
 # ── 14. Meteora DLMM (#78) ────────────────────────────────────────────────────
 
-# GeckoTerminal public API — no key required, aggregates Meteora DLMM on Solana
-# DEX slug candidates (tried in order until one returns pools)
-_GECKO_METEORA_URLS = [
-    "https://api.geckoterminal.com/api/v2/networks/solana/dexes/meteora-dlmm/pools",
-    "https://api.geckoterminal.com/api/v2/networks/solana/dexes/meteora/pools",
-]
-_GECKO_HEADERS = {"Accept": "application/json;version=20230302"}
-
 # Average Meteora DLMM fee rate used to estimate APY from 24h volume
 _METEORA_FEE_RATE = 0.0025   # 0.25% — conservative midpoint across DLMM tiers
 
 
-def fetch_meteora_yields() -> dict:
-    """Fetch Meteora DLMM pool yields via GeckoTerminal (no API key needed).
+def _gecko_meteora_hits(dex_slug: str) -> list[dict]:
+    """Fetch top Meteora pools via GeckoTerminal DEX endpoint.  Returns [] on any failure."""
+    url = f"https://api.geckoterminal.com/api/v2/networks/solana/dexes/{dex_slug}/pools"
+    try:
+        resp = _SESSION.get(url, params={"page": 1}, headers={"Accept": "application/json"},
+                            timeout=20)
+        resp.raise_for_status()
+        hits = []
+        for pool in (resp.json().get("data") or []):
+            attrs  = pool.get("attributes") or {}
+            name   = attrs.get("name") or ""
+            tvl    = float(attrs.get("reserve_in_usd") or 0)
+            vol24h = float((attrs.get("volume_usd") or {}).get("h24") or 0)
+            if tvl < 10_000:   # low threshold — filter after sorting
+                continue
+            apy = round((vol24h * _METEORA_FEE_RATE / max(tvl, 1)) * 365 * 100, 4)
+            hits.append({
+                "symbol":  name.replace(" / ", "-"),
+                "apy":     min(apy, 50_000),
+                "tvl_usd": round(tvl, 2),
+                "chain":   "Solana",
+                "project": "meteora-dlmm",
+            })
+        logger.info("[Meteora] GeckoTerminal dex=%s → %d raw pools", dex_slug, len(hits))
+        return hits
+    except Exception as e:
+        logger.warning("[Meteora] GeckoTerminal dex=%s failed: %s", dex_slug, e)
+        return []
 
-    GeckoTerminal aggregates Meteora DLMM pools on Solana and provides TVL
-    (reserve_in_usd) and 24h volume.  APY is estimated as:
-        APY = (vol_24h × fee_rate / TVL) × 365 × 100
-    Falls back to DeFiLlama substring search if GeckoTerminal fails.
+
+def _gecko_meteora_network_scan() -> list[dict]:
+    """Scan GeckoTerminal Solana top pools (pages 1-3) and filter for Meteora dex."""
+    hits = []
+    for page in (1, 2, 3):
+        try:
+            resp = _SESSION.get(
+                "https://api.geckoterminal.com/api/v2/networks/solana/pools",
+                params={"page": page, "include": "dex"},
+                headers={"Accept": "application/json"},
+                timeout=20,
+            )
+            resp.raise_for_status()
+            body    = resp.json()
+            # Build dex-id lookup from included sideload
+            dex_map = {
+                item["id"]: (item.get("attributes") or {}).get("name", "")
+                for item in (body.get("included") or [])
+                if item.get("type") == "dex"
+            }
+            for pool in (body.get("data") or []):
+                dex_id = ((pool.get("relationships") or {})
+                          .get("dex", {}).get("data") or {}).get("id", "")
+                dex_name = dex_map.get(dex_id, dex_id).lower()
+                if "meteora" not in dex_name and "meteora" not in dex_id.lower():
+                    continue
+                attrs  = pool.get("attributes") or {}
+                name   = attrs.get("name") or ""
+                tvl    = float(attrs.get("reserve_in_usd") or 0)
+                vol24h = float((attrs.get("volume_usd") or {}).get("h24") or 0)
+                if tvl < 10_000:
+                    continue
+                apy = round((vol24h * _METEORA_FEE_RATE / max(tvl, 1)) * 365 * 100, 4)
+                hits.append({
+                    "symbol":  name.replace(" / ", "-"),
+                    "apy":     min(apy, 50_000),
+                    "tvl_usd": round(tvl, 2),
+                    "chain":   "Solana",
+                    "project": "meteora-dlmm",
+                })
+        except Exception as e:
+            logger.warning("[Meteora] network scan page=%d failed: %s", page, e)
+            break
+    logger.info("[Meteora] network scan → %d meteora pools across pages 1-3", len(hits))
+    return hits
+
+
+def fetch_meteora_yields() -> dict:
+    """Fetch Meteora DLMM pool yields.
+
+    Strategy (first success wins):
+      1. GeckoTerminal DEX endpoint — tries meteora-dlmm, meteora, meteora-amm slugs
+      2. GeckoTerminal network scan — pages 1-3 of top Solana pools, filter by dex name
+      3. DeFiLlama yields pool search — substring match on "meteora"
     Returns top 5 pools by TVL.
     """
     now = time.time()
@@ -1028,41 +1096,21 @@ def fetch_meteora_yields() -> dict:
     result: dict = {"pools": [], "total_tvl": 0.0, "timestamp": ""}
     hits: list[dict] = []
 
-    # ── Primary: GeckoTerminal ──────────────────────────────────────────────
-    for url in _GECKO_METEORA_URLS:
-        try:
-            resp = _SESSION.get(
-                url,
-                params={"page": 1, "sort": "h24_volume_usd_desc"},
-                headers=_GECKO_HEADERS,
-                timeout=20,
-            )
-            resp.raise_for_status()
-            for pool in (resp.json().get("data") or []):
-                attrs  = pool.get("attributes") or {}
-                name   = attrs.get("name") or ""
-                tvl    = float(attrs.get("reserve_in_usd") or 0)
-                vol24h = float((attrs.get("volume_usd") or {}).get("h24") or 0)
-                if tvl < 50_000:
-                    continue
-                # Estimate APY from fees: (daily_fees / TVL) × 365 × 100
-                apy = round((vol24h * _METEORA_FEE_RATE / max(tvl, 1)) * 365 * 100, 4)
-                hits.append({
-                    "symbol":  name.replace(" / ", "-"),
-                    "apy":     min(apy, 50_000),   # cap extreme estimates
-                    "tvl_usd": round(tvl, 2),
-                    "chain":   "Solana",
-                    "project": "meteora-dlmm",
-                })
-            if hits:
-                logger.info("[Meteora] GeckoTerminal returned %d pools from %s", len(hits), url)
-                break
-        except Exception as e:
-            logger.warning("[Meteora] GeckoTerminal %s failed: %s", url, e)
+    # ── Method 1: GeckoTerminal DEX endpoint (try every known slug) ──────────
+    for slug in ("meteora-dlmm", "meteora", "meteora-amm"):
+        hits = _gecko_meteora_hits(slug)
+        if hits:
+            logger.info("[Meteora] got data via GeckoTerminal dex=%s", slug)
+            break
 
-    # ── Fallback: DeFiLlama yields pool search ──────────────────────────────
+    # ── Method 2: GeckoTerminal network scan ─────────────────────────────────
     if not hits:
-        logger.warning("[Meteora] GeckoTerminal failed — trying DeFiLlama fallback")
+        logger.info("[Meteora] DEX slugs returned nothing — trying network scan")
+        hits = _gecko_meteora_network_scan()
+
+    # ── Method 3: DeFiLlama fallback ─────────────────────────────────────────
+    if not hits:
+        logger.warning("[Meteora] all GeckoTerminal methods failed — trying DeFiLlama")
         try:
             pools = _get_llama_pools()
             for p in pools:
@@ -1070,7 +1118,7 @@ def fetch_meteora_yields() -> dict:
                 chain = (p.get("chain")   or "").lower()
                 tvl   = float(p.get("tvlUsd") or 0)
                 apy   = float(p.get("apy") or 0)
-                if "meteora" not in proj or chain != "solana" or tvl < 50_000:
+                if "meteora" not in proj or chain != "solana" or tvl < 10_000:
                     continue
                 hits.append({
                     "symbol":  p.get("symbol", ""),
