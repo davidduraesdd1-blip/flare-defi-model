@@ -848,6 +848,9 @@ def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
     Fetch 7-day TVL change for target chains as a bridge flow proxy.
     Positive = capital flowing in, Negative = capital flowing out.
 
+    DeFiLlama /v2/chains does NOT include change_7d — we calculate it from
+    /historicalChainTvl/{chain} which returns [{date, tvl}] daily snapshots.
+
     Returns list of: chain, tvl_usd, change_7d_pct, flow_signal (INFLOW/OUTFLOW/STABLE)
     """
     cache_key = "bridge_flows"
@@ -858,24 +861,40 @@ def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
             return cached.get("data", [])
 
     target_chains = chains or ["Ethereum", "Base", "Flare", "Solana", "Arbitrum", "Polygon"]
+    week_ago_ts = now - 7 * 86400
 
-    try:
-        data = _get(f"{_DEFILLAMA_API}/v2/chains")
-        if not isinstance(data, list):
-            return []
-        chain_lookup = {c.get("name", "").lower(): c for c in data}
-        flows = []
-        for chain in target_chains:
-            c = chain_lookup.get(chain.lower(), {})
-            tvl = float(c.get("tvl") or 0)
-            d7  = float(c.get("change_7d") or 0)
+    def _fetch_chain_flow(chain: str) -> dict:
+        try:
+            history = _get(f"{_DEFILLAMA_API}/historicalChainTvl/{chain}", timeout=15)
+            if not isinstance(history, list) or not history:
+                return {"chain": chain, "tvl_usd": 0, "change_7d_pct": 0.0, "flow_signal": "STABLE"}
+            history.sort(key=lambda x: x.get("date", 0))
+            current_tvl = float(history[-1].get("tvl") or 0)
+            # Find the entry closest to 7 days ago
+            week_entry = min(history, key=lambda x: abs(x.get("date", 0) - week_ago_ts))
+            week_tvl   = float(week_entry.get("tvl") or current_tvl)
+            d7 = ((current_tvl - week_tvl) / week_tvl * 100) if week_tvl > 0 else 0.0
             signal = "INFLOW" if d7 > 5 else "OUTFLOW" if d7 < -5 else "STABLE"
-            flows.append({
-                "chain":       chain,
-                "tvl_usd":     tvl,
+            return {
+                "chain":         chain,
+                "tvl_usd":       current_tvl,
                 "change_7d_pct": round(d7, 2),
-                "flow_signal": signal,
-            })
+                "flow_signal":   signal,
+            }
+        except Exception as e:
+            logger.debug("[BridgeFlow] %s error: %s", chain, e)
+            return {"chain": chain, "tvl_usd": 0, "change_7d_pct": 0.0, "flow_signal": "STABLE"}
+
+    flows = []
+    try:
+        with ThreadPoolExecutor(max_workers=min(6, len(target_chains))) as ex:
+            futures = {ex.submit(_fetch_chain_flow, c): c for c in target_chains}
+            for fut in as_completed(futures):
+                try:
+                    flows.append(fut.result(timeout=20))
+                except Exception as e:
+                    chain = futures[fut]
+                    logger.debug("[BridgeFlow] %s future error: %s", chain, e)
         flows.sort(key=lambda x: x["change_7d_pct"], reverse=True)
     except Exception as e:
         logger.warning("[BridgeFlow] fetch failed: %s", e)
@@ -884,4 +903,5 @@ def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
     with _cache_lock:
         _cache[cache_key] = {"data": flows, "_ts": now}
 
+    logger.info("[BridgeFlow] %d chains fetched", len(flows))
     return flows
