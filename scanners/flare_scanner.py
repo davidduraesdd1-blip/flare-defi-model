@@ -785,6 +785,8 @@ def _fetch_single_ktoken_rate(w3, asset: str, cfg: dict, n_tokens: int) -> Lendi
             underlying_decimals = 18
         token_amount = (cash + total_borrows) / (10 ** underlying_decimals)
         token_price  = _BASELINE_TOKEN_PRICES.get(asset, 1.0)
+        if asset in _BASELINE_TOKEN_PRICES:
+            logger.debug("[flare_scanner] Using hardcoded fallback price for %s: %.2f", asset, token_price)
         tvl_usd = round(token_amount * token_price, 2)
 
     except Exception as e:

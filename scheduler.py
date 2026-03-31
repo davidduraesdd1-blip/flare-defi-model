@@ -37,10 +37,15 @@ from scanners.options_scanner import fetch_volatility_data
 from models.risk_models       import run_all_models
 from models.arbitrage         import detect_all_arbitrage, detect_all_arbitrage_all_profiles
 from models.options_model     import run_options_analysis
-from ai.feedback_loop         import (
-    record_prediction, record_actuals,
-    update_model_weights, load_history, save_history
-)
+try:
+    from ai.feedback_loop import (
+        record_prediction, record_actuals,
+        update_model_weights, load_history, save_history
+    )
+    _FEEDBACK_AVAILABLE = True
+except ImportError:
+    _FEEDBACK_AVAILABLE = False
+    logger = logging.getLogger(__name__)  # may not exist yet; safe re-assign below
 from ai.alerts                import check_and_send_alerts
 from utils.file_io            import atomic_json_write
 
@@ -125,9 +130,10 @@ def run_quick_check() -> None:
     - Any major token price moved > 8% since last check (position risk)
     - Hyperliquid funding rate > 15% annualised (funding arb opportunity)
     """
-    if _scan_lock.locked():
+    if not _scan_lock.acquire(blocking=False):
         logger.debug("Quick check skipped — full scan in progress.")
         return
+    _scan_lock.release()  # quick_check doesn't hold the lock — just checks availability
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     logger.info("─" * 40)
@@ -280,8 +286,9 @@ def run_quick_check() -> None:
                 "lending": [asdict(r) for r in kinetic_list],
                 "staking": [],
             }
-            record_actuals(_quick_scan)
-            update_model_weights()
+            if _FEEDBACK_AVAILABLE:
+                record_actuals(_quick_scan)
+                update_model_weights()
             logger.debug("Quick check: feedback loop updated")
         except Exception as _fe:
             logger.debug(f"Quick check feedback update failed (non-critical): {_fe}")
@@ -385,15 +392,17 @@ def run_full_scan() -> None:
 
         # ── Step 6: Record predictions ────────────────────────────────────
         logger.info("Step 6/9 — Recording predictions for AI feedback loop...")
-        record_prediction(model_results)
+        if _FEEDBACK_AVAILABLE:
+            record_prediction(model_results)
 
         # ── Step 7: Evaluate yesterday's predictions ──────────────────────
         logger.info("Step 7/9 — Evaluating previous predictions...")
-        record_actuals(scan_dict)
+        if _FEEDBACK_AVAILABLE:
+            record_actuals(scan_dict)
 
         # ── Step 8: Update model weights ──────────────────────────────────
         logger.info("Step 8/9 — Updating AI model weights...")
-        weights = update_model_weights()
+        weights = update_model_weights() if _FEEDBACK_AVAILABLE else {}
 
         # ── Step 9: Send alerts + smart threshold calibration ────────────
         logger.info("Step 9/9 — Checking alert thresholds...")
@@ -426,7 +435,7 @@ def run_full_scan() -> None:
             "warnings":        scan_dict.get("warnings", []),
         }
 
-        history = load_history()
+        history = load_history() if _FEEDBACK_AVAILABLE else {"runs": []}
         if "runs" not in history:
             history["runs"] = []
         history["runs"].append(result)
@@ -434,7 +443,8 @@ def run_full_scan() -> None:
         # Keep only last N runs (configured in config.HISTORY_MAX_RUNS)
         history["runs"] = history["runs"][-HISTORY_MAX_RUNS:]
         history["latest"] = result
-        save_history(history)
+        if _FEEDBACK_AVAILABLE:
+            save_history(history)
 
         # ── Log summary ───────────────────────────────────────────────────
         duration = result["duration_seconds"]

@@ -152,12 +152,15 @@ def fetch_yfinance_macro() -> dict[str, Any]:
         # OPT-35: fetch all 4 tickers in parallel
         result: dict = {}
         with ThreadPoolExecutor(max_workers=4) as ex:
-            for key, series in ex.map(_fetch_one, _MAP.items()):
-                try:
-                    if series is not None and not series.empty:
-                        result[key] = round(float(series.iloc[-1]), 2)
-                except Exception as e:
-                    logger.debug("[yfinance] %s: %s", key, e)
+            try:
+                for key, series in ex.map(_fetch_one, _MAP.items()):
+                    try:
+                        if series is not None and not series.empty:
+                            result[key] = round(float(series.iloc[-1]), 2)
+                    except Exception as e:
+                        logger.debug("[yfinance] %s: %s", key, e)
+            except Exception as _map_err:
+                logger.warning("[macro_feeds] yfinance map error: %s", _map_err)
 
         if not result:
             return None
@@ -203,9 +206,12 @@ def fetch_macro_timeseries(days: int = 90) -> dict[str, Any]:
         # OPT-36: fetch all 6 symbols in parallel
         out: dict = {}
         with ThreadPoolExecutor(max_workers=6) as ex:
-            for key, series in ex.map(_fetch_ts, _SYMS.items()):
-                if series is not None:
-                    out[key] = series
+            try:
+                for key, series in ex.map(_fetch_ts, _SYMS.items()):
+                    if series is not None:
+                        out[key] = series
+            except Exception as _map_err:
+                logger.warning("[macro_feeds] yfinance ts map error: %s", _map_err)
 
         out.update({"_days": days, "_timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat()})
         return out

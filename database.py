@@ -20,7 +20,7 @@ from config import DB_FILE
 
 logger = logging.getLogger(__name__)
 
-_write_lock    = threading.Lock()
+_write_lock    = threading.RLock()
 _thread_local  = threading.local()
 _db_initialized = False
 
