@@ -106,11 +106,11 @@ except Exception as _e:
     import logging as _logging; _logging.getLogger(__name__).warning("Sidebar error: %s", _e)
     ctx = {}
 
-profile       = ctx["profile"]
-profile_cfg   = ctx["profile_cfg"]
-color         = ctx["color"]
-weight        = ctx["weight"]
-portfolio_size = ctx["portfolio_size"]
+profile       = ctx.get("profile", "conservative")
+profile_cfg   = ctx.get("profile_cfg", {})
+color         = ctx.get("color", "#00D4FF")
+weight        = ctx.get("weight", {})
+portfolio_size = ctx.get("portfolio_size", 10000)
 pro_mode      = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 demo_mode     = ctx.get("demo_mode", False)   # #67 Demo/Sandbox mode
 
