@@ -10,8 +10,11 @@ import html as _html
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from dotenv import load_dotenv
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # ─── Sentry error monitoring (free tier — only loads when DSN is set) ──────────
 
@@ -97,7 +100,12 @@ DEFI_CSS = """
 """
 st.markdown(DEFI_CSS, unsafe_allow_html=True)
 
-ctx           = render_sidebar()
+try:
+    ctx = render_sidebar()
+except Exception as _e:
+    import logging as _logging; _logging.getLogger(__name__).warning("Sidebar error: %s", _e)
+    ctx = {}
+
 profile       = ctx["profile"]
 profile_cfg   = ctx["profile_cfg"]
 color         = ctx["color"]

@@ -12,7 +12,14 @@ import time
 import subprocess
 import streamlit as st
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from datetime import timezone as _tz
+    class ZoneInfo:
+        def __init__(self, key): self._key = key
+        @staticmethod
+        def utc(): return _tz.utc
 from pathlib import Path
 
 # OPT-41: module-level TTL cache for get_feedback_dashboard() to avoid re-reading
