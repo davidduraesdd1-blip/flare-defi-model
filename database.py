@@ -219,7 +219,7 @@ def get_scan_status() -> dict:
 
 # ─── Scan Runs ────────────────────────────────────────────────────────────────
 
-def save_scan_run(profile: str, n_opps: int, duration_s: float = None,
+def save_scan_run(profile: str, n_opps: int, duration_s: Optional[float] = None,
                   status: str = "ok") -> int:
     """Insert a scan run record and return its ID."""
     ts = datetime.now(timezone.utc).isoformat()
@@ -409,8 +409,8 @@ def save_ai_feedback(profile: str, entries: List[dict]):
 def get_ai_feedback(profile: str = None, days: int = 90) -> pd.DataFrame:
     """Return AI feedback records within the lookback window."""
     conn = _get_conn_and_init()
-    from datetime import timedelta
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    from datetime import timedelta as _timedelta
+    cutoff = (datetime.now(timezone.utc) - _timedelta(days=days)).isoformat()
     try:
         if profile:
             return pd.read_sql_query(

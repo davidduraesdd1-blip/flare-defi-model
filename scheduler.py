@@ -185,27 +185,37 @@ def run_quick_check() -> None:
             util = getattr(rate, "utilisation", None)
             if util is None:
                 continue
-            if util >= util_limit:
+            try:
+                util_f = float(util)
+            except (TypeError, ValueError):
+                continue
+            if util_f >= util_limit:
+                asset_name = getattr(rate, "asset", "unknown")
                 alerts.append(
-                    f"KINETIC UTILIZATION SPIKE: {rate.asset} at "
-                    f"{util * 100:.1f}% — liquidity crunch risk, borrowing may be paused soon"
+                    f"KINETIC UTILIZATION SPIKE: {asset_name} at "
+                    f"{util_f * 100:.1f}% — liquidity crunch risk, borrowing may be paused soon"
                 )
 
         # ── 2. Cross-DEX APR gap (same pair on Blazeswap vs SparkDEX) ─────
         blaze_by_pair = {
             frozenset([p.token0, p.token1]): p
             for p in blaze_pools
+            if hasattr(p, "token0") and hasattr(p, "token1")
         }
         for sp in spark_pools:
+            if not hasattr(sp, "token0") or not hasattr(sp, "token1"):
+                continue
             key = frozenset([sp.token0, sp.token1])
             bz  = blaze_by_pair.get(key)
             if bz:
-                gap = abs(bz.apr - sp.apr)
+                bz_apr = bz.apr if bz.apr is not None else 0.0
+                sp_apr = sp.apr if sp.apr is not None else 0.0
+                gap = abs(bz_apr - sp_apr)
                 if gap >= dex_gap_limit:
-                    low_dex  = "Blazeswap" if bz.apr < sp.apr else "SparkDEX"
-                    high_dex = "SparkDEX"  if bz.apr < sp.apr else "Blazeswap"
-                    low_apr  = min(bz.apr, sp.apr)
-                    high_apr = max(bz.apr, sp.apr)
+                    low_dex  = "Blazeswap" if bz_apr < sp_apr else "SparkDEX"
+                    high_dex = "SparkDEX"  if bz_apr < sp_apr else "Blazeswap"
+                    low_apr  = min(bz_apr, sp_apr)
+                    high_apr = max(bz_apr, sp_apr)
                     alerts.append(
                         f"CROSS-DEX APR GAP: {sp.token0}-{sp.token1} "
                         f"{low_dex} {low_apr:.1f}% vs {high_dex} {high_apr:.1f}% "
@@ -213,16 +223,20 @@ def run_quick_check() -> None:
                     )
 
         # ── 3. FAssets price gap (FXRP vs XRP) ───────────────────────────
-        fxrp_p = next((p for p in prices_list if p.symbol == "FXRP"), None)
-        xrp_p  = next((p for p in prices_list if p.symbol == "XRP"),  None)
-        if fxrp_p and xrp_p and xrp_p.price_usd > 0:
-            gap_pct = (fxrp_p.price_usd - xrp_p.price_usd) / xrp_p.price_usd * 100
+        fxrp_p = next((p for p in prices_list if getattr(p, "symbol", None) == "FXRP"), None)
+        xrp_p  = next((p for p in prices_list if getattr(p, "symbol", None) == "XRP"),  None)
+        _fxrp_price = getattr(fxrp_p, "price_usd", None)
+        _xrp_price  = getattr(xrp_p,  "price_usd", None)
+        if (fxrp_p and xrp_p
+                and _xrp_price is not None and _fxrp_price is not None
+                and float(_xrp_price) > 0):
+            gap_pct = (float(_fxrp_price) - float(_xrp_price)) / float(_xrp_price) * 100
             if abs(gap_pct) >= fassets_limit:
                 direction = "premium" if gap_pct > 0 else "discount"
                 alerts.append(
                     f"FASSETS {direction.upper()}: FXRP is {abs(gap_pct):.2f}% "
                     f"{'above' if gap_pct > 0 else 'below'} XRP spot "
-                    f"(FXRP ${fxrp_p.price_usd:.4f} vs XRP ${xrp_p.price_usd:.4f}) — "
+                    f"(FXRP ${float(_fxrp_price):.4f} vs XRP ${float(_xrp_price):.4f}) — "
                     f"{'mint FXRP and sell' if gap_pct > 0 else 'buy FXRP and redeem'}"
                 )
 
@@ -230,21 +244,36 @@ def run_quick_check() -> None:
         cache = _load_quick_cache()
         _cached_prices = cache.get("prices", {})
         last_prices = _cached_prices if isinstance(_cached_prices, dict) else {}
-        current_prices = {p.symbol: p.price_usd for p in prices_list}
+        current_prices = {
+            getattr(p, "symbol", None): getattr(p, "price_usd", None)
+            for p in prices_list
+            if getattr(p, "symbol", None) is not None
+        }
         for symbol, price in current_prices.items():
+            if price is None:
+                continue
             last = last_prices.get(symbol)
-            if last is not None and last > 0:
-                change_pct = (price - last) / last * 100
+            if last is None:
+                continue
+            try:
+                price_f = float(price)
+                last_f  = float(last)
+            except (TypeError, ValueError):
+                continue
+            if last_f > 0:
+                change_pct = (price_f - last_f) / last_f * 100
                 if abs(change_pct) >= price_move_limit:
                     direction = "UP" if change_pct > 0 else "DOWN"
                     alerts.append(
                         f"PRICE MOVE {direction}: {symbol} moved {change_pct:+.1f}% "
-                        f"since last check (${last:.4f} → ${price:.4f})"
+                        f"since last check (${last_f:.4f} → ${price_f:.4f})"
                     )
 
         # ── 5. Hyperliquid funding rate spike ─────────────────────────────
         for perp in hl_perps:
-            fr_annual = perp.funding_rate_annualised
+            fr_annual = getattr(perp, "funding_rate_annualised", None)
+            if fr_annual is None:
+                continue
             if fr_annual >= funding_limit:
                 alerts.append(
                     f"FUNDING RATE SPIKE: {perp.pair} on Hyperliquid "
@@ -257,6 +286,9 @@ def run_quick_check() -> None:
         last_tvl = cache.get("tvl", {})
         current_tvl = {}
         for _pool in blaze_pools + spark_pools:
+            # Guard: skip non-dataclass items that may result from fetch failures
+            if not hasattr(_pool, "protocol") or not hasattr(_pool, "pool_name"):
+                continue
             _tvl_key = f"{_pool.protocol}:{_pool.pool_name}"
             current_tvl[_tvl_key] = _pool.tvl_usd
         for _pool_key, _curr_tvl in current_tvl.items():
@@ -281,9 +313,10 @@ def run_quick_check() -> None:
         # Feed it into record_actuals + update_model_weights so weights
         # converge every 3h instead of waiting for the 2×/day full scan.
         try:
+            import dataclasses as _dc
             _quick_scan = {
-                "pools":   [asdict(p) for p in blaze_pools + spark_pools],
-                "lending": [asdict(r) for r in kinetic_list],
+                "pools":   [asdict(p) for p in blaze_pools + spark_pools if _dc.is_dataclass(p) and not isinstance(p, type)],
+                "lending": [asdict(r) for r in kinetic_list if _dc.is_dataclass(r) and not isinstance(r, type)],
                 "staking": [],
             }
             if _FEEDBACK_AVAILABLE:
@@ -372,23 +405,31 @@ def run_full_scan() -> None:
             _f_multi  = _data_pool.submit(run_multi_scan)
             _f_vol    = _data_pool.submit(fetch_volatility_data)
             _f_fasset = _data_pool.submit(fetch_fasset_data)
-            flare_scan  = _f_flare.result()
-            multi_scan  = _f_multi.result()
-            vol_data    = _f_vol.result()
-            fasset_data = _f_fasset.result()
+            flare_scan  = _f_flare.result(timeout=300)
+            multi_scan  = _f_multi.result(timeout=300)
+            vol_data    = _f_vol.result(timeout=120)
+            fasset_data = _f_fasset.result(timeout=120)
 
         # ── Steps 3+4+5: Independent — run in parallel ───────────────────
         logger.info("Steps 3-5 — Running models, arbitrage, and options in parallel...")
-        scan_dict = asdict(flare_scan)   # run_flare_scan() always returns a ScanResult dataclass
+        # Guard: asdict() requires a dataclass instance; fall back to dict() if not
+        import dataclasses as _dc
+        if _dc.is_dataclass(flare_scan) and not isinstance(flare_scan, type):
+            scan_dict = asdict(flare_scan)
+        elif isinstance(flare_scan, dict):
+            scan_dict = flare_scan
+        else:
+            scan_dict = {}
+            logger.error("[Scheduler] run_flare_scan returned unexpected type: %s", type(flare_scan))
         with ThreadPoolExecutor(max_workers=3) as _model_pool:
             _f_models = _model_pool.submit(run_all_models, scan_dict)
             _f_arb    = _model_pool.submit(detect_all_arbitrage_all_profiles, scan_dict, multi_scan)
             _f_opts   = _model_pool.submit(
                 lambda: {p: run_options_analysis(vol_data, p) for p in RISK_PROFILE_NAMES}
             )
-            model_results   = _f_models.result()
-            arb_results     = _f_arb.result()
-            options_results = _f_opts.result()
+            model_results   = _f_models.result(timeout=300)
+            arb_results     = _f_arb.result(timeout=300)
+            options_results = _f_opts.result(timeout=120)
 
         # ── Step 6: Record predictions ────────────────────────────────────
         logger.info("Step 6/9 — Recording predictions for AI feedback loop...")
@@ -415,7 +456,12 @@ def run_full_scan() -> None:
             from ai.alerts import calibrate_alert_thresholds
             cal = calibrate_alert_thresholds()
             if cal.get("calibrated"):
-                logger.info(f"Smart Alert Tuning: threshold {cal['direction']} → {cal['new_threshold']:.1f}%")
+                _new_thresh = cal.get("new_threshold", 0)
+                try:
+                    _new_thresh = float(_new_thresh)
+                except (TypeError, ValueError):
+                    _new_thresh = 0.0
+                logger.info(f"Smart Alert Tuning: threshold {cal.get('direction','?')} → {_new_thresh:.1f}%")
         except Exception as _ce:
             logger.debug(f"Smart alert calibration skipped: {_ce}")
 
@@ -458,11 +504,11 @@ def run_full_scan() -> None:
 
         summary = (
             f"Scan complete in {duration}s\n"
-            f"Conservative: {top_conservative.get('asset_or_pool','N/A')} "
+            f"Conservative: {top_conservative.get('asset_or_pool') or 'N/A'} "
             f"@ {_fmt_apy(top_conservative)} APY\n"
-            f"Medium: {top_medium.get('asset_or_pool','N/A')} "
+            f"Medium: {top_medium.get('asset_or_pool') or 'N/A'} "
             f"@ {_fmt_apy(top_medium)} APY\n"
-            f"High: {top_high.get('asset_or_pool','N/A')} "
+            f"High: {top_high.get('asset_or_pool') or 'N/A'} "
             f"@ {_fmt_apy(top_high)} APY"
         )
 
@@ -523,20 +569,35 @@ def send_monthly_report() -> None:
             lines.append(f"\n{RISK_PROFILES[profile]['label']} ({profile.capitalize()}):")
             if opps:
                 for i, opp in enumerate(opps[:3], 1):
+                    _apy   = opp.get("estimated_apy") or 0.0
+                    _risk  = opp.get("risk_score") or 5.0
+                    _conf  = opp.get("confidence") or 0.0
+                    try:
+                        _apy  = float(_apy)
+                        _risk = float(_risk)
+                        _conf = float(_conf)
+                    except (TypeError, ValueError):
+                        _apy = _risk = _conf = 0.0
                     lines.append(
                         f"  {i}. {opp.get('protocol','?')} — {opp.get('asset_or_pool','?')}: "
-                        f"{opp.get('estimated_apy', 0):.1f}% APY  "
-                        f"(Grade: {opp.get('risk_score', 5):.0f}/10 risk, "
-                        f"Confidence: {opp.get('confidence', 0):.0f}%)"
+                        f"{_apy:.1f}% APY  "
+                        f"(Grade: {_risk:.0f}/10 risk, "
+                        f"Confidence: {_conf:.0f}%)"
                     )
             else:
                 lines.append("  No data available.")
 
         # APY trend summary (compare first vs last scan of the month)
         if len(runs) >= 2:
-            first_apy = (runs[0].get("models", {}).get("conservative") or [{}])[0].get("estimated_apy", 0)
-            last_apy  = (runs[-1].get("models", {}).get("conservative") or [{}])[0].get("estimated_apy", 0)
-            trend     = "▲ Improving" if last_apy > first_apy else ("▼ Declining" if last_apy < first_apy else "→ Stable")
+            first_apy = (runs[0].get("models", {}).get("conservative") or [{}])[0].get("estimated_apy") or 0.0
+            last_apy  = (runs[-1].get("models", {}).get("conservative") or [{}])[0].get("estimated_apy") or 0.0
+            try:
+                first_apy = float(first_apy)
+                last_apy  = float(last_apy)
+            except (TypeError, ValueError):
+                first_apy = 0.0
+                last_apy  = 0.0
+            trend = "▲ Improving" if last_apy > first_apy else ("▼ Declining" if last_apy < first_apy else "→ Stable")
             lines += [
                 "",
                 "═" * 50,
