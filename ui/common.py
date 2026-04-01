@@ -323,6 +323,15 @@ _CSS_LIGHT = """
         .block-container { padding-left: 0.5rem; padding-right: 0.5rem; }
         .price-chip { padding: 10px 8px; }
         [data-testid="stTabs"] [role="tab"] { font-size: 0.75rem; }
+        /* 44px minimum tap targets for mobile accessibility */
+        div[data-testid="stButton"] > button { min-height: 44px !important; }
+        [data-testid="stRadio"] label { min-height: 44px !important; padding: 10px 0 !important; }
+        [data-testid="stCheckbox"] label { min-height: 44px !important; padding: 10px 0 !important; }
+        [data-testid="stToggle"] label { min-height: 44px !important; }
+        [data-baseweb="select"] { min-height: 44px !important; }
+        /* Stack columns on mobile */
+        [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+        [data-testid="stColumn"] { min-width: 100% !important; }
     }
 
     /* ── Flip dark inline colors → accessible dark equivalents ───────── */
@@ -584,6 +593,15 @@ _CSS_DARK = """
         .block-container { padding-left: 0.5rem; padding-right: 0.5rem; }
         .price-chip { padding: 10px 8px; }
         [data-testid="stTabs"] [role="tab"] { font-size: 0.75rem; }
+        /* 44px minimum tap targets for mobile accessibility */
+        div[data-testid="stButton"] > button { min-height: 44px !important; }
+        [data-testid="stRadio"] label { min-height: 44px !important; padding: 10px 0 !important; }
+        [data-testid="stCheckbox"] label { min-height: 44px !important; padding: 10px 0 !important; }
+        [data-testid="stToggle"] label { min-height: 44px !important; }
+        [data-baseweb="select"] { min-height: 44px !important; }
+        /* Stack columns on mobile */
+        [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+        [data-testid="stColumn"] { min-width: 100% !important; }
     }
 
     /* ── Dark-mode legibility lift ────────────────────────────────────── */
@@ -721,7 +739,7 @@ def render_sidebar() -> dict:
             unsafe_allow_html=True,
         )
 
-        col_r, col_s = st.columns(2)
+        col_r, col_s, col_all = st.columns(3)
         with col_r:
             if st.button("↺ Reload", key="sidebar_refresh", width="stretch",
                          help="Reload the latest saved scan data from disk"):
@@ -729,6 +747,27 @@ def render_sidebar() -> dict:
                 _load_history_file.clear()
                 _get_history_cache()["data"] = None   # coherence: clear shared resource cache too
                 load_live_prices.clear()
+                st.rerun()
+        with col_all:
+            if st.button("🔄 All", key="sidebar_refresh_all", width="stretch",
+                         help="Refresh All Data — clears every cache and fetches fresh data from all sources"):
+                # Nuclear clear: invalidate EVERY st.cache_data in this module
+                try:
+                    st.cache_data.clear()
+                except Exception:
+                    # Fallback: clear individual known caches
+                    _load_history_file.clear()
+                    load_live_prices.clear()
+                    _get_api_status.clear()
+                    try:
+                        from macro_feeds import fetch_fred_macro, fetch_yfinance_macro
+                        fetch_fred_macro.clear()
+                        fetch_yfinance_macro.clear()
+                    except Exception:
+                        pass
+                _get_history_cache()["data"] = None
+                _FEEDBACK_CACHE["data"] = None
+                st.success("All caches cleared — fetching fresh data…")
                 st.rerun()
         with col_s:
             if st.button("▶ Scan", key="sidebar_scan_now", width="stretch",
@@ -1536,3 +1575,325 @@ def render_opportunity_card(
 {_ry_html}
 </div>
 </div>""", unsafe_allow_html=True)
+
+
+# ─── Phase 2 — New helpers ────────────────────────────────────────────────────
+
+# ── Coin Universe (Phase 2, item 16) ──────────────────────────────────────────
+
+MUST_HAVE_COINS: list[str] = ["XRP", "XLM", "XDC", "CC", "HBAR", "SHX", "ZBCN"]
+_STABLECOINS: frozenset[str] = frozenset({
+    "usdt","usdc","dai","busd","tusd","fdusd","usdd","frax","lusd","usdp",
+    "gusd","susd","nusd","crvusd","pyusd","eurc","eur",
+})
+
+
+@st.cache_data(ttl=3600)
+def fetch_coin_universe() -> list[dict]:
+    """Fetch top-30 non-stablecoin coins + 7 must-haves from CoinGecko.
+
+    Returns list of dicts with keys: id, symbol, name, rank.
+    Must-haves always included even if below top-30.
+    Cached 1 hour.
+    """
+    import urllib.request
+    try:
+        url = (
+            "https://api.coingecko.com/api/v3/coins/markets"
+            "?vs_currency=usd&order=market_cap_desc&per_page=60&page=1"
+            "&sparkline=false&locale=en"
+        )
+        with urllib.request.urlopen(url, timeout=10) as _resp:
+            _data = json.loads(_resp.read())
+
+        seen: set[str] = set()
+        top30: list[dict] = []
+        for _coin in _data:
+            _sym = (_coin.get("symbol") or "").lower()
+            if _sym in _STABLECOINS or _sym in seen or len(top30) >= 30:
+                continue
+            seen.add(_sym)
+            top30.append({
+                "id":     _coin.get("id", ""),
+                "symbol": _coin.get("symbol", "").upper(),
+                "name":   _coin.get("name", ""),
+                "rank":   _coin.get("market_cap_rank", 999),
+            })
+
+        # Inject must-haves that didn't make the top-30
+        top30_symbols = {c["symbol"] for c in top30}
+        for _s in MUST_HAVE_COINS:
+            if _s not in top30_symbols:
+                top30.append({"id": _s.lower(), "symbol": _s, "name": _s, "rank": 999})
+
+        return top30
+    except Exception:
+        return [{"id": s.lower(), "symbol": s, "name": s, "rank": 999}
+                for s in MUST_HAVE_COINS]
+
+
+# ── Fear & Greed Trend (Phase 2, item 14) ─────────────────────────────────────
+
+@st.cache_data(ttl=3600)
+def fetch_fear_greed_history(days: int = 30) -> list[dict]:
+    """Fetch Fear & Greed Index history from alternative.me API.
+
+    Returns list of dicts (most recent first) with 'value' and 'timestamp'.
+    Cached 1 hour.
+    """
+    import urllib.request
+    try:
+        _url = f"https://api.alternative.me/fng/?limit={days}&format=json"
+        with urllib.request.urlopen(_url, timeout=8) as _r:
+            return json.loads(_r.read()).get("data", [])
+    except Exception:
+        return []
+
+
+def render_fear_greed_trend(user_level: str = "beginner") -> None:
+    """Render Fear & Greed current value + 7-day avg + 30-day avg (Phase 2, item 14)."""
+    _history = fetch_fear_greed_history(30)
+    _values  = []
+    for _item in _history:
+        try:
+            _values.append(int(_item["value"]))
+        except Exception:
+            pass
+
+    if not _values:
+        st.caption("Fear & Greed data unavailable right now.")
+        return
+
+    _cur   = _values[0]
+    _avg7  = sum(_values[:7])  / min(7, len(_values))
+    _avg30 = sum(_values[:30]) / min(30, len(_values))
+
+    def _fg(v: float) -> tuple[str, str]:
+        if v <= 25:  return "Extreme Fear",  "#ef4444"
+        if v <= 45:  return "Fear",           "#f97316"
+        if v <= 55:  return "Neutral",        "#6b7280"
+        if v <= 75:  return "Greed",          "#f59e0b"
+        return "Extreme Greed", "#22c55e"
+
+    _cl, _cc = _fg(_cur)
+    _7l, _7c = _fg(_avg7)
+    _30l, _30c = _fg(_avg30)
+
+    _c1, _c2, _c3 = st.columns(3)
+    for _col, _val, _lbl, _col_hex, _period in [
+        (_c1, _cur,   _cl,  _cc,  "Now"),
+        (_c2, _avg7,  _7l,  _7c,  "7-Day Avg"),
+        (_c3, _avg30, _30l, _30c, "30-Day Avg"),
+    ]:
+        with _col:
+            st.markdown(
+                f"<div style='text-align:center;padding:12px;background:rgba(17,24,39,0.7);"
+                f"border-radius:8px;border:1px solid rgba(255,255,255,0.07);'>"
+                f"<div style='font-size:0.62rem;color:#6b7280;text-transform:uppercase;"
+                f"letter-spacing:0.8px;margin-bottom:4px'>{_period}</div>"
+                f"<div style='font-size:1.9rem;font-weight:800;color:{_col_hex};"
+                f"font-family:JetBrains Mono,monospace'>{_val:.0f}</div>"
+                f"<div style='font-size:0.70rem;color:{_col_hex};margin-top:2px'>{_lbl}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+    if user_level == "beginner":
+        st.caption(
+            f"💡 **What this means:** Fear & Greed measures market emotion — 0 = extreme panic "
+            f"(markets selling off), 100 = extreme euphoria (bubble risk). "
+            f"Current reading: **{_cur}** ({_cl}). "
+            f"Contrarian tip: extreme fear is historically a buying opportunity; "
+            f"extreme greed signals caution."
+        )
+
+
+# ── Welcome Banner (Phase 2, item 6) ──────────────────────────────────────────
+
+def render_welcome_banner() -> None:
+    """Show a one-time welcome message for Beginner users.
+
+    Appears once per session, dismissible with a button.
+    No-op for Intermediate/Advanced users.
+    """
+    if get_user_level() != "beginner":
+        return
+    if st.session_state.get("_defi_welcome_dismissed"):
+        return
+
+    _c1, _c2 = st.columns([11, 1])
+    with _c1:
+        st.info(
+            "👋 **Welcome to Flare DeFi Analytics!**  \n"
+            "This app helps you find the best yield opportunities on the Flare Network. "
+            "Every section includes plain-English explanations — no finance jargon required.  \n"
+            "**Not sure where to start?** Visit **Opportunities** for top-ranked yields, "
+            "or **Intelligence** to see what the market is signalling right now.  \n"
+            "💡 *Change your experience level in the sidebar at any time to see more detail.*"
+        )
+    with _c2:
+        if st.button("✕", key="_defi_dismiss_welcome", help="Dismiss welcome message"):
+            st.session_state["_defi_welcome_dismissed"] = True
+            st.rerun()
+
+
+# ── Signal Badge — Shape Encoding (Phase 2, item 10) ──────────────────────────
+
+def signal_badge_html(direction: str, label: str = "") -> str:
+    """Return HTML for a shape+color signal badge (color-blind safe).
+
+    Shape encoding:  ▲ BUY  /  ▼ SELL  /  ■ NEUTRAL
+    Shape + color always combined — never color alone.
+
+    Parameters
+    ----------
+    direction : str
+        One of: BUY, BULLISH, BULL, LONG, SELL, BEARISH, BEAR, SHORT,
+                NEUTRAL, HOLD, SIDEWAYS, or any other (→ NEUTRAL).
+    label : str
+        Override the display text. If empty, uses the canonical label.
+    """
+    _dir = direction.upper().strip()
+    if _dir in {"BUY", "BULLISH", "BULL", "LONG"}:
+        _shape, _bg, _txt, _border = "▲", "rgba(34,197,94,0.12)", "#22c55e", "rgba(34,197,94,0.3)"
+        _default = "BUY"
+    elif _dir in {"SELL", "BEARISH", "BEAR", "SHORT"}:
+        _shape, _bg, _txt, _border = "▼", "rgba(239,68,68,0.12)", "#ef4444", "rgba(239,68,68,0.3)"
+        _default = "SELL"
+    else:
+        _shape, _bg, _txt, _border = "■", "rgba(100,116,139,0.12)", "#94a3b8", "rgba(100,116,139,0.3)"
+        _default = "NEUTRAL"
+
+    _display = label if label else _default
+    return (
+        f"<span style='display:inline-flex;align-items:center;gap:4px;"
+        f"background:{_bg};border:1px solid {_border};border-radius:6px;"
+        f"padding:2px 8px;font-size:0.72rem;font-weight:700;color:{_txt};'>"
+        f"{_shape} {_display}</span>"
+    )
+
+
+# ── Beginner UX — "What does this mean?" Panel (Phase 2, item 8) ──────────────
+
+def render_what_this_means(message: str, title: str = "What does this mean for me?") -> None:
+    """Render a plain-English explanation panel after signals/scores.
+
+    Only shows when user_level == 'beginner'. No-op for Intermediate/Advanced.
+    Call this directly after any signal, score, or technical metric display.
+    """
+    if get_user_level() != "beginner":
+        return
+    st.info(f"💡 **{title}**  \n{message}")
+
+
+# ── Color-Coded Gauge (Phase 2, item 9) ───────────────────────────────────────
+
+def render_gauge(
+    value: float,
+    label: str,
+    min_v: float = 0.0,
+    max_v: float = 100.0,
+    low_threshold: float = 0.33,
+    high_threshold: float = 0.66,
+    user_level: str = "beginner",
+    unit: str = "",
+) -> None:
+    """Render a color-coded progress bar gauge.
+
+    Beginner: shows plain-English label (Low / Moderate / Good) + colored bar.
+    Intermediate/Advanced: shows numeric value + colored bar.
+    """
+    _pct = max(0.0, min(1.0, (value - min_v) / max(max_v - min_v, 0.001)))
+
+    if _pct >= high_threshold:
+        _color, _plain = "#22c55e", "Good"
+    elif _pct >= low_threshold:
+        _color, _plain = "#f59e0b", "Moderate"
+    else:
+        _color, _plain = "#ef4444", "Low"
+
+    _display = _plain if user_level == "beginner" else f"{value:.1f}{unit}"
+    _bar_w   = f"{_pct * 100:.1f}%"
+
+    st.markdown(
+        f"<div style='margin-bottom:8px;'>"
+        f"<div style='display:flex;justify-content:space-between;"
+        f"font-size:0.72rem;color:#6b7280;margin-bottom:4px;'>"
+        f"<span>{label}</span>"
+        f"<span style='color:{_color};font-weight:700;'>{_display}</span>"
+        f"</div>"
+        f"<div style='background:rgba(255,255,255,0.07);border-radius:4px;height:6px;'>"
+        f"<div style='width:{_bar_w};height:6px;background:{_color};"
+        f"border-radius:4px;transition:width 0.3s ease;'></div>"
+        f"</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+# ── Yield Sustainability Score (Phase 2, item 12) ─────────────────────────────
+
+def render_yield_sustainability(
+    fee_apy: float,
+    reward_apy: float,
+    user_level: str = "beginner",
+) -> None:
+    """Render a yield sustainability score widget.
+
+    Shows real yield ratio (fee revenue vs emissions) with color coding
+    and a plain-English explanation at Beginner level.
+
+    Real yield ratio = fee_apy / (fee_apy + reward_apy)
+    ≥ 70% = Sustainable (green)
+    35–70% = Partial (amber)
+    < 35%  = Incentive-Driven (red) — Ponzi-risk signal
+    """
+    _total = fee_apy + reward_apy
+    if _total <= 0:
+        return
+
+    _ratio = fee_apy / _total
+    _pct   = round(_ratio * 100)
+
+    if _ratio >= 0.70:
+        _label, _color, _icon = "Sustainable",       "#22c55e", "✅"
+        _explain = (
+            "Most of this yield comes from real trading fees — not from the protocol printing "
+            "new tokens. This is a healthy, sustainable return that should persist over time."
+        )
+    elif _ratio >= 0.35:
+        _label, _color, _icon = "Partially Sustainable", "#f59e0b", "⚠️"
+        _explain = (
+            "About half of this yield comes from trading fees, the rest from reward token "
+            "emissions. The yield is partly reliable but may decrease if emission rewards run out."
+        )
+    else:
+        _label, _color, _icon = "Incentive-Driven", "#ef4444", "🚨"
+        _explain = (
+            "Most of this yield is paid in reward tokens being printed by the protocol — "
+            "not from real trading fees. These high APYs often shrink or disappear when "
+            "the reward program ends. Approach with caution."
+        )
+
+    st.markdown(
+        f"<div style='padding:10px 14px;background:rgba(17,24,39,0.6);"
+        f"border-radius:8px;border-left:3px solid {_color};margin-top:8px;'>"
+        f"<div style='font-size:0.70rem;color:#6b7280;text-transform:uppercase;"
+        f"letter-spacing:0.7px;margin-bottom:4px;'>Yield Sustainability</div>"
+        f"<div style='display:flex;align-items:center;gap:8px;'>"
+        f"<span style='font-size:1.1rem;'>{_icon}</span>"
+        f"<span style='font-weight:700;color:{_color};font-size:0.88rem;'>{_label}</span>"
+        f"<span style='color:#6b7280;font-size:0.78rem;'>({_pct}% real fees)</span>"
+        f"</div>"
+        f"<div style='margin-top:6px;background:rgba(255,255,255,0.05);"
+        f"border-radius:3px;height:5px;'>"
+        f"<div style='width:{_pct}%;height:5px;background:{_color};"
+        f"border-radius:3px;'></div>"
+        f"</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    if user_level == "beginner":
+        st.caption(f"💡 {_explain}")
+
