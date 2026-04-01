@@ -199,8 +199,10 @@ def generate_arb_pdf(arb_results: dict) -> bytes:
     for profile, arbs in arb_results.items():
         if isinstance(arbs, list):
             for a in arbs:
-                a["_profile"] = profile
-                all_arbs.append(a)
+                # Use a shallow copy to avoid mutating the caller's dict
+                entry = dict(a)
+                entry["_profile"] = profile
+                all_arbs.append(entry)
 
     if not all_arbs:
         story.append(Paragraph("No arbitrage opportunities detected.", styles["body"]))

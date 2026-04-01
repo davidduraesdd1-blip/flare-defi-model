@@ -191,7 +191,15 @@ render_yield_hero_cards(positions, opps, portfolio_size)
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ── Top Opportunities ─────────────────────────────────────────────────────────
-render_section_header(f"Top Opportunities", f"{profile_cfg['label']} · {profile_cfg['target_apy_low']:.0f}–{profile_cfg['target_apy_high']:.0f}% target APY")
+_prof_label   = profile_cfg.get("label", profile.capitalize())
+_prof_apy_low = profile_cfg.get("target_apy_low", 0)
+_prof_apy_hi  = profile_cfg.get("target_apy_high", 0)
+try:
+    _prof_apy_low = float(_prof_apy_low)
+    _prof_apy_hi  = float(_prof_apy_hi)
+except (TypeError, ValueError):
+    _prof_apy_low = _prof_apy_hi = 0.0
+render_section_header(f"Top Opportunities", f"{_prof_label} · {_prof_apy_low:.0f}–{_prof_apy_hi:.0f}% target APY")
 
 if not pro_mode:
     st.markdown(
@@ -230,7 +238,10 @@ if not arb_data:
     )
 else:
     for arb in arb_data[:5]:
-        profit        = float(arb.get("estimated_profit", 0) or 0)
+        try:
+            profit = float(arb.get("estimated_profit") or 0)
+        except (TypeError, ValueError):
+            profit = 0.0
         urgency       = arb.get("urgency", "monitor")
         label         = _html.escape(str(arb.get("strategy_label", arb.get("strategy", "Arb"))))
         desc          = _html.escape(str(arb.get("plain_english", "—")))
@@ -254,9 +265,12 @@ render_section_header("FXRP Ecosystem", "FAssets live metrics · March 2026")
 _fxrp_cols = st.columns(4)
 
 # Wire live values where available; fall back to known estimates.
-_fxrp_circ_raw = (
-    latest.get("fasset", {}).get("assets", {}).get("FXRP", {}).get("circulating") or 0
-)
+try:
+    _fxrp_circ_raw = float(
+        latest.get("fasset", {}).get("assets", {}).get("FXRP", {}).get("circulating") or 0
+    )
+except (TypeError, ValueError):
+    _fxrp_circ_raw = 0.0
 if _fxrp_circ_raw >= 1_000_000:
     _fxrp_minted_str = f"{_fxrp_circ_raw / 1_000_000:.1f}M+"
 elif _fxrp_circ_raw >= 1_000:

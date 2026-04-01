@@ -153,7 +153,10 @@ def fetch_yfinance_macro() -> dict[str, Any]:
         result: dict = {}
         with ThreadPoolExecutor(max_workers=4) as ex:
             try:
-                for key, series in ex.map(_fetch_one, _MAP.items()):
+                for result_item in ex.map(_fetch_one, _MAP.items()):
+                    if result_item is None:
+                        continue
+                    key, series = result_item
                     try:
                         if series is not None and not series.empty:
                             result[key] = round(float(series.iloc[-1]), 2)
@@ -207,7 +210,10 @@ def fetch_macro_timeseries(days: int = 90) -> dict[str, Any]:
         out: dict = {}
         with ThreadPoolExecutor(max_workers=6) as ex:
             try:
-                for key, series in ex.map(_fetch_ts, _SYMS.items()):
+                for result_item in ex.map(_fetch_ts, _SYMS.items()):
+                    if result_item is None:
+                        continue
+                    key, series = result_item
                     if series is not None:
                         out[key] = series
             except Exception as _map_err:
@@ -354,9 +360,12 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             aa = row.get("AdrActCnt")
             if mc and rc:
                 try:
-                    mvrv_vals.append(float(mc) / float(rc))
+                    rc_f = float(rc)
+                    if rc_f == 0:
+                        raise ZeroDivisionError("CapRealUSD is zero")
+                    mvrv_vals.append(float(mc) / rc_f)
                     mvrv_dates.append(t)
-                    real_caps.append(float(rc))
+                    real_caps.append(rc_f)
                 except (ValueError, ZeroDivisionError):
                     pass
             if sp:
