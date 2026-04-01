@@ -16,6 +16,8 @@ import plotly.express as px
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
     render_opportunity_card, render_section_header, risk_score_to_grade,
+    render_what_this_means, render_yield_sustainability, signal_badge_html,
+    get_user_level,
 )
 from config import RISK_PROFILES, RISK_PROFILE_NAMES
 from scanners.defillama import (
@@ -118,6 +120,7 @@ color          = ctx["color"]
 weight         = ctx["weight"]
 portfolio_size = ctx["portfolio_size"]
 demo_mode      = ctx.get("demo_mode", False)
+_user_level    = ctx.get("user_level", get_user_level())
 
 # #82 Beginner/Pro toggle — reads from sidebar session state (set in ui/common.py render_sidebar)
 # The sidebar toggle is the canonical source; this reads it for page-level conditionals.
@@ -144,6 +147,15 @@ st.markdown(
     "<div style='color:#475569; font-size:0.87rem; margin-bottom:24px;'>"
     "Starter portfolios · APY trends · options strategies</div>",
     unsafe_allow_html=True,
+)
+
+# Beginner orientation (Phase 2, item 8)
+render_what_this_means(
+    "This page shows real yield opportunities on the Flare Network. "
+    "Each card shows an APY (annual return), a risk rating (A–F), "
+    "and how much of that return is from real trading fees vs. printed reward tokens. "
+    "Higher APY usually = higher risk. Start with Grade A or B opportunities matching your risk profile.",
+    title="How do I use this page?",
 )
 
 

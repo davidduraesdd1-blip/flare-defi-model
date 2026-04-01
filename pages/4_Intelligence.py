@@ -12,7 +12,7 @@ import pandas as pd
 
 from ui.common import (
     page_setup, render_sidebar, load_monitor_digest, render_section_header, _ts_fmt,
-    load_latest,
+    load_latest, render_fear_greed_trend, render_what_this_means, get_user_level,
 )
 from scanners.defillama import fetch_governance_alerts, governance_fetch_failed
 from ai.intent_classifier import classify_defi_intent   # #87
@@ -27,12 +27,18 @@ def _cached_governance_alerts():
 
 page_setup("Intelligence · Flare DeFi")
 
-ctx       = render_sidebar()
-profile   = ctx["profile"]
-pro_mode  = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
-demo_mode = ctx.get("demo_mode", False)  # #67 Demo/Sandbox mode
+ctx        = render_sidebar()
+profile    = ctx["profile"]
+pro_mode   = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
+demo_mode  = ctx.get("demo_mode", False)  # #67 Demo/Sandbox mode
+user_level = ctx.get("user_level", get_user_level())
 
 st.title("🧠 Intelligence")
+
+# ── Fear & Greed Trend (Phase 2, item 14) ─────────────────────────────────────
+render_section_header("Fear & Greed Index", "Current reading + 7-day + 30-day trend")
+render_fear_greed_trend(user_level=user_level)
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 st.caption("Ecosystem monitor, governance alerts, AI model accuracy, and protocol revenue health")
 st.markdown(
     "<div style='color:#475569; font-size:0.88rem; margin-bottom:24px;'>"

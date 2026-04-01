@@ -52,6 +52,7 @@ from ui.common import (
     render_price_strip, render_incentive_warning,
     render_yield_hero_cards, render_opportunity_card,
     render_urgency_badge, render_section_header, _ts_fmt, load_live_prices,
+    render_welcome_banner, signal_badge_html,
 )
 import streamlit as st
 
@@ -128,6 +129,9 @@ if demo_mode:
 
 latest    = load_latest()
 positions = load_positions()
+
+# ── Welcome Banner (Phase 2, item 6) — beginner only, once per session ────────
+render_welcome_banner()
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown(

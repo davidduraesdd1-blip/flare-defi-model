@@ -549,6 +549,14 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "discord.com",                  # Discord webhook alerts (#18)
 })
 
+# ─── Coin Universe (Phase 2, item 16) ────────────────────────────────────────
+# 7 must-have coins always included in scanner, benchmarks, and correlation views.
+# Top 30 dynamic coins are fetched at scan time via fetch_coin_universe() in ui/common.py.
+MUST_HAVE_COINS: list[str] = ["XRP", "XLM", "XDC", "CC", "HBAR", "SHX", "ZBCN"]
+
+# Exchange fallback chain for coins without primary listing
+EXCHANGE_FALLBACK: list[str] = ["binance", "okx", "gate", "bybit", "kucoin", "coingecko"]
+
 # ─── Branding ─────────────────────────────────────────────────────────────────
 # Set env vars to activate: DEFI_BRAND_NAME="My App"  DEFI_BRAND_LOGO_PATH="logo.png"
 # When unset (default), the app shows a clean placeholder header.
