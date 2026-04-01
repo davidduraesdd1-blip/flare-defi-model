@@ -28,6 +28,16 @@ _FEEDBACK_CACHE: dict = {"data": None, "expires": 0.0}
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+
+def get_user_level() -> str:
+    """Return current user level: 'beginner', 'intermediate', or 'advanced'.
+
+    Defaults to 'beginner' on first run (safe for new users).
+    Call this from any page to get the level-aware display mode.
+    """
+    return st.session_state.get("user_level", "beginner")
+
+
 # ─── Security Audit Logger (#15) ────────────────────────────────────────────
 # Dedicated logger for security-relevant events; does NOT propagate to root.
 # Write to /tmp on Linux (Streamlit Cloud mounts /mount/src via NFS — file
@@ -59,7 +69,7 @@ def audit(event: str, **ctx) -> None:
 from config import (
     RISK_PROFILES, RISK_PROFILE_NAMES, INCENTIVE_PROGRAM, HISTORY_FILE,
     POSITIONS_FILE, WALLETS_FILE, PROTOCOLS, TOKENS, FLARE_RPC_URLS,
-    MONITOR_DIGEST_FILE, SCHEDULER,
+    MONITOR_DIGEST_FILE, SCHEDULER, BRAND_NAME, BRAND_LOGO_PATH,
 )
 from utils.file_io import atomic_json_write
 
@@ -142,17 +152,20 @@ def _inject_css() -> None:
 # ── CSS constant strings (extracted for module-level caching, upgrade #32) ────
 _CSS_LIGHT = """
 <style>
+    /* ── Google Fonts — Inter (UI) + JetBrains Mono (data) ───────────── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
     /* ── Chrome Reset ─────────────────────────────────────────────────── */
     #MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden; }
 
     /* ── Base / App Shell ─────────────────────────────────────────────── */
-    .stApp, .main { background: #f1f5f9 !important; color: #1e293b !important; }
+    .stApp, .main { background: #f1f5f9 !important; color: #1e293b !important; font-family: 'Inter', system-ui, sans-serif !important; }
     .block-container { padding-top: 1.6rem; padding-bottom: 3rem; max-width: 1200px; }
 
     /* ── Typography ───────────────────────────────────────────────────── */
-    h1 { font-size: 1.75rem !important; font-weight: 800 !important; letter-spacing: -0.5px; color: #0f172a !important; }
-    h2 { font-size: 1.2rem !important; font-weight: 600 !important; color: #1e293b !important; letter-spacing: -0.2px; }
-    h3 { font-size: 1.0rem !important; font-weight: 600 !important; color: #475569 !important; text-transform: uppercase; letter-spacing: 0.8px; }
+    h1 { font-size: clamp(1.3rem, 1.4vw, 1.75rem) !important; font-weight: 800 !important; letter-spacing: -0.5px; color: #0f172a !important; }
+    h2 { font-size: clamp(1.0rem, 1.1vw, 1.2rem) !important; font-weight: 600 !important; color: #1e293b !important; letter-spacing: -0.2px; }
+    h3 { font-size: clamp(0.85rem, 0.9vw, 1.0rem) !important; font-weight: 600 !important; color: #475569 !important; text-transform: uppercase; letter-spacing: 0.8px; }
 
     /* ── Custom Scrollbar ─────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -174,8 +187,8 @@ _CSS_LIGHT = """
     .card-orange { border-left-color: #f59e0b; }
     .card-red    { border-left-color: #ef4444; }
     .card-violet { border-left-color: #8b5cf6; }
-    .big-number { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.8px; line-height: 1.1; color: #0f172a; font-variant-numeric: tabular-nums; }
-    .label { font-size: 0.68rem; color: #475569; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
+    .big-number { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.8px; line-height: 1.1; color: #0f172a; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
+    .label { font-size: clamp(0.62rem, 0.68vw, 0.68rem); color: #475569; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
 
     /* ── Opportunity Cards ────────────────────────────────────────────── */
     .opp-card {
@@ -228,7 +241,7 @@ _CSS_LIGHT = """
     .divider { border: none; border-top: 1px solid rgba(0,0,0,0.09); margin: 28px 0; }
 
     /* ── Section Header ───────────────────────────────────────────────── */
-    .section-header { font-size: 0.78rem; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 1.4px; padding-bottom: 8px; border-bottom: 1px solid rgba(109,40,217,0.3); margin-bottom: 16px; margin-top: 8px; }
+    .section-header { font-size: 0.78rem; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 1.4px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,212,170,0.3); margin-bottom: 16px; margin-top: 8px; }
 
     /* ── Section Label ────────────────────────────────────────────────── */
     .section-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 1.6px; margin-bottom: 10px; margin-top: 6px; }
@@ -250,7 +263,7 @@ _CSS_LIGHT = """
         transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s !important;
     }
     div[data-testid="stButton"] > button:hover,
-    button[kind="secondary"]:hover { border-color: rgba(109,40,217,0.4) !important; box-shadow: 0 0 12px rgba(109,40,217,0.15) !important; transform: translateY(-1px) !important; color: #0f172a !important; background: #f8f5ff !important; }
+    button[kind="secondary"]:hover { border-color: rgba(0,212,170,0.4) !important; box-shadow: 0 0 12px rgba(0,212,170,0.15) !important; transform: translateY(-1px) !important; color: #0f172a !important; background: #f0fefb !important; }
     div[data-testid="stButton"] > button:active { transform: translateY(0) !important; }
 
     /* ── Number input +/- step buttons ───────────────────────────────── */
@@ -260,7 +273,7 @@ _CSS_LIGHT = """
     [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
     [data-testid="stDataFrame"] table { background: rgba(255,255,255,0.97) !important; }
     [data-testid="stDataFrame"] thead tr th { background: rgba(241,245,249,0.98) !important; color: #64748b !important; font-size: 0.72rem !important; letter-spacing: 0.9px !important; text-transform: uppercase !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; }
-    [data-testid="stDataFrame"] tbody tr:hover td { background: rgba(109,40,217,0.04) !important; }
+    [data-testid="stDataFrame"] tbody tr:hover td { background: rgba(0,212,170,0.04) !important; }
 
     /* ── Price Chip ───────────────────────────────────────────────────── */
     .price-chip { text-align: center; padding: 14px 12px; background: rgba(255,255,255,0.97); border-radius: 14px; border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s; }
@@ -269,7 +282,7 @@ _CSS_LIGHT = """
     /* ── Tabs ─────────────────────────────────────────────────────────── */
     [data-testid="stTabs"] [role="tab"] { font-size: 0.82rem; font-weight: 600; color: #64748b; transition: color 0.15s; }
     [data-testid="stTabs"] [role="tab"]:hover { color: #475569; }
-    [data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: #6d28d9 !important; }
+    [data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: #00d4aa !important; }
     [data-testid="stTabs"] [role="tabpanel"] { padding-top: 16px; }
 
     /* ── Inputs ───────────────────────────────────────────────────────── */
@@ -278,7 +291,7 @@ _CSS_LIGHT = """
         border-radius: 9px !important; color: #1e293b !important; transition: border-color 0.15s, box-shadow 0.15s;
     }
     [data-testid="stNumberInput"] input:focus, [data-testid="stTextInput"] input:focus {
-        border-color: rgba(109,40,217,0.45) !important; box-shadow: 0 0 0 3px rgba(109,40,217,0.10) !important;
+        border-color: rgba(0,212,170,0.45) !important; box-shadow: 0 0 0 3px rgba(0,212,170,0.10) !important;
     }
 
     /* ── Expanders ────────────────────────────────────────────────────── */
@@ -361,7 +374,7 @@ _CSS_LIGHT = """
     [data-baseweb="list"] li,
     [data-baseweb="menu-item"] { color: #1e293b !important; }
     [data-baseweb="list"] li:hover,
-    [data-baseweb="menu-item"]:hover { background-color: rgba(109,40,217,0.07) !important; }
+    [data-baseweb="menu-item"]:hover { background-color: rgba(0,212,170,0.07) !important; }
 
     /* ── Select label + option text ───────────────────────────────────── */
     [data-testid="stSelectbox"] label,
@@ -412,17 +425,20 @@ _CSS_LIGHT = """
 
 _CSS_DARK = """
 <style>
+    /* ── Google Fonts — Inter (UI) + JetBrains Mono (data) ───────────── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
     /* ── Chrome Reset ─────────────────────────────────────────────────── */
     #MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden; }
 
     /* ── Base / App Shell ─────────────────────────────────────────────── */
-    .stApp, .main { background: #0d0e14 !important; color: #e2e8f0 !important; }
+    .stApp, .main { background: #0d0e14 !important; color: #e2e8f0 !important; font-family: 'Inter', system-ui, sans-serif !important; }
     .block-container { padding-top: 1.6rem; padding-bottom: 3rem; max-width: 1200px; }
 
     /* ── Typography ───────────────────────────────────────────────────── */
-    h1 { font-size: 1.75rem !important; font-weight: 800 !important; letter-spacing: -0.5px; color: #e2e8f0 !important; }
-    h2 { font-size: 1.2rem !important; font-weight: 600 !important; color: #cbd5e1 !important; letter-spacing: -0.2px; }
-    h3 { font-size: 1.0rem !important; font-weight: 600 !important; color: #94a3b8 !important; text-transform: uppercase; letter-spacing: 0.8px; }
+    h1 { font-size: clamp(1.3rem, 1.4vw, 1.75rem) !important; font-weight: 800 !important; letter-spacing: -0.5px; color: #e2e8f0 !important; }
+    h2 { font-size: clamp(1.0rem, 1.1vw, 1.2rem) !important; font-weight: 600 !important; color: #cbd5e1 !important; letter-spacing: -0.2px; }
+    h3 { font-size: clamp(0.85rem, 0.9vw, 1.0rem) !important; font-weight: 600 !important; color: #94a3b8 !important; text-transform: uppercase; letter-spacing: 0.8px; }
 
     /* ── Custom Scrollbar ─────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -432,7 +448,7 @@ _CSS_DARK = """
 
     /* ── Glassmorphism Metric Cards ───────────────────────────────────── */
     .metric-card {
-        background: rgba(19,20,28,0.95);
+        background: rgba(17,24,39,0.95);
         backdrop-filter: blur(16px) saturate(180%);
         -webkit-backdrop-filter: blur(16px) saturate(180%);
         border-radius: 16px; padding: 22px 26px; margin-bottom: 14px;
@@ -448,12 +464,12 @@ _CSS_DARK = """
     .card-orange { border-left-color: #f59e0b; }
     .card-red    { border-left-color: #ef4444; }
     .card-violet { border-left-color: #8b5cf6; }
-    .big-number { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.8px; line-height: 1.1; color: #f1f5f9; font-variant-numeric: tabular-nums; }
-    .label { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
+    .big-number { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.8px; line-height: 1.1; color: #f1f5f9; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
+    .label { font-size: clamp(0.62rem, 0.68vw, 0.68rem); color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
 
     /* ── Opportunity Cards ────────────────────────────────────────────── */
     .opp-card {
-        background: rgba(19,20,28,0.92);
+        background: rgba(17,24,39,0.92);
         backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
         border-radius: 16px; padding: 20px 24px; margin-bottom: 12px;
         border: 1px solid rgba(255,255,255,0.07);
@@ -495,7 +511,7 @@ _CSS_DARK = """
     .divider { border: none; border-top: 1px solid rgba(255,255,255,0.05); margin: 28px 0; }
 
     /* ── Section Header ───────────────────────────────────────────────── */
-    .section-header { font-size: 0.78rem; font-weight: 700; color: #e2e8f0; text-transform: uppercase; letter-spacing: 1.4px; padding-bottom: 8px; border-bottom: 1px solid rgba(139,92,246,0.35); margin-bottom: 16px; margin-top: 8px; }
+    .section-header { font-size: 0.78rem; font-weight: 700; color: #e2e8f0; text-transform: uppercase; letter-spacing: 1.4px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,212,170,0.35); margin-bottom: 16px; margin-top: 8px; }
 
     /* ── Section Label ────────────────────────────────────────────────── */
     .section-label { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.6px; margin-bottom: 10px; margin-top: 6px; }
@@ -510,36 +526,36 @@ _CSS_DARK = """
     div[data-testid="stButton"] > button {
         border-radius: 10px; border: 1px solid rgba(255,255,255,0.10);
         font-weight: 700; font-size: 0.82rem; letter-spacing: 0.3px;
-        background: rgba(19,20,28,0.85); color: #cbd5e1;
+        background: rgba(17,24,39,0.85); color: #cbd5e1;
         transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
     }
-    div[data-testid="stButton"] > button:hover { border-color: rgba(139,92,246,0.45); box-shadow: 0 0 16px rgba(139,92,246,0.18); transform: translateY(-1px); color: #f1f5f9; }
+    div[data-testid="stButton"] > button:hover { border-color: rgba(0,212,170,0.45); box-shadow: 0 0 16px rgba(0,212,170,0.18); transform: translateY(-1px); color: #f1f5f9; }
     div[data-testid="stButton"] > button:active { transform: translateY(0); }
 
     /* ── Dataframes ───────────────────────────────────────────────────── */
     [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
     [data-testid="stDataFrame"] table { background: rgba(13,14,20,0.96) !important; }
-    [data-testid="stDataFrame"] thead tr th { background: rgba(19,20,28,0.98) !important; color: #94a3b8 !important; font-size: 0.72rem !important; letter-spacing: 0.9px !important; text-transform: uppercase !important; border-bottom: 1px solid rgba(255,255,255,0.06) !important; }
-    [data-testid="stDataFrame"] tbody tr:hover td { background: rgba(139,92,246,0.06) !important; }
+    [data-testid="stDataFrame"] thead tr th { background: rgba(17,24,39,0.98) !important; color: #94a3b8 !important; font-size: 0.72rem !important; letter-spacing: 0.9px !important; text-transform: uppercase !important; border-bottom: 1px solid rgba(255,255,255,0.06) !important; }
+    [data-testid="stDataFrame"] tbody tr:hover td { background: rgba(0,212,170,0.06) !important; }
 
     /* ── Price Chip ───────────────────────────────────────────────────── */
-    .price-chip { text-align: center; padding: 14px 12px; background: rgba(19,20,28,0.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 14px; border: 1px solid rgba(255,255,255,0.07); box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04); transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s; }
+    .price-chip { text-align: center; padding: 14px 12px; background: rgba(17,24,39,0.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 14px; border: 1px solid rgba(255,255,255,0.07); box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04); transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s; }
     .price-chip:hover { border-color: rgba(255,255,255,0.13); box-shadow: 0 6px 24px rgba(0,0,0,0.45); transform: translateY(-1px); }
 
     /* ── Tabs ─────────────────────────────────────────────────────────── */
     [data-testid="stTabs"] [role="tab"] { font-size: 0.82rem; font-weight: 600; color: #64748b; transition: color 0.15s; }
     [data-testid="stTabs"] [role="tab"]:hover { color: #94a3b8; }
-    [data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: #a78bfa; }
+    [data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: #00d4aa; }
     [data-testid="stTabs"] [role="tabpanel"] { padding-top: 16px; }
 
     /* ── Inputs ───────────────────────────────────────────────────────── */
     [data-testid="stNumberInput"] input, [data-testid="stTextInput"] input {
-        background: rgba(19,20,28,0.88) !important; border: 1px solid rgba(255,255,255,0.09) !important;
+        background: rgba(17,24,39,0.88) !important; border: 1px solid rgba(255,255,255,0.09) !important;
         border-radius: 9px !important; color: #e2e8f0 !important;
         transition: border-color 0.15s, box-shadow 0.15s;
     }
     [data-testid="stNumberInput"] input:focus, [data-testid="stTextInput"] input:focus {
-        border-color: rgba(139,92,246,0.45) !important; box-shadow: 0 0 0 3px rgba(139,92,246,0.12) !important;
+        border-color: rgba(0,212,170,0.45) !important; box-shadow: 0 0 0 3px rgba(0,212,170,0.12) !important;
     }
 
     /* ── Expanders ────────────────────────────────────────────────────── */
@@ -551,7 +567,7 @@ _CSS_DARK = """
     [data-testid="stRadio"] [data-testid="stMarkdownContainer"] p { color: #94a3b8 !important; }
 
     /* ── Alert Boxes ──────────────────────────────────────────────────── */
-    [data-testid="stAlert"] { background: rgba(19,20,28,0.92) !important; border-radius: 12px !important; border-left-width: 3px !important; }
+    [data-testid="stAlert"] { background: rgba(17,24,39,0.92) !important; border-radius: 12px !important; border-left-width: 3px !important; }
     [data-testid="stAlert"] [data-testid="stMarkdownContainer"] p,
     [data-testid="stAlert"] [data-testid="stMarkdownContainer"] li { color: #94a3b8 !important; }
 
@@ -646,15 +662,19 @@ def render_sidebar() -> dict:
         _is_light = _native_light or st.session_state.get("_theme") == "light"
         _logo_col, _theme_col = st.columns([3, 1])
         with _logo_col:
-            st.markdown(
-                "<div style='font-size:1.25rem; font-weight:800; "
-                "background: linear-gradient(90deg, #a78bfa, #60a5fa); "
-                "-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
-                "background-clip: text; letter-spacing:-0.3px; margin-bottom:0px;'>⚡ Flare DeFi</div>"
-                "<div style='font-size:0.68rem; letter-spacing:1.2px; "
-                "text-transform:uppercase; margin-bottom:4px;'>Analytics Dashboard</div>",
-                unsafe_allow_html=True,
-            )
+            if BRAND_LOGO_PATH and Path(BRAND_LOGO_PATH).exists():
+                st.image(BRAND_LOGO_PATH, width=120)
+            else:
+                _header_text = BRAND_NAME if BRAND_NAME else "⚡ Flare DeFi"
+                st.markdown(
+                    f"<div style='font-size:1.25rem; font-weight:800; "
+                    f"background: linear-gradient(90deg, #00d4aa, #60a5fa); "
+                    f"-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
+                    f"background-clip: text; letter-spacing:-0.3px; margin-bottom:0px;'>{_header_text}</div>"
+                    "<div style='font-size:0.68rem; letter-spacing:1.2px; "
+                    "text-transform:uppercase; margin-bottom:4px;'>Analytics Dashboard</div>",
+                    unsafe_allow_html=True,
+                )
         with _theme_col:
             st.markdown("<div style='padding-top:6px;'></div>", unsafe_allow_html=True)
             if st.button("☀" if _is_light else "🌙", key="_theme_toggle",
@@ -769,19 +789,33 @@ def render_sidebar() -> dict:
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-        # Pro Mode toggle (#82) — stored in session_state so all pages read it consistently
-        _pro_val = st.toggle(
-            "Pro Mode",
-            value=st.session_state.get("defi_pro_mode", False),
-            key="defi_pro_mode_sidebar",
+        # ── User Level selector — 3-tier experience system (Phase 1) ──────────────
+        # Beginner = default on first run. Persists across all pages via session_state.
+        # pro_mode kept for backward compat: True when user is Advanced.
+        st.markdown("<div class='section-label'>Experience Level</div>", unsafe_allow_html=True)
+        _LEVEL_OPTIONS = ["beginner", "intermediate", "advanced"]
+        _LEVEL_LABELS  = {
+            "beginner":     "🟢 Beginner",
+            "intermediate": "🟡 Intermediate",
+            "advanced":     "🔴 Advanced",
+        }
+        _cur_level = st.session_state.get("user_level", "beginner")
+        _level_val = st.radio(
+            "User Level",
+            options=_LEVEL_OPTIONS,
+            format_func=lambda lv: _LEVEL_LABELS[lv],
+            index=_LEVEL_OPTIONS.index(_cur_level),
+            key="defi_user_level_radio",
+            label_visibility="collapsed",
             help=(
-                "Pro: shows Sharpe ratio, Kelly fraction, HMM state, real yield ratio, "
-                "technical indicators, and all advanced columns. "
-                "Beginner: simplified card view with plain-English labels and tooltips."
+                "Beginner: plain-English view, tooltips always visible, simplified signals. "
+                "Intermediate: key numbers + condensed explanations. "
+                "Advanced: full technical detail, all raw numbers."
             ),
         )
-        # Sync to the canonical session state key used by all pages
-        st.session_state["defi_pro_mode"] = _pro_val
+        st.session_state["user_level"]    = _level_val
+        # Backward compatibility — all existing pro_mode checks continue to work
+        st.session_state["defi_pro_mode"] = (_level_val == "advanced")
 
         # Demo / Sandbox mode toggle (#67)
         _demo_val = st.toggle(
@@ -797,6 +831,15 @@ def render_sidebar() -> dict:
                 "⚠️ DEMO MODE — synthetic data only</div>",
                 unsafe_allow_html=True,
             )
+
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+        # ── Glossary popover (Phase 1) ─────────────────────────────────────────
+        try:
+            from ui.glossary import glossary_popover as _glossary_pop
+            _glossary_pop(st.session_state.get("user_level", "beginner"))
+        except ImportError:
+            pass
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -898,6 +941,7 @@ def render_sidebar() -> dict:
         "portfolio_size": portfolio_size,
         "demo_mode":      st.session_state.get("defi_demo_mode", False),
         "pro_mode":       st.session_state.get("defi_pro_mode", False),
+        "user_level":     st.session_state.get("user_level", "beginner"),
     }
 
 

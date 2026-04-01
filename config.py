@@ -548,3 +548,10 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "api.telegram.org",             # Telegram bot API — webhook alert delivery (#18)
     "discord.com",                  # Discord webhook alerts (#18)
 })
+
+# ─── Branding ─────────────────────────────────────────────────────────────────
+# Set env vars to activate: DEFI_BRAND_NAME="My App"  DEFI_BRAND_LOGO_PATH="logo.png"
+# When unset (default), the app shows a clean placeholder header.
+# 2-line rebrand when ready — no restructuring required.
+BRAND_NAME: str = os.environ.get("DEFI_BRAND_NAME", "")
+BRAND_LOGO_PATH: str = os.environ.get("DEFI_BRAND_LOGO_PATH", "")
