@@ -167,6 +167,10 @@ def fetch_yfinance_macro() -> dict[str, Any]:
 
         if not result:
             return None
+        # Fill any missing keys from fallbacks (e.g. DXY failed but others succeeded)
+        for k, v in _YF_FALLBACKS.items():
+            if k not in result:
+                result[k] = v
         result.update({"source": "yfinance", "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat()})
         return result
 

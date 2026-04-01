@@ -453,7 +453,7 @@ try:
         value=30,
         key="defi_macro_corr_days",
     )
-    _ts = _mf.fetch_macro_timeseries(_corr_w + 20)
+    _ts = _mf.fetch_macro_timeseries(max(90, _corr_w * 3))
 
     if _ts and "BTC" in _ts:
         _frames: dict = {}
@@ -462,7 +462,7 @@ try:
             if _s and isinstance(_s, dict):
                 _frames[_key] = pd.Series(_s)
         if len(_frames) >= 2:
-            _dft = pd.DataFrame(_frames).sort_index()
+            _dft = pd.DataFrame(_frames).sort_index().ffill()
             _dft.index = pd.to_datetime(_dft.index)
             _dfr = _dft.pct_change().dropna()
             _fig = go.Figure()
