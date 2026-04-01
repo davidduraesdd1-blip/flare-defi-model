@@ -28,14 +28,14 @@ _pro_mode = _ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 
 # ─── Input Validation Helpers (#13) ──────────────────────────────────────────
 
-def _validate_positive(value: float, name: str) -> tuple[bool, str]:
+def _validate_positive(value: float, name: str) -> "tuple[bool, str]":
     """Return (True, '') if value > 0, else (False, error message)."""
     if value <= 0:
         return False, f"{name} must be positive"
     return True, ""
 
 
-def _validate_range(value: float, min_v: float, max_v: float, name: str) -> tuple[bool, str]:
+def _validate_range(value: float, min_v: float, max_v: float, name: str) -> "tuple[bool, str]":
     """Return (True, '') if min_v <= value <= max_v, else (False, error message)."""
     if not (min_v <= value <= max_v):
         return False, f"{name} must be between {min_v} and {max_v}"

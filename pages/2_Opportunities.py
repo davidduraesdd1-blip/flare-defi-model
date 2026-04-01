@@ -971,7 +971,7 @@ _alert_slugs = ["kinetic-finance", "clearpool-lending", "morpho", "aave-v3", "ei
 _tvl_alerts  = []
 
 # OPT-38: Fetch all 5 TVL alerts in parallel
-def _fetch_tvl_alert(slug: str) -> dict | None:
+def _fetch_tvl_alert(slug: str) -> "dict | None":
     try:
         alert = fetch_tvl_change_alert(slug, threshold_pct=5.0)
         return alert if alert.get("current_tvl", 0) > 0 else None

@@ -937,13 +937,15 @@ if positions:
 
 if positions:
     _incentive_positions = [p for p in positions if p.get("protocol", "") in ("blazeswap", "enosys", "sparkdex")]
+    # Define _days_to_jul2026 here so it is available to the Net Worth Projection
+    # section below regardless of whether any incentive positions exist.
+    _days_to_jul2026 = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
     if _incentive_positions:
         render_section_header("rFLR Incentive Tracker", "Estimated rFLR earned + projected earnings to July 2026")
 
         _RFLR_PER_USD_DAILY  = 0.0012   # rough: ~43% reward APY on $1 → ~$0.00118/day in rFLR value
         _FLR_PRICE           = (next((pr.get("price_usd", 0) for pr in (prices or []) if pr.get("symbol") == "FLR"), 0)
                                 or FALLBACK_PRICES.get("FLR", 0.0088))
-        _days_to_jul2026     = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
 
         rflr_rows = []
         for p in _incentive_positions:
@@ -1274,7 +1276,7 @@ if positions and total_value > 0:
     # ── Step 1: Current allocation by protocol type ──────────────────────────
     _type_map = {k: v.get("type", "Other") for k, v in PROTOCOLS.items()}
     _current_alloc: dict = {}
-    for pos in positions:
+    for pnl_idx, pos in enumerate(positions):
         proto_key  = pos.get("protocol", "")
         proto_type = _type_map.get(proto_key, "Other")
         # Simplify types for comparison
@@ -1288,7 +1290,6 @@ if positions and total_value > 0:
             bucket = "Yield Vault"
         else:
             bucket = "Other"
-        pnl_idx = positions.index(pos)
         _current_alloc[bucket] = _current_alloc.get(bucket, 0) + pnl_results[pnl_idx]["current_value"]
 
     _current_pct = {k: round(v / total_value * 100, 1) for k, v in _current_alloc.items()}

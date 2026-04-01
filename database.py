@@ -279,15 +279,17 @@ def save_opportunities(profile: str, opportunities: List[dict], scan_id: int = N
 def get_opportunities(profile: str = None, limit: int = 200) -> pd.DataFrame:
     """Return recent opportunities as a DataFrame."""
     conn = _get_conn_and_init()
+    # Pass the raw sqlite3.Connection to avoid pandas >= 2.0 SQLAlchemy deprecation warning.
+    raw = conn.__dict__["_c"]
     try:
         if profile:
             return pd.read_sql_query(
                 "SELECT * FROM opportunities WHERE profile=? ORDER BY timestamp DESC LIMIT ?",
-                conn, params=(profile, limit),
+                raw, params=(profile, limit),
             )
         return pd.read_sql_query(
             "SELECT * FROM opportunities ORDER BY timestamp DESC LIMIT ?",
-            conn, params=(limit,),
+            raw, params=(limit,),
         )
     except Exception as e:
         logger.error("[DB] get_opportunities: %s", e)
@@ -360,11 +362,12 @@ def save_arb_opportunities(arb_results: dict):
 def get_active_arb_opportunities(limit: int = 100) -> pd.DataFrame:
     """Return currently active arbitrage opportunities."""
     conn = _get_conn_and_init()
+    raw = conn.__dict__["_c"]
     try:
         return pd.read_sql_query(
             "SELECT * FROM arb_opportunities WHERE is_active=1 "
             "ORDER BY estimated_profit DESC LIMIT ?",
-            conn, params=(limit,),
+            raw, params=(limit,),
         )
     except Exception as e:
         logger.error("[DB] get_active_arb_opportunities: %s", e)
@@ -409,17 +412,18 @@ def save_ai_feedback(profile: str, entries: List[dict]):
 def get_ai_feedback(profile: str = None, days: int = 90) -> pd.DataFrame:
     """Return AI feedback records within the lookback window."""
     conn = _get_conn_and_init()
+    raw = conn.__dict__["_c"]
     from datetime import timedelta as _timedelta
     cutoff = (datetime.now(timezone.utc) - _timedelta(days=days)).isoformat()
     try:
         if profile:
             return pd.read_sql_query(
                 "SELECT * FROM ai_feedback WHERE profile=? AND timestamp>=? ORDER BY timestamp DESC",
-                conn, params=(profile, cutoff),
+                raw, params=(profile, cutoff),
             )
         return pd.read_sql_query(
             "SELECT * FROM ai_feedback WHERE timestamp>=? ORDER BY timestamp DESC",
-            conn, params=(cutoff,),
+            raw, params=(cutoff,),
         )
     except Exception as e:
         logger.error("[DB] get_ai_feedback: %s", e)
