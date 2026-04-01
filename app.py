@@ -199,7 +199,7 @@ try:
     _prof_apy_hi  = float(_prof_apy_hi)
 except (TypeError, ValueError):
     _prof_apy_low = _prof_apy_hi = 0.0
-render_section_header(f"Top Opportunities", f"{_prof_label} · {_prof_apy_low:.0f}–{_prof_apy_hi:.0f}% target APY")
+render_section_header("Top Opportunities", f"{_prof_label} · {_prof_apy_low:.0f}–{_prof_apy_hi:.0f}% target APY")
 
 if not pro_mode:
     st.markdown(
