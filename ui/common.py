@@ -759,12 +759,12 @@ def render_sidebar() -> dict:
                     _load_history_file.clear()
                     load_live_prices.clear()
                     _get_api_status.clear()
-                    try:
-                        from macro_feeds import fetch_fred_macro, fetch_yfinance_macro
-                        fetch_fred_macro.clear()
-                        fetch_yfinance_macro.clear()
-                    except Exception:
-                        pass
+                # Always clear module-level macro caches (not @st.cache_data decorated)
+                try:
+                    from macro_feeds import clear_macro_caches
+                    clear_macro_caches()
+                except Exception:
+                    pass
                 _get_history_cache()["data"] = None
                 _FEEDBACK_CACHE["data"] = None
                 st.success("All caches cleared — fetching fresh data…")

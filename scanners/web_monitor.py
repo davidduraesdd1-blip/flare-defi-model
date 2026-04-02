@@ -326,7 +326,7 @@ def claude_digest(
     try:
         client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model="claude-haiku-4-5",
             max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
         )
