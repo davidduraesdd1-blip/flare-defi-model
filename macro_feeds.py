@@ -157,20 +157,22 @@ def fetch_yfinance_macro() -> dict[str, Any]:
                 return key, None
 
         # OPT-35: fetch all 4 tickers in parallel
+        # FIX-503: use submit()+result(timeout=20) instead of ex.map() — ex.map() has
+        # no timeout and yfinance can hang indefinitely, blocking the Streamlit main thread
+        # and causing /script-health-check 503s after 60s.
         result: dict = {}
         with ThreadPoolExecutor(max_workers=4) as ex:
-            try:
-                for result_item in ex.map(_fetch_one, _MAP.items()):
+            futs = {ex.submit(_fetch_one, item): item[0] for item in _MAP.items()}
+            for fut, key in futs.items():
+                try:
+                    result_item = fut.result(timeout=20)
                     if result_item is None:
                         continue
-                    key, series = result_item
-                    try:
-                        if series is not None and not series.empty:
-                            result[key] = round(float(series.iloc[-1]), 2)
-                    except Exception as e:
-                        logger.debug("[yfinance] %s: %s", key, e)
-            except Exception as _map_err:
-                logger.warning("[macro_feeds] yfinance map error: %s", _map_err)
+                    _, series = result_item
+                    if series is not None and not series.empty:
+                        result[key] = round(float(series.iloc[-1]), 2)
+                except Exception as e:
+                    logger.debug("[yfinance] %s: %s", key, e)
 
         if not result:
             return None
@@ -218,17 +220,21 @@ def fetch_macro_timeseries(days: int = 90) -> dict[str, Any]:
             return key, None
 
         # OPT-36: fetch all 6 symbols in parallel
+        # FIX-503: same as fetch_yfinance_macro — use submit()+result(timeout=20)
+        # to prevent indefinite hangs from yfinance network stalls.
         out: dict = {}
         with ThreadPoolExecutor(max_workers=6) as ex:
-            try:
-                for result_item in ex.map(_fetch_ts, _SYMS.items()):
+            futs = {ex.submit(_fetch_ts, item): item[0] for item in _SYMS.items()}
+            for fut, key in futs.items():
+                try:
+                    result_item = fut.result(timeout=20)
                     if result_item is None:
                         continue
-                    key, series = result_item
+                    _, series = result_item
                     if series is not None:
                         out[key] = series
-            except Exception as _map_err:
-                logger.warning("[macro_feeds] yfinance ts map error: %s", _map_err)
+                except Exception as _map_err:
+                    logger.warning("[macro_feeds] yfinance ts %s timeout/error: %s", key, _map_err)
 
         out.update({"_days": days, "_timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat()})
         return out
