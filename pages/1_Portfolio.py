@@ -137,26 +137,28 @@ def _build_pdf_export(positions: list, pnl_results: list) -> bytes:
     total_fees    = sum(p["unclaimed_fees"] for p in pnl_results)
     report_date   = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    from fpdf.enums import XPos, YPos  # fpdf2 v2.5.2+ new_x/new_y API
+
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
 
     # Title
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "Flare DeFi Model - Portfolio Report", ln=True)
+    pdf.cell(0, 10, "Flare DeFi Model - Portfolio Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(0, 6, f"Generated: {report_date}", ln=True)
+    pdf.cell(0, 6, f"Generated: {report_date}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(4)
 
     # Summary row
     pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 7, "Portfolio Summary", ln=True)
+    pdf.cell(0, 7, "Portfolio Summary", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(60, 6, f"Total Value:   ${total_value:,.2f}")
     pdf.cell(60, 6, f"Total P&L:   ${total_pnl:+,.2f}")
-    pdf.cell(0,  6, f"Unclaimed Fees:   ${total_fees:,.2f}", ln=True)
+    pdf.cell(0,  6, f"Unclaimed Fees:   ${total_fees:,.2f}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.cell(60, 6, f"Positions:   {len(positions)}")
-    pdf.cell(0,  6, f"Deposited:   ${total_deposit:,.2f}", ln=True)
+    pdf.cell(0,  6, f"Deposited:   ${total_deposit:,.2f}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(6)
 
     # Table header
@@ -192,7 +194,7 @@ def _build_pdf_export(positions: list, pnl_results: list) -> bytes:
 
     pdf.ln(8)
     pdf.set_font("Helvetica", "I", 7)
-    pdf.cell(0, 5, "Not financial advice. DeFi positions carry risk including impermanent loss and smart contract risk.", ln=True)
+    pdf.cell(0, 5, "Not financial advice. DeFi positions carry risk including impermanent loss and smart contract risk.", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     return bytes(pdf.output())
 
