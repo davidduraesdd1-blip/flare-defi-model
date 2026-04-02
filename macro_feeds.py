@@ -58,6 +58,13 @@ def _cached_get(key: str, ttl: int, fetch_fn):
         return None
 
 
+def clear_macro_caches() -> None:
+    """Clear all module-level macro feed caches (used by 'Refresh All' button)."""
+    with _CACHE_LOCK:
+        _CACHE.clear()
+    logger.debug("[MacroFeeds] All caches cleared.")
+
+
 # ── FRED series ───────────────────────────────────────────────────────────────
 
 _FRED_SERIES = {

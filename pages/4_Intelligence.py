@@ -1083,7 +1083,7 @@ if _intent_input:
                 import anthropic as _anth
                 _cl = _anth.Anthropic(api_key=_ai_key, timeout=8.0)
                 _resp = _cl.messages.create(
-                    model="claude-haiku-4-5-20251001",
+                    model="claude-haiku-4-5",
                     max_tokens=80,
                     messages=[{"role": "user", "content":
                         f"Classify this DeFi intent into ONE of: swap, provide, stake, lend, borrow, claim, bridge, hedge.\n"

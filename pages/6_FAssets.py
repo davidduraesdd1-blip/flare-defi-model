@@ -30,7 +30,7 @@ st.markdown(
 
 # ─── Fetch FAsset data ────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def _load_fasset_data() -> dict:
     # Fast path: read from the most recent scan (no network calls needed).
     # fetch_fasset_data() is now included in the scan pipeline so this will
