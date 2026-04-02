@@ -843,6 +843,7 @@ if positions:
     total_lp_val   = 0
     total_hodl_val = 0
     total_dep      = 0
+    total_fees_lp  = 0   # fees from LP-only positions (same filter as total_lp_val)
     for i, pos in enumerate(positions):
         pnl = pnl_results[i]
         lp_val   = pnl["current_value"]
@@ -853,6 +854,7 @@ if positions:
             total_lp_val   += lp_val
             total_hodl_val += hodl_val
             total_dep      += dep
+            total_fees_lp  += fees_est   # only LP positions with valid HODL values
             diff     = (lp_val + fees_est) - hodl_val
             diff_pct = diff / hodl_val * 100 if hodl_val > 0 else 0
             hodl_rows.append({
@@ -867,7 +869,7 @@ if positions:
     if hodl_rows:
         st.dataframe(pd.DataFrame(hodl_rows), width="stretch", hide_index=True)
         if total_hodl_val > 0:
-            net_diff = (total_lp_val + sum(pnl_results[i]["fees_earned_est"] for i in range(len(positions)))) - total_hodl_val
+            net_diff = (total_lp_val + total_fees_lp) - total_hodl_val
             net_color = "#10b981" if net_diff >= 0 else "#ef4444"
             verdict   = "LP + fees is OUTPERFORMING HODL ✓" if net_diff >= 0 else "HODL would have been better — consider IL impact ⚠"
             st.markdown(
@@ -1465,6 +1467,99 @@ except Exception as _aw_err:
         f"{_html.escape(str(_aw_err))}</div>",
         unsafe_allow_html=True,
     )
+
+
+# ─── D5 — Daily Income Tracker ───────────────────────────────────────────────
+# Shows estimated daily / weekly / monthly income for every tracked position
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+render_section_header(
+    "Daily Income Tracker",
+    "How much income your DeFi positions generate every day, week, and month",
+)
+
+if positions:
+    from ui.common import render_what_this_means as _d5_rwm
+    _d5_rwm(
+        "This shows how much money your DeFi positions generate each day based on their "
+        "current APY and deposited value. It's your 'DeFi salary'. "
+        "Daily income = (Deposit × APY%) ÷ 365. "
+        "Actual income varies with APY — this is an estimate.",
+        title="What is daily income?",
+    )
+
+    _d5_rows  = []
+    _d5_total_daily  = 0.0
+    _d5_total_weekly = 0.0
+    _d5_total_monthly = 0.0
+    for i, pos in enumerate(positions):
+        _pnl    = pnl_results[i]
+        _dep    = float(pos.get("deposit_usd") or 0)
+        _cur    = float(_pnl.get("current_value") or _dep)
+        _apy    = float(pos.get("entry_apy") or 0)    # stored as % (e.g. 12.5)
+        # Estimate using current value for accuracy
+        _base   = _cur if _cur > 0 else _dep
+        _daily  = _base * (_apy / 100) / 365
+        _weekly = _daily * 7
+        _monthly = _daily * 30
+        _d5_total_daily  += _daily
+        _d5_total_weekly += _weekly
+        _d5_total_monthly += _monthly
+        _d5_rows.append({
+            "Position":   f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
+            "Type":       pos.get("position_type", "lp").upper(),
+            "APY %":      f"{_apy:.1f}%",
+            "Value":      f"${_cur:,.0f}",
+            "Daily ($)":  f"${_daily:.2f}",
+            "Weekly ($)": f"${_weekly:.2f}",
+            "Monthly ($)":f"${_monthly:,.2f}",
+        })
+
+    if _d5_rows:
+        st.dataframe(pd.DataFrame(_d5_rows), width="stretch", hide_index=True)
+
+        # Summary metrics
+        _dc1, _dc2, _dc3, _dc4 = st.columns(4)
+        _annual = _d5_total_daily * 365
+        with _dc1:
+            st.metric("Daily Income",   f"${_d5_total_daily:.2f}",
+                      help="Estimated income generated per day across all positions")
+        with _dc2:
+            st.metric("Weekly Income",  f"${_d5_total_weekly:.2f}")
+        with _dc3:
+            st.metric("Monthly Income", f"${_d5_total_monthly:,.2f}")
+        with _dc4:
+            st.metric("Annual Run Rate", f"${_annual:,.0f}")
+
+        # Bar chart — income per position
+        if len(_d5_rows) > 1:
+            _d5_fig = go.Figure()
+            _d5_fig.add_trace(go.Bar(
+                x=[r["Position"] for r in _d5_rows],
+                y=[float(r["Monthly ($)"].replace("$", "").replace(",", "")) for r in _d5_rows],
+                marker_color="#00d4aa",
+                text=[r["Monthly ($)"] for r in _d5_rows],
+                textposition="outside",
+                hovertemplate="<b>%{x}</b><br>Monthly: $%{y:,.2f}<extra></extra>",
+            ))
+            _d5_fig.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#475569",
+                xaxis=dict(tickangle=-30, gridcolor="rgba(148,163,184,0.1)"),
+                yaxis=dict(title="Monthly Income ($)", gridcolor="rgba(148,163,184,0.1)",
+                           tickprefix="$"),
+                height=240, margin=dict(l=40, r=20, t=20, b=80),
+                showlegend=False,
+            )
+            st.plotly_chart(_d5_fig, width="stretch", config={"displayModeBar": False})
+
+        st.caption(
+            "Income estimated from entry APY × current position value. "
+            "Actual earnings depend on live APY changes and compounding. "
+            "Not financial advice."
+        )
+else:
+    st.info("Add positions to see daily income estimates.")
 
 
 # ─── Portfolio Summary Export (Batch 9) ───────────────────────────────────────

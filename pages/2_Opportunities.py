@@ -24,6 +24,8 @@ from scanners.defillama import (
     fetch_yields_pools, fetch_protocol_risk_score, fetch_tvl_change_alert,
     fetch_governance_alerts, fetch_bridge_flows,
     fetch_llama_yield_pools,            # #68 global yield pools
+    fetch_protocol_revenue,             # D4 — protocol revenue trend
+    fetch_all_hacks,                    # D3 — hack history panel
     governance_fetch_failed,
 )
 from scanners.defi_protocols import (
@@ -111,6 +113,18 @@ def _cached_governance_alerts_opp():
     """Cached wrapper for fetch_governance_alerts(). TTL=1 hour."""
     return fetch_governance_alerts()
 
+
+@st.cache_data(ttl=3600)
+def _cached_protocol_revenue():
+    """Cached wrapper for fetch_protocol_revenue(). TTL=1 hour. (D4)"""
+    return fetch_protocol_revenue()
+
+
+@st.cache_data(ttl=86400)
+def _cached_all_hacks():
+    """Cached wrapper for fetch_all_hacks(). TTL=24 hours. (D3)"""
+    return fetch_all_hacks()
+
 page_setup("Opportunities · Flare DeFi")
 
 ctx            = render_sidebar()
@@ -142,7 +156,7 @@ latest     = load_latest()   # uses _load_history_file cache — no duplicate di
 runs       = load_history_runs()
 
 st.title("🎯 Opportunities")
-st.caption("Real-time yield opportunities across 10,000+ DeFi pools • Auto-refreshed every 15 minutes")
+st.caption("Real-time yield opportunities across Flare + DeFiLlama protocols • Auto-refreshed every 15 minutes")
 st.markdown(
     "<div style='color:#475569; font-size:0.87rem; margin-bottom:24px;'>"
     "Starter portfolios · APY trends · options strategies</div>",
@@ -1617,3 +1631,633 @@ else:
     st.info("Load global yield pools above to see sparklines.")
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# D1 — PROTOCOL RISK SCORE BADGES
+# DeFiLlama hack history + audit count → A-F grade badge per protocol
+# ══════════════════════════════════════════════════════════════════════════════
+
+render_section_header(
+    "Protocol Risk Grades",
+    "A–F safety grade based on hack history, audit count, TVL, and age — higher grade = safer",
+)
+
+render_what_this_means(
+    "These grades tell you how safe each protocol is. "
+    "'A' means very safe — audited, never hacked, large TVL. "
+    "'F' means high risk — multiple hacks or no audits. "
+    "Always check the grade before putting money into a protocol.",
+    title="What do these grades mean?",
+)
+
+_D1_PROTOCOLS = [
+    ("aave-v3",          "Aave v3",          "Lending",           5),
+    ("morpho",           "Morpho",           "Lending",           4),
+    ("uniswap-v3",       "Uniswap v3",       "DEX",               4),
+    ("compound-v3",      "Compound v3",      "Lending",           4),
+    ("lido",             "Lido",             "Liquid Staking",    3),
+    ("eigenlayer",       "EigenLayer",       "Restaking",         2),
+    ("pendle",           "Pendle Finance",   "Yield Tokenization",3),
+    ("ethena",           "Ethena",           "Delta-Neutral",     2),
+    ("aerodrome-v2",     "Aerodrome",        "DEX",               2),
+    ("curve-dex",        "Curve",            "DEX",               3),
+]
+
+def _d1_grade(hack_count: int, funds_lost_m: float, audit_count: int) -> tuple:
+    """Return (letter_grade, color, description) from risk factors."""
+    score = 100
+    score -= min(hack_count * 25, 60)           # -25 per hack, max -60
+    score -= min(int(funds_lost_m / 10) * 5, 30) # -5 per $10M lost, max -30
+    score += min(audit_count * 5, 20)            # +5 per audit, max +20
+    score = max(0, min(100, score))
+    if score >= 85:  return "A", "#22c55e",  "Excellent — no hacks, audited, battle-tested"
+    if score >= 70:  return "B", "#84cc16",  "Good — minor incidents or limited audit history"
+    if score >= 55:  return "C", "#f59e0b",  "Moderate — some risk factors present"
+    if score >= 35:  return "D", "#f97316",  "High risk — significant hack history"
+    return             "F", "#ef4444",  "Very high risk — multiple large hacks"
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _load_d1_risk_scores() -> list:
+    results = []
+    for slug, name, category, audit_est in _D1_PROTOCOLS:
+        try:
+            rs = fetch_protocol_risk_score(slug)
+            grade, color, desc = _d1_grade(
+                rs.get("hack_count", 0),
+                rs.get("funds_lost_m", 0.0),
+                rs.get("audit_count", audit_est),
+            )
+            results.append({
+                "slug": slug, "name": name, "category": category,
+                "hack_count": rs.get("hack_count", 0),
+                "funds_lost_m": rs.get("funds_lost_m", 0.0),
+                "audit_count": rs.get("audit_count", audit_est),
+                "grade": grade, "color": color, "desc": desc,
+            })
+        except Exception:
+            grade, color, desc = _d1_grade(0, 0.0, audit_est)
+            results.append({
+                "slug": slug, "name": name, "category": category,
+                "hack_count": 0, "funds_lost_m": 0.0, "audit_count": audit_est,
+                "grade": grade, "color": color, "desc": desc,
+            })
+    return results
+
+with st.spinner("Computing protocol risk grades…"):
+    _d1_scores = _load_d1_risk_scores()
+
+if _d1_scores:
+    # Display in a grid — 5 per row
+    _d1_cols_per_row = 5
+    for _d1_row_start in range(0, len(_d1_scores), _d1_cols_per_row):
+        _d1_row_items = _d1_scores[_d1_row_start: _d1_row_start + _d1_cols_per_row]
+        _d1_cols = st.columns(len(_d1_row_items))
+        for _ci, _item in enumerate(_d1_row_items):
+            with _d1_cols[_ci]:
+                _hacks_txt  = f"{_item['hack_count']} hack(s)" if _item["hack_count"] else "No hacks"
+                _audits_txt = f"{_item['audit_count']} audit(s)"
+                st.markdown(
+                    f"<div style='background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);"
+                    f"border-top:3px solid {_item['color']};border-radius:8px;"
+                    f"padding:10px 12px;margin-bottom:8px;text-align:center'>"
+                    f"<div style='font-size:2rem;font-weight:800;color:{_item['color']};line-height:1'>"
+                    f"{_item['grade']}</div>"
+                    f"<div style='font-size:0.78rem;font-weight:600;color:#e2e8f0;margin-top:4px'>"
+                    f"{_html.escape(_item['name'])}</div>"
+                    f"<div style='font-size:0.65rem;color:#64748b;margin-top:2px'>"
+                    f"{_html.escape(_item['category'])}</div>"
+                    f"<div style='font-size:0.65rem;color:#475569;margin-top:6px;border-top:1px solid rgba(255,255,255,0.05);padding-top:4px'>"
+                    f"{_hacks_txt} · {_audits_txt}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+    st.caption(
+        "Grade A = score ≥85 (no hacks, audited). "
+        "F = score <35 (multiple large hacks). "
+        "Audit count estimated from DeFiLlama data. "
+        "Source: DeFiLlama /hacks · cached 24 h."
+    )
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# D2 — IL BREAK-EVEN CALCULATOR
+# Interactive: entry price → current price → IL% → days to break-even
+# ══════════════════════════════════════════════════════════════════════════════
+
+render_section_header(
+    "IL Break-Even Calculator",
+    "How many days of fees does it take to recover from impermanent loss?",
+)
+
+render_what_this_means(
+    "When you provide liquidity in a pool, price movements cause 'impermanent loss' (IL). "
+    "This calculator tells you how much IL you've suffered and how many days it'll take "
+    "for your fee income to cover it. If break-even is 200+ days, IL is a serious concern.",
+    title="What is impermanent loss break-even?",
+)
+
+with st.expander("Open IL Break-Even Calculator", expanded=False):
+    _ilbe_c1, _ilbe_c2, _ilbe_c3 = st.columns(3)
+    with _ilbe_c1:
+        _ilbe_price_a0 = st.number_input(
+            "Token A entry price ($)", min_value=0.0001, value=1.0, step=0.01, key="ilbe_pa0",
+            help="Price of token A when you entered the pool.",
+        )
+        _ilbe_price_b0 = st.number_input(
+            "Token B entry price ($)", min_value=0.0001, value=1.0, step=0.01, key="ilbe_pb0",
+            help="Price of token B when you entered the pool.",
+        )
+    with _ilbe_c2:
+        _ilbe_price_a1 = st.number_input(
+            "Token A current price ($)", min_value=0.0001, value=1.2, step=0.01, key="ilbe_pa1",
+            help="Current price of token A.",
+        )
+        _ilbe_price_b1 = st.number_input(
+            "Token B current price ($)", min_value=0.0001, value=0.9, step=0.01, key="ilbe_pb1",
+            help="Current price of token B.",
+        )
+    with _ilbe_c3:
+        _ilbe_fee_apy = st.number_input(
+            "Pool fee APY (%)", min_value=0.1, value=15.0, step=0.5, key="ilbe_fee_apy",
+            help="Annual fee yield generated by the pool (base APY from fees only, not rewards).",
+        )
+        _ilbe_deposit = st.number_input(
+            "Deposit amount ($)", min_value=0.0, value=10000.0, step=100.0, key="ilbe_dep",
+        )
+
+    # IL formula: IL = 2√k/(1+k) − 1 where k = price_ratio_change
+    # k = (pa1/pb1) / (pa0/pb0)
+    try:
+        _ilbe_k  = (_ilbe_price_a1 / _ilbe_price_b1) / (_ilbe_price_a0 / _ilbe_price_b0)
+        import math as _ilbe_math
+        _ilbe_il = 2 * _ilbe_math.sqrt(_ilbe_k) / (1 + _ilbe_k) - 1   # negative number
+        _ilbe_il_pct  = abs(_ilbe_il) * 100
+        _ilbe_loss_usd = _ilbe_il_pct / 100 * _ilbe_deposit
+
+        # Daily fee income
+        _ilbe_daily_fee  = _ilbe_deposit * (_ilbe_fee_apy / 100) / 365
+        _ilbe_breakeven_days = int(_ilbe_loss_usd / _ilbe_daily_fee) if _ilbe_daily_fee > 0 else 9999
+
+        _il_color = "#22c55e" if _ilbe_il_pct < 1 else "#f59e0b" if _ilbe_il_pct < 5 else "#ef4444"
+        _be_color = "#22c55e" if _ilbe_breakeven_days < 30 else "#f59e0b" if _ilbe_breakeven_days < 180 else "#ef4444"
+        _be_verdict = (
+            "Excellent — fees cover IL quickly" if _ilbe_breakeven_days < 30
+            else "Acceptable — IL is manageable" if _ilbe_breakeven_days < 90
+            else "Caution — IL takes a long time to recover" if _ilbe_breakeven_days < 365
+            else "Warning — IL may never be recovered at this fee rate"
+        )
+
+        _r1, _r2, _r3, _r4 = st.columns(4)
+        with _r1:
+            st.metric("Price Ratio Change", f"{(_ilbe_k - 1) * 100:+.1f}%")
+        with _r2:
+            st.metric("Impermanent Loss", f"{_ilbe_il_pct:.2f}%",
+                      delta=f"-${_ilbe_loss_usd:,.2f}", delta_color="inverse")
+        with _r3:
+            st.metric("Daily Fee Income", f"${_ilbe_daily_fee:.2f}")
+        with _r4:
+            st.metric("Break-Even Days", f"{_ilbe_breakeven_days:,}d",
+                      help=f"Days at {_ilbe_fee_apy:.1f}% APY to recover ${_ilbe_loss_usd:,.2f} IL")
+
+        st.markdown(
+            f"<div style='background:rgba(0,0,0,0.2);border-left:3px solid {_be_color};"
+            f"border-radius:6px;padding:10px 14px;margin-top:8px;font-size:0.88rem'>"
+            f"<span style='color:{_be_color};font-weight:700'>"
+            f"{'▲ ' if _ilbe_breakeven_days < 90 else '■ ' if _ilbe_breakeven_days < 365 else '▼ '}"
+            f"{_be_verdict}</span><br>"
+            f"<span style='color:#64748b'>At {_ilbe_fee_apy:.1f}% fee APY you earn "
+            f"${_ilbe_daily_fee:.2f}/day. You need <b style='color:{_be_color}'>"
+            f"{_ilbe_breakeven_days:,} days</b> to recover ${_ilbe_loss_usd:,.2f} IL.</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    except Exception as _ilbe_err:
+        st.warning(f"Calculator error — check inputs: {_ilbe_err}")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# D3 — HACK HISTORY PANEL
+# DeFiLlama /hacks — top hacks by funds lost, category breakdown
+# ══════════════════════════════════════════════════════════════════════════════
+
+render_section_header(
+    "DeFi Hack History",
+    "Largest DeFi exploits on record — know where the money was lost and how",
+)
+
+render_what_this_means(
+    "This panel shows the biggest DeFi hacks ever recorded. "
+    "Understanding how protocols get hacked helps you avoid putting money "
+    "into similar risks. Look for the 'technique' column — "
+    "flash loan attacks and smart contract bugs are the most common.",
+    title="Why look at hack history?",
+)
+
+with st.spinner("Loading hack history from DeFiLlama…"):
+    _d3_hacks = [] if demo_mode else _cached_all_hacks()
+
+if demo_mode:
+    _d3_hacks = [
+        {"name": "Ronin Bridge",   "date": "2022-03-29", "funds_lost_usd": 624_000_000, "chain": "Ethereum",   "technique": "Private Key Compromise", "category": "Bridge"},
+        {"name": "Poly Network",   "date": "2021-08-10", "funds_lost_usd": 611_000_000, "chain": "Multi-chain","technique": "Smart Contract Bug",       "category": "Bridge"},
+        {"name": "BNB Chain",      "date": "2022-10-07", "funds_lost_usd": 566_000_000, "chain": "BNB",        "technique": "Bridge Exploit",           "category": "Bridge"},
+        {"name": "FTX",            "date": "2022-11-11", "funds_lost_usd": 415_000_000, "chain": "Solana",     "technique": "Insider",                  "category": "Exchange"},
+        {"name": "Wormhole",       "date": "2022-02-02", "funds_lost_usd": 320_000_000, "chain": "Solana",     "technique": "Smart Contract Bug",       "category": "Bridge"},
+        {"name": "Nomad Bridge",   "date": "2022-08-01", "funds_lost_usd": 190_000_000, "chain": "Multi-chain","technique": "Smart Contract Bug",       "category": "Bridge"},
+        {"name": "Euler Finance",  "date": "2023-03-13", "funds_lost_usd": 197_000_000, "chain": "Ethereum",   "technique": "Flash Loan",               "category": "Lending"},
+        {"name": "Curve Finance",  "date": "2023-07-30", "funds_lost_usd": 61_000_000,  "chain": "Ethereum",   "technique": "Reentrancy",               "category": "DEX"},
+    ]
+
+if _d3_hacks:
+    # Category breakdown pie
+    _d3_cats: dict = {}
+    _d3_total_lost = 0.0
+    for _h in _d3_hacks:
+        _cat = _h.get("category") or "Unknown"
+        _lost = float(_h.get("funds_lost_usd") or 0)
+        _d3_cats[_cat] = _d3_cats.get(_cat, 0) + _lost
+        _d3_total_lost += _lost
+
+    _hack_col1, _hack_col2 = st.columns([2, 1])
+    with _hack_col1:
+        _d3_rows = []
+        for _h in _d3_hacks[:20]:
+            _lost_m = float(_h.get("funds_lost_usd") or 0) / 1e6
+            _d3_rows.append({
+                "Protocol":     _h.get("name", "—"),
+                "Date":         _h.get("date", "—"),
+                "Funds Lost":   f"${_lost_m:.0f}M" if _lost_m >= 1 else f"${float(_h.get('funds_lost_usd',0)):,.0f}",
+                "Chain":        str(_h.get("chain") or "—")[:20],
+                "Technique":    str(_h.get("technique") or "—")[:30],
+                "Category":     str(_h.get("category") or "—"),
+            })
+        st.dataframe(pd.DataFrame(_d3_rows), width="stretch", hide_index=True)
+        _total_lost_b = _d3_total_lost / 1e9
+        st.caption(
+            f"Top {len(_d3_rows)} hacks shown · Total lost: ${_total_lost_b:.1f}B · "
+            "Source: DeFiLlama /hacks · cached 24 h."
+        )
+    with _hack_col2:
+        if _d3_cats:
+            _cat_labels = list(_d3_cats.keys())
+            _cat_values = [_d3_cats[c] / 1e6 for c in _cat_labels]
+            _fig_cats = go.Figure(data=[go.Pie(
+                labels=_cat_labels, values=_cat_values,
+                hole=0.55,
+                textinfo="percent",
+                marker=dict(colors=["#ef4444","#f97316","#f59e0b","#84cc16","#22c55e","#3b82f6","#8b5cf6","#ec4899"]),
+            )])
+            _fig_cats.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#94a3b8",
+                showlegend=True,
+                legend=dict(font=dict(size=9), bgcolor="rgba(0,0,0,0)"),
+                margin=dict(l=0, r=0, t=10, b=10),
+                height=240,
+                title=dict(text="By Category ($M)", font=dict(size=11, color="#64748b"), x=0.5),
+            )
+            st.plotly_chart(_fig_cats, width="stretch", config={"displayModeBar": False})
+else:
+    st.info("Hack history unavailable — DeFiLlama API may be unreachable.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# D4 — PROTOCOL REVENUE TREND
+# DeFiLlama /summary/fees → 24h fee revenue vs 30-day daily average
+# ══════════════════════════════════════════════════════════════════════════════
+
+render_section_header(
+    "Protocol Revenue Trend",
+    "24h fee revenue vs 30-day daily average — growing revenue = healthier protocol",
+)
+
+render_what_this_means(
+    "A protocol's fee revenue shows whether real users are actively using it. "
+    "If fees are trending up, more trading is happening — that usually means higher yields too. "
+    "Green = revenue above 30-day average. Red = below average (less activity).",
+    title="Why does protocol revenue matter?",
+)
+
+with st.spinner("Loading protocol revenue data…"):
+    if demo_mode:
+        _d4_rev = {
+            "aave-v3":      {"fees_24h": 420_000, "fees_30d": 11_200_000, "trend": 1.13, "health": "GREEN"},
+            "uniswap":      {"fees_24h": 2_800_000,"fees_30d": 73_000_000, "trend": 1.15, "health": "GREEN"},
+            "lido":         {"fees_24h": 580_000,  "fees_30d": 16_200_000, "trend": 1.07, "health": "GREEN"},
+            "compound-v3":  {"fees_24h": 48_000,   "fees_30d": 1_800_000,  "trend": 0.80, "health": "YELLOW"},
+            "curve-dex":    {"fees_24h": 210_000,  "fees_30d": 9_100_000,  "trend": 0.69, "health": "YELLOW"},
+            "pendle":       {"fees_24h": 95_000,   "fees_30d": 2_100_000,  "trend": 1.36, "health": "GREEN"},
+            "morpho":       {"fees_24h": 31_000,   "fees_30d": 640_000,    "trend": 1.45, "health": "GREEN"},
+            "aerodrome-v2": {"fees_24h": 810_000,  "fees_30d": 19_500_000, "trend": 1.24, "health": "GREEN"},
+            "timestamp": "2026-04-02T00:00:00Z", "errors": [],
+        }
+    else:
+        _d4_rev = _cached_protocol_revenue()
+
+_d4_items = [(k, v) for k, v in _d4_rev.items() if k not in ("timestamp", "errors") and isinstance(v, dict)]
+_d4_items.sort(key=lambda x: x[1].get("trend", 0), reverse=True)
+
+if _d4_items:
+    _d4_names  = [k.replace("-", " ").title() for k, _ in _d4_items]
+    _d4_trends = [v.get("trend", 0) for _, v in _d4_items]
+    _d4_colors = [
+        "#22c55e" if t > 0.9 else "#f59e0b" if t > 0.5 else "#ef4444"
+        for t in _d4_trends
+    ]
+
+    _fig_d4 = go.Figure()
+    _fig_d4.add_trace(go.Bar(
+        x=_d4_names, y=_d4_trends,
+        marker_color=_d4_colors,
+        text=[f"{t:.2f}×" for t in _d4_trends],
+        textposition="outside",
+        hovertemplate="<b>%{x}</b><br>24h vs 30d avg: %{y:.2f}×<extra></extra>",
+    ))
+    _fig_d4.add_hline(y=1.0, line_dash="dash", line_color="#475569",
+                      annotation_text="30d avg baseline", annotation_position="right")
+    _fig_d4.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#94a3b8",
+        xaxis=dict(gridcolor="rgba(148,163,184,0.1)"),
+        yaxis=dict(title="24h fee / 30d daily avg", gridcolor="rgba(148,163,184,0.1)", tickformat=".2f"),
+        height=280, margin=dict(l=40, r=20, t=30, b=60),
+        showlegend=False,
+    )
+    st.plotly_chart(_fig_d4, width="stretch", config={"displayModeBar": False})
+
+    # Summary table
+    _d4_rows = []
+    for k, v in _d4_items:
+        _f24 = float(v.get("fees_24h") or 0)
+        _f30 = float(v.get("fees_30d") or 0)
+        _health = v.get("health", "—")
+        _health_icon = "🟢" if _health == "GREEN" else "🟡" if _health == "YELLOW" else "🔴"
+        _d4_rows.append({
+            "Protocol":       k.replace("-", " ").title(),
+            "24h Fees":       f"${_f24/1e3:.0f}K" if _f24 >= 1000 else f"${_f24:,.0f}",
+            "30d Total Fees": f"${_f30/1e6:.2f}M" if _f30 >= 1e6 else f"${_f30/1e3:.0f}K",
+            "Trend vs Avg":   f"{v.get('trend', 0):.2f}×",
+            "Health":         f"{_health_icon} {_health}",
+        })
+    st.dataframe(pd.DataFrame(_d4_rows), width="stretch", hide_index=True)
+    st.caption(
+        "Trend = 24h fees ÷ (30d fees / 30). >1.0 = above average activity. "
+        "Source: DeFiLlama /summary/fees · cached 1 hour."
+    )
+else:
+    st.info("Protocol revenue data unavailable.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# D6 — YIELD GAP ALERT
+# Flag pools where current APY deviates significantly from 7d average
+# ══════════════════════════════════════════════════════════════════════════════
+
+render_section_header(
+    "Yield Gap Alerts",
+    "Pools where current APY deviates >20% from 7-day average — sudden spikes or crashes",
+)
+
+render_what_this_means(
+    "When a pool's yield suddenly jumps much higher than normal, it's often a sign of "
+    "a one-time event, extra token rewards, or a short-term anomaly. "
+    "A sudden drop in yield can mean the protocol is losing users. "
+    "These alerts help you spot unusual changes before they disappear.",
+    title="What do yield gap alerts mean?",
+)
+
+_d6_all_pools = list(_gy_display or []) + list(_mc_pools or [])
+_d6_gap_alerts = []
+for _d6p in _d6_all_pools:
+    try:
+        _d6_cur  = float(_d6p.get("apy") or _d6p.get("apy", 0))
+        _d6_avg  = float(_d6p.get("apy_7d") or _d6p.get("apy7d") or _d6_cur)
+        if _d6_avg <= 0 or _d6_cur <= 0:
+            continue
+        _d6_gap_pct = (_d6_cur - _d6_avg) / _d6_avg * 100
+        if abs(_d6_gap_pct) >= 20:
+            _d6_gap_alerts.append({
+                "proto":    str(_d6p.get("protocol") or _d6p.get("project") or "—"),
+                "pool":     str(_d6p.get("symbol") or "—"),
+                "chain":    str(_d6p.get("chain") or "—"),
+                "current":  _d6_cur,
+                "avg_7d":   _d6_avg,
+                "gap_pct":  _d6_gap_pct,
+            })
+    except Exception:
+        continue
+
+_d6_gap_alerts.sort(key=lambda x: abs(x["gap_pct"]), reverse=True)
+
+if _d6_gap_alerts:
+    for _d6a in _d6_gap_alerts[:10]:
+        _gap   = _d6a["gap_pct"]
+        _dir   = "▲ SPIKE" if _gap > 0 else "▼ DROP"
+        _col   = "#22c55e" if _gap > 0 else "#ef4444"
+        _badge = "▲ BUY signal?" if _gap > 40 else "▼ Exit signal?" if _gap < -40 else "■ Watch closely"
+        st.markdown(
+            f"<div style='background:rgba(0,0,0,0.2);border-left:3px solid {_col};"
+            f"border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:0.85rem'>"
+            f"<b style='color:{_col}'>{_dir} {abs(_gap):.0f}%</b> · "
+            f"<b>{_html.escape(_d6a['proto'].replace('-',' ').title())}</b> "
+            f"<span style='color:#64748b'>{_html.escape(_d6a['pool'])} · {_html.escape(_d6a['chain'])}</span> · "
+            f"Now: <b>{_d6a['current']:.1f}%</b> vs 7d avg: <b>{_d6a['avg_7d']:.1f}%</b> · "
+            f"<span style='color:#f59e0b'>{_badge}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    st.caption(f"{len(_d6_gap_alerts)} pools with >20% APY deviation from 7-day average.")
+else:
+    st.success("▲ No major yield gap anomalies detected — all pools near their 7-day average.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# D7 — CONCENTRATED LIQUIDITY RANGE MONITOR
+# Interactive: enter tick range → see if position is in-range at current price
+# ══════════════════════════════════════════════════════════════════════════════
+
+render_section_header(
+    "Concentrated Liquidity Range Monitor",
+    "Uniswap v3 / Aerodrome CL — check if your position is in-range and earning fees",
+)
+
+render_what_this_means(
+    "Concentrated liquidity (CL) pools let you earn higher fees but ONLY while the price "
+    "stays inside your chosen range. If price moves outside your range, you stop earning — "
+    "and you're stuck holding 100% of one token. This tool shows whether you're in-range right now.",
+    title="What is a concentrated liquidity range?",
+)
+
+with st.expander("Open CL Range Monitor", expanded=False):
+    _cl_c1, _cl_c2 = st.columns(2)
+    with _cl_c1:
+        _cl_range_low  = st.number_input("Range LOW price ($)",  min_value=0.0001, value=1500.0, step=10.0, key="cl_low")
+        _cl_range_high = st.number_input("Range HIGH price ($)", min_value=0.0001, value=2500.0, step=10.0, key="cl_high")
+        _cl_deposit    = st.number_input("Position size ($)",    min_value=0.0, value=10000.0, step=100.0, key="cl_dep")
+    with _cl_c2:
+        _cl_current    = st.number_input("Current price ($)",    min_value=0.0001, value=1900.0, step=10.0, key="cl_cur")
+        _cl_fee_apy    = st.number_input("Pool fee APY (in-range) (%)", min_value=0.1, value=40.0, step=1.0, key="cl_apy")
+        _cl_token_pair = st.text_input("Pool (for reference)", value="ETH/USDC", key="cl_pair")
+
+    if _cl_range_low < _cl_range_high:
+        _cl_in_range = _cl_range_low <= _cl_current <= _cl_range_high
+        _cl_status_col   = "#22c55e" if _cl_in_range else "#ef4444"
+        _cl_status_txt   = "▲ IN RANGE — earning fees now" if _cl_in_range else "▼ OUT OF RANGE — not earning fees"
+        _cl_status_icon  = "✅" if _cl_in_range else "🚨"
+
+        # Distance to nearest boundary
+        if _cl_in_range:
+            _dist_low  = abs(_cl_current - _cl_range_low)  / _cl_current * 100
+            _dist_high = abs(_cl_range_high - _cl_current) / _cl_current * 100
+            _nearest   = min(_dist_low, _dist_high)
+            _detail    = f"{_nearest:.1f}% to nearest boundary"
+        else:
+            if _cl_current < _cl_range_low:
+                _dist_to_re_enter = (_cl_range_low - _cl_current) / _cl_current * 100
+                _detail = f"Price needs to rise {_dist_to_re_enter:.1f}% to re-enter range"
+            else:
+                _dist_to_re_enter = (_cl_current - _cl_range_high) / _cl_current * 100
+                _detail = f"Price needs to fall {_dist_to_re_enter:.1f}% to re-enter range"
+
+        # Range width
+        _range_width_pct = (_cl_range_high - _cl_range_low) / _cl_range_low * 100
+        _daily_fees_if_in = _cl_deposit * (_cl_fee_apy / 100) / 365 if _cl_in_range else 0.0
+
+        st.markdown(
+            f"<div style='background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);"
+            f"border-top:3px solid {_cl_status_col};border-radius:8px;padding:14px 16px;margin:8px 0'>"
+            f"<div style='font-size:1.1rem;font-weight:700;color:{_cl_status_col}'>"
+            f"{_cl_status_icon} {_cl_status_txt}</div>"
+            f"<div style='color:#94a3b8;font-size:0.85rem;margin-top:6px'>{_detail}</div>"
+            f"<div style='display:flex;gap:16px;margin-top:10px;flex-wrap:wrap'>"
+            f"<span style='color:#64748b'>Range: ${_cl_range_low:,.0f} – ${_cl_range_high:,.0f} "
+            f"({_range_width_pct:.0f}% wide)</span>"
+            f"<span style='color:#64748b'>Current: ${_cl_current:,.2f}</span>"
+            f"{'<span style=\"color:#22c55e\">Daily fees: $' + f'{_daily_fees_if_in:.2f}' + '</span>' if _cl_in_range else ''}"
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
+
+        # Visual range bar
+        _bar_min = min(_cl_range_low * 0.8, _cl_current * 0.9)
+        _bar_max = max(_cl_range_high * 1.2, _cl_current * 1.1)
+        _fig_cl  = go.Figure()
+        # Range region (shaded)
+        _fig_cl.add_vrect(x0=_cl_range_low, x1=_cl_range_high,
+                          fillcolor="rgba(34,197,94,0.12)", layer="below", line_width=0)
+        # Boundary lines
+        _fig_cl.add_vline(x=_cl_range_low,  line_dash="dash", line_color="#22c55e", line_width=1,
+                          annotation_text=f"Low ${_cl_range_low:,.0f}", annotation_position="top left")
+        _fig_cl.add_vline(x=_cl_range_high, line_dash="dash", line_color="#22c55e", line_width=1,
+                          annotation_text=f"High ${_cl_range_high:,.0f}", annotation_position="top right")
+        # Current price
+        _fig_cl.add_vline(x=_cl_current, line_color=_cl_status_col, line_width=2,
+                          annotation_text=f"Now ${_cl_current:,.2f}", annotation_position="top left")
+        _fig_cl.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.8)",
+            xaxis=dict(range=[_bar_min, _bar_max], showgrid=False,
+                       title=f"{_html.escape(_cl_token_pair)} Price"),
+            yaxis=dict(visible=False),
+            height=100, margin=dict(l=20, r=20, t=30, b=20),
+            showlegend=False,
+        )
+        st.plotly_chart(_fig_cl, width="stretch", config={"displayModeBar": False})
+    else:
+        st.warning("Range LOW must be less than Range HIGH.")
+
+st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# D8 — RISK-ADJUSTED YIELD RANKING
+# Dedicated Sharpe-ranked leaderboard with full explanation
+# ══════════════════════════════════════════════════════════════════════════════
+
+render_section_header(
+    "Risk-Adjusted Yield Ranking",
+    "All pools ranked by Sharpe ratio — the truest measure of yield quality",
+)
+
+render_what_this_means(
+    "Raw APY is misleading — a pool at 50% APY with wild swings may be worse than a stable 10% pool. "
+    "The Sharpe ratio measures how much yield you get per unit of risk. "
+    "Higher Sharpe = better quality yield. Aim for Sharpe > 1.0 (Good).",
+    title="What is the Sharpe ratio?",
+)
+
+# Collect all pools from all sources
+_d8_pool_sources: list = []
+for _src_pool in (_gy_display or []):
+    _d8_pool_sources.append({
+        "protocol": str(_src_pool.get("protocol") or "—").replace("-", " ").title(),
+        "pool":     str(_src_pool.get("symbol") or "—"),
+        "chain":    str(_src_pool.get("chain") or "—"),
+        "apy":      float(_src_pool.get("apy") or 0),
+        "apy_7d":   float(_src_pool.get("apy_7d") or _src_pool.get("apy") or 0),
+        "tvl":      float(_src_pool.get("tvl_usd") or 0),
+        "sharpe":   _src_pool.get("_sharpe_val", 0),
+        "rank":     _src_pool.get("_rank", "—"),
+    })
+for _src_pool in (_mc_pools_with_sharpe if "_mc_pools_with_sharpe" in dir() else []):
+    _d8_pool_sources.append({
+        "protocol": str(_src_pool.get("project") or "—").replace("-", " ").title(),
+        "pool":     str(_src_pool.get("symbol") or "—"),
+        "chain":    str(_src_pool.get("chain") or "—"),
+        "apy":      float(_src_pool.get("apy") or 0),
+        "apy_7d":   float(_src_pool.get("apy7d") or _src_pool.get("apy") or 0),
+        "tvl":      float(_src_pool.get("tvlUsd") or 0),
+        "sharpe":   float(_src_pool.get("_sharpe") or 0),
+        "rank":     str(_src_pool.get("_rank") or "—"),
+    })
+
+# Deduplicate by (protocol, pool, chain) and sort by Sharpe
+_d8_seen: set = set()
+_d8_deduped: list = []
+for _dp in sorted(_d8_pool_sources, key=lambda x: x["sharpe"], reverse=True):
+    _k = (_dp["protocol"], _dp["pool"], _dp["chain"])
+    if _k not in _d8_seen and _dp["apy"] > 0:
+        _d8_seen.add(_k)
+        _d8_deduped.append(_dp)
+
+if _d8_deduped:
+    _d8_rows = []
+    for _ri, _dp in enumerate(_d8_deduped[:25], 1):
+        _sh      = _dp["sharpe"]
+        _rk      = _dp["rank"]
+        _sh_col  = "#22c55e" if _sh >= 2 else "#84cc16" if _sh >= 1 else "#f59e0b" if _sh >= 0.5 else "#ef4444"
+        _rk_icon = {"excellent": "▲", "good": "▲", "fair": "■", "poor": "▼"}.get(_rk, "■")
+        _rk_col  = {"excellent": "#22c55e", "good": "#84cc16", "fair": "#f59e0b", "poor": "#ef4444"}.get(_rk, "#9ca3af")
+        _tvl_str = (f"${_dp['tvl']/1e9:.1f}B" if _dp["tvl"] >= 1e9
+                    else f"${_dp['tvl']/1e6:.0f}M" if _dp["tvl"] >= 1e6
+                    else f"${_dp['tvl']/1e3:.0f}K" if _dp["tvl"] >= 1000 else "—")
+        _d8_rows.append({
+            "Rank":     f"#{_ri}",
+            "Protocol": _dp["protocol"],
+            "Pool":     _dp["pool"],
+            "Chain":    _dp["chain"],
+            "APY %":    f"{_dp['apy']:.2f}%",
+            "7d Avg %": f"{_dp['apy_7d']:.2f}%",
+            "Sharpe":   f"{_sh:.2f}",
+            "Quality":  f"{_rk_icon} {_rk.capitalize()}",
+            "TVL":      _tvl_str,
+        })
+    st.dataframe(pd.DataFrame(_d8_rows), width="stretch", hide_index=True)
+    st.caption(
+        "Sharpe = (APY − risk_free) / APY_volatility. "
+        "Excellent ≥2.0 · Good 1–2 · Fair 0.5–1 · Poor <0.5. "
+        "Volatility estimated from deviation of current vs 7d average APY. "
+        "Source: DeFiLlama yields · all loaded pools."
+    )
+else:
+    st.info("Load yield pools above to see the risk-adjusted ranking.")

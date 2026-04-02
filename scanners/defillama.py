@@ -843,6 +843,49 @@ def fetch_protocol_revenue(protocol_slugs: list = None) -> dict:
     return result
 
 
+def fetch_all_hacks(limit: int = 50) -> List[dict]:
+    """
+    Fetch recent DeFi hacks from DeFiLlama /hacks endpoint.  (D3 — Hack History panel)
+
+    Returns list of dicts sorted by date desc:
+        name, date, funds_lost_usd, chain, category, technique, source
+    Cached 24 hours — hack history changes rarely.
+    """
+    cache_key = "all_hacks"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and now - cached.get("_ts", 0) < _HACKS_TTL:
+            return cached.get("data", [])
+
+    result: List[dict] = []
+    try:
+        data = _get(f"{_DEFILLAMA_API}/hacks")
+        if isinstance(data, list):
+            for h in data:
+                try:
+                    result.append({
+                        "name":           str(h.get("name") or h.get("projectName") or "Unknown"),
+                        "date":           str(h.get("date") or ""),
+                        "funds_lost_usd": float(h.get("fundsLost") or h.get("amount") or 0),
+                        "chain":          str(h.get("chain") or h.get("chains") or ""),
+                        "category":       str(h.get("category") or ""),
+                        "technique":      str(h.get("technique") or h.get("type") or ""),
+                        "rekt_url":       str(h.get("defiId") or h.get("url") or ""),
+                    })
+                except Exception:
+                    continue
+            # Sort by funds_lost descending
+            result.sort(key=lambda x: x["funds_lost_usd"], reverse=True)
+    except Exception as e:
+        logger.debug("[AllHacks] fetch failed: %s", e)
+
+    with _cache_lock:
+        _cache[cache_key] = {"data": result[:limit], "_ts": now}
+
+    return result[:limit]
+
+
 def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
     """
     Fetch 7-day TVL change for target chains as a bridge flow proxy.
