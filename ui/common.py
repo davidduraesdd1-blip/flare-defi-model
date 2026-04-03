@@ -1383,9 +1383,8 @@ def render_yield_hero_cards(positions: list, opps: list, portfolio_size: float) 
             </div>""", unsafe_allow_html=True)
 
     # Count-up animation — targets specific hero-card IDs so it never bleeds into other metric cards
-    # FIX: st.components.v1.html deprecated → st.iframe(srcdoc=...) for inline HTML content.
-    # st.iframe first positional arg is src (URL); srcdoc= is the inline-HTML equivalent.
-    st.iframe(srcdoc=f"""
+    import streamlit.components.v1 as _components_v1
+    _components_v1.html(f"""
     <script>
     (function() {{
         function animateCountUp(id, target, prefix, decimals, duration) {{
