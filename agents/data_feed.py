@@ -36,12 +36,13 @@ except ImportError:
     _CONFIG_OK = False
     FALLBACK_PRICES = {"FLR": 0.018, "XRP": 2.30, "FXRP": 2.297}
 
-# Fear & Greed from existing macro_feeds
+# Fear & Greed from ui/common — fetch_fear_greed_history returns 30-day list
 try:
-    from macro_feeds import get_fear_greed_cached
+    from ui.common import fetch_fear_greed_history as _fetch_fg_history
     _FG_OK = True
 except (ImportError, Exception):
     _FG_OK = False
+    _fetch_fg_history = None
 
 
 def _utcnow() -> str:
@@ -107,18 +108,56 @@ def _get_top_opportunities(n: int = 5) -> list[dict]:
 
 
 def _get_fear_greed() -> dict:
-    if _FG_OK:
-        try:
-            fg = get_fear_greed_cached()
-            if fg:
-                return {
-                    "value":      int(fg.get("value", 50)),
-                    "label":      str(fg.get("value_classification", "Neutral")),
-                    "updated_at": str(fg.get("timestamp", "")),
-                }
-        except Exception:
-            pass
-    return {"value": 50, "label": "Neutral (data unavailable)", "updated_at": ""}
+    """Return current F&G value + 7-day and 30-day trend averages for Claude."""
+    result = {
+        "value":   50,
+        "label":   "Neutral (data unavailable)",
+        "avg_7d":  None,
+        "avg_30d": None,
+        "trend":   "unknown",
+    }
+    if not _FG_OK or _fetch_fg_history is None:
+        return result
+    try:
+        history = _fetch_fg_history(30)   # list of dicts, most recent first
+        values  = []
+        for item in history:
+            try:
+                values.append(int(item["value"]))
+            except Exception:
+                pass
+        if not values:
+            return result
+
+        cur    = values[0]
+        avg7   = sum(values[:7])  / min(7,  len(values))
+        avg30  = sum(values[:30]) / min(30, len(values))
+
+        def _label(v: float) -> str:
+            if v <= 25:  return "Extreme Fear"
+            if v <= 45:  return "Fear"
+            if v <= 55:  return "Neutral"
+            if v <= 75:  return "Greed"
+            return "Extreme Greed"
+
+        # Trend direction Claude can reason about
+        if cur > avg7 + 5:
+            trend = "rising (more greedy than 7d avg — momentum building)"
+        elif cur < avg7 - 5:
+            trend = "falling (more fearful than 7d avg — sentiment cooling)"
+        else:
+            trend = "stable (within 5pts of 7d avg)"
+
+        result.update({
+            "value":   cur,
+            "label":   _label(cur),
+            "avg_7d":  round(avg7, 1),
+            "avg_30d": round(avg30, 1),
+            "trend":   trend,
+        })
+    except Exception:
+        pass
+    return result
 
 
 # ─── Simple in-process cache ──────────────────────────────────────────────────

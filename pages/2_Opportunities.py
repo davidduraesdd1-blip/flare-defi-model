@@ -45,6 +45,30 @@ from models.risk_models import (
     compute_protocol_risk_score,        # #80
 )
 
+# Agent-executable protocol sets (used to label Multi-Chain Pool rows)
+try:
+    from agents.config import FLARE_PROTOCOL_WHITELIST, XRPL_PROTOCOL_WHITELIST
+    _AGENT_FLARE  = FLARE_PROTOCOL_WHITELIST
+    _AGENT_XRPL   = XRPL_PROTOCOL_WHITELIST
+except Exception:
+    _AGENT_FLARE  = frozenset({"kinetic", "blazeswap", "sparkdex"})
+    _AGENT_XRPL   = frozenset({"xrpl_dex", "xrpl_amm"})
+
+
+def _agent_executable(project: str, chain: str) -> str:
+    """Return badge text showing whether the agent can execute on this pool."""
+    _p   = str(project).lower().replace("-", "").replace("_", "").replace(" ", "")
+    _c   = str(chain).lower()
+    # Check Flare whitelist (strip common suffixes)
+    for _wl in _AGENT_FLARE:
+        if _wl.replace("-", "").replace("_", "") in _p or _p in _wl.replace("-", "").replace("_", ""):
+            return "▲ Agent"
+    # Check XRPL whitelist
+    for _wl in _AGENT_XRPL:
+        if _wl.replace("-", "").replace("_", "") in _p:
+            return "▲ Agent"
+    return "— Info only"
+
 
 # ── OPT-39: module-level @st.cache_data wrappers ──────────────────────────────
 
@@ -158,9 +182,22 @@ runs       = load_history_runs()
 st.title("🎯 Opportunities")
 st.caption("Real-time yield opportunities across Flare + DeFiLlama protocols • Auto-refreshed every 15 minutes")
 st.markdown(
-    "<div style='color:#475569; font-size:0.87rem; margin-bottom:24px;'>"
+    "<div style='color:#475569; font-size:0.87rem; margin-bottom:16px;'>"
     "Starter portfolios · APY trends · options strategies</div>",
     unsafe_allow_html=True,
+)
+
+# Agent scope banner — always visible so users understand what the agent can act on
+st.html(
+    "<div style='background:rgba(0,212,170,0.06);border:1px solid rgba(0,212,170,0.2);"
+    "border-left:3px solid #00d4aa;border-radius:8px;padding:10px 16px;margin-bottom:20px;"
+    "font-size:0.83rem;color:#94a3b8;'>"
+    "<span style='color:#00d4aa;font-weight:700;'>▲ Agent-Executable</span>"
+    " protocols on this page: <span style='color:#f1f5f9;font-weight:600;'>"
+    "Kinetic · BlazeSwap · SparkDEX</span> (Flare) · "
+    "<span style='color:#f1f5f9;font-weight:600;'>XRPL DEX · XRPL AMM</span> (XRP Ledger). "
+    "All other protocols are <span style='color:#64748b;'>— Info only</span> "
+    "— the agent cannot execute on Ethereum, Base, or Solana protocols.</div>"
 )
 
 # Beginner orientation (Phase 2, item 8)
@@ -569,6 +606,7 @@ if _mc_pools:
             "#ef4444"
         )
         _row = {
+            "Agent":       _agent_executable(p.get("project", ""), p.get("chain", "")),
             "Protocol":    p.get("project", "—").replace("-", " ").title(),
             "Chain":       p.get("chain", "—"),
             "Pool":        p.get("symbol", "—"),

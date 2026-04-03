@@ -7,6 +7,7 @@ The RiskGuard enforces these limits independently before any execution.
 Changing a value here changes it everywhere instantly.
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -142,3 +143,66 @@ AES_NONCE_BYTES: int  = 12   # 96-bit nonce for GCM
 PHASE_GATE_KEY: str      = "paper_days_completed"
 LIVE_UNLOCK_KEY: str     = "live_manually_unlocked"
 EMERGENCY_STOP_KEY: str  = "emergency_stop_active"
+
+# ─── User Config Overrides (from Settings page UI) ────────────────────────────
+# Users can adjust agent behaviour from the Settings page without editing code.
+# Overrides are stored in agent_overrides.json and applied at every cycle start.
+# Only numeric/bool constants are patchable. Whitelists are never overridable.
+AGENT_OVERRIDES_FILE: Path = AGENT_DATA_DIR / "agent_overrides.json"
+
+# Keys that are safe to override from the UI (must be numeric or bool)
+_OVERRIDABLE_KEYS: frozenset = frozenset({
+    "MAX_TRADE_SIZE_PCT",
+    "MAX_DAILY_LOSS_PCT",
+    "MAX_DRAWDOWN_PCT",
+    "MIN_CONFIDENCE",
+    "MAX_OPEN_POSITIONS",
+    "COOLDOWN_AFTER_LOSS_SECONDS",
+    "PAPER_STARTING_BALANCE_USD",
+    "PHASE2_WALLET_CAP_USD",
+    "MIN_TRADE_SIZE_USD",
+    "MIN_NET_PROFIT_PCT",
+    "MAX_SLIPPAGE_PCT",
+    "MAX_REASONABLE_APY",
+    "PAPER_TRADING_GATE_DAYS",
+})
+
+
+def _apply_overrides() -> None:
+    """
+    Load user overrides from the Settings page and patch module-level constants.
+    Called at the START of every decision cycle by agent_runner.py.
+    Safe to call repeatedly — only patches values in _OVERRIDABLE_KEYS.
+    Never crashes the agent on failure.
+    """
+    try:
+        if not AGENT_OVERRIDES_FILE.exists():
+            return
+        data = json.loads(AGENT_OVERRIDES_FILE.read_text(encoding="utf-8"))
+        g = globals()
+        for key, val in data.items():
+            if key in _OVERRIDABLE_KEYS and key in g:
+                g[key] = type(g[key])(val)   # cast to original type (float/int/bool)
+    except Exception:
+        pass  # Never let override loading crash the agent cycle
+
+
+def save_overrides(overrides: dict) -> None:
+    """Write user overrides to the overrides file. Called from Settings page."""
+    try:
+        AGENT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        AGENT_OVERRIDES_FILE.write_text(
+            json.dumps(overrides, indent=2), encoding="utf-8"
+        )
+    except Exception:
+        pass
+
+
+def load_overrides() -> dict:
+    """Read current overrides from file. Returns {} if no file or parse error."""
+    try:
+        if AGENT_OVERRIDES_FILE.exists():
+            return json.loads(AGENT_OVERRIDES_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
