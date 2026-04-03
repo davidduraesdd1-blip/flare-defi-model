@@ -693,29 +693,32 @@ def validate_api_connections() -> dict:
     import os as _os
     results: dict = {}
 
-    # DeFiLlama (free, no key)
-    try:
-        r = _SESSION.get("https://api.llama.fi/protocols", timeout=5)
-        results["defillama"] = "ok" if r.status_code == 200 else f"HTTP {r.status_code}"
-    except Exception:
-        results["defillama"] = "error"
+    # FIX-503: run all 3 checks in parallel with a hard 8s cap.
+    # Sequential checks with _SESSION (retry adapter) could take up to 81s,
+    # exceeding Streamlit's 60s health check timeout and triggering 503 crashes.
+    def _chk(url: str) -> str:
+        try:
+            r = _SESSION.get(url, timeout=5)
+            return "ok" if r.status_code == 200 else f"HTTP {r.status_code}"
+        except Exception:
+            return "error"
 
-    # CoinGecko (free tier)
-    try:
-        r = _SESSION.get("https://api.coingecko.com/api/v3/ping", timeout=5)
-        results["coingecko"] = "ok" if r.status_code == 200 else f"HTTP {r.status_code}"
-    except Exception:
-        results["coingecko"] = "error"
-
-    # FRED (no key for public CSV endpoint)
-    try:
-        r = _SESSION.get(
-            "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10",
-            timeout=5,
-        )
-        results["fred"] = "ok" if r.status_code == 200 else f"HTTP {r.status_code}"
-    except Exception:
-        results["fred"] = "error"
+    with ThreadPoolExecutor(max_workers=3) as _chk_ex:
+        _f_llama = _chk_ex.submit(_chk, "https://api.llama.fi/protocols")
+        _f_cg    = _chk_ex.submit(_chk, "https://api.coingecko.com/api/v3/ping")
+        _f_fred  = _chk_ex.submit(_chk, "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10")
+        try:
+            results["defillama"] = _f_llama.result(timeout=8)
+        except Exception:
+            results["defillama"] = "error"
+        try:
+            results["coingecko"] = _f_cg.result(timeout=8)
+        except Exception:
+            results["coingecko"] = "error"
+        try:
+            results["fred"] = _f_fred.result(timeout=8)
+        except Exception:
+            results["fred"] = "error"
 
     # CoinMetrics — check env var AND session-state runtime key (#18)
     coinmetrics_key = _get_runtime_key("coinmetrics_key", _os.environ.get("DEFI_COINMETRICS_API_KEY", "")).strip()

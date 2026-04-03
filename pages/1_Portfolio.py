@@ -663,8 +663,7 @@ if positions:
                     {days_str} active{fees_html}{il_html}{hodl_html}
                 </div>
                 <div style="color:#334155; font-size:0.78rem; margin-top:6px;">
-                    Unclaimed fees: <span style="color:#10b981">${pnl['unclaimed_fees']:,.2f}</span>
-                    {"  ·  " + bal_str if bal_str else ""}
+                    Unclaimed fees: <span style="color:#10b981">${pnl['unclaimed_fees']:,.2f}</span>{"  ·  " + bal_str if bal_str else ""}
                 </div>
             </div>""", unsafe_allow_html=True)
         with col_del:
