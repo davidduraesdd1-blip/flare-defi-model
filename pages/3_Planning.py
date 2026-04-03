@@ -193,6 +193,7 @@ with tab1:
             "IL Risk = Impermanent Loss Risk: 'None' means your deposit value stays stable; 'Low' means it "
             "could drop slightly if prices change a lot.",
             title="How do I use this planner?",
+            intermediate_message="Capital required = target income ÷ APY. Diversify across 2–3 strategies. IL Risk: None = stable, Low = minor exposure.",
         )
 
 
@@ -260,6 +261,7 @@ with tab2:
             "LP Route: Higher potential returns but your balance can shrink if FLR's price moves a lot "
             "(that's called Impermanent Loss). For beginners, the Fixed Rate is the safest choice here.",
             title="Fixed vs Variable vs LP — what's the difference?",
+            intermediate_message="Fixed: locked APY guaranteed to maturity. Variable: rate floats. LP: higher upside, subject to IL.",
         )
     elif days_to_maturity == 0:
         st.warning("The sFLR-MAY2026 market has matured. Check Spectra Finance for new markets.")
@@ -364,6 +366,7 @@ with tab3:
             "The model recommends splitting between 2 providers to reduce risk. "
             "Avoid providers marked ⚠ — they have too much vote power and may lose reward eligibility.",
             title="What is FTSO delegation?",
+            intermediate_message="FTSO delegation: ~4% APY, non-custodial. Avoid providers >2.5% vote share — they lose reward eligibility.",
         )
 
 
@@ -728,6 +731,7 @@ with tab5:
                 "The 'Blended APY' at the bottom is your overall expected return across all strategies combined. "
                 "These are suggestions — you don't have to follow them exactly. Start small and learn as you go.",
                 title="How do I read this strategy plan?",
+                intermediate_message="Allocation split per risk profile using Kelly sizing. Blended APY = weighted average across all positions.",
             )
 
         if _warnings:

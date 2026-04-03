@@ -197,6 +197,7 @@ render_what_this_means(
     "full portfolio. Weekly = what you'd earn in one week. Monthly = one month. Yearly = one full year. "
     "These are estimates — actual returns depend on fees, price changes, and how long you stay invested.",
     title="What are these yield estimates?",
+    intermediate_message="Est. returns from your top-3 opportunities assuming full allocation — actual results vary.",
 )
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -234,6 +235,7 @@ render_what_this_means(
     "The 'Confidence' bar shows how sure the model is about this opportunity. "
     "Start with Grade A or B to keep risk low.",
     title="How do I read these opportunity cards?",
+    intermediate_message="APY = annualised return. Grade A–F = safety (A safest). Confidence = model conviction. Gauges show numeric values.",
 )
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -276,6 +278,7 @@ else:
         "ACT NOW = opportunity closes fast. MONITOR = watch it, may be ready soon. "
         "These opportunities are usually short-lived — the model flags them as soon as they appear.",
         title="What is arbitrage?",
+        intermediate_message="Cross-protocol arb: buy low on one DEX, sell high on another in one tx. ACT NOW = closes fast.",
     )
 
 # ── FXRP Ecosystem Metrics ────────────────────────────────────────────────────

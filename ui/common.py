@@ -1578,18 +1578,18 @@ def render_opportunity_card(
 </div>
 </div>""", unsafe_allow_html=True)
 
-    # Beginner: show colour-coded gauges for Confidence and Risk Score
-    if _card_user_level == "beginner":
+    # Beginner: plain-English gauges. Intermediate: numeric gauges. Advanced: no gauges.
+    if _card_user_level in ("beginner", "intermediate"):
         _g1, _g2 = st.columns(2)
         with _g1:
             render_gauge(conf, "Model Confidence", min_v=0, max_v=100,
                          low_threshold=0.45, high_threshold=0.70,
-                         user_level="beginner", unit="%")
+                         user_level=_card_user_level, unit="%")
         with _g2:
             # Risk score: lower = better, so invert for gauge (10−rs maps to 0–10 scale)
             render_gauge(10.0 - rs, "Safety Score", min_v=0, max_v=10,
                          low_threshold=0.33, high_threshold=0.66,
-                         user_level="beginner")
+                         user_level=_card_user_level)
 
 
 # ─── Phase 2 — New helpers ────────────────────────────────────────────────────
@@ -1790,15 +1790,22 @@ def signal_badge_html(direction: str, label: str = "") -> str:
 
 # ── Beginner UX — "What does this mean?" Panel (Phase 2, item 8) ──────────────
 
-def render_what_this_means(message: str, title: str = "What does this mean for me?") -> None:
-    """Render a plain-English explanation panel after signals/scores.
+def render_what_this_means(
+    message: str,
+    title: str = "What does this mean for me?",
+    intermediate_message: str = "",
+) -> None:
+    """Render a level-aware explanation after signals/scores.
 
-    Only shows when user_level == 'beginner'. No-op for Intermediate/Advanced.
-    Call this directly after any signal, score, or technical metric display.
+    Beginner:     full info panel with title and plain-English explanation.
+    Intermediate: condensed one-liner caption (pass via intermediate_message).
+    Advanced:     no-op — maximum data density, no hand-holding.
     """
-    if get_user_level() != "beginner":
-        return
-    st.info(f"💡 **{title}**  \n{message}")
+    level = get_user_level()
+    if level == "beginner":
+        st.info(f"💡 **{title}**  \n{message}")
+    elif level == "intermediate" and intermediate_message:
+        st.caption(f"ℹ️ {intermediate_message}")
 
 
 # ── Color-Coded Gauge (Phase 2, item 9) ───────────────────────────────────────

@@ -161,6 +161,7 @@ render_what_this_means(
     "Active Agents are the entities that hold collateral and guarantee FXRP is backed. "
     "Mint Capacity shows how much more FXRP can be created — when it's near 100%, new minting slows down.",
     title="What are FAssets?",
+    intermediate_message="FAssets = tokenised cross-chain assets (FXRP ≈ XRP on Flare). Active agents hold FLR collateral. Mint capacity = remaining headroom.",
 )
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -222,6 +223,7 @@ render_what_this_means(
     "emergency measures to protect FXRP holders. "
     "Green line = healthy (≥200%). Yellow = watch closely. Red = at risk (<160%).",
     title="What does the Collateral Ratio mean?",
+    intermediate_message="CR <160% triggers CCB liquidations. CR ≥200% = well-collateralised. Watch for downtrend toward the 160% floor.",
 )
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 

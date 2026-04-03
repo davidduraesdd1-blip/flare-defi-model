@@ -170,6 +170,7 @@ render_what_this_means(
     "and how much of that return is from real trading fees vs. printed reward tokens. "
     "Higher APY usually = higher risk. Start with Grade A or B opportunities matching your risk profile.",
     title="How do I use this page?",
+    intermediate_message="Live yield opportunities on Flare — APY, risk grade, fee sustainability, and model confidence shown per card.",
 )
 
 
@@ -1661,6 +1662,7 @@ render_what_this_means(
     "'F' means high risk — multiple hacks or no audits. "
     "Always check the grade before putting money into a protocol.",
     title="What do these grades mean?",
+    intermediate_message="Safety grade: A–F derived from hack history, audit count, TVL stability, and protocol age (DeFiLlama data).",
 )
 
 _D1_PROTOCOLS = [
@@ -1769,6 +1771,7 @@ render_what_this_means(
     "This calculator tells you how much IL you've suffered and how many days it'll take "
     "for your fee income to cover it. If break-even is 200+ days, IL is a serious concern.",
     title="What is impermanent loss break-even?",
+    intermediate_message="IL break-even = days at current fee APY to recover divergence losses. Formula: IL = 2√k/(1+k) − 1.",
 )
 
 with st.expander("Open IL Break-Even Calculator", expanded=False):
@@ -1868,6 +1871,7 @@ render_what_this_means(
     "into similar risks. Look for the 'technique' column — "
     "flash loan attacks and smart contract bugs are the most common.",
     title="Why look at hack history?",
+    intermediate_message="Historical exploits by technique — use to assess smart contract risk vectors before allocating capital.",
 )
 
 with st.spinner("Loading hack history from DeFiLlama…"):
@@ -1955,6 +1959,7 @@ render_what_this_means(
     "If fees are trending up, more trading is happening — that usually means higher yields too. "
     "Green = revenue above 30-day average. Red = below average (less activity).",
     title="Why does protocol revenue matter?",
+    intermediate_message="Fee revenue trend: 24h vs 30d daily avg. >1.0× = above average activity = healthier yield sustainability.",
 )
 
 with st.spinner("Loading protocol revenue data…"):
@@ -2045,6 +2050,7 @@ render_what_this_means(
     "A sudden drop in yield can mean the protocol is losing users. "
     "These alerts help you spot unusual changes before they disappear.",
     title="What do yield gap alerts mean?",
+    intermediate_message="APY deviation >20% from 7d avg — flag for reward spikes, liquidity exits, or protocol stress events.",
 )
 
 _d6_all_pools = list(_gy_display or []) + list(_mc_pools or [])
@@ -2109,6 +2115,7 @@ render_what_this_means(
     "stays inside your chosen range. If price moves outside your range, you stop earning — "
     "and you're stuck holding 100% of one token. This tool shows whether you're in-range right now.",
     title="What is a concentrated liquidity range?",
+    intermediate_message="CL positions earn fees only while price is within your tick range — out-of-range = 0 fee income, full single-asset exposure.",
 )
 
 with st.expander("Open CL Range Monitor", expanded=False):
@@ -2206,6 +2213,7 @@ render_what_this_means(
     "The Sharpe ratio measures how much yield you get per unit of risk. "
     "Higher Sharpe = better quality yield. Aim for Sharpe > 1.0 (Good).",
     title="What is the Sharpe ratio?",
+    intermediate_message="Sharpe = excess return ÷ volatility. >1.0 = good risk-adjusted yield. Adjusts raw APY for standard deviation.",
 )
 
 # Collect all pools from all sources
