@@ -882,6 +882,58 @@ def render_sidebar() -> dict:
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+        # ── Agent Control Panel (mini) ─────────────────────────────────────────
+        try:
+            from agents.agent_runner import get_state as _agent_get_state, set_running as _agent_set_running, set_emergency_stop as _agent_estop
+            from agents.config import EMERGENCY_STOP_KEY as _ESTOP_KEY, PAPER_TRADING_GATE_DAYS as _GATE_DAYS
+            from agents.audit_log import AuditLog as _AuditLog
+            _agent_state  = _agent_get_state()
+            _agent_running = _agent_state.get("running", False)
+            _agent_estop   = _agent_state.get(_ESTOP_KEY, False)
+            _agent_mode    = _agent_state.get("mode", "PAPER")
+            _paper_days    = _AuditLog().get_paper_trade_days()
+            _last_dec      = _agent_state.get("last_decision", {})
+
+            if _agent_estop:
+                _a_color = "#ef4444"; _a_icon = "🔴"; _a_label = "STOPPED"
+            elif _agent_running:
+                _a_color = "#22c55e"; _a_icon = "🟢"; _a_label = "RUNNING"
+            else:
+                _a_color = "#f59e0b"; _a_icon = "⏸️"; _a_label = "PAUSED"
+
+            st.markdown(
+                f"<div style='font-size:0.60rem;text-transform:uppercase;letter-spacing:0.8px;"
+                f"color:#475569;margin-bottom:4px;'>Agent</div>"
+                f"<div style='display:flex;align-items:center;gap:8px;margin-bottom:6px;'>"
+                f"<span style='color:{_a_color};font-size:0.72rem;font-weight:700;'>"
+                f"{_a_icon} {_a_label} · {_agent_mode}</span>"
+                f"<span style='color:#64748b;font-size:0.65rem;'>"
+                f"Paper: {_paper_days}/{_GATE_DAYS}d</span></div>",
+                unsafe_allow_html=True,
+            )
+            if _last_dec.get("action"):
+                _action_color = "#22c55e" if _last_dec.get("approved") else "#f59e0b"
+                st.markdown(
+                    f"<div style='font-size:0.65rem;color:{_action_color};margin-bottom:6px;'>"
+                    f"Last: {_last_dec.get('action','—')} → {_last_dec.get('protocol','—')}</div>",
+                    unsafe_allow_html=True,
+                )
+            _sa_col, _sb_col = st.columns(2)
+            with _sa_col:
+                _btn_label = "⏸ Pause" if _agent_running else "▶ Start"
+                if st.button(_btn_label, key="sidebar_agent_toggle", width="stretch"):
+                    _agent_set_running(not _agent_running)
+                    st.rerun()
+            with _sb_col:
+                if st.button("🛑 E-Stop", key="sidebar_agent_estop", width="stretch"):
+                    _agent_estop("Sidebar emergency stop")
+                    st.rerun()
+            st.page_link("pages/5_Agent.py", label="→ Agent Control Panel", icon="🤖")
+        except Exception:
+            pass  # never crash sidebar on agent import failure
+
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
         # ── API Status Dots (#17) ──────────────────────────────────────────────
         try:
             _api_status = _get_api_status()
