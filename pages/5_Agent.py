@@ -302,10 +302,43 @@ try:
             st.success("Agent config reset to code defaults.")
             st.rerun()
 
-    if _overrides:
-        st.caption(
-            f"Active overrides: {', '.join(f'{k}={v}' for k, v in _overrides.items())}"
-        )
+    # ── Active limits panel — shows effective values (overrides applied) ─────────
+    # Compute effective values: override wins, else fall back to code default
+    def _eff(key, default): return _overrides.get(key, default)
+    def _tag(key): return "custom" if key in _overrides else "default"
+
+    st.markdown("#### Active Limits (what the agent will use on the next cycle)")
+    _lc1, _lc2, _lc3, _lc4 = st.columns(4)
+    _lc1.metric("Max trade size",
+                f"{int(round(_eff('MAX_TRADE_SIZE_PCT', MAX_TRADE_SIZE_PCT) * 100))}% of wallet",
+                delta=_tag("MAX_TRADE_SIZE_PCT"), delta_color="off")
+    _lc2.metric("Daily loss limit",
+                f"{int(round(_eff('MAX_DAILY_LOSS_PCT', MAX_DAILY_LOSS_PCT) * 100))}% of wallet",
+                delta=_tag("MAX_DAILY_LOSS_PCT"), delta_color="off")
+    _lc3.metric("Min confidence",
+                f"{int(round(_eff('MIN_CONFIDENCE', MIN_CONFIDENCE) * 100))}%",
+                delta=_tag("MIN_CONFIDENCE"), delta_color="off")
+    _lc4.metric("Max positions",
+                str(int(_eff("MAX_OPEN_POSITIONS", MAX_OPEN_POSITIONS))),
+                delta=_tag("MAX_OPEN_POSITIONS"), delta_color="off")
+    _lc5, _lc6, _lc7, _lc8 = st.columns(4)
+    _lc5.metric("Max drawdown",
+                f"{int(round(_eff('MAX_DRAWDOWN_PCT', MAX_DRAWDOWN_PCT) * 100))}%",
+                delta=_tag("MAX_DRAWDOWN_PCT"), delta_color="off")
+    _lc6.metric("Cooldown after loss",
+                f"{int(_eff('COOLDOWN_AFTER_LOSS_SECONDS', COOLDOWN_AFTER_LOSS_SECONDS) // 60)} min",
+                delta=_tag("COOLDOWN_AFTER_LOSS_SECONDS"), delta_color="off")
+    _lc7.metric("Min trade size",
+                f"${_eff('MIN_TRADE_SIZE_USD', MIN_TRADE_SIZE_USD):.0f}",
+                delta=_tag("MIN_TRADE_SIZE_USD"), delta_color="off")
+    _lc8.metric("Max believable APY",
+                f"{int(round(_eff('MAX_REASONABLE_APY', MAX_REASONABLE_APY) * 100))}%",
+                delta=_tag("MAX_REASONABLE_APY"), delta_color="off")
+    st.caption(
+        "Values labelled 'custom' are your saved overrides. 'default' = code defaults. "
+        "Hit 'Run One Cycle Now' to run a cycle — the Audit Log entry below will confirm "
+        "these exact limits were active (stored in config_at_cycle for each decision)."
+    )
 
 except Exception as _ag_cfg_err:
     st.warning(f"Agent config unavailable: {_ag_cfg_err}")
@@ -494,21 +527,27 @@ st.divider()
 # ─── Audit Log ────────────────────────────────────────────────────────────────
 render_section_header("Audit Log", "Every decision, approval, rejection, and error")
 
-with st.expander("Show Full Audit Log (last 50 events)", expanded=False):
+st.caption(
+    "Every decision cycle is logged below — including what config limits were active. "
+    "Data is fetched from live APIs each cycle; the decision row confirms it ran. "
+    "Expand the 'extra' column in the raw DB to see the full config_at_cycle snapshot."
+)
+with st.expander("Audit Log (last 50 events)", expanded=True):
     audit_rows = _runner.get_recent_audit(limit=50)
     if audit_rows:
         audit_df_rows = []
         for a in audit_rows:
             audit_df_rows.append({
-                "Time":     str(a.get("timestamp", ""))[:16],
-                "Event":    a.get("event_type", "—"),
-                "Chain":    a.get("chain", "—"),
-                "Protocol": a.get("protocol", "—"),
-                "Action":   a.get("action", "—"),
-                "Approved": "✓" if a.get("approved") else "✗",
-                "Reason":   str(a.get("reason", ""))[:80],
+                "Time":      str(a.get("timestamp", ""))[:16],
+                "Event":     a.get("event_type", "—"),
+                "Chain":     a.get("chain", "—"),
+                "Protocol":  a.get("protocol", "—"),
+                "Action":    a.get("action", "—"),
+                "Size $":    f"${a.get('size_usd', 0):,.0f}" if a.get("size_usd") else "—",
+                "Approved":  "✓" if a.get("approved") else "✗",
+                "Reason":    str(a.get("reason", ""))[:80],
             })
-        st.dataframe(pd.DataFrame(audit_df_rows), width="stretch", hide_index=True)
+        st.dataframe(pd.DataFrame(audit_df_rows), use_container_width=True, hide_index=True)
     else:
-        st.caption("No audit events yet.")
+        st.caption("No audit events yet — hit 'Run One Cycle Now' to generate the first entry.")
 

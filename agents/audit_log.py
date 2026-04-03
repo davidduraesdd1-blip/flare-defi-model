@@ -162,7 +162,14 @@ class AuditLog:
                 conn.close()
 
     def log_decision(self, decision: dict, approved: bool, reason: str,
-                     wallet_usd: float = 0, daily_pnl_usd: float = 0) -> None:
+                     wallet_usd: float = 0, daily_pnl_usd: float = 0,
+                     config_snapshot: dict | None = None) -> None:
+        extra = {
+            "confidence": decision.get("confidence", 0),
+            "reasoning":  decision.get("reasoning", ""),
+        }
+        if config_snapshot:
+            extra["config_at_cycle"] = config_snapshot
         self._write(
             self.DECISION_APPROVED if approved else self.DECISION_REJECTED,
             chain=decision.get("chain", ""),
@@ -174,8 +181,7 @@ class AuditLog:
             reason=reason,
             wallet_usd=wallet_usd,
             daily_pnl_usd=daily_pnl_usd,
-            extra={"confidence": decision.get("confidence", 0),
-                   "reasoning": decision.get("reasoning", "")},
+            extra=extra,
         )
 
     def log_trade_opened(self, trade: dict) -> None:
