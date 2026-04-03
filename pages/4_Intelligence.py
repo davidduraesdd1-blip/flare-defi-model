@@ -45,6 +45,7 @@ render_what_this_means(
     "75–100 = Extreme Greed (market is overheated — can be risky to buy). "
     "It's a sentiment signal, not a buy/sell order. Use it alongside other data.",
     title="What is the Fear & Greed Index?",
+    intermediate_message="F&G: 0–25 Extreme Fear (capitulation), 75–100 Extreme Greed (overheated). Contrarian signal — not a direct trade trigger.",
 )
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 st.caption("Ecosystem monitor, governance alerts, AI model accuracy, and protocol revenue health")
@@ -116,6 +117,7 @@ try:
             f"The confidence ({_conf_pct}%) shows how certain the model is about this classification. "
             "If the intent is wrong, try rephrasing — e.g. 'best place to stake FLR' instead of just 'staking'.",
             title="What does this intent detection mean?",
+            intermediate_message=f"Intent: {_primary} ({_conf_pct}% confidence). Model routing query to relevant data feeds and opportunity scanner.",
         )
 
         # Context-relevant data based on intent
