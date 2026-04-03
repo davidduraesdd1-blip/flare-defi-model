@@ -121,17 +121,21 @@ def unlock_live_mode() -> None:
 
 # ─── Core decision cycle ──────────────────────────────────────────────────────
 
-def _run_one_cycle() -> None:
-    """Execute a single agent decision cycle."""
-    # Apply any user config overrides from the Settings page before reading C.*
+def _run_one_cycle(force: bool = False) -> None:
+    """
+    Execute a single agent decision cycle.
+    force=True: bypass the running check (used by "Run One Cycle Now" from the UI).
+    Emergency stop is always respected, even when forced.
+    """
+    # Apply any user config overrides before reading any C.* constants
     C._apply_overrides()
 
     state = _load_state()
 
-    if not state.get("running", False):
-        return
     if state.get(C.EMERGENCY_STOP_KEY, False):
-        return
+        return  # always respect emergency stop
+    if not force and not state.get("running", False):
+        return  # only skip when paused AND not a forced UI cycle
 
     operating_mode       = state.get("mode", C.OPERATING_MODE)
     paper_days           = _audit.get_paper_trade_days()
@@ -175,12 +179,26 @@ def _run_one_cycle() -> None:
         emergency_stop_active  = emergency_stop,
     )
 
+    # Capture a snapshot of the active config limits at cycle time so the audit
+    # log proves exactly which settings governed this decision.
+    _config_snapshot = {
+        "MAX_TRADE_SIZE_PCT":          C.MAX_TRADE_SIZE_PCT,
+        "MAX_DAILY_LOSS_PCT":          C.MAX_DAILY_LOSS_PCT,
+        "MAX_DRAWDOWN_PCT":            C.MAX_DRAWDOWN_PCT,
+        "MIN_CONFIDENCE":              C.MIN_CONFIDENCE,
+        "MAX_OPEN_POSITIONS":          C.MAX_OPEN_POSITIONS,
+        "COOLDOWN_AFTER_LOSS_SECONDS": C.COOLDOWN_AFTER_LOSS_SECONDS,
+        "MIN_TRADE_SIZE_USD":          C.MIN_TRADE_SIZE_USD,
+        "MAX_REASONABLE_APY":          C.MAX_REASONABLE_APY,
+        "forced_cycle":                force,
+    }
     _audit.log_decision(
         decision.to_dict(),
         approved       = risk_result.approved,
         reason         = risk_result.reason,
         wallet_usd     = wallet_usd,
         daily_pnl_usd  = daily_pnl,
+        config_snapshot = _config_snapshot,
     )
 
     # Update state with last decision for UI display
@@ -215,13 +233,14 @@ def _run_one_cycle() -> None:
     #  after live key management infrastructure is production-ready.)
 
 
-def run_agent_loop_once() -> None:
+def run_agent_loop_once(force: bool = False) -> None:
     """
     Single cycle — called by APScheduler every DECISION_LOOP_INTERVAL_SECONDS.
     Wrapped in full exception handling so a crash never stops the scheduler.
+    force=True passed through from run_cycle_now() for UI-triggered cycles.
     """
     try:
-        _run_one_cycle()
+        _run_one_cycle(force=force)
         # Reset error counter on success
         with _lock:
             s = _load_state()
@@ -280,8 +299,10 @@ class AgentRunner:
         unlock_live_mode()
 
     def run_cycle_now(self) -> None:
-        """Force one cycle immediately — used for testing from the UI."""
-        run_agent_loop_once()
+        """Force one cycle immediately — used for testing from the UI.
+        Bypasses the running check so it works even when the agent is paused.
+        The resulting decision is recorded in the audit log as normal."""
+        run_agent_loop_once(force=True)
 
     def get_paper_days(self) -> int:
         return _audit.get_paper_trade_days()
