@@ -367,6 +367,12 @@ _FTSO_FEEDS = {
     "XRP": "0x015852502f555344000000000000000000000000",
 }
 
+# When all Flare FTSO endpoints fail, back off for this many seconds before
+# trying again — avoids hammering dead endpoints on every refresh cycle.
+_FTSO_BACKOFF_SECS = 3600  # 1 hour
+_ftso_dead_until: float = 0.0  # epoch seconds; 0 = "not in backoff"
+
+
 def fetch_ftso_prices() -> dict:
     """
     Fetch current FTSO oracle prices for FLR and XRP from the Flare data availability layer.
@@ -374,6 +380,8 @@ def fetch_ftso_prices() -> dict:
     Used as a conviction multiplier in risk models: if FTSO agrees with CoinGecko,
     confidence in the data is higher; large divergence signals potential arb opportunity.
     """
+    global _ftso_dead_until
+
     base = APIS.get("ftso_data", "https://flr-data-availability.flare.network")
     results = {}
 
@@ -399,47 +407,57 @@ def fetch_ftso_prices() -> dict:
                             pass
         return out
 
-    # Try multiple known endpoint paths in priority order — Flare updated their
-    # data availability REST API and old paths (block-latency-feeds, /feeds/{id})
-    # now return 404.  retries=0 on each: a 404 is definitive, not transient.
-    _ENDPOINTS = [
-        f"{base}/api/v0/ftso/anchor-feeds",         # FTSOv2 anchor feeds (current)
-        f"{base}/api/v0/feeds",                      # generic feeds list
-        f"{base}/api/v1/ftso/feeds",                 # v1 path
-        f"{base}/api/v0/ftso/block-latency-feeds",   # legacy (404 as of Q1 2026)
-    ]
-    for _ep in _ENDPOINTS:
-        if results:
-            break
-        try:
-            data = _get(_ep, timeout=5, retries=0)
-            if data:
-                results = _parse_feeds(data)
-        except Exception as exc:
-            logger.debug(f"FTSO endpoint {_ep} failed: {exc}")
-
-    # Fallback: individual feed endpoint variants
-    if not results:
-        _FEED_PATHS = [
-            "{base}/api/v0/ftso/feeds/{feed_id}",
-            "{base}/api/v0/feeds/{feed_id}",
+    # Only attempt Flare endpoints when not in backoff period.
+    # All 4 paths below returned 404 as of Q1 2026 (Flare API restructure).
+    # After one round of failures we wait _FTSO_BACKOFF_SECS before retrying,
+    # so dead endpoints don't spam logs on every refresh.
+    if time.time() >= _ftso_dead_until:
+        _ENDPOINTS = [
+            f"{base}/api/v0/ftso/anchor-feeds",         # FTSOv2 anchor feeds
+            f"{base}/api/v0/feeds",                      # generic feeds list
+            f"{base}/api/v1/ftso/feeds",                 # v1 path
+            f"{base}/api/v0/ftso/block-latency-feeds",   # legacy
         ]
-        for sym, feed_id in _FTSO_FEEDS.items():
-            if sym in results:
-                continue
-            for path_tpl in _FEED_PATHS:
-                url = path_tpl.format(base=base, feed_id=feed_id)
-                try:
-                    data = _get(url, timeout=4, retries=0)
-                    if data and isinstance(data, dict):
-                        price = data.get("value", data.get("price", data.get("v")))
-                        if price is not None:
-                            results[sym] = float(price)
-                            break
-                except Exception:
-                    pass
+        for _ep in _ENDPOINTS:
+            if results:
+                break
+            try:
+                data = _get(_ep, timeout=5, retries=0)
+                if data:
+                    results = _parse_feeds(data)
+            except Exception as exc:
+                logger.debug(f"FTSO endpoint {_ep} failed: {exc}")
 
-    # Final fallback: CoinGecko free API for FLR and XRP when all FTSO paths fail
+        # Individual feed endpoint variants
+        if not results:
+            _FEED_PATHS = [
+                "{base}/api/v0/ftso/feeds/{feed_id}",
+                "{base}/api/v0/feeds/{feed_id}",
+            ]
+            for sym, feed_id in _FTSO_FEEDS.items():
+                if sym in results:
+                    continue
+                for path_tpl in _FEED_PATHS:
+                    url = path_tpl.format(base=base, feed_id=feed_id)
+                    try:
+                        data = _get(url, timeout=4, retries=0)
+                        if data and isinstance(data, dict):
+                            price = data.get("value", data.get("price", data.get("v")))
+                            if price is not None:
+                                results[sym] = float(price)
+                                break
+                    except Exception:
+                        pass
+
+        # All Flare paths failed — enter backoff to stop hammering dead endpoints
+        if not results:
+            _ftso_dead_until = time.time() + _FTSO_BACKOFF_SECS
+            logger.debug(
+                "All FTSO endpoints unavailable — skipping for %d min, using CoinGecko",
+                _FTSO_BACKOFF_SECS // 60,
+            )
+
+    # Final fallback: CoinGecko free API for FLR and XRP
     if not results:
         try:
             _cg_base = APIS.get("coingecko", "https://api.coingecko.com/api/v3")
