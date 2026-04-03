@@ -113,6 +113,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+with st.expander("📋 What's in each tab?", expanded=(_user_level == "Beginner")):
+    st.markdown(
+        "| Tab | What it does |\n"
+        "|-----|--------------|\n"
+        "| 💰 **Income Planner** | Calculate how much capital replaces your FlareDrop income |\n"
+        "| 🔒 **Spectra Fixed-Rate** | Lock sFLR at a guaranteed APY until May 2026 — no variable rate risk |\n"
+        "| 📡 **FTSO Delegation** | Delegate FLR vote power to earn rewards every ~3.5 days — nothing locked |\n"
+        "| 🌐 **FAssets** | Bring BTC, XRP & DOGE on-chain to earn DeFi yields without selling |\n"
+        "| 🎯 **Strategy Planner** | Answer 3 questions — get a personalised Flare DeFi strategy |\n"
+        "| 📈 **Compound Calculator** | Project how yields grow over time with daily compounding & top-ups |"
+    )
+
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "💰  Income Planner",
     "🔒  Spectra Fixed-Rate",

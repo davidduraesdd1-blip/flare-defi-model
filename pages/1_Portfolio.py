@@ -888,15 +888,15 @@ if positions:
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
-# ─── Claimable Rewards Aggregator (Feature 3) ─────────────────────────────────
+# ─── Rewards & Incentives ─────────────────────────────────────────────────────
 
 if positions:
-    render_section_header("Claimable Rewards", "All unclaimed fees + FTSO rewards across your positions")
+    render_section_header("Rewards & Incentives", "Unclaimed fees · FTSO rewards · rFLR incentive tracker")
 
+    # ── Claimable Rewards ──────────────────────────────────────────────────────
     total_fees    = sum(float(p.get("unclaimed_fees", 0)) for p in positions)
     total_rewards = sum(float(p.get("rewards", 0)) for p in positions if isinstance(p.get("rewards"), (int, float)))
 
-    # FTSO reward estimate: ~4.3% APY on FLR held in LP positions
     _FTSO_RATE    = 0.043
     flr_in_lp     = 0.0
     for p in positions:
@@ -906,11 +906,12 @@ if positions:
             price_lkp = {pr.get("symbol", ""): pr.get("price_usd", 0) for pr in (prices or [])}
             flr_price = price_lkp.get("FLR") or FALLBACK_PRICES.get("FLR", 0.0088)
             if "FLR" in (tok_a, tok_b) or "WFLR" in (tok_a, tok_b):
-                dep = float(p.get("deposit_usd", 0)) * 0.5   # ~50% in FLR side
+                dep = float(p.get("deposit_usd", 0)) * 0.5
                 flr_in_lp += dep / flr_price if flr_price > 0 else 0
 
-    days_to_expiry = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
-    ftso_est_usd   = flr_in_lp * FALLBACK_PRICES.get("FLR", 0.0088) * _FTSO_RATE * (30 / 365)  # 30-day estimate
+    _days_to_jul2026 = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
+    days_to_expiry   = _days_to_jul2026
+    ftso_est_usd     = flr_in_lp * FALLBACK_PRICES.get("FLR", 0.0088) * _FTSO_RATE * (30 / 365)
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -933,29 +934,19 @@ if positions:
         </div>""", unsafe_allow_html=True)
 
     st.caption("Unclaimed fees pulled from tracked positions. FTSO estimate based on FLR in LP positions at 4.3% APY. Claim via app.flare.network.")
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-
-# ─── rFLR Incentive Tracker (Feature 6) ──────────────────────────────────────
-
-if positions:
+    # ── rFLR Incentive Tracker ─────────────────────────────────────────────────
     _incentive_positions = [p for p in positions if p.get("protocol", "") in ("blazeswap", "enosys", "sparkdex")]
-    # Define _days_to_jul2026 here so it is available to the Net Worth Projection
-    # section below regardless of whether any incentive positions exist.
-    _days_to_jul2026 = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
     if _incentive_positions:
-        render_section_header("rFLR Incentive Tracker", "Estimated rFLR earned + projected earnings to July 2026")
-
-        _RFLR_PER_USD_DAILY  = 0.0012   # rough: ~43% reward APY on $1 → ~$0.00118/day in rFLR value
-        _FLR_PRICE           = (next((pr.get("price_usd", 0) for pr in (prices or []) if pr.get("symbol") == "FLR"), 0)
-                                or FALLBACK_PRICES.get("FLR", 0.0088))
-
+        st.markdown("##### rFLR Incentive Tracker")
+        _FLR_PRICE = (next((pr.get("price_usd", 0) for pr in (prices or []) if pr.get("symbol") == "FLR"), 0)
+                      or FALLBACK_PRICES.get("FLR", 0.0088))
         rflr_rows = []
         for p in _incentive_positions:
-            dep       = float(p.get("deposit_usd", 0))
-            entry_apy = float(p.get("entry_apy", 0))
-            _reward_rate = max(0, (entry_apy - 5) / 100)   # rough: subtract ~5% base fee yield
-            days_held = 0
+            dep          = float(p.get("deposit_usd", 0))
+            entry_apy    = float(p.get("entry_apy", 0))
+            _reward_rate = max(0, (entry_apy - 5) / 100)
+            days_held    = 0
             if p.get("entry_date"):
                 try:
                     _p_entry_dt = datetime.fromisoformat(p["entry_date"])
@@ -964,10 +955,10 @@ if positions:
                     days_held = max(0, (datetime.now(timezone.utc) - _p_entry_dt).days)
                 except Exception:
                     pass
-            earned_usd   = dep * _reward_rate * days_held / 365 if days_held > 0 else 0
-            earned_rflr  = earned_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
-            proj_usd     = dep * _reward_rate * _days_to_jul2026 / 365
-            proj_rflr    = proj_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
+            earned_usd  = dep * _reward_rate * days_held / 365 if days_held > 0 else 0
+            earned_rflr = earned_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
+            proj_usd    = dep * _reward_rate * _days_to_jul2026 / 365
+            proj_rflr   = proj_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
             rflr_rows.append({
                 "Position":           f"{p.get('pool','?')} ({p.get('protocol','?').capitalize()})",
                 "Deposit":            f"${dep:,.0f}",
@@ -975,13 +966,12 @@ if positions:
                 "Est. rFLR Earned":   f"{earned_rflr:,.0f} FLR (≈${earned_usd:,.2f})",
                 f"Proj. to Jul 2026": f"{proj_rflr:,.0f} FLR (≈${proj_usd:,.2f})",
             })
-
         st.dataframe(pd.DataFrame(rflr_rows), width="stretch", hide_index=True)
         st.caption(
             f"rFLR rewards estimated from entry APY minus ~5% base fees. FLR price: ${_FLR_PRICE:.4f}. "
             f"Incentive program ends July 1 2026 ({_days_to_jul2026} days). Claim via blazeswap.finance or enosys.finance."
         )
-        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
 # ─── FTSO IL Calculator (Feature 4) ──────────────────────────────────────────
