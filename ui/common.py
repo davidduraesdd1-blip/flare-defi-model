@@ -1426,6 +1426,7 @@ def render_opportunity_card(
     opp: dict, idx: int, color: str,
     portfolio_size: float = 0, weight: float = 1.0,
 ) -> None:
+    _card_user_level = get_user_level()
     apy    = opp.get("estimated_apy", 0)
     lo     = opp.get("apy_low",  apy * 0.8)
     hi     = opp.get("apy_high", apy * 1.2)
@@ -1576,6 +1577,19 @@ def render_opportunity_card(
 {_ry_html}
 </div>
 </div>""", unsafe_allow_html=True)
+
+    # Beginner: show colour-coded gauges for Confidence and Risk Score
+    if _card_user_level == "beginner":
+        _g1, _g2 = st.columns(2)
+        with _g1:
+            render_gauge(conf, "Model Confidence", min_v=0, max_v=100,
+                         low_threshold=0.45, high_threshold=0.70,
+                         user_level="beginner", unit="%")
+        with _g2:
+            # Risk score: lower = better, so invert for gauge (10−rs maps to 0–10 scale)
+            render_gauge(10.0 - rs, "Safety Score", min_v=0, max_v=10,
+                         low_threshold=0.33, high_threshold=0.66,
+                         user_level="beginner")
 
 
 # ─── Phase 2 — New helpers ────────────────────────────────────────────────────
