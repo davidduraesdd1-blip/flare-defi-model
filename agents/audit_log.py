@@ -27,6 +27,8 @@ def _utcnow() -> str:
 def _get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(str(AGENT_DB_FILE), check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 
@@ -203,6 +205,10 @@ class AuditLog:
 
     def log_agent_stop(self, reason: str = "user request") -> None:
         self._write(self.AGENT_STOPPED, reason=reason)
+
+    def log_live_unlocked(self, paper_days: int) -> None:
+        self._write(self.LIVE_UNLOCKED, reason="manual unlock by user",
+                    extra={"paper_days": paper_days})
 
     # ── Query helpers ──────────────────────────────────────────────────────────
 
