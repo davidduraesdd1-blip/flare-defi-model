@@ -891,7 +891,10 @@ def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
     Fetch 7-day TVL change for target chains as a bridge flow proxy.
     Positive = capital flowing in, Negative = capital flowing out.
 
-    Uses /v2/chains which returns tvl + change_1d + change_7d in one request.
+    Strategy:
+      1. /v2/chains  → current TVL + change_7d when available
+      2. /historicalChainTvl/{chain} (sequential) → compute change_7d for any
+         chain where /v2/chains returned null for that field
 
     Returns list of: chain, tvl_usd, change_7d_pct, flow_signal (INFLOW/OUTFLOW/STABLE)
     """
@@ -902,31 +905,68 @@ def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
         if cached and now - cached.get("_ts", 0) < _BRIDGE_FLOW_TTL:
             return cached.get("data", [])
 
-    target_chains = {c.lower() for c in (chains or ["Ethereum", "Base", "Flare", "Solana", "Arbitrum", "Polygon"])}
-    flows: List[dict] = []
+    default_chains = ["Ethereum", "Base", "Flare", "Solana", "Arbitrum", "Polygon"]
+    target_list    = chains or default_chains
+    target_lower   = {c.lower(): c for c in target_list}   # lower → display name
 
+    # Step 1: /v2/chains — one call, get TVL + possibly change_7d
+    chain_data: dict[str, dict] = {}   # lower_name → {name, tvl, change_7d or None}
     try:
-        data = _get(f"{_DEFILLAMA_API}/v2/chains")
-        if data and isinstance(data, list):
-            for chain in data:
-                name = str(chain.get("name") or "")
-                if name.lower() not in target_chains:
+        v2 = _get(f"{_DEFILLAMA_API}/v2/chains")
+        if v2 and isinstance(v2, list):
+            for c in v2:
+                name = str(c.get("name") or "")
+                lname = name.lower()
+                if lname not in target_lower:
                     continue
-                tvl   = float(chain.get("tvl") or 0)
-                d7    = float(chain.get("change_7d") or 0)
-                signal = "INFLOW" if d7 > 5 else "OUTFLOW" if d7 < -5 else "STABLE"
-                flows.append({
-                    "chain":         name,
-                    "tvl_usd":       tvl,
-                    "change_7d_pct": round(d7, 2),
-                    "flow_signal":   signal,
-                })
-            flows.sort(key=lambda x: x["change_7d_pct"], reverse=True)
+                raw_d7 = c.get("change_7d")          # may be None
+                chain_data[lname] = {
+                    "name":      name,
+                    "tvl":       float(c.get("tvl") or 0),
+                    "change_7d": float(raw_d7) if raw_d7 is not None else None,
+                }
     except Exception as e:
-        logger.warning("[BridgeFlow] fetch failed: %s", e)
+        logger.warning("[BridgeFlow] /v2/chains failed: %s", e)
+
+    # Step 2: historicalChainTvl fallback — sequential, only for chains still missing change_7d
+    week_ago_ts = now - 7 * 86400
+    for lname, display in target_lower.items():
+        entry = chain_data.get(lname)
+        if entry and entry["change_7d"] is not None:
+            continue    # already have it
+        try:
+            hist = _get(f"{_DEFILLAMA_API}/historicalChainTvl/{display}", timeout=20)
+            if isinstance(hist, list) and hist:
+                hist.sort(key=lambda x: x.get("date", 0))
+                cur_tvl  = float(hist[-1].get("tvl") or 0)
+                week_rec = min(hist, key=lambda x: abs(x.get("date", 0) - week_ago_ts))
+                week_tvl = float(week_rec.get("tvl") or cur_tvl)
+                d7 = ((cur_tvl - week_tvl) / week_tvl * 100) if week_tvl > 0 else 0.0
+                if entry is None:
+                    chain_data[lname] = {"name": display, "tvl": cur_tvl, "change_7d": d7}
+                else:
+                    entry["change_7d"] = d7
+            else:
+                logger.debug("[BridgeFlow] historicalChainTvl/%s returned no data", display)
+        except Exception as e:
+            logger.debug("[BridgeFlow] historicalChainTvl/%s error: %s", display, e)
+
+    # Step 3: build output
+    flows: List[dict] = []
+    for lname, entry in chain_data.items():
+        d7     = float(entry.get("change_7d") or 0)
+        signal = "INFLOW" if d7 > 5 else "OUTFLOW" if d7 < -5 else "STABLE"
+        flows.append({
+            "chain":         entry["name"],
+            "tvl_usd":       entry["tvl"],
+            "change_7d_pct": round(d7, 2),
+            "flow_signal":   signal,
+        })
+    flows.sort(key=lambda x: x["change_7d_pct"], reverse=True)
 
     with _cache_lock:
         _cache[cache_key] = {"data": flows, "_ts": now}
 
-    logger.info("[BridgeFlow] %d chains fetched", len(flows))
+    logger.info("[BridgeFlow] %d chains: %s",
+                len(flows), [(f["chain"], f["change_7d_pct"]) for f in flows])
     return flows
