@@ -123,6 +123,9 @@ def unlock_live_mode() -> None:
 
 def _run_one_cycle() -> None:
     """Execute a single agent decision cycle."""
+    # Apply any user config overrides from the Settings page before reading C.*
+    C._apply_overrides()
+
     state = _load_state()
 
     if not state.get("running", False):

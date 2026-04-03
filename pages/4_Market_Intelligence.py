@@ -14,7 +14,8 @@ from ui.common import (
     page_setup, render_sidebar, load_monitor_digest, render_section_header, _ts_fmt,
     load_latest, render_fear_greed_trend, render_what_this_means, get_user_level,
 )
-from scanners.defillama import fetch_governance_alerts, governance_fetch_failed
+from scanners.defillama import fetch_governance_alerts, governance_fetch_failed, fetch_all_hacks, fetch_protocol_revenue
+from scanners.defi_protocols import fetch_token_unlock_alerts, fetch_tvl_change_alerts
 from ai.intent_classifier import classify_defi_intent   # #87
 
 
@@ -25,7 +26,7 @@ def _cached_governance_alerts():
     return fetch_governance_alerts()
 
 
-page_setup("Intelligence · Flare DeFi")
+page_setup("Market Intelligence · Flare DeFi")
 
 ctx        = render_sidebar()
 profile    = ctx["profile"]
@@ -33,7 +34,7 @@ pro_mode   = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 demo_mode  = ctx.get("demo_mode", False)  # #67 Demo/Sandbox mode
 user_level = ctx.get("user_level", get_user_level())
 
-st.title("🧠 Intelligence")
+st.title("🧠 Market Intelligence")
 
 # ── Fear & Greed Trend (Phase 2, item 14) ─────────────────────────────────────
 render_section_header("Fear & Greed Index", "Current reading + 7-day + 30-day trend")
@@ -47,7 +48,173 @@ render_what_this_means(
     title="What is the Fear & Greed Index?",
     intermediate_message="F&G: 0–25 Extreme Fear (capitulation), 75–100 Extreme Greed (overheated). Contrarian signal — not a direct trade trigger.",
 )
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
+
+# ─── Risk & Alert Center ──────────────────────────────────────────────────────
+
+render_section_header("Risk & Alert Center", "Exploit alerts · TVL drops · token unlocks · protocol revenue health")
+
+if not demo_mode:
+    _alert_c1, _alert_c2 = st.columns(2)
+
+    # ── Hack / Exploit Alerts ────────────────────────────────────────────────
+    with _alert_c1:
+        st.markdown("#### ☠️ Recent Exploits & Hacks")
+        try:
+            @st.cache_data(ttl=86400)
+            def _cached_hacks():
+                return fetch_all_hacks(limit=50)
+
+            _hacks = _cached_hacks()
+            # Show last 10 by date (most recent first)
+            _hacks_sorted = sorted(_hacks, key=lambda h: h.get("date", ""), reverse=True)[:10]
+            if _hacks_sorted:
+                for _h in _hacks_sorted:
+                    _hloss = _h.get("funds_lost_usd", 0)
+                    _hcolor = "#ef4444" if _hloss >= 10_000_000 else ("#f59e0b" if _hloss >= 1_000_000 else "#6b7280")
+                    _hloss_str = (f"${_hloss/1e6:.1f}M" if _hloss >= 1_000_000
+                                  else f"${_hloss:,.0f}" if _hloss > 0 else "Undisclosed")
+                    _htech = _h.get("technique", _h.get("category", "—"))
+                    _hchain = _h.get("chain", "—")
+                    st.markdown(
+                        f"<div style='background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.06);"
+                        f"border-left:3px solid {_hcolor};border-radius:6px;"
+                        f"padding:8px 12px;margin-bottom:6px;font-size:0.83rem'>"
+                        f"<b style='color:#f1f5f9'>{_html.escape(_h.get('name','Unknown'))}</b>"
+                        f"<span style='float:right;color:{_hcolor};font-weight:700'>{_hloss_str}</span><br>"
+                        f"<span style='color:#64748b;font-size:0.72rem'>"
+                        f"{_h.get('date','')[:10]} · {_html.escape(str(_hchain))} · {_html.escape(str(_htech))}"
+                        f"</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                st.caption("Source: DeFiLlama · sorted by date · cached 24h")
+            else:
+                st.success("No recent exploits in the database.")
+        except Exception as _hk_err:
+            st.caption(f"Hack data unavailable: {_hk_err}")
+
+    # ── TVL Drop Alerts ──────────────────────────────────────────────────────
+    with _alert_c2:
+        st.markdown("#### 📉 TVL Drop Alerts")
+        try:
+            @st.cache_data(ttl=1800)
+            def _cached_tvl_alerts():
+                return fetch_tvl_change_alerts(threshold_pct=5.0)
+
+            _tvl_alerts = _cached_tvl_alerts()
+            if _tvl_alerts:
+                for _ta in _tvl_alerts[:10]:
+                    _ta_col = "#ef4444" if _ta.get("severity") == "CRITICAL" else "#f59e0b"
+                    _ta_chg = _ta.get("change_pct", 0)
+                    _ta_now = _ta.get("tvl_now", 0)
+                    _ta_fmtb = lambda v: (f"${v/1e9:.2f}B" if v >= 1e9 else f"${v/1e6:.1f}M" if v >= 1e6 else f"${v:,.0f}")
+                    st.markdown(
+                        f"<div style='background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.06);"
+                        f"border-left:3px solid {_ta_col};border-radius:6px;"
+                        f"padding:8px 12px;margin-bottom:6px;font-size:0.83rem'>"
+                        f"<b style='color:#f1f5f9'>{_html.escape(str(_ta.get('protocol','—')).replace('-',' ').title())}</b>"
+                        f"<span style='float:right;color:{_ta_col};font-weight:700'>{_ta_chg:+.1f}%</span><br>"
+                        f"<span style='color:#64748b;font-size:0.72rem'>"
+                        f"Now: {_ta_fmtb(_ta_now)} · {_ta.get('severity','')}"
+                        f"</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                st.caption("Threshold: ≥5% drop vs 24h baseline · cached 30 min")
+            else:
+                st.success("✓ No significant TVL drops detected right now.")
+                st.caption("Monitored: all DeFiLlama-indexed protocols · threshold 5%")
+        except Exception as _tvla_err:
+            st.caption(f"TVL alert data unavailable: {_tvla_err}")
+
+    st.divider()
+
+    # ── Token Unlock Calendar ─────────────────────────────────────────────────
+    _uc1, _uc2 = st.columns([2, 1])
+    with _uc1:
+        st.markdown("#### 🔓 Token Unlock Calendar (next 30 days)")
+    with _uc2:
+        _unlock_days = st.selectbox("Window", [7, 14, 30], index=2, key="unlock_window_sel",
+                                    label_visibility="collapsed")
+    try:
+        @st.cache_data(ttl=3600)
+        def _cached_unlocks(days: int):
+            return fetch_token_unlock_alerts(within_days=days)
+
+        _unlocks = _cached_unlocks(_unlock_days)
+        if _unlocks:
+            _sev_color = {"CRITICAL": "#ef4444", "WARNING": "#f59e0b", "INFO": "#3b82f6"}
+            _unlock_rows = []
+            for _ul in _unlocks:
+                _ul_c = _sev_color.get(_ul.get("severity", "INFO"), "#6b7280")
+                _unlock_rows.append({
+                    "Token":      _ul.get("token", "—"),
+                    "Date":       _ul.get("date", "—"),
+                    "Days":       _ul.get("days_until", "—"),
+                    "Unlock %":   f"{_ul.get('amount_pct', 0):.1f}%",
+                    "Type":       _ul.get("type", "—"),
+                    "Severity":   _ul.get("severity", "—"),
+                    "Cliff":      "Yes" if _ul.get("is_cliff") else "No",
+                })
+            st.dataframe(pd.DataFrame(_unlock_rows), width="stretch", hide_index=True)
+            _crit_ul = [u for u in _unlocks if u.get("severity") == "CRITICAL"]
+            if _crit_ul:
+                st.warning(f"⚠️ {len(_crit_ul)} CRITICAL unlock(s) within {_unlock_days} days — may cause price pressure.")
+            st.caption(f"Source: tracked unlock schedule · {_unlock_days}-day window · cached 1h")
+        else:
+            st.success(f"✓ No significant token unlocks in the next {_unlock_days} days.")
+    except Exception as _ul_err:
+        st.caption(f"Token unlock data unavailable: {_ul_err}")
+
+    st.divider()
+
+    # ── Protocol Revenue Health ───────────────────────────────────────────────
+    render_section_header("Protocol Revenue Health", "DeFiLlama fees API · 24h fees vs 30-day average · trend health")
+    try:
+        @st.cache_data(ttl=3600)
+        def _cached_revenue():
+            return fetch_protocol_revenue()
+
+        _rev = _cached_revenue()
+        _rev_errors = _rev.get("errors", [])
+        _rev_protocols = {k: v for k, v in _rev.items() if k not in ("timestamp", "errors") and isinstance(v, dict)}
+        if _rev_protocols:
+            _rev_rows = []
+            for _slug, _rd in sorted(_rev_protocols.items(), key=lambda x: x[1].get("fees_24h", 0), reverse=True):
+                _rh = _rd.get("health", "RED")
+                _rh_icon = {"GREEN": "✅", "YELLOW": "⚠️", "RED": "❌"}.get(_rh, "—")
+                _rt = _rd.get("trend", 0)
+                _f24 = _rd.get("fees_24h", 0)
+                _f30 = _rd.get("fees_30d", 0)
+                _daily_avg = _f30 / 30 if _f30 > 0 else 0
+                _rev_rows.append({
+                    "Protocol":    _slug.replace("-", " ").title(),
+                    "24h Fees":    f"${_f24:,.0f}",
+                    "30d Avg/Day": f"${_daily_avg:,.0f}",
+                    "Trend":       f"{_rt:.2f}×",
+                    "Health":      f"{_rh_icon} {_rh}",
+                })
+            st.dataframe(pd.DataFrame(_rev_rows), width="stretch", hide_index=True)
+            st.caption(
+                "Trend = 24h fees ÷ 30-day daily avg. "
+                "✅ >0.9× healthy · ⚠️ 0.5–0.9× slowing · ❌ <0.5× revenue decline · "
+                f"Source: DeFiLlama · {_rev.get('timestamp','')[:19]} UTC · cached 1h"
+            )
+            if user_level == "Beginner":
+                st.info(
+                    "Protocol revenue shows how much money a DeFi protocol earned in fees today "
+                    "compared to its recent average. A protocol earning less than usual may be losing users, "
+                    "which can affect yields over time."
+                )
+        else:
+            st.info("Revenue data loading… (DeFiLlama fees API)")
+    except Exception as _rev_err:
+        st.caption(f"Protocol revenue data unavailable: {_rev_err}")
+
+else:
+    st.info("Risk & Alert Center is disabled in Demo Mode.", icon="🎭")
+
+st.divider()
+
 st.caption("Ecosystem monitor, governance alerts, AI model accuracy, and protocol revenue health")
 st.markdown(
     "<div style='color:#475569; font-size:0.88rem; margin-bottom:24px;'>"
@@ -164,7 +331,7 @@ try:
 except Exception as _assist_exc:
     st.info("DeFi Assistant unavailable. Check logs for details.")
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 
 # ─── What's New ───────────────────────────────────────────────────────────────
@@ -245,7 +412,7 @@ else:
             unsafe_allow_html=True,
         )
 
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    st.divider()
 
     # New protocols
     new_protocols = digest.get("new_protocols") or []
@@ -333,7 +500,7 @@ else:
             for err in errors:
                 st.caption(err)
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 
 # ─── AI Model Health ──────────────────────────────────────────────────────────
@@ -377,7 +544,7 @@ if feedback:
             <div style="color:#475569; font-size:0.82rem; margin-top:4px;">of {scans} evaluated</div>
         </div>""", unsafe_allow_html=True)
 
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    st.divider()
     st.markdown("#### Per-Profile Accuracy")
 
     from config import RISK_PROFILE_NAMES, RISK_PROFILES
@@ -430,7 +597,7 @@ if feedback:
     # Model weights
     weights = feedback.get("model_weights") or {}
     if weights:
-        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+        st.divider()
         st.markdown("#### Model Confidence Weights")
         st.markdown(
             "<div style='color:#475569; font-size:0.82rem; margin-bottom:10px;'>"
@@ -442,7 +609,7 @@ if feedback:
                 for p, w in weights.items()]
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 
 # ─── Macro Intelligence ────────────────────────────────────────────────────────
@@ -522,7 +689,7 @@ except Exception as _macro_err:
     st.caption(f"Macro data unavailable: {_macro_err}")
 
 # ─── Blood in the Streets · DCA Multiplier (Group 3) ─────────────────────────
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 render_section_header("Blood in the Streets", "Multi-factor capitulation signal · DCA sizing guide")
 
 try:
@@ -574,7 +741,7 @@ except Exception as _bits_err:
     st.caption(f"Blood in Streets signal unavailable: {_bits_err}")
 
 # ─── On-Chain Intelligence (Group 4) ─────────────────────────────────────────
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 render_section_header("On-Chain Intelligence", "CoinMetrics Community API · MVRV Z-Score · SOPR · no API key required")
 
 try:
@@ -816,7 +983,7 @@ try:
 except Exception as _opt_err:
     st.caption(f"Options data unavailable: {_opt_err}")
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 
 # ── Governance Alerts (#74) ────────────────────────────────────────────────────
@@ -910,7 +1077,7 @@ else:
     else:
         st.info("Governance data temporarily unavailable (Snapshot API). Check back later.")
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 
 # ─── FTSO Price Monitor ────────────────────────────────────────────────────────
@@ -986,7 +1153,7 @@ else:
         st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True)
     st.caption("FTSO oracle prices refresh every 2 min. Divergence >2% may indicate arb opportunity. Source: Flare Data Availability Layer.")
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 
 # ── Claude DeFi Intent Taxonomy  (#87) ─────────────────────────────────────
@@ -1117,7 +1284,7 @@ if _intent_input:
 # ─── Protocol Revenue Health (#57) ───────────────────────────────────────────
 
 if pro_mode:
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    st.divider()
     render_section_header(
         "Protocol Revenue Health",
         "24h vs 30-day average fee revenue — real demand signal for each protocol",
@@ -1203,7 +1370,7 @@ if pro_mode:
 # ─── RWA Credit Protocol Health (#58) ────────────────────────────────────────
 
 if pro_mode:
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    st.divider()
     render_section_header(
         "RWA Credit Protocol Health",
         "Centrifuge · Maple Finance · Clearpool · Goldfinch — TVL trends and health signals",
