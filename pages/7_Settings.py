@@ -434,14 +434,29 @@ st.info(
 )
 
 try:
-    from agents.config import (
-        load_overrides, save_overrides,
-        MAX_TRADE_SIZE_PCT, MAX_DAILY_LOSS_PCT, MAX_DRAWDOWN_PCT,
-        MIN_CONFIDENCE, MAX_OPEN_POSITIONS, COOLDOWN_AFTER_LOSS_SECONDS,
-        PAPER_STARTING_BALANCE_USD, PHASE2_WALLET_CAP_USD,
-        MIN_TRADE_SIZE_USD, MAX_REASONABLE_APY,
-        PAPER_TRADING_GATE_DAYS,
-    )
+    # Load agents/config.py directly via importlib to bypass agents/__init__.py,
+    # which chains through agent_runner → decision_engine → anthropic and fails
+    # if any optional dependency (anthropic, web3, xrpl) is not installed.
+    import importlib.util as _ilu
+    _cfg_path = Path(__file__).parent.parent / "agents" / "config.py"
+    _cfg_spec = _ilu.spec_from_file_location("_agents_config_settings", _cfg_path)
+    _cfg_mod  = _ilu.module_from_spec(_cfg_spec)
+    _cfg_spec.loader.exec_module(_cfg_mod)
+
+    load_overrides  = _cfg_mod.load_overrides
+    save_overrides  = _cfg_mod.save_overrides
+    MAX_TRADE_SIZE_PCT          = _cfg_mod.MAX_TRADE_SIZE_PCT
+    MAX_DAILY_LOSS_PCT          = _cfg_mod.MAX_DAILY_LOSS_PCT
+    MAX_DRAWDOWN_PCT            = _cfg_mod.MAX_DRAWDOWN_PCT
+    MIN_CONFIDENCE              = _cfg_mod.MIN_CONFIDENCE
+    MAX_OPEN_POSITIONS          = _cfg_mod.MAX_OPEN_POSITIONS
+    COOLDOWN_AFTER_LOSS_SECONDS = _cfg_mod.COOLDOWN_AFTER_LOSS_SECONDS
+    PAPER_STARTING_BALANCE_USD  = _cfg_mod.PAPER_STARTING_BALANCE_USD
+    PHASE2_WALLET_CAP_USD       = _cfg_mod.PHASE2_WALLET_CAP_USD
+    MIN_TRADE_SIZE_USD          = _cfg_mod.MIN_TRADE_SIZE_USD
+    MAX_REASONABLE_APY          = _cfg_mod.MAX_REASONABLE_APY
+    PAPER_TRADING_GATE_DAYS     = _cfg_mod.PAPER_TRADING_GATE_DAYS
+
     _overrides = load_overrides()
 
     st.markdown("#### Position Sizing & Trade Quality")
@@ -587,5 +602,5 @@ try:
             f"Active overrides: {', '.join(f'{k}={v}' for k, v in _overrides.items())}"
         )
 
-except ImportError:
-    st.warning("Agent module not available. Check that the agents/ directory is present.")
+except Exception as _ag_import_err:
+    st.warning(f"Agent config unavailable: {_ag_import_err}")
