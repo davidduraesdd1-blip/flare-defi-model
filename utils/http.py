@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
+from requests.exceptions import HTTPError
 from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
@@ -155,7 +156,12 @@ def http_get(
             if attempt < retries:
                 time.sleep(1.5 ** attempt)
                 continue
-            logger.warning("GET %s failed after %d attempt(s): %s", url, retries + 1, e)
+            # 404 = endpoint gone/deprecated (expected for APIs that restructure);
+            # log at DEBUG to avoid log spam. All other failures stay at WARNING.
+            if isinstance(e, HTTPError) and getattr(e.response, "status_code", None) == 404:
+                logger.debug("GET %s → 404 Not Found (endpoint may have moved)", url)
+            else:
+                logger.warning("GET %s failed after %d attempt(s): %s", url, retries + 1, e)
     return None
 
 
