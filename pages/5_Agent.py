@@ -20,15 +20,16 @@ from agents.agent_runner import AgentRunner
 from agents.config import (
     OPERATING_MODE, PAPER_TRADING_GATE_DAYS, PHASE2_WALLET_CAP_USD,
     PAPER_STARTING_BALANCE_USD, EMERGENCY_STOP_KEY,
+    MAX_TRADE_SIZE_PCT, MAX_DAILY_LOSS_PCT, MAX_DRAWDOWN_PCT,
+    MIN_CONFIDENCE, MAX_OPEN_POSITIONS, COOLDOWN_AFTER_LOSS_SECONDS,
+    MIN_TRADE_SIZE_USD, MAX_REASONABLE_APY,
+    load_overrides, save_overrides,
 )
-from agents.wallet_manager import WalletManager
-
 page_setup("Agent · Flare DeFi")
 ctx = render_sidebar()
 _user_level = ctx.get("user_level", get_user_level())
 
 _runner = AgentRunner()
-_wallets = WalletManager()
 
 # ─── CSS ──────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -150,6 +151,164 @@ with col_estop:
         _runner.emergency_stop("User triggered emergency stop from UI")
         st.error("Emergency stop activated. All activity halted.")
         st.rerun()
+
+st.divider()
+
+# ─── Agent Configuration ──────────────────────────────────────────────────────
+render_section_header("Agent Configuration", "Adjust risk limits and behaviour — changes apply on next decision cycle")
+st.markdown(
+    "<div style='color:#475569; font-size:0.85rem; margin-bottom:8px;'>"
+    "Changes take effect on the <b>next decision cycle</b> (within 5 minutes). "
+    "The decision loop interval requires an app restart to change.</div>",
+    unsafe_allow_html=True,
+)
+
+try:
+    _overrides = load_overrides()
+
+    st.markdown("#### Position Sizing & Trade Quality")
+    _ag_c1, _ag_c2, _ag_c3 = st.columns(3)
+    with _ag_c1:
+        _max_trade = st.slider(
+            "Max trade size (% of wallet)",
+            min_value=1, max_value=10,
+            value=int(round(_overrides.get("MAX_TRADE_SIZE_PCT", MAX_TRADE_SIZE_PCT) * 100)),
+            step=1,
+            key="ag_max_trade_pct",
+            help=f"Default: {int(MAX_TRADE_SIZE_PCT*100)}%. Max size per single trade as % of wallet balance.",
+        )
+    with _ag_c2:
+        _min_trade = st.number_input(
+            "Min trade size ($)",
+            min_value=1.0, max_value=500.0,
+            value=float(_overrides.get("MIN_TRADE_SIZE_USD", MIN_TRADE_SIZE_USD)),
+            step=1.0,
+            key="ag_min_trade_usd",
+            help=f"Default: ${MIN_TRADE_SIZE_USD:.0f}. Trades smaller than this are skipped (gas cost > profit).",
+        )
+    with _ag_c3:
+        _min_conf = st.slider(
+            "Min confidence threshold",
+            min_value=50, max_value=90,
+            value=int(round(_overrides.get("MIN_CONFIDENCE", MIN_CONFIDENCE) * 100)),
+            step=5,
+            key="ag_min_confidence",
+            help=f"Default: {int(MIN_CONFIDENCE*100)}%. Claude must be this confident or the trade is skipped.",
+        )
+
+    st.markdown("#### Loss Limits & Risk Controls")
+    _ag_d1, _ag_d2, _ag_d3 = st.columns(3)
+    with _ag_d1:
+        _max_daily = st.slider(
+            "Daily loss limit (% of wallet)",
+            min_value=1, max_value=10,
+            value=int(round(_overrides.get("MAX_DAILY_LOSS_PCT", MAX_DAILY_LOSS_PCT) * 100)),
+            step=1,
+            key="ag_max_daily_loss",
+            help=f"Default: {int(MAX_DAILY_LOSS_PCT*100)}%. Agent pauses for the rest of the day if this is hit.",
+        )
+    with _ag_d2:
+        _max_drawdown = st.slider(
+            "Max drawdown from peak (%)",
+            min_value=5, max_value=30,
+            value=int(round(_overrides.get("MAX_DRAWDOWN_PCT", MAX_DRAWDOWN_PCT) * 100)),
+            step=5,
+            key="ag_max_drawdown",
+            help=f"Default: {int(MAX_DRAWDOWN_PCT*100)}%. Full stop if portfolio drops this far from peak (requires manual restart).",
+        )
+    with _ag_d3:
+        _cooldown = st.slider(
+            "Cooldown after loss (minutes)",
+            min_value=15, max_value=240,
+            value=int(_overrides.get("COOLDOWN_AFTER_LOSS_SECONDS", COOLDOWN_AFTER_LOSS_SECONDS) // 60),
+            step=15,
+            key="ag_cooldown_min",
+            help=f"Default: {COOLDOWN_AFTER_LOSS_SECONDS // 60} min. How long the agent pauses after any losing trade.",
+        )
+
+    st.markdown("#### Positions & APY Limits")
+    _ag_e1, _ag_e2 = st.columns(2)
+    with _ag_e1:
+        _max_pos = st.slider(
+            "Max simultaneous positions",
+            min_value=1, max_value=5,
+            value=int(_overrides.get("MAX_OPEN_POSITIONS", MAX_OPEN_POSITIONS)),
+            step=1,
+            key="ag_max_positions",
+            help=f"Default: {MAX_OPEN_POSITIONS}. Max number of open trades at once.",
+        )
+    with _ag_e2:
+        _max_apy = st.slider(
+            "Max believable APY (%)",
+            min_value=50, max_value=500,
+            value=int(round(_overrides.get("MAX_REASONABLE_APY", MAX_REASONABLE_APY) * 100)),
+            step=50,
+            key="ag_max_apy",
+            help=f"Default: {int(MAX_REASONABLE_APY*100)}%. APY signals above this are rejected as likely data errors.",
+        )
+
+    st.markdown("#### Paper Trading Settings")
+    _ag_f1, _ag_f2, _ag_f3 = st.columns(3)
+    with _ag_f1:
+        _paper_bal = st.number_input(
+            "Paper trading start balance ($)",
+            min_value=1000.0, max_value=1_000_000.0,
+            value=float(_overrides.get("PAPER_STARTING_BALANCE_USD", PAPER_STARTING_BALANCE_USD)),
+            step=1000.0,
+            key="ag_paper_balance",
+            help=f"Default: ${PAPER_STARTING_BALANCE_USD:,.0f}. Virtual wallet for paper trading mode.",
+        )
+    with _ag_f2:
+        _gate_days = st.slider(
+            "Paper trading gate (days)",
+            min_value=3, max_value=30,
+            value=int(_overrides.get("PAPER_TRADING_GATE_DAYS", PAPER_TRADING_GATE_DAYS)),
+            step=1,
+            key="ag_gate_days",
+            help=f"Default: {PAPER_TRADING_GATE_DAYS} days. Minimum paper trading days before live mode can be unlocked.",
+        )
+    with _ag_f3:
+        _phase2_cap = st.number_input(
+            "Live Phase 2 wallet cap ($)",
+            min_value=100.0, max_value=10_000.0,
+            value=float(_overrides.get("PHASE2_WALLET_CAP_USD", PHASE2_WALLET_CAP_USD)),
+            step=100.0,
+            key="ag_phase2_cap",
+            help=f"Default: ${PHASE2_WALLET_CAP_USD:,.0f}. Hard cap on wallet size in Live Phase 2.",
+        )
+
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    _btn_c1, _btn_c2, _btn_c3 = st.columns([2, 2, 4])
+    with _btn_c1:
+        if st.button("💾 Save Agent Config", key="save_agent_cfg", width="stretch", type="primary"):
+            _new_overrides = {
+                "MAX_TRADE_SIZE_PCT":          _max_trade / 100.0,
+                "MAX_DAILY_LOSS_PCT":          _max_daily / 100.0,
+                "MAX_DRAWDOWN_PCT":            _max_drawdown / 100.0,
+                "MIN_CONFIDENCE":              _min_conf / 100.0,
+                "MAX_OPEN_POSITIONS":          int(_max_pos),
+                "COOLDOWN_AFTER_LOSS_SECONDS": int(_cooldown * 60),
+                "PAPER_STARTING_BALANCE_USD":  float(_paper_bal),
+                "PHASE2_WALLET_CAP_USD":       float(_phase2_cap),
+                "MIN_TRADE_SIZE_USD":          float(_min_trade),
+                "MAX_REASONABLE_APY":          _max_apy / 100.0,
+                "PAPER_TRADING_GATE_DAYS":     int(_gate_days),
+            }
+            save_overrides(_new_overrides)
+            st.success("Agent config saved. Changes take effect on the next decision cycle.")
+    with _btn_c2:
+        if st.button("↺ Reset to Defaults", key="reset_agent_cfg", width="stretch"):
+            save_overrides({})
+            st.success("Agent config reset to code defaults.")
+            st.rerun()
+
+    if _overrides:
+        st.caption(
+            f"Active overrides: {', '.join(f'{k}={v}' for k, v in _overrides.items())}"
+        )
+
+except Exception as _ag_cfg_err:
+    st.warning(f"Agent config unavailable: {_ag_cfg_err}")
 
 st.divider()
 
@@ -353,54 +512,3 @@ with st.expander("Show Full Audit Log (last 50 events)", expanded=False):
     else:
         st.caption("No audit events yet.")
 
-st.divider()
-
-# ─── Wallet Setup ─────────────────────────────────────────────────────────────
-render_section_header("Wallet Setup", "Generate encrypted agent wallets for Phase 2")
-
-wallet_status = _wallets.wallets_exist()
-flare_addr    = _wallets.get_flare_address()
-xrpl_addr     = _wallets.get_xrpl_address()
-
-if wallet_status["flare"] and wallet_status["xrpl"]:
-    st.success("✓ Both wallets generated and encrypted.")
-    if flare_addr:
-        st.markdown(f"**Flare address:** `{flare_addr}`")
-        st.caption("Fund this address with FLR before enabling Phase 2.")
-    if xrpl_addr:
-        st.markdown(f"**XRPL address:** `{xrpl_addr}`")
-        st.caption("Fund this address with XRP (min 10 XRP reserve) before enabling Phase 2.")
-else:
-    render_what_this_means(
-        "Before live trading, you need two dedicated wallets — one for Flare, one for XRPL. "
-        "These are separate from your personal wallets. Set a strong password and never share it. "
-        "The private keys are stored encrypted on this device — never uploaded anywhere.",
-        title="About agent wallets",
-        intermediate_message="Dedicated bot wallets, isolated from personal holdings. AES-256-GCM encrypted, PBKDF2-SHA256 key derivation.",
-    )
-
-    with st.form("wallet_setup_form"):
-        st.markdown("**Generate agent wallets** — both Flare (EVM) and XRPL")
-        st.warning("⚠️ Set a strong password. You will need this password every time the agent signs a live transaction.")
-        pwd1 = st.text_input("Password", type="password", key="wallet_pwd1")
-        pwd2 = st.text_input("Confirm password", type="password", key="wallet_pwd2")
-        submitted = st.form_submit_button("Generate Wallets", type="primary")
-
-    if submitted:
-        if not pwd1 or len(pwd1) < 12:
-            st.error("Password must be at least 12 characters.")
-        elif pwd1 != pwd2:
-            st.error("Passwords do not match.")
-        else:
-            try:
-                result = _wallets.setup_wallets(pwd1)
-                st.success("✓ Wallets generated and encrypted successfully!")
-                st.markdown(f"**Flare address:** `{result.get('flare', 'error')}`")
-                st.markdown(f"**XRPL address:** `{result.get('xrpl', 'error')}`")
-                st.info(
-                    "Fund each wallet with the Phase 2 amount ($1,000 equivalent) "
-                    "only after completing 14 days of paper trading."
-                )
-                st.rerun()
-            except Exception as e:
-                st.error(f"Wallet generation failed: {e}")
