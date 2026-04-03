@@ -38,6 +38,14 @@ st.title("🧠 Intelligence")
 # ── Fear & Greed Trend (Phase 2, item 14) ─────────────────────────────────────
 render_section_header("Fear & Greed Index", "Current reading + 7-day + 30-day trend")
 render_fear_greed_trend(user_level=user_level)
+render_what_this_means(
+    "The Fear & Greed Index measures how emotional the crypto market is right now. "
+    "0–25 = Extreme Fear (everyone is scared and selling — can be a good time to buy). "
+    "25–50 = Fear. 50–75 = Greed (people are excited and buying). "
+    "75–100 = Extreme Greed (market is overheated — can be risky to buy). "
+    "It's a sentiment signal, not a buy/sell order. Use it alongside other data.",
+    title="What is the Fear & Greed Index?",
+)
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 st.caption("Ecosystem monitor, governance alerts, AI model accuracy, and protocol revenue health")
 st.markdown(
@@ -100,6 +108,14 @@ try:
             f"<div style='color:#c4cbdb;font-size:0.87rem'>{_html.escape(_action)}</div>"
             f"</div>",
             unsafe_allow_html=True,
+        )
+
+        render_what_this_means(
+            f"Your question was classified as: '{_primary}'. "
+            "This tells the model what kind of DeFi action you're looking for so it can show you the most relevant data. "
+            f"The confidence ({_conf_pct}%) shows how certain the model is about this classification. "
+            "If the intent is wrong, try rephrasing — e.g. 'best place to stake FLR' instead of just 'staking'.",
+            title="What does this intent detection mean?",
         )
 
         # Context-relevant data based on intent

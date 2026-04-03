@@ -10,7 +10,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone
 
-from ui.common import page_setup, render_sidebar, render_section_header
+from ui.common import page_setup, render_sidebar, render_section_header, render_what_this_means, get_user_level
 from config import FALLBACK_PRICES
 from scanners.defillama import fetch_yields_pools
 from models.risk_models import (
@@ -22,8 +22,9 @@ from models.risk_models import (
 
 page_setup("Planning · Flare DeFi")
 
-_ctx      = render_sidebar()
-_pro_mode = _ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
+_ctx        = render_sidebar()
+_pro_mode   = _ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
+_user_level = _ctx.get("user_level", get_user_level())
 
 
 # ─── Input Validation Helpers (#13) ──────────────────────────────────────────
@@ -185,6 +186,14 @@ with tab1:
         )
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         st.caption("Capital = Annual income ÷ APY. Diversify across 2–3 strategies.")
+        render_what_this_means(
+            "This table shows how much money you'd need invested in each strategy to replace your "
+            "FlareDrop income. For example, if you were getting $200/month in FlareDrop, the table "
+            "shows you'd need about $4,000 in the 60% APY pool — or $30,000 in a 8% APY lending strategy. "
+            "IL Risk = Impermanent Loss Risk: 'None' means your deposit value stays stable; 'Low' means it "
+            "could drop slightly if prices change a lot.",
+            title="How do I use this planner?",
+        )
 
 
 # ─── Tab 2: Spectra Fixed-Rate ────────────────────────────────────────────────
@@ -243,6 +252,14 @@ with tab2:
         st.caption(
             f"Amounts over {days_to_maturity} days. Fixed is guaranteed. "
             "Variable fluctuates. LP subject to impermanent loss."
+        )
+        render_what_this_means(
+            "Fixed Rate: You lock your sFLR now and are guaranteed to earn exactly 18.6% per year until "
+            "May 2026 — no matter what happens to the market. "
+            "Variable Staking: You earn rewards but the rate can go up or down. "
+            "LP Route: Higher potential returns but your balance can shrink if FLR's price moves a lot "
+            "(that's called Impermanent Loss). For beginners, the Fixed Rate is the safest choice here.",
+            title="Fixed vs Variable vs LP — what's the difference?",
         )
     elif days_to_maturity == 0:
         st.warning("The sFLR-MAY2026 market has matured. Check Spectra Finance for new markets.")
@@ -339,6 +356,14 @@ with tab3:
             "Split between 2 providers for coverage. "
             "Delegate at app.flare.network or via Sceptre. "
             "Vote power cap: providers >2.5% lose reward eligibility."
+        )
+        render_what_this_means(
+            "FTSO delegation lets you earn ~4% APY just by telling the Flare network which provider "
+            "you trust to submit price data. You never give anyone your FLR — it stays in your wallet the whole time. "
+            "Think of it like voting: you vote for a price provider, and if they do a good job, you both get rewarded. "
+            "The model recommends splitting between 2 providers to reduce risk. "
+            "Avoid providers marked ⚠ — they have too much vote power and may lose reward eligibility.",
+            title="What is FTSO delegation?",
         )
 
 
@@ -695,6 +720,15 @@ with tab5:
                 unsafe_allow_html=True,
             )
             st.caption(f"APY source: {_apy_source} · Refreshed every 15 min. Allocations are suggestions only. Not financial advice.")
+            render_what_this_means(
+                "This plan splits your money across several strategies to balance safety and returns. "
+                "Each row shows: the protocol (where your money goes), the strategy name, the estimated APY "
+                "(how much you'd earn per year), and how much of your capital to put there. "
+                "Low Risk = safest, High Risk = highest potential gain but also highest chance of loss. "
+                "The 'Blended APY' at the bottom is your overall expected return across all strategies combined. "
+                "These are suggestions — you don't have to follow them exactly. Start small and learn as you go.",
+                title="How do I read this strategy plan?",
+            )
 
         if _warnings:
             for w in _warnings:

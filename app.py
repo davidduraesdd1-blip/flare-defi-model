@@ -52,7 +52,7 @@ from ui.common import (
     render_price_strip, render_incentive_warning,
     render_yield_hero_cards, render_opportunity_card,
     render_urgency_badge, render_section_header, _ts_fmt, load_live_prices,
-    render_welcome_banner, signal_badge_html,
+    render_welcome_banner, signal_badge_html, render_what_this_means,
 )
 import streamlit as st
 
@@ -114,6 +114,7 @@ weight        = ctx.get("weight", {})
 portfolio_size = ctx.get("portfolio_size", 10000)
 pro_mode      = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 demo_mode     = ctx.get("demo_mode", False)   # #67 Demo/Sandbox mode
+user_level    = ctx.get("user_level", "beginner")
 
 # ── Demo Mode Banner (#67) ────────────────────────────────────────────────────
 if demo_mode:
@@ -191,6 +192,12 @@ opps       = model_data.get(profile, [])
 
 render_section_header("Estimated Yield", "Projected returns based on your top-3 ranked opportunities")
 render_yield_hero_cards(positions, opps, portfolio_size)
+render_what_this_means(
+    "These numbers show how much you could earn from the top 3 opportunities if you invested your "
+    "full portfolio. Weekly = what you'd earn in one week. Monthly = one month. Yearly = one full year. "
+    "These are estimates — actual returns depend on fees, price changes, and how long you stay invested.",
+    title="What are these yield estimates?",
+)
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -219,6 +226,15 @@ else:
         with st.expander(f"Show all {len(opps)} opportunities"):
             for i, opp in enumerate(opps[3:], start=3):
                 render_opportunity_card(opp, i, color, portfolio_size, weight)
+
+render_what_this_means(
+    "Each card is a place to put your money to earn interest or trading fees. "
+    "The big % number is the APY — how much you'd earn per year if nothing changes. "
+    "The Grade (A–F) tells you how safe it is: A = safest, F = riskiest. "
+    "The 'Confidence' bar shows how sure the model is about this opportunity. "
+    "Start with Grade A or B to keep risk low.",
+    title="How do I read these opportunity cards?",
+)
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -254,6 +270,13 @@ else:
             </div>
         </div>
         """, unsafe_allow_html=True)
+    render_what_this_means(
+        "Arbitrage means buying something cheap in one place and selling it for more somewhere else — "
+        "all in a single transaction. The 'Estimated profit' shows the % gain per trade. "
+        "ACT NOW = opportunity closes fast. MONITOR = watch it, may be ready soon. "
+        "These opportunities are usually short-lived — the model flags them as soon as they appear.",
+        title="What is arbitrage?",
+    )
 
 # ── FXRP Ecosystem Metrics ────────────────────────────────────────────────────
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)

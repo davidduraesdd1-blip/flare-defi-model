@@ -13,12 +13,13 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-from ui.common import page_setup, render_sidebar, render_section_header, load_latest, load_history_runs, _ts_fmt
+from ui.common import page_setup, render_sidebar, render_section_header, load_latest, load_history_runs, _ts_fmt, render_what_this_means, get_user_level
 
 page_setup("FAssets · Flare DeFi")
 
-ctx     = render_sidebar()
-profile = ctx["profile"]
+ctx        = render_sidebar()
+profile    = ctx["profile"]
+user_level = ctx.get("user_level", get_user_level())
 
 st.markdown("# FAssets Dashboard")
 st.markdown(
@@ -153,6 +154,14 @@ with c4:
         </div>
     </div>""", unsafe_allow_html=True)
 
+render_what_this_means(
+    "FAssets are tokens on the Flare blockchain that represent real assets from other blockchains. "
+    "For example, FXRP is a Flare token that is backed 1:1 by real XRP. "
+    "System Health shows if the backing system is running safely. "
+    "Active Agents are the entities that hold collateral and guarantee FXRP is backed. "
+    "Mint Capacity shows how much more FXRP can be created — when it's near 100%, new minting slows down.",
+    title="What are FAssets?",
+)
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ── Feature 13: Backing Ratio Trend Chart ─────────────────────────────────────
@@ -206,6 +215,14 @@ if len(_cr_vals) >= 2:
 else:
     st.caption("Collateral ratio history available after 2+ scans.")
 
+render_what_this_means(
+    "The Collateral Ratio shows how well-backed FXRP is. "
+    "A ratio of 200% means for every $1 of FXRP in circulation, there is $2 of FLR held as collateral. "
+    "This is the safety cushion. If the ratio drops below 160%, the system automatically triggers "
+    "emergency measures to protect FXRP holders. "
+    "Green line = healthy (≥200%). Yellow = watch closely. Red = at risk (<160%).",
+    title="What does the Collateral Ratio mean?",
+)
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 

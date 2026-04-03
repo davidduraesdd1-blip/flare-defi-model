@@ -198,13 +198,25 @@ for p in RISK_PROFILE_NAMES:
                     "Protocol":     opp.get("protocol", "—"),
                     "Pool / Asset": opp.get("asset_or_pool", "—"),
                     "Est. APY":     f"{opp.get('estimated_apy', 0):.1f}%",
-                    "Range":        f"{opp.get('apy_low', 0):.0f}–{opp.get('apy_high', 0):.0f}%",
-                    "Grade":        grade,
+                    "Safety Grade": grade,
+                    "Price Risk":   (opp.get("il_risk") or "—").upper(),
+                    "APY Range":    f"{opp.get('apy_low', 0):.0f}–{opp.get('apy_high', 0):.0f}%",
+                    "Suggested $":  f"${kf*portfolio_size:,.0f}" if portfolio_size > 0 else "—",
                     "Alloc %":      f"{kf*100:.0f}%",
-                    "$ Amount":     f"${kf*portfolio_size:,.0f}" if portfolio_size > 0 else "—",
-                    "IL Risk":      (opp.get("il_risk") or "—").upper(),
+                    "Action":       opp.get("action", opp.get("plain_english", "—")),
                 })
-            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+            df_all = pd.DataFrame(rows)
+            # Beginner: show only the most important columns with plain-English labels
+            if _user_level == "beginner":
+                beginner_cols = ["Protocol", "Pool / Asset", "Est. APY", "Safety Grade", "Price Risk", "Suggested $"]
+                st.dataframe(df_all[[c for c in beginner_cols if c in df_all.columns]], width="stretch", hide_index=True)
+                st.caption("Safety Grade: A = safest · F = riskiest. Price Risk: None = stable token, Low = small price swings, High = big price swings.")
+            elif _user_level == "intermediate":
+                inter_cols = ["Protocol", "Pool / Asset", "Est. APY", "APY Range", "Safety Grade", "Price Risk", "Suggested $"]
+                st.dataframe(df_all[[c for c in inter_cols if c in df_all.columns]], width="stretch", hide_index=True)
+            else:
+                # Advanced: full table
+                st.dataframe(df_all, width="stretch", hide_index=True)
         st.caption(pcfg.get("description", ""))
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
