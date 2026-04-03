@@ -10,6 +10,12 @@ data/alerts_config.json      # contains SMTP/Telegram/Discord credentials
 *.db-shm
 *.db-wal
 
+# ── Agent wallet files (NEVER commit — contain encrypted private keys) ────────
+data/agent/wallets.enc
+data/agent/*.enc
+data/agent/agent.db
+data/agent/agent_state.json
+
 # ── Runtime data files (auto-generated, personal data) ───────────────────────
 data/history.json
 data/positions.json
