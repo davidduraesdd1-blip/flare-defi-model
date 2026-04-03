@@ -1117,17 +1117,18 @@ _opt_upper_default = round(_opt_price * 1.10, 4)
 
 for _pi, _pct in enumerate(_preset_pcts):
     if _preset_cols[_pi].button(f"±{_pct}%", key=f"opt83_preset_{_pct}"):
-        st.session_state["opt83_lower_val"] = round(_opt_price * (1 - _pct / 100), 4)
-        st.session_state["opt83_upper_val"] = round(_opt_price * (1 + _pct / 100), 4)
+        # Write directly to the number_input widget keys so Streamlit picks them up
+        st.session_state["opt83_lower"] = round(_opt_price * (1 - _pct / 100), 4)
+        st.session_state["opt83_upper"] = round(_opt_price * (1 + _pct / 100), 4)
 
 _opt_lower = st.number_input(
     "Range lower bound ($)", min_value=0.0001,
-    value=float(st.session_state.get("opt83_lower_val", _opt_lower_default)),
+    value=_opt_lower_default,
     step=_opt_price * 0.01, format="%.4f", key="opt83_lower",
 )
 _opt_upper = st.number_input(
     "Range upper bound ($)", min_value=0.0001,
-    value=float(st.session_state.get("opt83_upper_val", _opt_upper_default)),
+    value=_opt_upper_default,
     step=_opt_price * 0.01, format="%.4f", key="opt83_upper",
 )
 
