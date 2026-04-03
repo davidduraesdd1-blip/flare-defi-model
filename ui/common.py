@@ -884,17 +884,17 @@ def render_sidebar() -> dict:
 
         # ── Agent Control Panel (mini) ─────────────────────────────────────────
         try:
-            from agents.agent_runner import get_state as _agent_get_state, set_running as _agent_set_running, set_emergency_stop as _agent_estop
+            from agents.agent_runner import get_state as _agent_get_state, set_running as _agent_set_running, set_emergency_stop as _agent_set_estop
             from agents.config import EMERGENCY_STOP_KEY as _ESTOP_KEY, PAPER_TRADING_GATE_DAYS as _GATE_DAYS
             from agents.audit_log import AuditLog as _AuditLog
-            _agent_state  = _agent_get_state()
-            _agent_running = _agent_state.get("running", False)
-            _agent_estop   = _agent_state.get(_ESTOP_KEY, False)
-            _agent_mode    = _agent_state.get("mode", "PAPER")
+            _agent_state     = _agent_get_state()
+            _agent_running   = _agent_state.get("running", False)
+            _agent_estop_on  = _agent_state.get(_ESTOP_KEY, False)
+            _agent_mode      = _agent_state.get("mode", "PAPER")
             _paper_days    = _AuditLog().get_paper_trade_days()
             _last_dec      = _agent_state.get("last_decision", {})
 
-            if _agent_estop:
+            if _agent_estop_on:
                 _a_color = "#ef4444"; _a_icon = "🔴"; _a_label = "STOPPED"
             elif _agent_running:
                 _a_color = "#22c55e"; _a_icon = "🟢"; _a_label = "RUNNING"
@@ -926,7 +926,7 @@ def render_sidebar() -> dict:
                     st.rerun()
             with _sb_col:
                 if st.button("🛑 E-Stop", key="sidebar_agent_estop", width="stretch"):
-                    _agent_estop("Sidebar emergency stop")
+                    _agent_set_estop(True, "Sidebar emergency stop")
                     st.rerun()
             st.page_link("pages/5_Agent.py", label="→ Agent Control Panel", icon="🤖")
         except Exception:

@@ -27,6 +27,8 @@ def _utcnow() -> str:
 def _get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(str(AGENT_DB_FILE), check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 
@@ -211,7 +213,6 @@ class PositionMonitor:
         Paper balance = starting balance + all realized P&L + unrealized P&L.
         In paper mode this is the effective 'wallet balance'.
         """
-        realized = _audit.get_daily_pnl_usd()  # simplified — use total for paper
         unrealized = self.get_total_unrealized_pnl()
         # Compute total realized P&L (not just today)
         with _lock:

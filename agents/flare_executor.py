@@ -266,10 +266,27 @@ class FlareExecutor:
 
         proto = decision.protocol
         if proto == "kinetic":
-            # Default to USDT0 supply (safest, stablecoin)
+            # Supply USDT0 (USD0) to Kinetic — safest stablecoin strategy.
+            # token_address = underlying USDT0 token (USD0 on Flare mainnet)
+            # ktoken_address = kUSDT0 cToken that represents the supply position
+            try:
+                from config import TOKENS as _TOKENS
+                _underlying = _TOKENS.get("USD0", "")
+            except Exception:
+                _underlying = ""
+            if not _underlying:
+                _audit.log_error(
+                    "FlareExecutor: USDT0 underlying address not found in config.TOKENS['USD0'] — "
+                    "verify token address before Phase 2",
+                    {"decision": decision.to_dict()}
+                )
+                return {
+                    "status": "rejected",
+                    "reason": "USDT0 underlying token address missing from config — set TOKENS['USD0'] before live execution",
+                }
             return self.execute_kinetic_supply(
                 decision, adjusted_size_usd, private_key,
-                token_address  = FLARE_CONTRACTS["kinetic_kUSDT0"],
+                token_address  = _underlying,
                 ktoken_address = FLARE_CONTRACTS["kinetic_kUSDT0"],
                 token_decimals = 6,
             )

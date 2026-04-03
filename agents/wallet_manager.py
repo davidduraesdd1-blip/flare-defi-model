@@ -150,6 +150,7 @@ class WalletManager:
         blob = _encrypt(payload, password)
         data = _load_wallet_file()
         data["flare"] = blob.hex()
+        data["flare_address"] = acct.address   # cache plaintext address for display
         _save_wallet_file(data)
         return {"address": acct.address, "saved": True}
 

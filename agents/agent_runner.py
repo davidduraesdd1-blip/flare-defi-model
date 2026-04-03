@@ -116,8 +116,7 @@ def unlock_live_mode() -> None:
         state[C.LIVE_UNLOCK_KEY]  = True
         state[C.PHASE_GATE_KEY]   = paper_days
         _save_state(state)
-    _audit._write(AuditLog.LIVE_UNLOCKED, reason="manual unlock by user",
-                  extra={"paper_days": _audit.get_paper_trade_days()})
+    _audit.log_live_unlocked(_audit.get_paper_trade_days())
 
 
 # ─── Core decision cycle ──────────────────────────────────────────────────────
