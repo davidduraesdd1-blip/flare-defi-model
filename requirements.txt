@@ -15,5 +15,5 @@ anthropic>=0.40.0
 sentry-sdk>=1.40.0
 feedparser>=6.0.10
 # Agent dependencies
-xrpl>=3.0.0
+# xrpl>=3.0.0  -- no Python 3.14 wheel; imported conditionally in agents/xrpl_executor.py
 cryptography>=42.0.0
