@@ -205,14 +205,6 @@ except (TypeError, ValueError):
     _prof_apy_low = _prof_apy_hi = 0.0
 render_section_header("Top Opportunities", f"{_prof_label} · {_prof_apy_low:.0f}–{_prof_apy_hi:.0f}% target APY")
 
-if not pro_mode:
-    st.markdown(
-        "<div style='background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.14);"
-        "border-radius:8px;padding:7px 14px;font-size:0.78rem;color:#a78bfa;margin-bottom:10px'>"
-        "Beginner mode: showing simplified view. Enable Pro Mode in the sidebar to see Sharpe ratio, "
-        "Kelly fraction, HMM state, and full technical detail.</div>",
-        unsafe_allow_html=True,
-    )
 
 if not opps:
     if not latest.get("completed_at") and not latest.get("run_id"):
