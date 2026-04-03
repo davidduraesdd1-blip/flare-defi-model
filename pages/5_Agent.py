@@ -94,29 +94,27 @@ else:
     status_icon  = "⏸️"
     status_text  = f"PAUSED · {mode}"
 
-st.markdown(f"""
-<div class="agent-status-card {status_class}">
-    <div style="font-size:1.1rem;font-weight:800;color:#f1f5f9;">
-        {status_icon} {status_text}
-    </div>
-    <div style="color:#94a3b8;font-size:0.82rem;margin-top:6px;">
-        Last decision: {last_ts}
-        {"&nbsp;·&nbsp;" + last_dec.get("action","—") + " → " + last_dec.get("protocol","—")
-         if last_dec.get("action") else ""}
-    </div>
-</div>
-""", unsafe_allow_html=True)
+_dec_suffix = (
+    f"&nbsp;·&nbsp;{last_dec.get('action','—')} → {last_dec.get('protocol','—')}"
+    if last_dec.get("action") else ""
+)
+st.html(
+    f"<div class='agent-status-card {status_class}' style='background:rgba(0,212,170,0.07);"
+    f"border:1px solid rgba(0,212,170,0.25);border-radius:10px;padding:16px 20px;margin-bottom:12px;'>"
+    f"<div style='font-size:1.1rem;font-weight:800;color:#f1f5f9;'>{status_icon} {status_text}</div>"
+    f"<div style='color:#94a3b8;font-size:0.82rem;margin-top:6px;'>"
+    f"Last decision: {last_ts or '—'}{_dec_suffix}</div></div>"
+)
 
 # Last decision reasoning
 if last_dec.get("reasoning"):
     verdict_color = "#22c55e" if last_dec.get("approved") else "#f59e0b"
     verdict_icon  = "▲" if last_dec.get("approved") else "■"
-    st.markdown(
+    st.html(
         f"<div style='font-size:0.82rem;color:{verdict_color};margin-bottom:12px;'>"
         f"{verdict_icon} {last_dec.get('reason','')}</div>"
         f"<div style='font-size:0.80rem;color:#64748b;margin-bottom:16px;'>"
-        f"Reasoning: {last_dec.get('reasoning','')}</div>",
-        unsafe_allow_html=True,
+        f"Reasoning: {last_dec.get('reasoning','')}</div>"
     )
 
 # ─── Control buttons ──────────────────────────────────────────────────────────
@@ -153,7 +151,7 @@ with col_estop:
         st.error("Emergency stop activated. All activity halted.")
         st.rerun()
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 # ─── Performance summary ───────────────────────────────────────────────────────
 render_section_header("Paper Performance", "Simulation results — no real money")
@@ -184,7 +182,7 @@ render_what_this_means(
     intermediate_message=f"Paper P&L simulated from real prices + slippage model. Gate: {paper_days}/{PAPER_TRADING_GATE_DAYS} days.",
 )
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 # ─── Phase Gate ───────────────────────────────────────────────────────────────
 render_section_header("Phase Gate", "14-day paper requirement before live unlock")
@@ -229,7 +227,7 @@ else:
     remaining = PAPER_TRADING_GATE_DAYS - paper_days
     st.info(f"ℹ️ {remaining} more paper trading days needed before live unlock is available.")
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 # ─── Active Risk Limits ───────────────────────────────────────────────────────
 render_section_header("Active Risk Limits", "Hardcoded safeguards — these cannot be changed by the AI")
@@ -271,7 +269,7 @@ render_what_this_means(
     intermediate_message="Risk limits enforced by independent RiskGuard layer — AI decision engine never accesses config.py.",
 )
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 # ─── Open Positions ───────────────────────────────────────────────────────────
 render_section_header("Open Positions", "Current paper/live positions")
@@ -296,7 +294,7 @@ else:
         unsafe_allow_html=True,
     )
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 # ─── Trade Log ────────────────────────────────────────────────────────────────
 render_section_header("Trade Log", "Full record of all paper and live trades")
@@ -332,7 +330,7 @@ else:
         unsafe_allow_html=True,
     )
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 # ─── Audit Log ────────────────────────────────────────────────────────────────
 render_section_header("Audit Log", "Every decision, approval, rejection, and error")
@@ -355,7 +353,7 @@ with st.expander("Show Full Audit Log (last 50 events)", expanded=False):
     else:
         st.caption("No audit events yet.")
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+st.divider()
 
 # ─── Wallet Setup ─────────────────────────────────────────────────────────────
 render_section_header("Wallet Setup", "Generate encrypted agent wallets for Phase 2")
