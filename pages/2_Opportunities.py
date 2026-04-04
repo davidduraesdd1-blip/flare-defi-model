@@ -168,9 +168,9 @@ def _cached_protocol_revenue():
     return fetch_protocol_revenue()
 
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=21600)
 def _cached_all_hacks():
-    """Cached wrapper for fetch_all_hacks(). TTL=24 hours. (D3)"""
+    """Cached wrapper for fetch_all_hacks(). TTL=6 hours. (D3)"""
     return fetch_all_hacks()
 
 
