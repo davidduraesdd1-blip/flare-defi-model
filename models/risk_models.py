@@ -505,22 +505,59 @@ def optimise_portfolio(candidates: list, risk_profile: str) -> list:
             proto_counts[o.protocol] = n + 1
     ranked = diversified
 
-    # Take top opportunities based on Kelly fractions (normalised)
-    top_n = min(6, len(ranked))
-    top   = ranked[:top_n]
+    # Drop pools where Kelly math yields 0 (net APY < risk-free after IL)
+    # — these pools are not recommended and would show as $0/0% in the table,
+    # which is misleading.  They remain in the scanner data but are excluded
+    # from the allocated portfolio.
+    positive = [o for o in ranked if o.kelly_fraction > 0]
+    if not positive:
+        # All pools have negative/zero Kelly — return top 3 with equal weight
+        positive = ranked[:3]
+        for o in positive:
+            o.kelly_fraction = round(1.0 / len(positive), 4)
+        for i, o in enumerate(positive):
+            o.rank = i + 1
+        return positive
 
-    # Normalise Kelly fractions to sum to ≤1
+    top_n = min(6, len(positive))
+    top   = positive[:top_n]
+
+    # Always normalize to 1.0 so 100% of capital is always allocated.
+    # Previously this only ran when total > 1.0, leaving up to 40% undeployed
+    # when all pools were individually capped at MAX_KELLY_FRACTION=0.10.
     total_kelly = sum(o.kelly_fraction for o in top)
-    if total_kelly > 1.0:
+    if total_kelly > 0:
         for o in top:
             o.kelly_fraction = round(o.kelly_fraction / total_kelly, 4)
 
-    # Apply per-profile single-position cap AFTER normalisation (correct Kelly order)
+    # Apply per-profile single-position cap
     max_pos = profile["max_single_position_pct"] / 100
     for o in top:
         o.kelly_fraction = min(o.kelly_fraction, max_pos)
 
-    # Re-rank after normalisation
+    # Re-normalize after cap — capping can push the total below 1.0 and leave
+    # capital unallocated.  Iterate until stable (converges in ≤ 3 passes).
+    for _ in range(3):
+        capped   = [o for o in top if o.kelly_fraction >= max_pos]
+        uncapped = [o for o in top if o.kelly_fraction <  max_pos]
+        if not uncapped:
+            break
+        remainder = 1.0 - sum(o.kelly_fraction for o in capped)
+        if remainder <= 0:
+            break
+        uncapped_total = sum(o.kelly_fraction for o in uncapped)
+        if uncapped_total <= 0:
+            break
+        for o in uncapped:
+            o.kelly_fraction = round(o.kelly_fraction / uncapped_total * remainder, 4)
+        if all(o.kelly_fraction < max_pos for o in uncapped):
+            break  # converged — no more values hit the cap
+
+    # Final clamp to guarantee no pool exceeds the cap
+    for o in top:
+        o.kelly_fraction = min(o.kelly_fraction, max_pos)
+
+    # Re-rank
     for i, o in enumerate(top):
         o.rank = i + 1
 
