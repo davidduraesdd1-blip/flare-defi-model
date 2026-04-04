@@ -968,15 +968,44 @@ with _tab_pos:
     # ─── PnL vs HODL Comparison (Feature 5) ──────────────────────────────────────
 
     if positions:
-        render_section_header("PnL vs HODL", "Quantified LP vs holding cost — are your fees beating impermanent loss?")
+        render_section_header("Triple P&L Benchmarks", "How your DeFi strategy compares to holding USD, ETH, or your own tokens")
+
+        # ── Fetch ETH price benchmark ──────────────────────────────────────────
+        @st.cache_data(ttl=900)
+        def _get_eth_benchmark_prices(entry_date_str: str) -> dict:
+            """Get ETH-USD price at entry date and today using yfinance."""
+            try:
+                import yfinance as yf
+                from datetime import timedelta
+                _entry = datetime.strptime(entry_date_str[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                _end   = datetime.now(timezone.utc)
+                _start = _entry - timedelta(days=2)   # 2-day buffer for non-trading days
+                _df    = yf.download(
+                    "ETH-USD",
+                    start=_start.strftime("%Y-%m-%d"),
+                    end=_end.strftime("%Y-%m-%d"),
+                    progress=False,
+                    auto_adjust=True,
+                )
+                if _df.empty:
+                    return {}
+                _close = _df["Close"].dropna()
+                if len(_close) < 2:
+                    return {}
+                return {
+                    "entry_price": float(_close.iloc[0]),
+                    "current_price": float(_close.iloc[-1]),
+                }
+            except Exception:
+                return {}
 
         hodl_rows = []
         total_lp_val   = 0
         total_hodl_val = 0
         total_dep      = 0
-        total_fees_lp  = 0   # fees from LP-only positions (same filter as total_lp_val)
+        total_fees_lp  = 0
         for i, pos in enumerate(positions):
-            pnl = pnl_results[i]
+            pnl      = pnl_results[i]
             lp_val   = pnl["current_value"]
             hodl_val = pnl["hodl_value"]
             dep      = pnl["deposit_usd"]
@@ -985,33 +1014,68 @@ with _tab_pos:
                 total_lp_val   += lp_val
                 total_hodl_val += hodl_val
                 total_dep      += dep
-                total_fees_lp  += fees_est   # only LP positions with valid HODL values
+                total_fees_lp  += fees_est
                 diff     = (lp_val + fees_est) - hodl_val
                 diff_pct = diff / hodl_val * 100 if hodl_val > 0 else 0
-                hodl_rows.append({
-                    "Position":      f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
-                    "Deposit":       f"${dep:,.0f}",
-                    "LP Value":      f"${lp_val:,.0f}",
-                    "Est. Fees":     f"${fees_est:,.2f}",
-                    "HODL Value":    f"${hodl_val:,.0f}",
-                    "LP+Fees vs HODL": f"{diff:+,.0f} ({diff_pct:+.1f}%)",
-                })
+
+                # USD benchmark: original deposit unchanged (0% return)
+                usd_val  = dep
+                usd_diff = (lp_val + fees_est) - usd_val
+
+                # ETH benchmark: how much ETH could we have bought at entry?
+                _entry_date = pos.get("entry_date", "")
+                eth_val = 0.0
+                if _entry_date:
+                    _eth_px = _get_eth_benchmark_prices(_entry_date)
+                    if _eth_px:
+                        _eth_entry = _eth_px.get("entry_price", 0)
+                        _eth_now   = _eth_px.get("current_price", 0)
+                        if _eth_entry > 0:
+                            eth_val  = dep * (_eth_now / _eth_entry)
+                eth_diff = (lp_val + fees_est) - eth_val if eth_val > 0 else 0.0
+
+                row = {
+                    "Position":        f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
+                    "Deposit":         f"${dep:,.0f}",
+                    "LP+Fees":         f"${lp_val + fees_est:,.0f}",
+                    "vs USD (0%)":     f"{usd_diff:+,.0f}",
+                    "vs HODL tokens":  f"{diff:+,.0f} ({diff_pct:+.1f}%)",
+                }
+                if eth_val > 0:
+                    row["vs ETH"] = f"{eth_diff:+,.0f}"
+                hodl_rows.append(row)
 
         if hodl_rows:
             st.dataframe(pd.DataFrame(hodl_rows), width="stretch", hide_index=True)
             if total_hodl_val > 0:
-                net_diff = (total_lp_val + total_fees_lp) - total_hodl_val
+                net_diff  = (total_lp_val + total_fees_lp) - total_hodl_val
                 net_color = "#10b981" if net_diff >= 0 else "#ef4444"
-                verdict   = "LP + fees is OUTPERFORMING HODL ✓" if net_diff >= 0 else "HODL would have been better — consider IL impact ⚠"
-                st.markdown(
-                    f"<div style='font-size:0.84rem; color:{net_color}; margin-top:8px; font-weight:600;'>"
-                    f"Overall: {verdict} (net {net_diff:+,.0f})</div>",
-                    unsafe_allow_html=True,
-                )
-            st.caption("HODL value = token amounts × current prices without providing liquidity. Fees are estimated from entry APY × days held.")
+                verdict   = "LP + fees BEATS token HODL ✓" if net_diff >= 0 else "Token HODL would have been better ⚠"
+                usd_net   = (total_lp_val + total_fees_lp) - total_dep
+                usd_col   = "#10b981" if usd_net >= 0 else "#ef4444"
+                _bench_c1, _bench_c2 = st.columns(2)
+                with _bench_c1:
+                    st.markdown(
+                        f"<div style='font-size:0.84rem; color:{net_color}; font-weight:600; margin-top:6px;'>"
+                        f"vs HODL: {verdict} (net {net_diff:+,.0f})</div>",
+                        unsafe_allow_html=True,
+                    )
+                with _bench_c2:
+                    st.markdown(
+                        f"<div style='font-size:0.84rem; color:{usd_col}; font-weight:600; margin-top:6px;'>"
+                        f"vs USD baseline: {usd_net:+,.0f} total profit</div>",
+                        unsafe_allow_html=True,
+                    )
+            st.caption(
+                "LP+Fees = current position value + estimated accrued fees. "
+                "USD baseline = original deposit (0% return, no risk). "
+                "HODL = holding the same tokens without providing liquidity. "
+                "ETH = buying ETH at entry date price instead. "
+                "ETH prices from Yahoo Finance — requires internet."
+            )
         else:
             st.markdown(
-                "<div style='color:#334155; font-size:0.85rem;'>Add LP positions with token amounts to see HODL comparison.</div>",
+                "<div style='color:#334155; font-size:0.85rem;'>Add LP positions with token amounts to see benchmarks.</div>",
                 unsafe_allow_html=True,
             )
 
