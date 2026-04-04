@@ -19,6 +19,7 @@ from agents.config import (
 from agents.decision_engine import TradeDecision
 from agents.position_monitor import PositionMonitor
 from agents.audit_log import AuditLog
+from utils.http import _SESSION as _cg_session, coingecko_limiter as _cg_limiter
 
 _monitor = PositionMonitor()
 _audit   = AuditLog()
@@ -112,9 +113,9 @@ class XRPLExecutor:
         if not self._ensure_connected():
             return 0.0
         try:
-            import requests
             xrp = _get_xrp_balance(self._client, address)
-            r = requests.get(
+            _cg_limiter.acquire()
+            r = _cg_session.get(
                 "https://api.coingecko.com/api/v3/simple/price",
                 params={"ids": "ripple", "vs_currencies": "usd"},
                 timeout=5,
@@ -205,8 +206,8 @@ class XRPLExecutor:
         if decision.protocol == "xrpl_dex":
             # Convert USD size to XRP amount
             try:
-                import requests
-                r = requests.get(
+                _cg_limiter.acquire()
+                r = _cg_session.get(
                     "https://api.coingecko.com/api/v3/simple/price",
                     params={"ids": "ripple", "vs_currencies": "usd"},
                     timeout=5,

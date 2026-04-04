@@ -90,6 +90,9 @@ def _get_live_prices() -> dict:
                 timeout=6,
             )
         else:
+            # Fallback: _http_session unavailable, use basic requests — still throttle
+            if _cg_limiter is not None:
+                _cg_limiter.acquire()
             import requests as _requests
             r = _requests.get(
                 "https://api.coingecko.com/api/v3/simple/price",
