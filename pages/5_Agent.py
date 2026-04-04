@@ -280,7 +280,7 @@ try:
     st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
     _btn_c1, _btn_c2, _btn_c3 = st.columns([2, 2, 4])
     with _btn_c1:
-        if st.button("💾 Save Agent Config", key="save_agent_cfg", width="stretch", type="primary"):
+        if st.button("💾 Save Agent Config", key="save_agent_cfg", use_container_width=True, type="primary"):
             _new_overrides = {
                 "MAX_TRADE_SIZE_PCT":          _max_trade / 100.0,
                 "MAX_DAILY_LOSS_PCT":          _max_daily / 100.0,
@@ -297,7 +297,7 @@ try:
             save_overrides(_new_overrides)
             st.success("Agent config saved. Changes take effect on the next decision cycle.")
     with _btn_c2:
-        if st.button("↺ Reset to Defaults", key="reset_agent_cfg", width="stretch"):
+        if st.button("↺ Reset to Defaults", key="reset_agent_cfg", use_container_width=True):
             save_overrides({})
             st.success("Agent config reset to code defaults.")
             st.rerun()
@@ -478,7 +478,7 @@ if open_pos:
             "Unreal. P&L": f"${p.get('unrealized_pnl', 0):+,.4f}",
             "Opened":   str(p.get("entry_timestamp", ""))[:16],
         })
-    st.dataframe(pd.DataFrame(pos_rows), width="stretch", hide_index=True)
+    st.dataframe(pd.DataFrame(pos_rows), use_container_width=True, hide_index=True)
 else:
     st.markdown(
         "<div style='color:#475569;font-size:0.88rem;padding:12px 0;'>"
@@ -510,7 +510,7 @@ if trades:
             "P&L":       f"${t.get('realized_pnl', 0):+,.4f}" if t.get("status") == "closed" else "open",
         })
     df = pd.DataFrame(trade_rows)
-    st.dataframe(df, width="stretch", hide_index=True)
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
     csv = df.to_csv(index=False)
     st.download_button("⬇ Export Trade Log CSV", data=csv,

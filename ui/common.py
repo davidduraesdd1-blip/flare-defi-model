@@ -70,6 +70,7 @@ from config import (
     RISK_PROFILES, RISK_PROFILE_NAMES, INCENTIVE_PROGRAM, HISTORY_FILE,
     POSITIONS_FILE, WALLETS_FILE, PROTOCOLS, TOKENS, FLARE_RPC_URLS,
     MONITOR_DIGEST_FILE, SCHEDULER, BRAND_NAME, BRAND_LOGO_PATH,
+    PROTOCOL_AUDITS, risk_letter_grade,
 )
 from utils.file_io import atomic_json_write
 from utils.http import _SESSION as _http_session, coingecko_limiter
@@ -698,7 +699,7 @@ def render_sidebar() -> dict:
             st.markdown("<div style='padding-top:6px;'></div>", unsafe_allow_html=True)
             if st.button("☀" if _is_light else "🌙", key="_theme_toggle",
                          help="Switch to light mode" if not _is_light else "Switch to dark mode",
-                         width="stretch"):
+                         use_container_width=True):
                 st.session_state["_theme"] = "dark" if _is_light else "light"
                 st.rerun()
 
@@ -740,6 +741,26 @@ def render_sidebar() -> dict:
             unsafe_allow_html=True,
         )
 
+        # ── Incentive Countdown Widget (Agent Priority 8) ────────────────────
+        try:
+            _exp_dt    = datetime.strptime(INCENTIVE_PROGRAM.get("expires", "2026-07-01"), "%Y-%m-%d")
+            _cnt_days  = max(0, (_exp_dt - datetime.now()).days)
+            if _cnt_days <= 90:
+                _cnt_color = "#ef4444" if _cnt_days <= 30 else "#f59e0b"
+                _cnt_icon  = "🔴" if _cnt_days == 0 else ("⚠️" if _cnt_days <= 30 else "⏳")
+                _cnt_msg   = "Rewards ended" if _cnt_days == 0 else f"Rewards expire in {_cnt_days}d"
+                _exp_str = INCENTIVE_PROGRAM.get("expires", "2026-07-01")
+                st.markdown(
+                    f"<div style='background:rgba(0,0,0,0.15); border:1px solid {_cnt_color}44; "
+                    f"border-left:3px solid {_cnt_color}; border-radius:6px; "
+                    f"padding:4px 10px; margin:4px 0; font-size:0.71rem; color:{_cnt_color}; font-weight:600;' "
+                    f"title='RFLR/SPRK incentive program expires {_exp_str}. Base fee yield continues after this date.'>"
+                    f"{_cnt_icon} {_cnt_msg} \u2014 only base yield after</div>",
+                    unsafe_allow_html=True,
+                )
+        except Exception:
+            pass
+
         # ── Persistent Agent Status Badge (Item 17) ───────────────────────────
         try:
             from agents.agent_runner import get_state as _get_agent_state
@@ -765,7 +786,8 @@ def render_sidebar() -> dict:
 
         col_r, col_s, col_all = st.columns(3)
         with col_r:
-            if st.button("↺ Reload", key="sidebar_refresh", width="stretch",
+            if st.button("↺ Reload", key="sidebar_refresh",
+                         use_container_width=True,
                          help="Reload the latest saved scan data from disk"):
                 # OPT-44: targeted clear — reload scan data and live prices only
                 _load_history_file.clear()
@@ -773,7 +795,8 @@ def render_sidebar() -> dict:
                 load_live_prices.clear()
                 st.rerun()
         with col_all:
-            if st.button("🔄 All", key="sidebar_refresh_all", width="stretch",
+            if st.button("🔄 All", key="sidebar_refresh_all",
+                         use_container_width=True,
                          help="Refresh All Data — clears every cache and fetches fresh data from all sources"):
                 # Nuclear clear: invalidate EVERY st.cache_data in this module
                 try:
@@ -794,7 +817,8 @@ def render_sidebar() -> dict:
                 st.success("All caches cleared — fetching fresh data…")
                 st.rerun()
         with col_s:
-            if st.button("▶ Scan", key="sidebar_scan_now", width="stretch",
+            if st.button("▶ Scan", key="sidebar_scan_now",
+                         use_container_width=True,
                          help="Run a fresh scan now (~30 seconds). Auto-reloads when done."):
                 try:
                     scheduler_path = str(Path(__file__).parent.parent / "scheduler.py")
@@ -945,11 +969,13 @@ def render_sidebar() -> dict:
             _sa_col, _sb_col = st.columns(2)
             with _sa_col:
                 _btn_label = "⏸ Pause" if _agent_running else "▶ Start"
-                if st.button(_btn_label, key="sidebar_agent_toggle", width="stretch"):
+                if st.button(_btn_label, key="sidebar_agent_toggle",
+                         use_container_width=True):
                     _agent_set_running(not _agent_running)
                     st.rerun()
             with _sb_col:
-                if st.button("🛑 E-Stop", key="sidebar_agent_estop", width="stretch"):
+                if st.button("🛑 E-Stop", key="sidebar_agent_estop",
+                         use_container_width=True):
                     _agent_set_estop(True, "Sidebar emergency stop")
                     st.rerun()
             st.page_link("pages/5_Agent.py", label="→ Agent Control Panel", icon="🤖")
@@ -1220,12 +1246,11 @@ def _next_scan() -> str:
 
 
 def risk_score_to_grade(score: float) -> tuple:
-    if score <= 2.0:   return "A",  "#10b981"
-    elif score <= 3.5: return "A-", "#34d399"
-    elif score <= 5.0: return "B",  "#f59e0b"
-    elif score <= 6.5: return "C",  "#f97316"
-    elif score <= 8.0: return "D",  "#ef4444"
-    else:              return "F",  "#dc2626"
+    """Map 0-10 risk score to A-F letter grade + hex color.
+    Aligned with Exponential.fi industry standard: A = safest, F = riskiest.
+    """
+    from config import risk_letter_grade as _rlg
+    return _rlg(float(score))
 
 
 def compute_position_pnl(pos: dict, current_prices: list) -> dict:
@@ -1519,6 +1544,42 @@ def render_opportunity_card(
     il_color = {"none": "#22c55e", "low": "#22c55e", "medium": "#f59e0b", "high": "#ef4444"}.get(il, "#f59e0b")
     il_icon  = {"none": "✓", "low": "✓", "medium": "~", "high": "!"}.get(il, "~")
 
+    # IL estimate % (inline percentage from model, not just category)
+    il_est_pct   = float(opp.get("il_estimate_pct", 0.0))
+    il_est_html  = (
+        f" <span style='color:{il_color}; font-size:0.70rem;' "
+        f"title='Estimated impermanent loss over 1 year based on pair volatility'>"
+        f"~{il_est_pct:.1f}% IL</span>"
+        if il_est_pct > 0 else ""
+    )
+
+    # Audit badge: look up protocol in PROTOCOL_AUDITS
+    proto_key    = str(opp.get("protocol", "")).lower().split()[0]
+    _audit_data  = PROTOCOL_AUDITS.get(proto_key, {})
+    _auditors    = _audit_data.get("auditors", [])
+    _audit_year  = _audit_data.get("year", "")
+    _audit_note  = _audit_data.get("note", "")
+    _audit_html  = (
+        f"<span style='font-size:0.70rem; color:#34d399; font-weight:600; "
+        f"background:rgba(52,211,153,0.08); padding:1px 6px; border-radius:4px; "
+        f"border:1px solid rgba(52,211,153,0.25);' "
+        f"title='{_html.escape(_audit_note)}'>"
+        f"🛡 {' + '.join(_auditors[:2])} ({_audit_year})</span>"
+        if _auditors else ""
+    )
+
+    # Protocol URL deep link
+    _proto_url  = (PROTOCOLS.get(proto_key) or {}).get("url", "")
+    _url_html   = (
+        f"<a href='{_proto_url}' target='_blank' rel='noopener noreferrer' "
+        f"style='font-size:0.70rem; color:#00d4aa; font-weight:600; "
+        f"text-decoration:none; padding:1px 8px; border-radius:4px; "
+        f"border:1px solid rgba(0,212,170,0.3); background:rgba(0,212,170,0.06);' "
+        f"title='Open {_html.escape(str(proto))} in new tab'>"
+        f"Open ↗</a>"
+        if _proto_url else ""
+    )
+
     est_tag  = " <span class='badge-est'>EST</span>" if src in ("baseline", "estimate") else " <span class='badge-live'>LIVE</span>"
     medals   = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣"]
     medal    = medals[min(idx, 5)]
@@ -1636,7 +1697,7 @@ def render_opportunity_card(
     st.markdown(f"""<div class="opp-card" style="border-left:3px solid {color};">
 <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
 <div style="flex:1;min-width:0;"><span style="font-size:0.82rem;color:#475569;margin-right:8px;">{medal}</span><span style="font-size:1.05rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 6px;">·</span><span style="font-size:0.95rem;color:#94a3b8;">{pool}</span></div>
-<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;"><span class="grade-badge" style="background:{grade_color};color:#000;">{grade}</span><span class="{glow_cls}" style="font-size:1.8rem;font-weight:800;color:{color};letter-spacing:-1px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
+<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;"><span class="grade-badge" style="background:{grade_color};color:#fff;font-weight:800;letter-spacing:0.5px;" title="Safety Grade: A=safest, F=riskiest (Exponential.fi standard)">{grade}</span><span class="{glow_cls}" style="font-size:1.8rem;font-weight:800;color:{color};letter-spacing:-1px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
 </div>
 <div style="margin-top:10px;margin-bottom:2px;">
 <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#475569;margin-bottom:3px;"><span>Low {lo:.1f}%</span><span style="color:#64748b;">APY Range</span><span>High {hi:.1f}%</span></div>
@@ -1644,13 +1705,14 @@ def render_opportunity_card(
 </div>
 {_apy_decomp_html}
 <div style="color:#94a3b8;font-size:0.91rem;margin-top:10px;line-height:1.55;">{action}</div>
-<div style="display:flex;gap:20px;font-size:0.78rem;color:#475569;margin-top:12px;flex-wrap:wrap;align-items:center;">
-<span><span style="color:{il_color};font-weight:700;">{il_icon}</span><span style="margin-left:3px;">Price risk: <span style="color:{il_color};font-weight:600;">{il.upper()}</span></span></span>
+<div style="display:flex;gap:14px;font-size:0.78rem;color:#475569;margin-top:10px;flex-wrap:wrap;align-items:center;">
+<span><span style="color:{il_color};font-weight:700;">{il_icon}</span><span style="margin-left:3px;">Price risk: <span style="color:{il_color};font-weight:600;">{il.upper()}</span>{il_est_html}</span></span>
 <span style="display:flex;align-items:center;gap:5px;">Confidence:<span style="display:inline-block;width:48px;height:5px;background:rgba(255,255,255,0.07);border-radius:3px;vertical-align:middle;margin:0 2px;overflow:hidden;"><span style="display:block;width:{conf_bar_pct};height:100%;background:{conf_color};border-radius:3px;"></span></span><span style="color:{conf_color};font-weight:600;">{conf:.0f}%</span></span>
 <span>Suggested: <span style="color:#94a3b8;font-weight:600;">{alloc_str}</span></span>
 {tvl_html}
 {_ry_html}
 </div>
+{f'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">{_audit_html}{_url_html}</div>' if (_audit_html or _url_html) else ""}
 </div>""", unsafe_allow_html=True)
 
     # Beginner: plain-English gauges. Intermediate: numeric gauges. Advanced: no gauges.

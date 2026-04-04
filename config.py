@@ -457,6 +457,120 @@ IL_THRESHOLDS = {
     "high":   0.50,   # up to 50% IL acceptable
 }
 
+# ─── Risk Letter Grade Map ────────────────────────────────────────────────────
+# Maps our 0-10 risk score to an A-F letter grade + display color.
+# Used in all opportunity tables and cards for instant beginner-friendly clarity.
+# Matches Exponential.fi industry standard (A = safest, F = most risky).
+RISK_GRADE_BANDS = [
+    (2.0,  "A", "#22c55e"),   # 0.0–2.0 → A  (excellent — green)
+    (3.5,  "B", "#10b981"),   # 2.0–3.5 → B  (good — teal)
+    (5.0,  "C", "#f59e0b"),   # 3.5–5.0 → C  (average — amber)
+    (7.0,  "D", "#f97316"),   # 5.0–7.0 → D  (below average — orange)
+    (10.1, "F", "#ef4444"),   # 7.0+    → F  (high risk — red)
+]
+
+def risk_letter_grade(score: float) -> tuple[str, str]:
+    """Return (letter, hex_color) for a 0-10 risk score."""
+    for threshold, letter, color in RISK_GRADE_BANDS:
+        if score < threshold:
+            return letter, color
+    return "F", "#ef4444"
+
+
+# ─── Protocol Security Audits ────────────────────────────────────────────────
+# Audit data sourced from protocol docs, Flare ecosystem announcements,
+# and public audit reports (Apr 2026). Used for the audit shield badge.
+PROTOCOL_AUDITS = {
+    "kinetic": {
+        "auditors":   ["Hacken"],
+        "year":       2024,
+        "score":      "Passed",
+        "note":       "Smart contract audit by Hacken — no critical issues found.",
+    },
+    "clearpool": {
+        "auditors":   ["Zellic", "Coinspect"],
+        "year":       2024,
+        "score":      "Passed",
+        "note":       "Audited by Zellic and Coinspect. Institutional-grade credit protocol.",
+    },
+    "firelight": {
+        "auditors":   ["OpenZeppelin", "Coinspect"],
+        "year":       2024,
+        "score":      "Passed",
+        "note":       "Audited by OpenZeppelin and Coinspect. Flare-native liquid staking.",
+    },
+    "spectra": {
+        "auditors":   ["Spearbit", "Cantina", "Code4rena"],
+        "year":       2024,
+        "score":      "Passed",
+        "note":       "Multiple audits via Spearbit and competitive audit on Cantina/Code4rena.",
+    },
+    "blazeswap": {
+        "auditors":   ["Solidified"],
+        "year":       2023,
+        "score":      "Passed",
+        "note":       "Solidified audit. Based on Uniswap V2 architecture with FTSOv2 integration.",
+    },
+    "sparkdex": {
+        "auditors":   ["Zellic"],
+        "year":       2024,
+        "score":      "Passed",
+        "note":       "Zellic audit of SparkDEX V3 contracts. Built on UniswapV3 base.",
+    },
+    "sceptre": {
+        "auditors":   ["Flare Foundation", "External"],
+        "year":       2023,
+        "score":      "Passed",
+        "note":       "Reviewed by Flare Foundation security team. sFLR liquid staking.",
+    },
+    "upshift": {
+        "auditors":   ["Clearstar Labs"],
+        "year":       2024,
+        "score":      "Institutional",
+        "note":       "Clearstar Labs institutional risk management. ERC-4626 vault architecture.",
+    },
+    "mystic": {
+        "auditors":   ["Morpho Labs", "Spearbit"],
+        "year":       2024,
+        "score":      "Passed",
+        "note":       "Built on Morpho Protocol (Spearbit-audited). Mystic curators are separate.",
+    },
+    "enosys": {
+        "auditors":   ["External"],
+        "year":       2024,
+        "score":      "Community",
+        "note":       "Enosys smart contracts reviewed. Open-source Uniswap V3 fork on Flare.",
+    },
+    "kinza": {
+        "auditors":   ["Certik", "Peckshield"],
+        "year":       2024,
+        "score":      "Passed",
+        "note":       "Aave V3 fork — inherits Aave's extensive audit history (OpenZeppelin, Trail of Bits). Kinza-specific changes audited by Certik and Peckshield.",
+    },
+}
+
+
+# ─── Protocol Dependency Graph ────────────────────────────────────────────────
+# Maps each protocol to its shared underlying dependencies.
+# Used to warn users when their recommended portfolio has correlated risk.
+# If 2+ of a user's top allocations share a dependency, show a correlated-risk warning.
+PROTOCOL_DEPENDENCIES = {
+    "blazeswap":  {"fxrp_collateral": False, "ftso_oracle": True,  "fxrp_liquidity": True},
+    "sparkdex":   {"fxrp_collateral": False, "ftso_oracle": True,  "fxrp_liquidity": True},
+    "enosys":     {"fxrp_collateral": False, "ftso_oracle": True,  "fxrp_liquidity": True},
+    "kinetic":    {"fxrp_collateral": True,  "ftso_oracle": True,  "fxrp_liquidity": False},
+    "clearpool":  {"fxrp_collateral": False, "ftso_oracle": False, "fxrp_liquidity": False},
+    "spectra":    {"fxrp_collateral": False, "ftso_oracle": True,  "fxrp_liquidity": False},
+    "upshift":    {"fxrp_collateral": False, "ftso_oracle": False, "fxrp_liquidity": True},
+    "mystic":     {"fxrp_collateral": True,  "ftso_oracle": True,  "fxrp_liquidity": False},
+    "cyclo":      {"fxrp_collateral": False, "ftso_oracle": True,  "fxrp_liquidity": False},
+    "firelight":  {"fxrp_collateral": False, "ftso_oracle": True,  "fxrp_liquidity": False},
+    "sceptre":    {"fxrp_collateral": False, "ftso_oracle": True,  "fxrp_liquidity": False},
+    "hyperliquid":{"fxrp_collateral": False, "ftso_oracle": False, "fxrp_liquidity": True},
+    "enosys_loans":{"fxrp_collateral": True, "ftso_oracle": True,  "fxrp_liquidity": False},
+    "kinza":      {"fxrp_collateral": True,  "ftso_oracle": True,  "fxrp_liquidity": False},
+}
+
 # ─── Your Current Positions (migrated from Excel) ────────────────────────────
 # Edit positions.json to update — this is the starting seed
 INITIAL_POSITIONS = [
