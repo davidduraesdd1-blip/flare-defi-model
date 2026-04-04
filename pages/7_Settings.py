@@ -440,7 +440,7 @@ with _ctrl_tab_export:
         "and AI agent performance summary.</div>",
         unsafe_allow_html=True,
     )
-    if st.button("Generate Investment Committee PDF", key="ic_pdf_btn", use_container_width=True):
+    if st.button("Generate Investment Committee PDF", key="ic_pdf_btn", width='stretch'):
         try:
             from pdf_export import generate_investment_committee_pdf
             from agents.agent_runner import AgentRunner as _AR
@@ -483,7 +483,7 @@ with _ctrl_tab_export:
                 file_name=_ic_fname,
                 mime="application/pdf",
                 key="ic_pdf_download",
-                use_container_width=True,
+                width='stretch',
             )
             st.success("Report generated successfully.")
         except ImportError as _ie:

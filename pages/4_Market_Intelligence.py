@@ -171,7 +171,7 @@ try:
                 {"Bridge": r["name"], "Supported Routes": r["chains"], "Type": r["type"]}
                 for r in _bridge_protocols
             ]
-            st.dataframe(pd.DataFrame(_bp_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_bp_rows), width='stretch', hide_index=True)
             # Live capital flow data from DeFiLlama
             try:
                 from scanners.defillama import fetch_bridge_flows as _fetch_bf
@@ -194,7 +194,7 @@ try:
                             "7d Flow":  f"{_arrow} {abs(_d7):.1f}%",
                             "Signal":   _sig,
                         })
-                    st.dataframe(pd.DataFrame(_flow_rows), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(_flow_rows), width='stretch', hide_index=True)
             except Exception:
                 pass
 
@@ -997,7 +997,7 @@ with _t_onchain:
                 "7d Change":     f"{_c['7d_chg']:+.1f}%",
                 "30d Change":    f"{_c['30d_chg']:+.1f}%",
             })
-        st.dataframe(pd.DataFrame(_iotm_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_iotm_rows), width='stretch', hide_index=True)
 
         render_what_this_means(
             "The 'In the Money' score estimates how many people who bought this coin are "
@@ -1381,7 +1381,7 @@ with _t_eco:
                 "Pools":      len(_ppools),
                 "Agent":      _agent,
             })
-        st.dataframe(pd.DataFrame(_eco_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_eco_rows), width='stretch', hide_index=True)
         st.caption("Source: DeFiLlama yields · Flare chain · Cached 15 min. Agent = executable by AI agent.")
     else:
         # Static fallback when DeFiLlama is unavailable
@@ -1393,7 +1393,7 @@ with _t_eco:
             {"Protocol": "Clearpool",         "Type": "Institutional Lending","TVL": "~$46M", "Best APY": "~11%",  "Pools": 2, "Agent": "✓ Agent"},
             {"Protocol": "Spectra Finance",   "Type": "Fixed Rate Yield",     "TVL": "~$5M",  "Best APY": "~18%",  "Pools": 3, "Agent": "✓ Agent"},
         ]
-        st.dataframe(pd.DataFrame(_eco_static), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_eco_static), width='stretch', hide_index=True)
         st.caption("Showing research-based estimates — DeFiLlama live data unavailable.")
 
 
@@ -1439,7 +1439,7 @@ with _t_eco:
                 "TVL":      (f"${_xtvl/1e6:.1f}M" if _xtvl >= 1e6 else f"${_xtvl:,.0f}"),
                 "IL Risk":  "Yes" if "yes" in _xil else "No",
             })
-        st.dataframe(pd.DataFrame(_xrpl_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_xrpl_rows), width='stretch', hide_index=True)
     else:
         st.info("XRPL AMM pool data unavailable — using research estimates below.")
         _xrpl_static = [
@@ -1447,7 +1447,7 @@ with _t_eco:
             {"Pool": "XRP/BTC",  "Protocol": "XRPL AMM", "APY": "~2-5%", "TVL": "~$2M+", "IL Risk": "Yes"},
             {"Pool": "XRP/ETH",  "Protocol": "XRPL AMM", "APY": "~2-6%", "TVL": "~$1M+", "IL Risk": "Yes"},
         ]
-        st.dataframe(pd.DataFrame(_xrpl_static), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_xrpl_static), width='stretch', hide_index=True)
 
     # EVM Sidechain bridge flows: Flare ↔ Ethereum + Flare ↔ XRP
     st.markdown(
@@ -1471,7 +1471,7 @@ with _t_eco:
                     "7d Flow":  f"{_a} {abs(_d7):.1f}%",
                     "Signal":   _s,
                 })
-            st.dataframe(pd.DataFrame(_flow_r), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_flow_r), width='stretch', hide_index=True)
         else:
             st.caption("Bridge flow data unavailable.")
     except Exception:

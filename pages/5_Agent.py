@@ -123,31 +123,31 @@ col_start, col_stop, col_cycle, col_estop = st.columns([2, 2, 2, 2])
 
 with col_start:
     if not running and not e_stop:
-        if st.button("▶ Start Agent", use_container_width=True, type="primary"):
+        if st.button("▶ Start Agent", width='stretch', type="primary"):
             _runner.start()
             st.success("Agent started.")
             st.rerun()
     elif running:
-        if st.button("⏸ Pause Agent", use_container_width=True):
+        if st.button("⏸ Pause Agent", width='stretch'):
             _runner.stop()
             st.info("Agent paused.")
             st.rerun()
 
 with col_stop:
     if e_stop:
-        if st.button("🔄 Reset Emergency Stop", use_container_width=True):
+        if st.button("🔄 Reset Emergency Stop", width='stretch'):
             _runner.reset_emergency_stop()
             st.success("Emergency stop cleared.")
             st.rerun()
 
 with col_cycle:
-    if st.button("⚡ Run One Cycle Now", use_container_width=True):
+    if st.button("⚡ Run One Cycle Now", width='stretch'):
         _runner.run_cycle_now()
         st.success("Cycle complete.")
         st.rerun()
 
 with col_estop:
-    if st.button("🛑 EMERGENCY STOP", use_container_width=True, type="secondary"):
+    if st.button("🛑 EMERGENCY STOP", width='stretch', type="secondary"):
         _runner.emergency_stop("User triggered emergency stop from UI")
         st.error("Emergency stop activated. All activity halted.")
         st.rerun()
@@ -559,7 +559,7 @@ with st.expander("Audit Log (last 200 events)", expanded=True):
             })
 
         _audit_df = pd.DataFrame(audit_df_rows)
-        st.dataframe(_audit_df, use_container_width=True, hide_index=True)
+        st.dataframe(_audit_df, width='stretch', hide_index=True)
 
         # ── Download buttons (Item 42) ──────────────────────────────────────
         _al_c1, _al_c2 = st.columns(2)
