@@ -19,7 +19,9 @@ from models.risk_models import (
     calc_concentrated_lp_efficiency,
     compute_il_vs_hodl,
     compute_concentrated_lp_metrics,   # #83
+    _incentive_decay_factor,            # decay multiplier for RFLR/SPRK pools
 )
+from config import PROTOCOLS as _PROTOS_CFG, PROTOCOL_AUDITS, risk_letter_grade
 
 page_setup("Planning · Flare DeFi")
 
@@ -90,21 +92,56 @@ def _resolve_apy(live_apys: dict, project: str, symbol_hint: str, fallback: floa
     Look up live APY from DeFiLlama pool data. Tries exact match first,
     then partial match (handles token-order variants like WFLR-USDT0 vs USDT0-WFLR).
     Falls back to the hardcoded value if no live data found.
+
+    For DEX LP pools on Flare (blazeswap, sparkdex, enosys) the incentive decay
+    factor is applied to the reward portion — matching the Opportunities page math.
     """
     proj = project.lower()
     hint = symbol_hint.upper()
     # Exact match
     live = live_apys.get((proj, hint))
-    if live is not None and live > 0:
-        return round(live, 1)
-    # Partial / token-order-agnostic match
-    for (p, s), apy in live_apys.items():
-        if p == proj and apy > 0:
-            tokens_hint = set(hint.split("-"))
-            tokens_pool = set(s.split("-"))
-            if tokens_hint and tokens_hint == tokens_pool:
-                return round(apy, 1)
-    return fallback
+    if live is None or live <= 0:
+        # Partial / token-order-agnostic match
+        for (p, s), apy in live_apys.items():
+            if p == proj and apy > 0:
+                tokens_hint = set(hint.split("-"))
+                tokens_pool = set(s.split("-"))
+                if tokens_hint and tokens_pool and tokens_hint == tokens_pool:
+                    live = apy
+                    break
+    if live is None or live <= 0:
+        live = fallback
+
+    # Apply incentive decay to RFLR/SPRK-rewarded DEX pools
+    _rflr_protos = {"blazeswap", "enosys", "sparkdex"}
+    if proj in _rflr_protos:
+        _proto_data  = _PROTOS_CFG.get(proj, {})
+        _pools_data  = _proto_data.get("pools", {})
+        _reward_apr  = 0.0
+        _baseline_ar = 0.0
+        for pool_name, pool_cfg in _pools_data.items():
+            _ptokens = set(pool_name.upper().split("-"))
+            _htokens = set(hint.split("-"))
+            if _ptokens and _htokens and _ptokens == _htokens:
+                _reward_apr  = float(pool_cfg.get("reward_apr",  0.0))
+                _baseline_ar = float(pool_cfg.get("baseline_apr", 0.0))
+                break
+        _decay = _incentive_decay_factor()
+        if _baseline_ar > 0 and _reward_apr > 0:
+            # Full split known — apply decay precisely
+            _fee_part = _baseline_ar - _reward_apr
+            live      = round(_fee_part + _reward_apr * _decay, 1)
+        else:
+            # No config split — conservative 80/20 estimate
+            live = round(float(live) * 0.20 + float(live) * 0.80 * _decay, 1)
+
+    return round(float(live), 1)
+
+
+# IL estimate by risk category for strategy cards
+_IL_EST_BY_RISK = {"None": 0.0, "Low": 2.0, "Medium": 8.0, "High": 16.0}
+# Map risk category → 0-10 score for A-F grade badge
+_RISK_SCORE_MAP = {"None": 1.0, "Low": 2.5, "Medium": 4.5, "High": 7.0}
 
 st.title("📐 Planning Tools")
 st.caption("Model income scenarios, lock fixed rates with Spectra, delegate to FTSO, and plan FAssets allocations")
@@ -701,27 +738,73 @@ with tab5:
             total_alloc = sum(p["alloc_pct"] for p in _plans)
             st.markdown("### Your Personalised Strategy")
             for plan in _plans:
-                alloc_usd = capital * plan["alloc_pct"] / 100
-                risk_color = {"None": "#10b981", "Low": "#22c55e", "Medium": "#f59e0b", "High": "#ef4444"}.get(plan["risk"], "#64748b")
+                alloc_usd  = capital * plan["alloc_pct"] / 100
+                _risk_cat  = plan["risk"]   # "None" / "Low" / "Medium" / "High"
+                risk_color = {"None": "#10b981", "Low": "#22c55e", "Medium": "#f59e0b", "High": "#ef4444"}.get(_risk_cat, "#64748b")
+
+                # A-F grade badge
+                _rs       = _RISK_SCORE_MAP.get(_risk_cat, 5.0)
+                _grade, _grade_color = risk_letter_grade(_rs)
+
+                # IL estimate
+                _il_est   = _IL_EST_BY_RISK.get(_risk_cat, 0.0)
+                _il_html  = (f" <span style='color:{risk_color}; font-size:0.70rem;' "
+                             f"title='Estimated impermanent loss % per year for this pair type'>"
+                             f"~{_il_est:.0f}% IL</span>") if _il_est > 0 else ""
+
+                # Audit badge
+                _proto_slug = plan["protocol"].lower().split()[0]
+                _aud_data   = PROTOCOL_AUDITS.get(_proto_slug, {})
+                _aud_html   = ""
+                if _aud_data.get("auditors"):
+                    _aud_note = _aud_data.get("note", "")
+                    _aud_yr   = _aud_data.get("year", "")
+                    _aud_html = (
+                        f"<span style='font-size:0.70rem; color:#34d399; font-weight:600; "
+                        f"background:rgba(52,211,153,0.08); padding:1px 6px; border-radius:4px; "
+                        f"border:1px solid rgba(52,211,153,0.25);' "
+                        f"title='{_aud_note}'>"
+                        f"&#x1F6E1; {_aud_data['auditors'][0]} ({_aud_yr})</span>"
+                    )
+
+                # Protocol URL
+                _proto_url = (_PROTOS_CFG.get(_proto_slug) or {}).get("url", "")
+                _plan_proto_name = plan["protocol"]
+                _url_html  = (
+                    f"<a href='{_proto_url}' target='_blank' rel='noopener noreferrer' "
+                    f"style='font-size:0.70rem; color:#00d4aa; font-weight:600; "
+                    f"text-decoration:none; padding:1px 8px; border-radius:4px; "
+                    f"border:1px solid rgba(0,212,170,0.3); background:rgba(0,212,170,0.06);' "
+                    f"title='Open {_plan_proto_name} in new tab'>Open &#x2197;</a>"
+                ) if _proto_url else ""
+
+                _badge_row = f"<div style='display:flex;gap:8px;margin-top:7px;flex-wrap:wrap;align-items:center;'>{_aud_html}{_url_html}</div>" if (_aud_html or _url_html) else ""
+
                 st.markdown(
                     f"<div class='opp-card' style='border-left:3px solid {risk_color};'>"
                     f"<div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;'>"
                     f"<div><span style='font-weight:700; color:#f1f5f9;'>{plan['protocol']}</span>"
                     f"<span style='color:#475569; margin:0 6px;'>·</span>"
                     f"<span style='color:#94a3b8; font-size:0.9rem;'>{plan['strategy']}</span></div>"
-                    f"<div style='display:flex; gap:12px; font-size:0.82rem;'>"
-                    f"<span style='color:#a78bfa; font-weight:700;'>{plan['apy_est']:.0f}% est. APY</span>"
-                    f"<span style='color:{risk_color}; font-weight:600;'>{plan['risk']} Risk</span>"
+                    f"<div style='display:flex; gap:10px; font-size:0.82rem; align-items:center;'>"
+                    f"<span style='background:{_grade_color}; color:#fff; font-weight:800; font-size:0.75rem; "
+                    f"padding:1px 7px; border-radius:4px;' title='Safety Grade: A=safest, F=riskiest'>{_grade}</span>"
+                    f"<span style='color:#a78bfa; font-weight:700;'>{plan['apy_est']:.1f}% APY</span>"
+                    f"<span style='color:{risk_color}; font-weight:600; font-size:0.78rem;'>{_risk_cat} risk{_il_html}</span>"
                     f"<span style='color:#f1f5f9; font-weight:700;'>{plan['alloc_pct']}% = ${alloc_usd:,.0f}</span>"
                     f"</div></div>"
                     f"<div style='color:#94a3b8; font-size:0.88rem; margin-top:8px;'>{plan['action']}</div>"
+                    f"{_badge_row}"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
 
-            # Summary metrics
+            # Summary metrics — all decay-adjusted
             blended_apy = sum(p["apy_est"] * p["alloc_pct"] / total_alloc for p in _plans) if total_alloc > 0 else 0.0
             annual_usd  = capital * blended_apy / 100
+            _decay_note = f" · RFLR incentives decay-adjusted (~{_incentive_decay_factor()*100:.0f}% remaining)" if any(
+                p["protocol"].lower().split()[0] in {"blazeswap","enosys","sparkdex"} for p in _plans
+            ) else ""
             st.markdown(
                 f"<div style='background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.14); "
                 f"border-radius:10px; padding:14px 18px; margin-top:14px; font-size:0.88rem;'>"
@@ -734,7 +817,7 @@ with tab5:
                 f"</div></div>",
                 unsafe_allow_html=True,
             )
-            st.caption(f"APY source: {_apy_source} · Refreshed every 15 min. Allocations are suggestions only. Not financial advice.")
+            st.caption(f"APY source: {_apy_source} · Refreshed every 15 min{_decay_note}. Allocations are suggestions only. Not financial advice.")
             render_what_this_means(
                 "This plan splits your money across several strategies to balance safety and returns. "
                 "Each row shows: the protocol (where your money goes), the strategy name, the estimated APY "
