@@ -905,7 +905,7 @@ with _t_onchain:
         Methodology: CoinGecko ATH + ath_change_percentage + market_data.
         """
         from config import MUST_HAVE_COINS
-        import urllib.request, json as _json
+        from utils.http import _SESSION as _iotm_session, coingecko_limiter as _iotm_lim
         _IOTM_COINS = {
             "xrp": "XRP", "flare-networks": "FLR", "ripple": "XRP",
             "stellar": "XLM", "xdc-network": "XDC", "hedera-hashgraph": "HBAR",
@@ -914,14 +914,17 @@ with _t_onchain:
         }
         _ids = list(_IOTM_COINS.keys())
         try:
-            _url = (
-                "https://api.coingecko.com/api/v3/coins/markets"
-                f"?vs_currency=usd&ids={','.join(_ids)}"
-                "&order=market_cap_desc&per_page=30&page=1"
-                "&price_change_percentage=7d,30d&locale=en"
+            _iotm_lim.acquire()
+            _r = _iotm_session.get(
+                "https://api.coingecko.com/api/v3/coins/markets",
+                params={
+                    "vs_currency": "usd", "ids": ",".join(_ids),
+                    "order": "market_cap_desc", "per_page": "30", "page": "1",
+                    "price_change_percentage": "7d,30d", "locale": "en",
+                },
+                timeout=10,
             )
-            with urllib.request.urlopen(_url, timeout=10) as _r:
-                _raw = _json.loads(_r.read())
+            _raw = _r.json() if _r.status_code == 200 else []
         except Exception:
             return []
 
