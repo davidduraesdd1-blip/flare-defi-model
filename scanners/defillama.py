@@ -665,7 +665,7 @@ def fetch_snapshot_proposals(
 # DeFiLlama chain TVL weekly delta as cross-chain capital flow proxy
 # ─────────────────────────────────────────────────────────────────────────────
 
-_BRIDGE_FLOW_TTL = 3600
+_BRIDGE_FLOW_TTL = 600   # 10 min — was 1hr (too long to hold stale zeros)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -991,28 +991,32 @@ def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
     except Exception as e:
         logger.warning("[BridgeFlow] /v2/chains failed: %s", e)
 
-    # Step 2: historicalChainTvl fallback — sequential, only for chains still missing change_7d
+    # Step 2: /charts/{chain} fallback — sequential, only for chains still missing change_7d
+    # DeFiLlama /historicalChainTvl/{chain} was removed (returns 404).
+    # /charts/{chain} is the correct endpoint: returns [{date: str, totalLiquidityUSD: float}]
     week_ago_ts = now - 7 * 86400
     for lname, display in target_lower.items():
         entry = chain_data.get(lname)
         if entry and entry["change_7d"] is not None:
             continue    # already have it
         try:
-            hist = _get(f"{_DEFILLAMA_API}/historicalChainTvl/{display}", timeout=20)
+            hist = _get(f"{_DEFILLAMA_API}/charts/{display}", timeout=20)
             if isinstance(hist, list) and hist:
-                hist.sort(key=lambda x: x.get("date", 0))
-                cur_tvl  = float(hist[-1].get("tvl") or 0)
-                week_rec = min(hist, key=lambda x: abs(x.get("date", 0) - week_ago_ts))
-                week_tvl = float(week_rec.get("tvl") or cur_tvl)
+                # date field is a string timestamp; totalLiquidityUSD is the TVL value
+                hist.sort(key=lambda x: int(x.get("date") or 0))
+                cur_tvl  = float(hist[-1].get("totalLiquidityUSD") or 0)
+                week_rec = min(hist, key=lambda x: abs(int(x.get("date") or 0) - week_ago_ts))
+                week_tvl = float(week_rec.get("totalLiquidityUSD") or cur_tvl)
                 d7 = ((cur_tvl - week_tvl) / week_tvl * 100) if week_tvl > 0 else 0.0
                 if entry is None:
                     chain_data[lname] = {"name": display, "tvl": cur_tvl, "change_7d": d7}
                 else:
+                    entry["tvl"]      = cur_tvl  # prefer fresh charts TVL over v2/chains value
                     entry["change_7d"] = d7
             else:
-                logger.debug("[BridgeFlow] historicalChainTvl/%s returned no data", display)
+                logger.debug("[BridgeFlow] charts/%s returned no data", display)
         except Exception as e:
-            logger.debug("[BridgeFlow] historicalChainTvl/%s error: %s", display, e)
+            logger.debug("[BridgeFlow] charts/%s error: %s", display, e)
 
     # Step 3: build output
     flows: List[dict] = []
