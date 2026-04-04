@@ -98,6 +98,7 @@ _BLOCKS_30D   = int(_FLARE_BLOCKS_PER_YEAR * 30 / 365)        # ~1,297,000 block
 # Sentinel value distinguishes "never fetched" from "fetched but returned None"
 _SCEPTRE_SENTINEL = object()
 _sceptre_cache: dict = {"ts": 0, "data": _SCEPTRE_SENTINEL}
+_sceptre_lock  = threading.Lock()
 _SCEPTRE_TTL: int = 300  # seconds
 
 
@@ -113,13 +114,15 @@ def fetch_sceptre_onchain_rate() -> Optional[float]:
     so a None result (APY outside sanity bounds) is also cached and not re-fetched every call.
     """
     now = time.time()
-    if _sceptre_cache["data"] is not _SCEPTRE_SENTINEL and now - _sceptre_cache["ts"] < _SCEPTRE_TTL:
-        return _sceptre_cache["data"]
+    with _sceptre_lock:
+        if _sceptre_cache["data"] is not _SCEPTRE_SENTINEL and now - _sceptre_cache["ts"] < _SCEPTRE_TTL:
+            return _sceptre_cache["data"]
 
     w3 = _get_web3()
     if w3 is None:
-        _sceptre_cache["ts"]   = time.time()
-        _sceptre_cache["data"] = None
+        with _sceptre_lock:
+            _sceptre_cache["ts"]   = time.time()
+            _sceptre_cache["data"] = None
         return None
     try:
         contract = w3.eth.contract(
@@ -140,26 +143,30 @@ def fetch_sceptre_onchain_rate() -> Optional[float]:
             total_past  = contract.functions.totalPooledFlr().call(block_identifier=past_block)
             shares_past = contract.functions.totalShares().call(block_identifier=past_block)
             if shares_now == 0 or shares_past == 0:
-                _sceptre_cache["ts"]   = time.time()
-                _sceptre_cache["data"] = None
+                with _sceptre_lock:
+                    _sceptre_cache["ts"]   = time.time()
+                    _sceptre_cache["data"] = None
                 return None
             rate_now  = total_now  * shares_1e18 // shares_now
             rate_past = total_past * shares_1e18 // shares_past
 
         if rate_past <= 0:
-            _sceptre_cache["ts"]   = time.time()
-            _sceptre_cache["data"] = None
+            with _sceptre_lock:
+                _sceptre_cache["ts"]   = time.time()
+                _sceptre_cache["data"] = None
             return None
         growth_30d = (rate_now - rate_past) / rate_past
         apy = round(((1 + growth_30d) ** (365.0 / 30) - 1) * 100, 2)
         result = apy if 0.5 <= apy <= 50.0 else None   # sanity bounds
-        _sceptre_cache["ts"]   = time.time()
-        _sceptre_cache["data"] = result
+        with _sceptre_lock:
+            _sceptre_cache["ts"]   = time.time()
+            _sceptre_cache["data"] = result
         return result
     except Exception as exc:
         logger.warning(f"Sceptre on-chain rate failed: {exc}")
-        _sceptre_cache["ts"]   = time.time()
-        _sceptre_cache["data"] = None
+        with _sceptre_lock:
+            _sceptre_cache["ts"]   = time.time()
+            _sceptre_cache["data"] = None
         return None
 
 

@@ -1734,11 +1734,12 @@ def fetch_fear_greed_history(days: int = 30) -> list[dict]:
     Returns list of dicts (most recent first) with 'value' and 'timestamp'.
     Cached 1 hour.
     """
-    import urllib.request
     try:
-        _url = f"https://api.alternative.me/fng/?limit={days}&format=json"
-        with urllib.request.urlopen(_url, timeout=8) as _r:
-            return json.loads(_r.read()).get("data", [])
+        _resp = _http_session.get(
+            f"https://api.alternative.me/fng/?limit={days}&format=json",
+            timeout=8,
+        )
+        return _resp.json().get("data", []) if _resp.status_code == 200 else []
     except Exception:
         return []
 
