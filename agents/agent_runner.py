@@ -239,12 +239,26 @@ def run_agent_loop_once(force: bool = False) -> None:
     Wrapped in full exception handling so a crash never stops the scheduler.
     force=True passed through from run_cycle_now() for UI-triggered cycles.
     """
+    _cycle_start = time.time()
     try:
         _run_one_cycle(force=force)
-        # Reset error counter on success
+        _cycle_duration = time.time() - _cycle_start
+
+        # Warn if cycle duration exceeds 80% of the decision interval (performance alert)
+        _threshold = C.DECISION_LOOP_INTERVAL_SECONDS * 0.8
+        if _cycle_duration > _threshold:
+            _audit.log_error(
+                f"Cycle took {_cycle_duration:.1f}s — exceeds {_threshold:.0f}s threshold "
+                f"({int(_cycle_duration/_threshold*100)}% of {C.DECISION_LOOP_INTERVAL_SECONDS}s interval). "
+                "Consider checking API latency."
+            )
+
+        # Reset error counter on success and record cycle performance
         with _lock:
             s = _load_state()
-            s["consecutive_errors"] = 0
+            s["consecutive_errors"]    = 0
+            s["last_cycle_duration_s"] = round(_cycle_duration, 2)
+            s["last_cycle_ts"]         = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             _save_state(s)
     except Exception as e:
         _audit.log_error(f"agent_runner cycle error: {e}")

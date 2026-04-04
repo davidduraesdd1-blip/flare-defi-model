@@ -532,22 +532,94 @@ st.caption(
     "Data is fetched from live APIs each cycle; the decision row confirms it ran. "
     "Expand the 'extra' column in the raw DB to see the full config_at_cycle snapshot."
 )
-with st.expander("Audit Log (last 50 events)", expanded=True):
-    audit_rows = _runner.get_recent_audit(limit=50)
+with st.expander("Audit Log (last 200 events)", expanded=True):
+    audit_rows = _runner.get_recent_audit(limit=200)
     if audit_rows:
         audit_df_rows = []
         for a in audit_rows:
+            # Parse composite score from extra JSON if present
+            _extra_str = a.get("extra", "{}")
+            try:
+                import json as _json
+                _extra = _json.loads(_extra_str) if isinstance(_extra_str, str) else (_extra_str or {})
+            except Exception:
+                _extra = {}
+            _composite = _extra.get("composite_score") or _extra.get("config_at_cycle", {})
+            _cscore_str = f"{float(_extra.get('composite_score', 0)):+.3f}" if _extra.get("composite_score") is not None else "—"
             audit_df_rows.append({
-                "Time":      str(a.get("timestamp", ""))[:16],
-                "Event":     a.get("event_type", "—"),
-                "Chain":     a.get("chain", "—"),
-                "Protocol":  a.get("protocol", "—"),
-                "Action":    a.get("action", "—"),
-                "Size $":    f"${a.get('size_usd', 0):,.0f}" if a.get("size_usd") else "—",
-                "Approved":  "✓" if a.get("approved") else "✗",
-                "Reason":    str(a.get("reason", ""))[:80],
+                "Time":       str(a.get("timestamp", ""))[:16],
+                "Event":      a.get("event_type", "—"),
+                "Chain":      a.get("chain", "—"),
+                "Protocol":   a.get("protocol", "—"),
+                "Action":     a.get("action", "—"),
+                "Size $":     f"${a.get('size_usd', 0):,.0f}" if a.get("size_usd") else "—",
+                "Approved":   "✓" if a.get("approved") else "✗",
+                "Signal":     _cscore_str,
+                "Reason":     str(a.get("reason", ""))[:100],
             })
-        st.dataframe(pd.DataFrame(audit_df_rows), use_container_width=True, hide_index=True)
+
+        _audit_df = pd.DataFrame(audit_df_rows)
+        st.dataframe(_audit_df, use_container_width=True, hide_index=True)
+
+        # ── Download buttons (Item 42) ──────────────────────────────────────
+        _al_c1, _al_c2 = st.columns(2)
+        with _al_c1:
+            _audit_csv = _audit_df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "⬇ Export Audit Log CSV",
+                data=_audit_csv,
+                file_name="agent_audit_log.csv",
+                mime="text/csv",
+                key="dl_audit_csv",
+            )
+        with _al_c2:
+            try:
+                from fpdf import FPDF
+                from fpdf.enums import XPos, YPos
+                _report_dt = pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+                _pdf = FPDF()
+                _pdf.set_auto_page_break(auto=True, margin=10)
+                _pdf.add_page()
+                _pdf.set_font("Helvetica", "B", 14)
+                _pdf.cell(0, 10, "Agent Audit Log", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                _pdf.set_font("Helvetica", "", 8)
+                _pdf.cell(0, 6, f"Generated: {_report_dt} · {len(audit_rows)} events",
+                           new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                _pdf.ln(3)
+                _cols    = ["Time", "Event", "Protocol", "Action", "Approved", "Reason"]
+                _widths  = [30, 35, 25, 25, 18, 57]
+                _pdf.set_font("Helvetica", "B", 7)
+                _pdf.set_fill_color(17, 24, 39)
+                _pdf.set_text_color(255, 255, 255)
+                for _c, _w in zip(_cols, _widths):
+                    _pdf.cell(_w, 6, _c, border=1, fill=True)
+                _pdf.ln()
+                _pdf.set_text_color(0, 0, 0)
+                _pdf.set_font("Helvetica", "", 6)
+                for _i, _a in enumerate(audit_rows):
+                    _fill = _i % 2 == 0
+                    _pdf.set_fill_color(241, 245, 249) if _fill else _pdf.set_fill_color(255, 255, 255)
+                    _row_vals = [
+                        str(_a.get("timestamp", ""))[:16],
+                        str(_a.get("event_type", ""))[:16],
+                        str(_a.get("protocol", "—"))[:12],
+                        str(_a.get("action", "—"))[:12],
+                        "YES" if _a.get("approved") else "NO",
+                        str(_a.get("reason", ""))[:40],
+                    ]
+                    for _v, _w in zip(_row_vals, _widths):
+                        _pdf.cell(_w, 5, _v, border=1, fill=_fill)
+                    _pdf.ln()
+                _pdf_bytes = bytes(_pdf.output())
+                st.download_button(
+                    "⬇ Export Audit Log PDF",
+                    data=_pdf_bytes,
+                    file_name="agent_audit_log.pdf",
+                    mime="application/pdf",
+                    key="dl_audit_pdf",
+                )
+            except ImportError:
+                st.caption("PDF export unavailable (install fpdf2)")
     else:
         st.caption("No audit events yet — hit 'Run One Cycle Now' to generate the first entry.")
 

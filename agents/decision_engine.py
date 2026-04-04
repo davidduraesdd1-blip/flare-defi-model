@@ -44,26 +44,49 @@ HARD RULES — never violate these:
 7. Prefer Kinetic lending (safest) over LP positions (higher risk) when uncertain
 8. EXIT_POSITION if unrealized_pnl on any position is < -3% of size
 
+MARKET ENVIRONMENT (composite_signal):
+- The context includes market_context.composite_signal with score (-1.0 to +1.0)
+- score < -0.3 (RISK_OFF): prefer HOLD or conservative lending; avoid new LP positions
+- score -0.3 to +0.1 (NEUTRAL): normal operation; all whitelisted protocols eligible
+- score > +0.3 (RISK_ON): higher conviction for LP and yield positions acceptable
+- Always read the signal label and layer scores before deciding
+
+SPECTRA PROTOCOL RULES (position_type matters):
+- PT (Principal Token): fixed yield to maturity; safe to hold; include maturity_date in JSON
+- YT (Yield Token): MUST include maturity_date; never enter within 21 days of maturity
+- LP: include maturity_date; prefer pools with >30 days to maturity
+- Always include maturity_date field when protocol == "spectra"
+
 DECISION PRIORITY:
-1. HOLD — when market is unclear, confidence is low, or no opportunity beats current positions
+1. HOLD — when market is unclear, confidence is low, composite_signal is RISK_OFF, or no opportunity beats current positions
 2. EXIT_POSITION — when existing positions should be closed
 3. REBALANCE — when capital should move between existing positions
 4. ENTER_POSITION — when a clear superior opportunity exists
+
+EXTENDED REASONING REQUIREMENTS:
+In your reasoning field, always include:
+1. What the composite market signal says (score + interpretation)
+2. Why THIS specific opportunity was chosen over alternatives
+3. What would change this decision (key risk factors)
 
 Respond with ONLY valid JSON. No markdown. No explanation outside the JSON.
 Use exactly this schema:
 {
   "action": "ENTER_POSITION" | "EXIT_POSITION" | "REBALANCE" | "HOLD",
   "chain": "flare" | "xrpl" | "none",
-  "protocol": "kinetic" | "blazeswap" | "sparkdex" | "xrpl_dex" | "xrpl_amm" | "none",
+  "protocol": "kinetic" | "blazeswap" | "sparkdex" | "enosys" | "clearpool" | "spectra" | "xrpl_dex" | "xrpl_amm" | "none",
   "pool": "<pool name, empty string if HOLD>",
   "token_in": "<token symbol, empty if HOLD>",
   "token_out": "<token symbol, empty if HOLD>",
   "size_usd": <number, 0 if HOLD>,
   "expected_apy": <annualised % as decimal e.g. 0.085 for 8.5%, 0 if HOLD>,
   "confidence": <0.0 to 1.0>,
-  "reasoning": "<plain English, 1-3 sentences explaining the decision>",
-  "risk_factors": ["<factor>", "<factor>"]
+  "reasoning": "<1-4 sentences: market signal interpretation + choice rationale + key risk>",
+  "risk_factors": ["<factor>", "<factor>"],
+  "position_type": "<PT|YT|LP|LENDING|STAKING|empty>",
+  "maturity_date": "<YYYY-MM-DD for Spectra positions, empty otherwise>",
+  "composite_score": <copy market_context.composite_signal.score here, 0 if unavailable>,
+  "alternatives_considered": ["<protocol considered but rejected>"]
 }"""
 
 
@@ -79,7 +102,11 @@ class TradeDecision:
     expected_apy: float
     confidence:   float
     reasoning:    str
-    risk_factors: list = field(default_factory=list)
+    risk_factors:           list  = field(default_factory=list)
+    position_type:          str   = ""          # PT | YT | LP | LENDING | STAKING
+    maturity_date:          str   = ""          # YYYY-MM-DD for Spectra
+    composite_score:        float = 0.0         # composite signal score at decision time
+    alternatives_considered: list = field(default_factory=list)
     raw_response: str  = ""
     error:        str  = ""
 
@@ -89,17 +116,21 @@ class TradeDecision:
 
     def to_dict(self) -> dict:
         return {
-            "action":       self.action,
-            "chain":        self.chain,
-            "protocol":     self.protocol,
-            "pool":         self.pool,
-            "token_in":     self.token_in,
-            "token_out":    self.token_out,
-            "size_usd":     self.size_usd,
-            "expected_apy": self.expected_apy,
-            "confidence":   self.confidence,
-            "reasoning":    self.reasoning,
-            "risk_factors": self.risk_factors,
+            "action":                  self.action,
+            "chain":                   self.chain,
+            "protocol":                self.protocol,
+            "pool":                    self.pool,
+            "token_in":                self.token_in,
+            "token_out":               self.token_out,
+            "size_usd":                self.size_usd,
+            "expected_apy":            self.expected_apy,
+            "confidence":              self.confidence,
+            "reasoning":               self.reasoning,
+            "risk_factors":            self.risk_factors,
+            "position_type":           self.position_type,
+            "maturity_date":           self.maturity_date,
+            "composite_score":         self.composite_score,
+            "alternatives_considered": self.alternatives_considered,
         }
 
 
@@ -125,18 +156,22 @@ def _parse_response(text: str) -> TradeDecision:
     data = json.loads(text)
 
     return TradeDecision(
-        action        = str(data.get("action", "HOLD")).upper().strip(),
-        chain         = str(data.get("chain", "none")).lower().strip(),
-        protocol      = str(data.get("protocol", "none")).lower().strip(),
-        pool          = str(data.get("pool", "")),
-        token_in      = str(data.get("token_in", "")),
-        token_out     = str(data.get("token_out", "")),
-        size_usd      = float(data.get("size_usd", 0)),
-        expected_apy  = float(data.get("expected_apy", 0)),
-        confidence    = float(data.get("confidence", 0)),
-        reasoning     = str(data.get("reasoning", "")),
-        risk_factors  = list(data.get("risk_factors", [])),
-        raw_response  = text,
+        action                 = str(data.get("action", "HOLD")).upper().strip(),
+        chain                  = str(data.get("chain", "none")).lower().strip(),
+        protocol               = str(data.get("protocol", "none")).lower().strip(),
+        pool                   = str(data.get("pool", "")),
+        token_in               = str(data.get("token_in", "")),
+        token_out              = str(data.get("token_out", "")),
+        size_usd               = float(data.get("size_usd", 0)),
+        expected_apy           = float(data.get("expected_apy", 0)),
+        confidence             = float(data.get("confidence", 0)),
+        reasoning              = str(data.get("reasoning", "")),
+        risk_factors           = list(data.get("risk_factors", [])),
+        position_type          = str(data.get("position_type", "")),
+        maturity_date          = str(data.get("maturity_date", "")),
+        composite_score        = float(data.get("composite_score", 0)),
+        alternatives_considered= list(data.get("alternatives_considered", [])),
+        raw_response           = text,
     )
 
 

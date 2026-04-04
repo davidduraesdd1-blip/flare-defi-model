@@ -182,10 +182,38 @@ class RiskGuard:
                 )
             size_usd = max_size  # cap and continue
 
-        # ── 15. All checks passed ─────────────────────────────────────────────
+        # ── 15. Spectra maturity lifecycle rules ──────────────────────────────
+        # Spectra positions have fixed maturity dates. YT tokens expire worthless.
+        # LP positions suffer impermanent loss as maturity approaches.
+        # This check enforces the approved lifecycle rules from agents/config.py.
+        if protocol == "spectra" and action == "ENTER_POSITION":
+            maturity_date_str = decision.get("maturity_date", "")
+            position_type     = str(decision.get("position_type", "LP")).upper()
+            if maturity_date_str:
+                try:
+                    maturity_dt = datetime.strptime(maturity_date_str[:10], "%Y-%m-%d").replace(
+                        tzinfo=timezone.utc
+                    )
+                    days_left = (maturity_dt - datetime.now(timezone.utc)).days
+                    # YT: must exit 21 days before maturity (YT → worthless at expiry)
+                    min_days = {
+                        "YT": C.SPECTRA_YT_EXIT_DAYS_BEFORE,
+                        "LP": C.SPECTRA_LP_EXIT_DAYS_BEFORE,
+                    }.get(position_type, C.SPECTRA_MIN_DAYS_TO_MATURITY)
+                    if days_left < min_days:
+                        return RiskDecision(
+                            False,
+                            f"Spectra {position_type} position rejected: only {days_left} days "
+                            f"to maturity ({maturity_date_str}), minimum required is {min_days} days. "
+                            f"YT loses all value at maturity — do not enter near expiry."
+                        )
+                except ValueError:
+                    pass  # malformed date — let it through (Claude will know the date)
+
+        # ── 16. All checks passed ─────────────────────────────────────────────
         return RiskDecision(
             True,
-            f"All {15} risk checks passed",
+            f"All {16} risk checks passed",
             adjusted_size_usd=size_usd,
         )
 

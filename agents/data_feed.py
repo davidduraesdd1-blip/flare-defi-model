@@ -110,30 +110,60 @@ def _get_live_prices() -> dict:
 
 
 def _get_top_opportunities(n: int = 5) -> list[dict]:
-    """Pull top whitelisted opportunities from DeFiLlama scanner."""
+    """Pull top whitelisted opportunities from DeFiLlama scanner.
+    Includes all whitelisted protocols: kinetic, blazeswap, sparkdex, enosys,
+    clearpool, spectra (Flare) and xrpl_dex, xrpl_amm (XRPL).
+    For Spectra, includes maturity_date and position_type fields.
+    """
     if not _LLAMA_OK:
         return []
     try:
         pools = fetch_yields_pools(min_tvl_usd=1_000_000) or []
-        # Filter to Flare chain only (fetch_yields_pools has no chain param)
-        pools = [p for p in pools if str(p.get("chain", "")).lower() == "flare"]
+        # Include both Flare and XRPL chain pools
+        allowed_chains = {"flare", "xrp", "xrpl"}
+        pools = [p for p in pools if str(p.get("chain", "")).lower() in allowed_chains]
         out = []
-        for p in pools[:50]:
+        for p in pools[:100]:
             proto = str(p.get("project") or p.get("protocol") or "").lower()
-            if proto not in FLARE_PROTOCOL_WHITELIST:
+            # Map common DeFiLlama project names to whitelist names
+            _proto_map = {
+                "spectra-finance": "spectra",
+                "spectra":         "spectra",
+                "clearpool":       "clearpool",
+                "enosys":          "enosys",
+                "kinetic":         "kinetic",
+                "blazeswap":       "blazeswap",
+                "sparkdex":        "sparkdex",
+            }
+            proto = _proto_map.get(proto, proto)
+            _chain = str(p.get("chain", "")).lower()
+            _whitelist = FLARE_PROTOCOL_WHITELIST if _chain == "flare" else frozenset({"xrpl_dex", "xrpl_amm"})
+            if proto not in _whitelist:
                 continue
             apy = _safe_float(p.get("apy") or p.get("estimated_apy"))
-            if apy <= 0 or apy > 200:
+            if apy <= 0 or apy > 300:
                 continue
-            out.append({
-                "protocol":    proto,
-                "pool":        str(p.get("symbol") or p.get("pool") or ""),
-                "chain":       "flare",
-                "apy":         round(apy, 2),
-                "tvl_usd":     _safe_float(p.get("tvlUsd") or p.get("tvl_usd")),
-                "apy_7d":      _safe_float(p.get("apyBase7d") or p.get("apy_7d") or apy),
-                "il_risk":     str(p.get("il_risk") or "unknown"),
-            })
+            opp = {
+                "protocol":  proto,
+                "pool":      str(p.get("symbol") or p.get("pool") or ""),
+                "chain":     _chain if _chain != "xrp" else "xrpl",
+                "apy":       round(apy, 2),
+                "tvl_usd":   _safe_float(p.get("tvlUsd") or p.get("tvl_usd")),
+                "apy_7d":    _safe_float(p.get("apyBase7d") or p.get("apy_7d") or apy),
+                "il_risk":   str(p.get("ilRisk") or p.get("il_risk") or "unknown"),
+            }
+            # Spectra-specific: extract maturity date and position type from pool symbol
+            if proto == "spectra":
+                _sym = str(p.get("symbol") or "")
+                _pool_id = str(p.get("pool") or "")
+                # Pool symbol often contains maturity date, e.g. "PT-sFLR-2026-05-17"
+                import re as _re
+                _date_match = _re.search(r"(\d{4}-\d{2}-\d{2})", _sym) or _re.search(r"(\d{4}-\d{2}-\d{2})", _pool_id)
+                opp["maturity_date"]  = _date_match.group(1) if _date_match else ""
+                opp["position_type"]  = "PT" if "PT" in _sym.upper() else (
+                    "YT" if "YT" in _sym.upper() else "LP"
+                )
+            out.append(opp)
         # Sort by APY descending, cap at n
         out.sort(key=lambda x: x["apy"], reverse=True)
         return out[:n]
