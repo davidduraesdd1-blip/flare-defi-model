@@ -1820,9 +1820,12 @@ with _tab_fassets:
         with _fc2:
             _fw_html = f"&nbsp;<span style='color:#f59e0b;'>⚠ {_ag_warn}</span>" if _ag_warn else ""
             _fl_html = f"&nbsp;<span style='color:#ef4444;'>✗ {_ag_liq}</span>" if _ag_liq else ""
+            # Agent health distribution is estimated from total count + system health status.
+            # Live API does not expose per-agent status — numbers are approximate.
+            _ag_est_note = " (est.)" if _fa_agents else ""
             st.markdown(
                 f"<div class='metric-card card-blue'>"
-                f"<div class='label'>Active Agents</div>"
+                f"<div class='label'>Active Agents{_ag_est_note}</div>"
                 f"<div class='big-number'>{_fa_agents if _fa_agents else '—'}</div>"
                 f"<div style='color:#475569; font-size:0.82rem; margin-top:4px;'>"
                 f"<span style='color:#10b981;'>✓ {_ag_ok}</span>{_fw_html}{_fl_html}"
