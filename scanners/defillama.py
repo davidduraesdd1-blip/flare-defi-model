@@ -785,7 +785,7 @@ def fetch_pool_apy_history(pool_id: str, days: int = 30) -> list[dict]:
             return cached.get("data", [])
 
     try:
-        defillama_limiter.wait()
+        defillama_limiter.acquire()
         r = _SESSION.get(
             f"{_DEFILLAMA_YIELDS}/chart/{pool_id}",
             timeout=_REQUEST_TIMEOUT,
@@ -1085,25 +1085,37 @@ def fetch_protocol_treasuries(protocols: list = None) -> list[dict]:
 
     def _fetch_one(slug: str) -> dict | None:
         try:
-            defillama_limiter.wait()
+            defillama_limiter.acquire()
             data = _get(f"{_DEFILLAMA_API}/treasury/{slug}", timeout=_REQUEST_TIMEOUT)
             if not data:
                 return None
-            # Response: {name, tokenBreakdowns, tvl, ...}
-            _name  = str(data.get("name") or data.get("projectName") or slug)
-            _tvl   = float(data.get("tvl") or 0)
-            _breakdown = data.get("tokenBreakdowns") or []
-            if not _breakdown and isinstance(data.get("tokens"), list):
-                _breakdown = data["tokens"]
+            # DeFiLlama treasury response format (2025/2026+):
+            # Top-level tvl/tokenBreakdowns removed; data now lives in
+            # chainTvls[chain].tvl[-1].totalLiquidityUSD and
+            # chainTvls[chain].tokensInUsd[-1].tokens
+            _name = str(data.get("name") or data.get("projectName") or slug)
+            chain_tvls = data.get("chainTvls") or {}
+            _tvl = 0.0
+            _token_map: dict = {}
+            for _cname, _cdata in chain_tvls.items():
+                if "OwnTokens" in _cname:
+                    continue  # skip OwnTokens sub-chains to avoid double-counting
+                _tvl_series = _cdata.get("tvl") or []
+                if _tvl_series:
+                    _tvl += float(_tvl_series[-1].get("totalLiquidityUSD") or 0)
+                _tok_series = _cdata.get("tokensInUsd") or []
+                if _tok_series:
+                    for _sym, _usd_val in (_tok_series[-1].get("tokens") or {}).items():
+                        _token_map[_sym.upper()] = (
+                            _token_map.get(_sym.upper(), 0.0) + float(_usd_val or 0)
+                        )
 
             _stables = ("USDC", "USDT", "DAI", "FRAX", "LUSD", "BUSD", "GHO",
                         "USDE", "USDP", "TUSD", "FDUSD")
             _stable_usd = 0.0
             _native_usd = 0.0
             _token_list = []
-            for tok in (_breakdown if isinstance(_breakdown, list) else []):
-                _sym = str(tok.get("symbol") or tok.get("token") or "").upper()
-                _usd = float(tok.get("usd") or tok.get("value") or 0)
+            for _sym, _usd in _token_map.items():
                 _token_list.append({"symbol": _sym, "usd": _usd})
                 if any(s in _sym for s in _stables):
                     _stable_usd += _usd

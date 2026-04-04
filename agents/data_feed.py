@@ -83,7 +83,7 @@ def _get_live_prices() -> dict:
     fallback = {k: FALLBACK_PRICES.get(k, 0) for k in ("FLR", "XRP", "FXRP")}
     try:
         if _HTTP_OK and _cg_limiter is not None and _http_session is not None:
-            _cg_limiter.wait()
+            _cg_limiter.acquire()
             r = _http_session.get(
                 "https://api.coingecko.com/api/v3/simple/price",
                 params={"ids": "flare-networks,ripple", "vs_currencies": "usd"},
