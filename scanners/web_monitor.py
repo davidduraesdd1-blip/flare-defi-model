@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from utils.file_io import atomic_json_write
-from utils.http import _SESSION
+from utils.http import _SESSION, coingecko_limiter as _cg_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +152,7 @@ def fetch_coingecko_flare_tokens() -> dict:
     """
     result = {"new_tokens": [], "error": None}
     try:
+        _cg_limiter.acquire()
         resp = _SESSION.get(
             f"{_COINGECKO_API}/coins/list",
             params={"include_platform": "true"},

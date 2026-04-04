@@ -14,7 +14,7 @@ from typing import Optional
 
 from config import FALLBACK_PRICES
 from scanners.flare_scanner import fetch_prices as _fetch_flare_prices
-from utils.http import http_get
+from utils.http import http_get, coingecko_limiter as _cg_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,7 @@ def fetch_historical_volatility(token_id: str = "ripple", days: int = 30) -> Opt
             return hit["data"]
 
     url  = f"https://api.coingecko.com/api/v3/coins/{token_id}/market_chart"
+    _cg_limiter.acquire()
     data = http_get(url, params={"vs_currency": "usd", "days": days}, timeout=10)
     if not data:
         return None
