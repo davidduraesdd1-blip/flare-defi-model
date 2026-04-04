@@ -223,7 +223,20 @@ def _run_one_cycle(force: bool = False) -> None:
     # Execute
     if operating_mode == "PAPER":
         from agents.paper_trader import execute_paper_trade
-        execute_paper_trade(decision, risk_result.adjusted_size_usd)
+        # Look up current APY from live context for accurate exit P&L
+        # (entry APY may be stale for long-held positions)
+        _current_apy = 0.0
+        if decision.action == "EXIT_POSITION":
+            _opps = ctx.get("top_opportunities", [])
+            for _opp in _opps:
+                if (str(_opp.get("protocol", "")).lower() == decision.protocol
+                        and str(_opp.get("pool", "")).lower() == decision.pool.lower()):
+                    _current_apy = float(_opp.get("apy", 0)) / 100.0
+                    break
+            if _current_apy == 0.0:
+                # Fallback: use decision expected_apy if Claude set it on the EXIT decision
+                _current_apy = decision.expected_apy if decision.expected_apy > 0.001 else 0.0
+        execute_paper_trade(decision, risk_result.adjusted_size_usd, current_apy=_current_apy)
 
     # LIVE execution: flare_executor and xrpl_executor need wallet passwords
     # which are injected at session level — not implemented in the background

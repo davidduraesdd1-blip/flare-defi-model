@@ -27,454 +27,557 @@ page_setup("Settings · Flare DeFi")
 
 render_sidebar()
 
-st.markdown("# Settings")
+st.markdown("# Control Center")
 st.markdown(
     "<div style='color:#475569; font-size:0.88rem; margin-bottom:24px;'>"
-    "Alert notifications · report export</div>",
+    "Alert notifications · API key management · cache controls · report export · wallet setup</div>",
     unsafe_allow_html=True,
 )
 
-
-# ─── Alert Configuration ──────────────────────────────────────────────────────
-
-st.markdown("### Alert Notifications")
-st.markdown(
-    "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
-    "Get notified by email or Telegram when high-APY opportunities appear.</div>",
-    unsafe_allow_html=True,
-)
-
-try:
-    from ai.alerts import (
-        load_alerts_config, save_alerts_config,
-        test_email, test_telegram, test_discord, test_webhook,
-    )
-except ImportError:
-    st.error("ai/alerts.py not found. Check your installation.")
-    st.stop()
-
-config = load_alerts_config()
-
-tab_email, tab_tg, tab_discord, tab_webhook, tab_thresh = st.tabs([
-    "📧  Email", "📱  Telegram", "💬  Discord", "🔗  Webhook", "⚙️  Thresholds",
+_ctrl_tab_alerts, _ctrl_tab_api, _ctrl_tab_cache, _ctrl_tab_export, _ctrl_tab_wallet = st.tabs([
+    "🔔 Alerts", "🔑 API Keys", "🗄️ Cache", "📥 Export", "💼 Wallet Setup",
 ])
 
-with tab_email:
-    st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Gmail users: use an App Password (Settings → Security → App Passwords).</div>", unsafe_allow_html=True)
-    enabled    = st.toggle("Enable email alerts", value=config["email"].get("enabled", False), key="email_enabled")
-    email_addr = st.text_input("Email address",  value=config["email"].get("address", ""),          key="email_addr")
-    c1, c2     = st.columns(2)
-    with c1:
-        smtp_srv  = st.text_input("SMTP server", value=config["email"].get("smtp_server", "smtp.gmail.com"), key="smtp_srv")
-        smtp_user = st.text_input("SMTP username", value=config["email"].get("username", ""),        key="smtp_user")
-    with c2:
-        try:
-            _port_val = max(1, min(65535, int(config["email"].get("smtp_port", 587))))
-        except (ValueError, TypeError):
-            _port_val = 587
-        smtp_port = st.number_input("SMTP port", value=_port_val,
-                                    min_value=1, max_value=65535, key="smtp_port")
-        smtp_pass = st.text_input("SMTP password", value=config["email"].get("password", ""),
-                                   key="smtp_pass", type="password")
+with _ctrl_tab_alerts:
+    st.markdown("### Alert Notifications")
     st.markdown(
-        "<div class='warn-box' style='font-size:0.82rem;'>"
-        "Credentials stored in <code>data/alerts_config.json</code> — never commit this file to git.</div>",
+        "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
+        "Get notified by email or Telegram when high-APY opportunities appear.</div>",
         unsafe_allow_html=True,
     )
 
-with tab_tg:
-    st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Create a bot via @BotFather · Get your Chat ID via @userinfobot.</div>", unsafe_allow_html=True)
-    tg_enabled = st.toggle("Enable Telegram alerts", value=config["telegram"].get("enabled", False), key="tg_enabled")
-    bot_token  = st.text_input("Bot token", value=config["telegram"].get("bot_token", ""),
-                                key="bot_token", type="password")
-    chat_id    = st.text_input("Chat ID",   value=config["telegram"].get("chat_id", ""), key="chat_id")
 
-with tab_discord:
-    st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Create a Discord webhook: Server Settings → Integrations → Webhooks → New Webhook → Copy URL.</div>", unsafe_allow_html=True)
-    discord_enabled = st.toggle("Enable Discord alerts", value=config.get("discord", {}).get("enabled", False), key="discord_enabled")
-    discord_url     = st.text_input("Discord Webhook URL", value=config.get("discord", {}).get("webhook_url", ""),
-                                     key="discord_url", placeholder="https://discord.com/api/webhooks/…")
-    st.markdown(
-        "<div class='warn-box' style='font-size:0.82rem;'>"
-        "Webhook URL is stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
-        unsafe_allow_html=True,
-    )
-
-with tab_webhook:
-    st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Send JSON payloads to any HTTPS endpoint (Zapier, Make, n8n, Slack, custom API). Optionally sign with HMAC-SHA256.</div>", unsafe_allow_html=True)
-    webhook_enabled = st.toggle("Enable webhook alerts", value=config.get("webhook", {}).get("enabled", False), key="webhook_enabled")
-    webhook_url     = st.text_input("Webhook URL (HTTPS)", value=config.get("webhook", {}).get("url", ""),
-                                     key="webhook_url", placeholder="https://hooks.zapier.com/…")
-    webhook_secret  = st.text_input("Signing secret (optional)", value=config.get("webhook", {}).get("secret", ""),
-                                     key="webhook_secret", type="password",
-                                     help="If set, adds X-Flare-Signature HMAC-SHA256 header to each request")
-    st.markdown(
-        "<div class='warn-box' style='font-size:0.82rem;'>"
-        "Secret stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
-        unsafe_allow_html=True,
-    )
-    # Batch 9: Quick direct-URL webhook test (Discord / Telegram / generic)
-    st.markdown("---")
-    st.markdown(
-        "<div style='color:#475569; font-size:0.82rem; margin-bottom:6px;'>"
-        "<b>Quick URL Test</b> — paste a Discord/Telegram/generic webhook URL below to send a test message directly. "
-        "Uses the DEFI_WEBHOOK_URL env var if left blank.</div>",
-        unsafe_allow_html=True,
-    )
-    _quick_url = st.text_input(
-        "Webhook URL for quick test",
-        placeholder="https://discord.com/api/webhooks/… or leave blank for env var",
-        key="batch9_quick_webhook_url",
-    )
-    if st.button("Send Quick Test", key="batch9_quick_webhook_btn"):
-        try:
-            from ai.alerts import send_url_webhook_alert
-            _ok = send_url_webhook_alert(
-                f"DeFi Model — Quick webhook test sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.",
-                webhook_url=_quick_url or None,
-            )
-            if _ok:
-                st.success("Quick test message sent!")
-            else:
-                st.error("Quick test failed — check URL and DEFI_WEBHOOK_URL env var.")
-        except Exception as _qe:
-            st.error(f"Quick test error: {_qe}")
-
-with tab_thresh:
-    st.markdown(
-        "<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>"
-        "Alerts are only sent when these thresholds are crossed. "
-        "Smart tuning auto-adjusts the APY threshold after each scan based on prediction accuracy.</div>",
-        unsafe_allow_html=True,
-    )
+with _ctrl_tab_alerts:
     try:
-        _raw_apy_thresh = float(config["thresholds"].get("min_apy_alert", 150))
-    except (TypeError, ValueError):
-        _raw_apy_thresh = 150.0
-    _apy_slider_val = int(round(_raw_apy_thresh / 10) * 10)   # round to nearest step=10, no truncation
-    min_apy   = st.slider("Alert when any APY exceeds (%)", 50, 300,
-                          max(50, min(300, _apy_slider_val)), 10, key="min_apy_thresh")
-    arb_alert = st.toggle("Alert on ACT NOW arbitrage opportunities",
-                           value=config["thresholds"].get("new_arb_alert", True), key="arb_alert_cb")
+        from ai.alerts import (
+            load_alerts_config, save_alerts_config,
+            test_email, test_telegram, test_discord, test_webhook,
+        )
+    except ImportError:
+        st.error("ai/alerts.py not found. Check your installation.")
+        st.stop()
 
-    # Upgrade #6: Smart Alert Tuning status display
-    try:
-        from ai.alerts import get_calibration_report, calibrate_alert_thresholds
-        report = get_calibration_report()
-        cal_at  = report.get("calibrated_at")
-        samples = report.get("calibration_samples")
-        p75     = report.get("raw_p75_apy")
-        cal_html = ""
-        if cal_at and samples:
-            from ui.common import _ts_fmt
-            _p75_str = f"p75 APY = {p75:.1f}%" if p75 is not None else "p75 APY = N/A"
-            cal_html = (
-                f"<span style='color:#22c55e; font-weight:600;'>Active</span> · "
-                f"Last calibrated: {_ts_fmt(cal_at)} · "
-                f"{samples} samples · {_p75_str}"
-            )
-        else:
-            cal_html = "<span style='color:#475569;'>Waiting for prediction history (need 6+ evaluated predictions)</span>"
+    config = load_alerts_config()
+
+    tab_email, tab_tg, tab_discord, tab_webhook, tab_thresh = st.tabs([
+        "📧  Email", "📱  Telegram", "💬  Discord", "🔗  Webhook", "⚙️  Thresholds",
+    ])
+
+    with tab_email:
+        st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Gmail users: use an App Password (Settings → Security → App Passwords).</div>", unsafe_allow_html=True)
+        enabled    = st.toggle("Enable email alerts", value=config["email"].get("enabled", False), key="email_enabled")
+        email_addr = st.text_input("Email address",  value=config["email"].get("address", ""),          key="email_addr")
+        c1, c2     = st.columns(2)
+        with c1:
+            smtp_srv  = st.text_input("SMTP server", value=config["email"].get("smtp_server", "smtp.gmail.com"), key="smtp_srv")
+            smtp_user = st.text_input("SMTP username", value=config["email"].get("username", ""),        key="smtp_user")
+        with c2:
+            try:
+                _port_val = max(1, min(65535, int(config["email"].get("smtp_port", 587))))
+            except (ValueError, TypeError):
+                _port_val = 587
+            smtp_port = st.number_input("SMTP port", value=_port_val,
+                                        min_value=1, max_value=65535, key="smtp_port")
+            smtp_pass = st.text_input("SMTP password", value=config["email"].get("password", ""),
+                                       key="smtp_pass", type="password")
         st.markdown(
-            f"<div style='background:rgba(139,92,246,0.04); border:1px solid rgba(139,92,246,0.14); "
-            f"border-radius:10px; padding:10px 14px; margin-top:10px; font-size:0.81rem; color:#94a3b8;'>"
-            f"🤖 <span style='font-weight:600; color:#a78bfa;'>Smart Alert Tuning</span> — "
-            f"{cal_html}</div>",
+            "<div class='warn-box' style='font-size:0.82rem;'>"
+            "Credentials stored in <code>data/alerts_config.json</code> — never commit this file to git.</div>",
             unsafe_allow_html=True,
         )
-        if st.button("Calibrate Now", key="calibrate_now_btn",
-                     help="Run smart threshold calibration immediately using current prediction history"):
-            result = calibrate_alert_thresholds()
-            if result.get("calibrated"):
-                st.success(
-                    f"Calibrated: {result['old_threshold']:.1f}% → {result['new_threshold']:.1f}% "
-                    f"({result['direction']}, {result['samples']} samples)"
+
+    with tab_tg:
+        st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Create a bot via @BotFather · Get your Chat ID via @userinfobot.</div>", unsafe_allow_html=True)
+        tg_enabled = st.toggle("Enable Telegram alerts", value=config["telegram"].get("enabled", False), key="tg_enabled")
+        bot_token  = st.text_input("Bot token", value=config["telegram"].get("bot_token", ""),
+                                    key="bot_token", type="password")
+        chat_id    = st.text_input("Chat ID",   value=config["telegram"].get("chat_id", ""), key="chat_id")
+
+    with tab_discord:
+        st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Create a Discord webhook: Server Settings → Integrations → Webhooks → New Webhook → Copy URL.</div>", unsafe_allow_html=True)
+        discord_enabled = st.toggle("Enable Discord alerts", value=config.get("discord", {}).get("enabled", False), key="discord_enabled")
+        discord_url     = st.text_input("Discord Webhook URL", value=config.get("discord", {}).get("webhook_url", ""),
+                                         key="discord_url", placeholder="https://discord.com/api/webhooks/…")
+        st.markdown(
+            "<div class='warn-box' style='font-size:0.82rem;'>"
+            "Webhook URL is stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
+            unsafe_allow_html=True,
+        )
+
+    with tab_webhook:
+        st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Send JSON payloads to any HTTPS endpoint (Zapier, Make, n8n, Slack, custom API). Optionally sign with HMAC-SHA256.</div>", unsafe_allow_html=True)
+        webhook_enabled = st.toggle("Enable webhook alerts", value=config.get("webhook", {}).get("enabled", False), key="webhook_enabled")
+        webhook_url     = st.text_input("Webhook URL (HTTPS)", value=config.get("webhook", {}).get("url", ""),
+                                         key="webhook_url", placeholder="https://hooks.zapier.com/…")
+        webhook_secret  = st.text_input("Signing secret (optional)", value=config.get("webhook", {}).get("secret", ""),
+                                         key="webhook_secret", type="password",
+                                         help="If set, adds X-Flare-Signature HMAC-SHA256 header to each request")
+        st.markdown(
+            "<div class='warn-box' style='font-size:0.82rem;'>"
+            "Secret stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
+            unsafe_allow_html=True,
+        )
+        # Batch 9: Quick direct-URL webhook test (Discord / Telegram / generic)
+        st.markdown("---")
+        st.markdown(
+            "<div style='color:#475569; font-size:0.82rem; margin-bottom:6px;'>"
+            "<b>Quick URL Test</b> — paste a Discord/Telegram/generic webhook URL below to send a test message directly. "
+            "Uses the DEFI_WEBHOOK_URL env var if left blank.</div>",
+            unsafe_allow_html=True,
+        )
+        _quick_url = st.text_input(
+            "Webhook URL for quick test",
+            placeholder="https://discord.com/api/webhooks/… or leave blank for env var",
+            key="batch9_quick_webhook_url",
+        )
+        if st.button("Send Quick Test", key="batch9_quick_webhook_btn"):
+            try:
+                from ai.alerts import send_url_webhook_alert
+                _ok = send_url_webhook_alert(
+                    f"DeFi Model — Quick webhook test sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.",
+                    webhook_url=_quick_url or None,
+                )
+                if _ok:
+                    st.success("Quick test message sent!")
+                else:
+                    st.error("Quick test failed — check URL and DEFI_WEBHOOK_URL env var.")
+            except Exception as _qe:
+                st.error(f"Quick test error: {_qe}")
+
+    with tab_thresh:
+        st.markdown(
+            "<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>"
+            "Alerts are only sent when these thresholds are crossed. "
+            "Smart tuning auto-adjusts the APY threshold after each scan based on prediction accuracy.</div>",
+            unsafe_allow_html=True,
+        )
+        try:
+            _raw_apy_thresh = float(config["thresholds"].get("min_apy_alert", 150))
+        except (TypeError, ValueError):
+            _raw_apy_thresh = 150.0
+        _apy_slider_val = int(round(_raw_apy_thresh / 10) * 10)   # round to nearest step=10, no truncation
+        min_apy   = st.slider("Alert when any APY exceeds (%)", 50, 300,
+                              max(50, min(300, _apy_slider_val)), 10, key="min_apy_thresh")
+        arb_alert = st.toggle("Alert on ACT NOW arbitrage opportunities",
+                               value=config["thresholds"].get("new_arb_alert", True), key="arb_alert_cb")
+
+        # Upgrade #6: Smart Alert Tuning status display
+        try:
+            from ai.alerts import get_calibration_report, calibrate_alert_thresholds
+            report = get_calibration_report()
+            cal_at  = report.get("calibrated_at")
+            samples = report.get("calibration_samples")
+            p75     = report.get("raw_p75_apy")
+            cal_html = ""
+            if cal_at and samples:
+                from ui.common import _ts_fmt
+                _p75_str = f"p75 APY = {p75:.1f}%" if p75 is not None else "p75 APY = N/A"
+                cal_html = (
+                    f"<span style='color:#22c55e; font-weight:600;'>Active</span> · "
+                    f"Last calibrated: {_ts_fmt(cal_at)} · "
+                    f"{samples} samples · {_p75_str}"
                 )
             else:
-                st.info(result.get("reason", "Not enough data yet."))
-    except Exception as _cex:
-        st.caption(f"Smart tuning status unavailable: {_cex}")
+                cal_html = "<span style='color:#475569;'>Waiting for prediction history (need 6+ evaluated predictions)</span>"
+            st.markdown(
+                f"<div style='background:rgba(139,92,246,0.04); border:1px solid rgba(139,92,246,0.14); "
+                f"border-radius:10px; padding:10px 14px; margin-top:10px; font-size:0.81rem; color:#94a3b8;'>"
+                f"🤖 <span style='font-weight:600; color:#a78bfa;'>Smart Alert Tuning</span> — "
+                f"{cal_html}</div>",
+                unsafe_allow_html=True,
+            )
+            if st.button("Calibrate Now", key="calibrate_now_btn",
+                         help="Run smart threshold calibration immediately using current prediction history"):
+                result = calibrate_alert_thresholds()
+                if result.get("calibrated"):
+                    st.success(
+                        f"Calibrated: {result['old_threshold']:.1f}% → {result['new_threshold']:.1f}% "
+                        f"({result['direction']}, {result['samples']} samples)"
+                    )
+                else:
+                    st.info(result.get("reason", "Not enough data yet."))
+        except Exception as _cex:
+            st.caption(f"Smart tuning status unavailable: {_cex}")
 
-st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
-col_save, col_test_e, col_test_t = st.columns(3)
+    st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
+    col_save, col_test_e, col_test_t = st.columns(3)
 
-with col_save:
-    if st.button("Save Settings", key="save_alerts", width="stretch"):
-        new_config = {
-            "email":    {"enabled": enabled, "address": email_addr, "smtp_server": smtp_srv,
-                         "smtp_port": int(smtp_port), "username": smtp_user, "password": smtp_pass},
-            "telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id},
-            "discord":  {"enabled": discord_enabled, "webhook_url": discord_url},
-            "webhook":  {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret},
-            "thresholds": {"min_apy_alert": min_apy, "new_arb_alert": arb_alert},
-        }
-        save_alerts_config(new_config)
-        st.success("Settings saved.")
+    with col_save:
+        if st.button("Save Settings", key="save_alerts", width="stretch"):
+            new_config = {
+                "email":    {"enabled": enabled, "address": email_addr, "smtp_server": smtp_srv,
+                             "smtp_port": int(smtp_port), "username": smtp_user, "password": smtp_pass},
+                "telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id},
+                "discord":  {"enabled": discord_enabled, "webhook_url": discord_url},
+                "webhook":  {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret},
+                "thresholds": {"min_apy_alert": min_apy, "new_arb_alert": arb_alert},
+            }
+            save_alerts_config(new_config)
+            st.success("Settings saved.")
 
-with col_test_e:
-    if st.button("Send Test Email", key="test_email_btn", width="stretch"):
-        _test_cfg = {"email": {"enabled": enabled, "address": email_addr,
-                               "smtp_server": smtp_srv, "smtp_port": int(smtp_port),
-                               "username": smtp_user, "password": smtp_pass}}
-        ok, msg = test_email(_test_cfg)
-        st.success(msg) if ok else st.error(msg)
+    with col_test_e:
+        if st.button("Send Test Email", key="test_email_btn", width="stretch"):
+            _test_cfg = {"email": {"enabled": enabled, "address": email_addr,
+                                   "smtp_server": smtp_srv, "smtp_port": int(smtp_port),
+                                   "username": smtp_user, "password": smtp_pass}}
+            ok, msg = test_email(_test_cfg)
+            st.success(msg) if ok else st.error(msg)
 
-with col_test_t:
-    if st.button("Send Test Telegram", key="test_tg_btn", width="stretch"):
-        _test_cfg = {"telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id}}
-        ok, msg = test_telegram(_test_cfg)
-        st.success(msg) if ok else st.error(msg)
+    with col_test_t:
+        if st.button("Send Test Telegram", key="test_tg_btn", width="stretch"):
+            _test_cfg = {"telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id}}
+            ok, msg = test_telegram(_test_cfg)
+            st.success(msg) if ok else st.error(msg)
 
-col_test_d, col_test_w, _ = st.columns(3)
-with col_test_d:
-    if st.button("Test Discord", key="test_discord_btn", width="stretch"):
-        _test_cfg = {"discord": {"enabled": discord_enabled, "webhook_url": discord_url}}
-        ok, msg = test_discord(_test_cfg)
-        st.success(msg) if ok else st.error(msg)
-with col_test_w:
-    if st.button("Test Webhook", key="test_webhook_btn", width="stretch"):
-        _test_cfg = {"webhook": {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret}}
-        ok, msg = test_webhook(_test_cfg)
-        st.success(msg) if ok else st.error(msg)
-
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    col_test_d, col_test_w, _ = st.columns(3)
+    with col_test_d:
+        if st.button("Test Discord", key="test_discord_btn", width="stretch"):
+            _test_cfg = {"discord": {"enabled": discord_enabled, "webhook_url": discord_url}}
+            ok, msg = test_discord(_test_cfg)
+            st.success(msg) if ok else st.error(msg)
+    with col_test_w:
+        if st.button("Test Webhook", key="test_webhook_btn", width="stretch"):
+            _test_cfg = {"webhook": {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret}}
+            ok, msg = test_webhook(_test_cfg)
+            st.success(msg) if ok else st.error(msg)
 
 
-# ─── Report Export ────────────────────────────────────────────────────────────
+with _ctrl_tab_export:
+    # ─── Report Export ────────────────────────────────────────────────────────────
 
-st.markdown("### Export Report")
-st.markdown(
-    "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
-    "Download a printable HTML report. Open in Chrome/Edge → Ctrl+P → Save as PDF.</div>",
-    unsafe_allow_html=True,
-)
-
-latest = load_latest()
-
-if not latest:
-    st.info("Run a scan first to generate a report.")
-else:
-    from ui.common import risk_score_to_grade, _ts_fmt
-
-    col_profile, col_size = st.columns(2)
-    with col_profile:
-        report_profile = st.selectbox("Risk profile for report",
-                                      ["conservative", "medium", "high"],
-                                      format_func=lambda p: RISK_PROFILES[p]["label"],
-                                      key="report_profile")
-    with col_size:
-        report_portfolio = st.number_input("Portfolio size for report ($)",
-                                           min_value=0.0, value=10000.0, step=1000.0,
-                                           key="report_portfolio")
-
-    opps        = (latest.get("models") or {}).get(report_profile) or []
-    profile_cfg = RISK_PROFILES[report_profile]
-    ts          = latest.get("completed_at", datetime.now(timezone.utc).isoformat())
-
-    rows_html = ""
-    for opp in opps[:6]:
-        apy       = opp.get("estimated_apy", 0)
-        kf        = opp.get("kelly_fraction", 0)
-        grade, _  = risk_score_to_grade(opp.get("risk_score", 5))
-        alloc_str = f"${kf * report_portfolio:,.0f}" if report_portfolio > 0 else f"{kf*100:.0f}%"
-        proto     = _html.escape(str(opp.get("protocol", "—")))
-        pool      = _html.escape(str(opp.get("asset_or_pool", "—")))
-        action    = _html.escape(str(opp.get("action", "—")))
-        rank      = _html.escape(str(opp.get("rank", "—")))
-        rows_html += f"""
-        <tr>
-            <td>{rank}</td>
-            <td>{proto}</td>
-            <td>{pool}</td>
-            <td>{apy:.1f}%</td>
-            <td>{opp.get('apy_low', apy*0.8):.1f}%–{opp.get('apy_high', apy*1.2):.1f}%</td>
-            <td><b>{grade}</b></td>
-            <td>{alloc_str}</td>
-            <td style="font-size:0.85rem;">{action}</td>
-        </tr>"""
-
-    html_content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Flare DeFi Report — {_ts_fmt(ts)}</title>
-<style>
-  body  {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-           padding: 40px; color: #1e293b; max-width: 1000px; margin: auto; }}
-  h1    {{ color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; font-size: 1.6rem; }}
-  h2    {{ color: #0f172a; margin-top: 32px; font-size: 1.1rem; }}
-  table {{ border-collapse: collapse; width: 100%; margin-top: 12px; }}
-  th    {{ background: #1e293b; color: #f8fafc; padding: 10px 12px; text-align: left; font-size: 0.82rem; }}
-  td    {{ padding: 9px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-size: 0.88rem; }}
-  tr:nth-child(even) {{ background: #f8fafc; }}
-  .warn {{ background: #fefce8; padding: 14px 16px; border-radius: 8px; margin: 16px 0;
-           border-left: 4px solid #f59e0b; font-size: 0.9rem; }}
-  .meta {{ color: #64748b; font-size: 0.88rem; margin-bottom: 24px; }}
-  .footer {{ margin-top: 40px; color: #94a3b8; font-size: 0.78rem;
-             border-top: 1px solid #e2e8f0; padding-top: 16px; }}
-  @media print {{ body {{ padding: 20px; }} }}
-</style>
-</head>
-<body>
-<h1>⚡ Flare DeFi Opportunities Report</h1>
-<p class="meta">
-  Profile: <b>{profile_cfg['label']}</b> &nbsp;·&nbsp;
-  Generated: <b>{_ts_fmt(ts)}</b> &nbsp;·&nbsp;
-  Portfolio: <b>${report_portfolio:,.0f}</b>
-</p>
-<div class="warn">⚠️ {INCENTIVE_PROGRAM['note']}</div>
-<h2>Top Opportunities</h2>
-<table>
-<tr><th>#</th><th>Protocol</th><th>Pool / Asset</th><th>Est. APY</th>
-    <th>APY Range</th><th>Grade</th><th>Allocation</th><th>Action</th></tr>
-{rows_html}
-</table>
-<h2>How to Read This Report</h2>
-<ul>
-  <li><b>Est. APY</b> — Model's central estimate. Actual results will vary.</li>
-  <li><b>APY Range</b> — Conservative ±20% scenario band.</li>
-  <li><b>Grade A–F</b> — A = very safe (lending/staking). F = high risk (leveraged/perps).</li>
-  <li><b>Allocation</b> — Kelly Criterion position sizing. Never concentrate 100% in one strategy.</li>
-</ul>
-<div class="footer">
-  Flare DeFi Model · Data from Blazeswap, SparkDEX, Ēnosys, Kinetic, Clearpool,
-  Spectra, Upshift, Mystic, Hyperliquid, Cyclo, Sceptre, Firelight<br>
-  <b>Not financial advice. Always do your own research before investing.</b>
-</div>
-</body>
-</html>"""
-
-    fname = f"flare_defi_report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.html"
-    st.download_button(
-        label="Download Report (HTML → Print → Save as PDF)",
-        data=html_content,
-        file_name=fname,
-        mime="text/html",
-        key="pdf_export_btn",
-        width="stretch",
+    st.markdown("### Export Report")
+    st.markdown(
+        "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
+        "Download a printable HTML report. Open in Chrome/Edge → Ctrl+P → Save as PDF.</div>",
+        unsafe_allow_html=True,
     )
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    latest = load_latest()
 
+    if not latest:
+        st.info("Run a scan first to generate a report.")
+    else:
+        from ui.common import risk_score_to_grade, _ts_fmt
 
-# ─── Tax CSV Export (Feature 11) ──────────────────────────────────────────────
+        col_profile, col_size = st.columns(2)
+        with col_profile:
+            report_profile = st.selectbox("Risk profile for report",
+                                          ["conservative", "medium", "high"],
+                                          format_func=lambda p: RISK_PROFILES[p]["label"],
+                                          key="report_profile")
+        with col_size:
+            report_portfolio = st.number_input("Portfolio size for report ($)",
+                                               min_value=0.0, value=10000.0, step=1000.0,
+                                               key="report_portfolio")
 
-st.markdown("### Tax Export")
-st.markdown(
-    "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
-    "Download a CSV of all scanned opportunities for tax records or external analysis. "
-    "Includes estimated yield per position based on your portfolio size.</div>",
-    unsafe_allow_html=True,
-)
+        opps        = (latest.get("models") or {}).get(report_profile) or []
+        profile_cfg = RISK_PROFILES[report_profile]
+        ts          = latest.get("completed_at", datetime.now(timezone.utc).isoformat())
 
-_tax_runs = load_history_runs()
-if not _tax_runs:
-    st.info("No scan history yet. Run a scan first to generate a tax export.")
-else:
-    _tax_col1, _tax_col2 = st.columns(2)
-    with _tax_col1:
-        _tax_portfolio = st.number_input(
-            "Portfolio size for yield estimate ($)",
-            min_value=0.0, value=10000.0, step=1000.0, key="tax_portfolio_size",
-        )
-    with _tax_col2:
-        _tax_profiles = st.multiselect(
-            "Include profiles",
-            ["conservative", "medium", "high"],
-            default=["conservative", "medium", "high"],
-            format_func=lambda p: RISK_PROFILES[p]["label"],
-            key="tax_profiles",
-        )
+        rows_html = ""
+        for opp in opps[:6]:
+            apy       = opp.get("estimated_apy", 0)
+            kf        = opp.get("kelly_fraction", 0)
+            grade, _  = risk_score_to_grade(opp.get("risk_score", 5))
+            alloc_str = f"${kf * report_portfolio:,.0f}" if report_portfolio > 0 else f"{kf*100:.0f}%"
+            proto     = _html.escape(str(opp.get("protocol", "—")))
+            pool      = _html.escape(str(opp.get("asset_or_pool", "—")))
+            action    = _html.escape(str(opp.get("action", "—")))
+            rank      = _html.escape(str(opp.get("rank", "—")))
+            rows_html += f"""
+            <tr>
+                <td>{rank}</td>
+                <td>{proto}</td>
+                <td>{pool}</td>
+                <td>{apy:.1f}%</td>
+                <td>{opp.get('apy_low', apy*0.8):.1f}%–{opp.get('apy_high', apy*1.2):.1f}%</td>
+                <td><b>{grade}</b></td>
+                <td>{alloc_str}</td>
+                <td style="font-size:0.85rem;">{action}</td>
+            </tr>"""
 
-    _tax_rows = []
-    for _run in _tax_runs:
-        _date_str = (_run.get("completed_at") or _run.get("run_id", ""))[:10]
-        for _prof in (_tax_profiles or ["conservative", "medium", "high"]):
-            for _opp in (_run.get("models") or {}).get(_prof, [])[:5]:
-                _apy = float(_opp.get("estimated_apy") or 0)
-                _ann_yield = round(_tax_portfolio * _apy / 100, 2) if _tax_portfolio > 0 else 0.0
-                _day_yield = round(_ann_yield / 365, 4)
-                _tax_rows.append({
-                    "Date":                 _date_str,
-                    "Risk Profile":         _prof.capitalize(),
-                    "Protocol":             _opp.get("protocol", "—"),
-                    "Pool / Asset":         _opp.get("asset_or_pool", "—"),
-                    "Est. APY (%)":         round(_apy, 2),
-                    "Est. Annual Yield ($)": _ann_yield,
-                    "Est. Daily Yield ($)":  _day_yield,
-                    "Confidence (%)":       round(float(_opp.get("confidence") or 0), 1),
-                    "Action":               _opp.get("action", "—"),
-                })
+        html_content = f"""<!DOCTYPE html>
+    <html lang="en">
+    <head>
+    <meta charset="utf-8">
+    <title>Flare DeFi Report — {_ts_fmt(ts)}</title>
+    <style>
+      body  {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+               padding: 40px; color: #1e293b; max-width: 1000px; margin: auto; }}
+      h1    {{ color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; font-size: 1.6rem; }}
+      h2    {{ color: #0f172a; margin-top: 32px; font-size: 1.1rem; }}
+      table {{ border-collapse: collapse; width: 100%; margin-top: 12px; }}
+      th    {{ background: #1e293b; color: #f8fafc; padding: 10px 12px; text-align: left; font-size: 0.82rem; }}
+      td    {{ padding: 9px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-size: 0.88rem; }}
+      tr:nth-child(even) {{ background: #f8fafc; }}
+      .warn {{ background: #fefce8; padding: 14px 16px; border-radius: 8px; margin: 16px 0;
+               border-left: 4px solid #f59e0b; font-size: 0.9rem; }}
+      .meta {{ color: #64748b; font-size: 0.88rem; margin-bottom: 24px; }}
+      .footer {{ margin-top: 40px; color: #94a3b8; font-size: 0.78rem;
+                 border-top: 1px solid #e2e8f0; padding-top: 16px; }}
+      @media print {{ body {{ padding: 20px; }} }}
+    </style>
+    </head>
+    <body>
+    <h1>⚡ Flare DeFi Opportunities Report</h1>
+    <p class="meta">
+      Profile: <b>{profile_cfg['label']}</b> &nbsp;·&nbsp;
+      Generated: <b>{_ts_fmt(ts)}</b> &nbsp;·&nbsp;
+      Portfolio: <b>${report_portfolio:,.0f}</b>
+    </p>
+    <div class="warn">⚠️ {INCENTIVE_PROGRAM['note']}</div>
+    <h2>Top Opportunities</h2>
+    <table>
+    <tr><th>#</th><th>Protocol</th><th>Pool / Asset</th><th>Est. APY</th>
+        <th>APY Range</th><th>Grade</th><th>Allocation</th><th>Action</th></tr>
+    {rows_html}
+    </table>
+    <h2>How to Read This Report</h2>
+    <ul>
+      <li><b>Est. APY</b> — Model's central estimate. Actual results will vary.</li>
+      <li><b>APY Range</b> — Conservative ±20% scenario band.</li>
+      <li><b>Grade A–F</b> — A = very safe (lending/staking). F = high risk (leveraged/perps).</li>
+      <li><b>Allocation</b> — Kelly Criterion position sizing. Never concentrate 100% in one strategy.</li>
+    </ul>
+    <div class="footer">
+      Flare DeFi Model · Data from Blazeswap, SparkDEX, Ēnosys, Kinetic, Clearpool,
+      Spectra, Upshift, Mystic, Hyperliquid, Cyclo, Sceptre, Firelight<br>
+      <b>Not financial advice. Always do your own research before investing.</b>
+    </div>
+    </body>
+    </html>"""
 
-    if _tax_rows:
-        _buf = io.StringIO()
-        _writer = csv.DictWriter(_buf, fieldnames=list(_tax_rows[0].keys()))
-        _writer.writeheader()
-        _writer.writerows(_tax_rows)
-        _csv_fname = f"flare_defi_tax_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+        fname = f"flare_defi_report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.html"
         st.download_button(
-            label=f"Download Tax CSV ({len(_tax_rows)} rows, {len(_tax_runs)} scans)",
-            data=_buf.getvalue().encode("utf-8"),
-            file_name=_csv_fname,
-            mime="text/csv",
-            key="tax_csv_btn",
+            label="Download Report (HTML → Print → Save as PDF)",
+            data=html_content,
+            file_name=fname,
+            mime="text/html",
+            key="pdf_export_btn",
             width="stretch",
         )
-        st.caption(f"Top 5 opportunities per profile per scan · {len(_tax_runs)} scan(s) in history")
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+with _ctrl_tab_export:
+    # ─── Tax CSV Export (Feature 11) ──────────────────────────────────────────────
 
-# ─── Wallet Setup ─────────────────────────────────────────────────────────────
-render_section_header("Wallet Setup", "Generate encrypted agent wallets for Phase 2")
+    st.markdown("### Tax Export")
+    st.markdown(
+        "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
+        "Download a CSV of all scanned opportunities for tax records or external analysis. "
+        "Includes estimated yield per position based on your portfolio size.</div>",
+        unsafe_allow_html=True,
+    )
 
-if not _WALLETS_OK or _wallets is None:
-    st.warning("Wallet manager unavailable — ensure agents package dependencies are installed.")
-else:
-    wallet_status = _wallets.wallets_exist()
-    flare_addr    = _wallets.get_flare_address()
-    xrpl_addr     = _wallets.get_xrpl_address()
-
-    if wallet_status["flare"] and wallet_status["xrpl"]:
-        st.success("✓ Both wallets generated and encrypted.")
-        if flare_addr:
-            st.markdown(f"**Flare address:** `{flare_addr}`")
-            st.caption("Fund this address with FLR before enabling Phase 2.")
-        if xrpl_addr:
-            st.markdown(f"**XRPL address:** `{xrpl_addr}`")
-            st.caption("Fund this address with XRP (min 10 XRP reserve) before enabling Phase 2.")
+    _tax_runs = load_history_runs()
+    if not _tax_runs:
+        st.info("No scan history yet. Run a scan first to generate a tax export.")
     else:
-        render_what_this_means(
-            "Before live trading, you need two dedicated wallets — one for Flare, one for XRPL. "
-            "These are separate from your personal wallets. Set a strong password and never share it. "
-            "The private keys are stored encrypted on this device — never uploaded anywhere.",
-            title="About agent wallets",
-            intermediate_message="Dedicated bot wallets, isolated from personal holdings. AES-256-GCM encrypted, PBKDF2-SHA256 key derivation.",
+        _tax_col1, _tax_col2 = st.columns(2)
+        with _tax_col1:
+            _tax_portfolio = st.number_input(
+                "Portfolio size for yield estimate ($)",
+                min_value=0.0, value=10000.0, step=1000.0, key="tax_portfolio_size",
+            )
+        with _tax_col2:
+            _tax_profiles = st.multiselect(
+                "Include profiles",
+                ["conservative", "medium", "high"],
+                default=["conservative", "medium", "high"],
+                format_func=lambda p: RISK_PROFILES[p]["label"],
+                key="tax_profiles",
+            )
+
+        _tax_rows = []
+        for _run in _tax_runs:
+            _date_str = (_run.get("completed_at") or _run.get("run_id", ""))[:10]
+            for _prof in (_tax_profiles or ["conservative", "medium", "high"]):
+                for _opp in (_run.get("models") or {}).get(_prof, [])[:5]:
+                    _apy = float(_opp.get("estimated_apy") or 0)
+                    _ann_yield = round(_tax_portfolio * _apy / 100, 2) if _tax_portfolio > 0 else 0.0
+                    _day_yield = round(_ann_yield / 365, 4)
+                    _tax_rows.append({
+                        "Date":                 _date_str,
+                        "Risk Profile":         _prof.capitalize(),
+                        "Protocol":             _opp.get("protocol", "—"),
+                        "Pool / Asset":         _opp.get("asset_or_pool", "—"),
+                        "Est. APY (%)":         round(_apy, 2),
+                        "Est. Annual Yield ($)": _ann_yield,
+                        "Est. Daily Yield ($)":  _day_yield,
+                        "Confidence (%)":       round(float(_opp.get("confidence") or 0), 1),
+                        "Action":               _opp.get("action", "—"),
+                    })
+
+        if _tax_rows:
+            _buf = io.StringIO()
+            _writer = csv.DictWriter(_buf, fieldnames=list(_tax_rows[0].keys()))
+            _writer.writeheader()
+            _writer.writerows(_tax_rows)
+            _csv_fname = f"flare_defi_tax_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+            st.download_button(
+                label=f"Download Tax CSV ({len(_tax_rows)} rows, {len(_tax_runs)} scans)",
+                data=_buf.getvalue().encode("utf-8"),
+                file_name=_csv_fname,
+                mime="text/csv",
+                key="tax_csv_btn",
+                width="stretch",
+            )
+            st.caption(f"Top 5 opportunities per profile per scan · {len(_tax_runs)} scan(s) in history")
+
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+
+with _ctrl_tab_wallet:
+    # ─── Wallet Setup ─────────────────────────────────────────────────────────────
+    render_section_header("Wallet Setup", "Generate encrypted agent wallets for Phase 2")
+
+    if not _WALLETS_OK or _wallets is None:
+        st.warning("Wallet manager unavailable — ensure agents package dependencies are installed.")
+    else:
+        wallet_status = _wallets.wallets_exist()
+        flare_addr    = _wallets.get_flare_address()
+        xrpl_addr     = _wallets.get_xrpl_address()
+
+        if wallet_status["flare"] and wallet_status["xrpl"]:
+            st.success("✓ Both wallets generated and encrypted.")
+            if flare_addr:
+                st.markdown(f"**Flare address:** `{flare_addr}`")
+                st.caption("Fund this address with FLR before enabling Phase 2.")
+            if xrpl_addr:
+                st.markdown(f"**XRPL address:** `{xrpl_addr}`")
+                st.caption("Fund this address with XRP (min 10 XRP reserve) before enabling Phase 2.")
+        else:
+            render_what_this_means(
+                "Before live trading, you need two dedicated wallets — one for Flare, one for XRPL. "
+                "These are separate from your personal wallets. Set a strong password and never share it. "
+                "The private keys are stored encrypted on this device — never uploaded anywhere.",
+                title="About agent wallets",
+                intermediate_message="Dedicated bot wallets, isolated from personal holdings. AES-256-GCM encrypted, PBKDF2-SHA256 key derivation.",
+            )
+
+            with st.form("wallet_setup_form"):
+                st.markdown("**Generate agent wallets** — both Flare (EVM) and XRPL")
+                st.warning("⚠️ Set a strong password. You will need this password every time the agent signs a live transaction.")
+                pwd1 = st.text_input("Password", type="password", key="wallet_pwd1")
+                pwd2 = st.text_input("Confirm password", type="password", key="wallet_pwd2")
+                submitted = st.form_submit_button("Generate Wallets", type="primary")
+
+            if submitted:
+                if not pwd1 or len(pwd1) < 12:
+                    st.error("Password must be at least 12 characters.")
+                elif pwd1 != pwd2:
+                    st.error("Passwords do not match.")
+                else:
+                    try:
+                        result = _wallets.setup_wallets(pwd1)
+                        st.success("✓ Wallets generated and encrypted successfully!")
+                        st.markdown(f"**Flare address:** `{result.get('flare', 'error')}`")
+                        st.markdown(f"**XRPL address:** `{result.get('xrpl', 'error')}`")
+                        st.info(
+                            "Fund each wallet with the Phase 2 amount ($1,000 equivalent) "
+                            "only after completing 14 days of paper trading."
+                        )
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Wallet generation failed: {e}")
+
+
+with _ctrl_tab_api:
+    st.markdown("### API Key Management")
+    st.markdown(
+        "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
+        "Set API keys below. Keys entered here are saved to session state only — they override "
+        "environment variables for this session. To persist permanently, set them as environment variables.</div>",
+        unsafe_allow_html=True,
+    )
+    _api_keys = [
+        ("ANTHROPIC_API_KEY",    "Anthropic (Claude Decision Engine)",  "Required for autonomous agent decisions"),
+        ("COINMETRICS_API_KEY",  "CoinMetrics (On-Chain Data)",         "MVRV, SOPR, Hash Rate — optional, uses community API if blank"),
+        ("FRED_API_KEY",         "FRED (Macro Data)",                    "DXY, VIX, CPI, yield curve — optional, falls back to cached values"),
+        ("ZERION_API_KEY",       "Zerion (Multi-Chain Wallet Data)",    "Required for Zerion wallet positions in Portfolio tab"),
+        ("CG_PRO_API_KEY",       "CoinGecko Pro",                       "Optional — removes rate limits on price feeds"),
+        ("DEFI_WEBHOOK_URL",     "Webhook Alert URL",                   "Optional — Discord/Slack webhook for quick alerts"),
+    ]
+    import os
+    for _key, _label, _desc in _api_keys:
+        _cur = st.session_state.get(f"api_{_key}", "") or os.environ.get(_key, "")
+        _masked = (_cur[:6] + "…" + _cur[-4:]) if len(_cur) > 12 else ("●" * len(_cur) if _cur else "")
+        _c1, _c2 = st.columns([3, 1])
+        with _c1:
+            _new_val = st.text_input(
+                f"{_label}",
+                value=_cur,
+                type="password",
+                help=_desc,
+                key=f"api_input_{_key}",
+            )
+        with _c2:
+            _set_lbl = "Set" if _cur else "Not set"
+            _set_col = "#10b981" if _cur else "#ef4444"
+            st.markdown(f"<div style='font-size:0.75rem; color:{_set_col}; margin-top:28px;'>{_set_lbl}</div>", unsafe_allow_html=True)
+        if _new_val and _new_val != _cur:
+            st.session_state[f"api_{_key}"] = _new_val
+            os.environ[_key] = _new_val
+    st.markdown(
+        "<div class='warn-box' style='font-size:0.82rem;'>"
+        "API keys entered here are stored in session memory only — they are cleared when you restart the app. "
+        "For permanent storage, set them as system environment variables or in a <code>.env</code> file.</div>",
+        unsafe_allow_html=True,
+    )
+
+with _ctrl_tab_cache:
+    st.markdown("### Cache Controls")
+    st.markdown(
+        "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
+        "Manage data caches. Clearing forces a fresh fetch on the next scan or page load.</div>",
+        unsafe_allow_html=True,
+    )
+    _cc1, _cc2 = st.columns(2)
+    with _cc1:
+        if st.button("🗑️ Clear All Streamlit Cache", key="clear_all_cache", width="stretch",
+                     help="Clears all @st.cache_data caches across all pages"):
+            st.cache_data.clear()
+            st.success("All Streamlit caches cleared — data will refresh on next load.")
+        if st.button("🔄 Force Macro Data Refresh", key="clear_macro_cache", width="stretch",
+                     help="Forces fresh fetch of DXY, VIX, CPI, yield curve data"):
+            try:
+                from macro_feeds import _macro_cache as _mc
+                _mc.clear() if hasattr(_mc, "clear") else None
+            except Exception:
+                pass
+            st.cache_data.clear()
+            st.success("Macro data cache cleared.")
+    with _cc2:
+        if st.button("🔄 Force Scan Data Refresh", key="clear_scan_cache", width="stretch",
+                     help="Forces the next scan to re-fetch all DeFiLlama and scanner data"):
+            st.cache_data.clear()
+            st.success("Scan cache cleared — next scan will fetch fresh data.")
+        if st.button("🔄 Force Price Data Refresh", key="clear_price_cache", width="stretch",
+                     help="Forces fresh CoinGecko price fetch"):
+            st.cache_data.clear()
+            st.success("Price cache cleared.")
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    st.markdown("**Cache Status**")
+    _cache_info = [
+        ("DeFiLlama Yields",   "60 min TTL",  "Auto-refreshes every scan cycle"),
+        ("CoinGecko Prices",   "5 min TTL",   "Rate-limited to 0.4 req/s"),
+        ("FRED Macro Data",    "2 hour TTL",  "DXY, VIX, CPI, 2Y10Y"),
+        ("CoinMetrics On-Chain","1 hour TTL", "MVRV, SOPR, Hash Rate, Puell"),
+        ("Fear & Greed",       "1 hour TTL",  "30-day history from Alternative.me"),
+        ("Composite Signal",   "1 hour TTL",  "3-layer model: Macro + Sentiment + On-Chain"),
+    ]
+    for _cn, _ttl, _desc in _cache_info:
+        st.markdown(
+            f"<div style='display:flex; justify-content:space-between; "
+            f"border-bottom:1px solid rgba(148,163,184,0.1); padding:6px 0; font-size:0.82rem;'>"
+            f"<span style='color:#e2e8f0;'>{_cn}</span>"
+            f"<span style='color:#3b82f6;'>{_ttl}</span>"
+            f"<span style='color:#475569;'>{_desc}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
         )
-
-        with st.form("wallet_setup_form"):
-            st.markdown("**Generate agent wallets** — both Flare (EVM) and XRPL")
-            st.warning("⚠️ Set a strong password. You will need this password every time the agent signs a live transaction.")
-            pwd1 = st.text_input("Password", type="password", key="wallet_pwd1")
-            pwd2 = st.text_input("Confirm password", type="password", key="wallet_pwd2")
-            submitted = st.form_submit_button("Generate Wallets", type="primary")
-
-        if submitted:
-            if not pwd1 or len(pwd1) < 12:
-                st.error("Password must be at least 12 characters.")
-            elif pwd1 != pwd2:
-                st.error("Passwords do not match.")
-            else:
-                try:
-                    result = _wallets.setup_wallets(pwd1)
-                    st.success("✓ Wallets generated and encrypted successfully!")
-                    st.markdown(f"**Flare address:** `{result.get('flare', 'error')}`")
-                    st.markdown(f"**XRPL address:** `{result.get('xrpl', 'error')}`")
-                    st.info(
-                        "Fund each wallet with the Phase 2 amount ($1,000 equivalent) "
-                        "only after completing 14 days of paper trading."
-                    )
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Wallet generation failed: {e}")

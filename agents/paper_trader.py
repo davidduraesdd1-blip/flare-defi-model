@@ -48,6 +48,7 @@ def execute_paper_trade(
     decision: TradeDecision,
     adjusted_size_usd: float,
     entry_price: float = 1.0,
+    current_apy: float = 0.0,
 ) -> dict:
     """
     Simulate executing the approved decision in paper mode.
@@ -125,9 +126,9 @@ def execute_paper_trade(
         except Exception:
             hours_held = 1.0
 
-        # Use entry APY for accrual — current APY isn't tracked on open positions
-        # (Paper trade APY is locked at entry for realistic P&L simulation)
-        apy = pos.get("expected_apy", 0.05)
+        # Use current APY if provided (from live data feed), otherwise fall back to entry APY.
+        # This corrects for pools where APY has materially changed since entry.
+        apy = current_apy if current_apy > 0.001 else pos.get("expected_apy", 0.05)
         # In paper mode, simulate yield accrual: P&L = size × APY × (hours/8760)
         accrued_yield = pos["size_usd"] * apy * (hours_held / 8760)
         exit_slippage = _simulate_slippage(pos["size_usd"])
