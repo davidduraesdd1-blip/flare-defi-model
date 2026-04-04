@@ -817,7 +817,23 @@ with tab5:
                 f"</div></div>",
                 unsafe_allow_html=True,
             )
-            st.caption(f"APY source: {_apy_source} · Refreshed every 15 min{_decay_note}. Allocations are suggestions only. Not financial advice.")
+            # Data freshness indicator
+            _live_count = sum(1 for p in _plans if _resolve_apy(_live_apys, p["protocol"].lower().split()[0], "", 0) > 0)
+            _live_badge = (
+                "<span style='background:rgba(34,197,94,0.12);color:#22c55e;font-size:0.65rem;"
+                "font-weight:700;padding:1px 7px;border-radius:8px;border:1px solid rgba(34,197,94,0.28);"
+                "vertical-align:middle;'>📡 LIVE</span>"
+            ) if _live_apys else (
+                "<span style='background:rgba(245,158,11,0.12);color:#f59e0b;font-size:0.65rem;"
+                "font-weight:700;padding:1px 7px;border-radius:8px;border:1px solid rgba(245,158,11,0.28);"
+                "vertical-align:middle;'>📊 EST</span>"
+            )
+            st.markdown(
+                f"<div style='font-size:0.78rem;color:#64748b;margin-top:4px;'>"
+                f"{_live_badge} APY source: {_apy_source} · refreshed every 15 min{_decay_note}. "
+                f"Allocations are suggestions only. Not financial advice.</div>",
+                unsafe_allow_html=True,
+            )
             render_what_this_means(
                 "This plan splits your money across several strategies to balance safety and returns. "
                 "Each row shows: the protocol (where your money goes), the strategy name, the estimated APY "

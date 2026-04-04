@@ -316,13 +316,13 @@ PROTOCOLS = {
 # ─── Fallback Prices (used when CoinGecko is unavailable) ────────────────────
 # Update these conservatively whenever prices move significantly (>20%).
 FALLBACK_PRICES = {
-    "FLR":   0.018,   # updated 2026-03-27
-    "XRP":   2.30,    # updated 2026-03-27
-    "FXRP":  2.297,   # XRP * 0.998 bridge discount; updated 2026-03-27
+    "FLR":   0.0076,  # updated 2026-04-04 (live: $0.0076)
+    "XRP":   1.32,    # updated 2026-04-04 (live: $1.32)
+    "FXRP":  1.317,   # XRP * 0.998 bridge discount; updated 2026-04-04
     "USD0":  1.00,
     "RLUSD": 1.00,    # Ripple USD — regulated stablecoin, maintains $1 peg
     "SPRK":  0.05,    # SparkDEX token — placeholder; updated live from CoinGecko
-    "HYPE":  15.0,    # Hyperliquid native token — placeholder; updated live from CoinGecko; updated 2026-03-27
+    "HYPE":  36.18,   # Hyperliquid native token — updated 2026-04-04 (live: $36.18)
 }
 
 # ─── Model Parameters ─────────────────────────────────────────────────────────
