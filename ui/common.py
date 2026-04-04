@@ -72,6 +72,7 @@ from config import (
     MONITOR_DIGEST_FILE, SCHEDULER, BRAND_NAME, BRAND_LOGO_PATH,
 )
 from utils.file_io import atomic_json_write
+from utils.http import _SESSION as _http_session, coingecko_limiter
 
 
 # ─── API Status Helper (#17) ──────────────────────────────────────────────────
@@ -1685,10 +1686,9 @@ def fetch_coin_universe() -> list[dict]:
     Must-haves always included even if below top-30.
     Cached 1 hour.
     """
-    from utils.http import _SESSION as _cg_session, coingecko_limiter as _cg_limiter
     try:
-        _cg_limiter.acquire()
-        _resp = _cg_session.get(
+        coingecko_limiter.acquire()
+        _resp = _http_session.get(
             "https://api.coingecko.com/api/v3/coins/markets",
             params={
                 "vs_currency": "usd", "order": "market_cap_desc",
