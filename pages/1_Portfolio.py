@@ -22,6 +22,7 @@ from ui.common import (
     load_positions, save_positions, load_wallets, save_wallets,
     compute_position_pnl, render_opportunity_card, render_section_header,
     _ts_fmt, load_live_prices, risk_score_to_grade, render_ftso_il_calculator,
+    render_what_this_means, get_user_level,
 )
 
 
@@ -181,32 +182,40 @@ if _hero["total_value"] > 0 or positions:
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-# ── Demo Mode Holdings (#67) ──────────────────────────────────────────────────
-if demo_mode:
-    st.warning(
-        "Demo Mode — Showing sample portfolio data. No API keys required.",
-        icon="🎭",
-    )
-    try:
-        from data.demo_data import DEMO_PORTFOLIO
-        _demo_holdings = DEMO_PORTFOLIO.get("holdings", [])
-        _demo_total    = DEMO_PORTFOLIO.get("total_value_usd", 0)
-        if _demo_holdings:
-            st.markdown("**Sample Holdings**")
-            _demo_rows = [
-                {
-                    "Protocol":    h["protocol"],
-                    "Asset":       h["asset"],
-                    "Value (USD)": f"${h['amount_usd']:,.0f}",
-                    "APY":         f"{h['apy']*100:.1f}%",
-                    "Est. Annual": f"${h['amount_usd']*h['apy']:,.0f}",
-                }
-                for h in _demo_holdings
-            ]
-            st.dataframe(pd.DataFrame(_demo_rows), width="stretch", hide_index=True)
-            st.metric("Total Portfolio Value", f"${_demo_total:,.0f}")
-    except Exception as _e:
-        st.info(f"Demo data unavailable: {_e}")
+
+# ─── Main Portfolio Tabs ─────────────────────────────────────────────────────
+_tab_pos, _tab_wallet, _tab_rewards, _tab_fassets = st.tabs([
+    "📊 Positions", "👛 Wallet", "🎁 Rewards & Incentives", "🔗 FAssets",
+])
+
+with _tab_pos:
+    # ── Demo Mode Holdings (#67) ──────────────────────────────────────────────────
+    if demo_mode:
+        st.warning(
+            "Demo Mode — Showing sample portfolio data. No API keys required.",
+            icon="🎭",
+        )
+        try:
+            from data.demo_data import DEMO_PORTFOLIO
+            _demo_holdings = DEMO_PORTFOLIO.get("holdings", [])
+            _demo_total    = DEMO_PORTFOLIO.get("total_value_usd", 0)
+            if _demo_holdings:
+                st.markdown("**Sample Holdings**")
+                _demo_rows = [
+                    {
+                        "Protocol":    h["protocol"],
+                        "Asset":       h["asset"],
+                        "Value (USD)": f"${h['amount_usd']:,.0f}",
+                        "APY":         f"{h['apy']*100:.1f}%",
+                        "Est. Annual": f"${h['amount_usd']*h['apy']:,.0f}",
+                    }
+                    for h in _demo_holdings
+                ]
+                st.dataframe(pd.DataFrame(_demo_rows), width="stretch", hide_index=True)
+                st.metric("Total Portfolio Value", f"${_demo_total:,.0f}")
+        except Exception as _e:
+            st.info(f"Demo data unavailable: {_e}")
+
 
 
 # ─── Export Helpers ───────────────────────────────────────────────────────────
@@ -486,1228 +495,1533 @@ def _fetch_wallet_balances(wallet: str) -> list:
     return [{"Token": k, "Balance": f"{v:,.4f}"} for k, v in token_balances.items() if v >= 0.0001]
 
 
-render_section_header("Wallet Tracker", "Read-only on-chain balance lookup")
-with st.expander("Connect a wallet (read-only)"):
-    saved_wallets = load_wallets()
-    ca, cl, cb = st.columns([4, 2, 1])
-    with ca:
-        new_addr  = st.text_input("Address", placeholder="0x1234…abcd", label_visibility="collapsed", key="new_wallet_addr")
-    with cl:
-        new_label = st.text_input("Label",   placeholder="Main Wallet",  label_visibility="collapsed", key="new_wallet_label")
-    with cb:
-        if st.button("Add", key="add_wallet_btn", width="stretch"):
-            _clean_addr = _sanitize_address(new_addr.strip()) if new_addr else ""
-            if _clean_addr and len(_clean_addr) == 42 and _clean_addr.startswith("0x"):
-                try:
-                    from web3 import Web3
-                    checksum_addr = Web3.to_checksum_address(_clean_addr)
-                    label = new_label.strip() or f"{checksum_addr[:6]}…{checksum_addr[-4:]}"
-                    saved_wallets.append({"label": label, "address": checksum_addr})
-                    save_wallets(saved_wallets)
-                    st.rerun()
-                except Exception:
-                    st.warning("Invalid address — failed checksum validation.")
-            else:
-                st.warning("Enter a valid 42-character 0x address.")
 
-    if saved_wallets:
-        wallet_labels = [f"{w['label']}  ({w['address'][:6]}…{w['address'][-4:]})" for w in saved_wallets]
-        sel_idx = st.selectbox("Wallet", range(len(wallet_labels)), format_func=lambda i: wallet_labels[i], key="wallet_select")
-        col_check, col_remove = st.columns([3, 1])
-        with col_check:
-            if st.button("Check Balances", key="check_wallet_btn", width="stretch"):
-                with st.spinner("Fetching on-chain balances…"):
+with _tab_wallet:
+    render_section_header("Wallet Tracker", "Read-only on-chain balance lookup")
+    with st.expander("Connect a wallet (read-only)"):
+        saved_wallets = load_wallets()
+        ca, cl, cb = st.columns([4, 2, 1])
+        with ca:
+            new_addr  = st.text_input("Address", placeholder="0x1234…abcd", label_visibility="collapsed", key="new_wallet_addr")
+        with cl:
+            new_label = st.text_input("Label",   placeholder="Main Wallet",  label_visibility="collapsed", key="new_wallet_label")
+        with cb:
+            if st.button("Add", key="add_wallet_btn", width="stretch"):
+                _clean_addr = _sanitize_address(new_addr.strip()) if new_addr else ""
+                if _clean_addr and len(_clean_addr) == 42 and _clean_addr.startswith("0x"):
                     try:
-                        rows = _fetch_wallet_balances(saved_wallets[sel_idx]["address"])
-                        st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame(), width="stretch", hide_index=True)
-                        if not rows:
-                            st.info("No significant balances found.")
-                    except ImportError:
-                        st.warning("Install web3: `pip install web3`")
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-
-            if st.button("🔍 Detect Positions", key="detect_pos_btn", width="stretch",
-                         help="Auto-detect Kinetic lending, sFLR staking, and stXRP staking from wallet"):
-                with st.spinner("Scanning on-chain positions…"):
-                    try:
-                        suggestions = _detect_onchain_positions(saved_wallets[sel_idx]["address"])
-                        if suggestions:
-                            st.session_state["_pos_suggestions"] = suggestions
-                            st.success(f"Found {len(suggestions)} position(s). Review below ↓")
-                        else:
-                            st.info("No Kinetic / sFLR / stXRP positions detected for this wallet.")
-                    except ImportError:
-                        st.warning("Install web3: `pip install web3`")
-                    except Exception as e:
-                        st.error(f"Detection error: {e}")
-
-        # ── Detected position suggestions ─────────────────────────────────────
-        if st.session_state.get("_pos_suggestions"):
-            st.markdown("**Detected positions — confirm to add:**")
-            for i, sug in enumerate(st.session_state["_pos_suggestions"]):
-                ca2, cb2 = st.columns([5, 1])
-                with ca2:
-                    st.markdown(
-                        f"<div style='font-size:0.85rem; color:#94a3b8; padding:4px 0;'>"
-                        f"<b>{sug['pool']}</b> · {sug['protocol'].capitalize()} · "
-                        f"{sug['position_type']} · {sug.get('token_a_amount', 0):,.4f} {sug.get('token_a', '')}"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-                with cb2:
-                    if st.button("Add", key=f"add_sug_{i}", width="stretch"):
-                        new_pos = dict(sug)
-                        new_pos["id"] = f"pos_{int(datetime.now(timezone.utc).timestamp())}_{i}"
-                        positions.append(new_pos)
-                        save_positions(positions)
-                        st.session_state["_pos_suggestions"].pop(i)
+                        from web3 import Web3
+                        checksum_addr = Web3.to_checksum_address(_clean_addr)
+                        label = new_label.strip() or f"{checksum_addr[:6]}…{checksum_addr[-4:]}"
+                        saved_wallets.append({"label": label, "address": checksum_addr})
+                        save_wallets(saved_wallets)
                         st.rerun()
-            if st.button("Clear suggestions", key="clear_sug_btn"):
-                st.session_state["_pos_suggestions"] = []
-                st.rerun()
-        with col_remove:
-            if st.button("Remove", key="remove_wallet_btn", width="stretch"):
-                if sel_idx < len(saved_wallets):
-                    saved_wallets.pop(sel_idx)
-                    save_wallets(saved_wallets)
-                st.rerun()
-    else:
-        st.caption("Add a wallet address above to start tracking.")
-
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-
-
-# ─── Zerion Wallet Positions (#111) ───────────────────────────────────────────
-
-render_section_header("Wallet Positions", "Live DeFi portfolio via Zerion — chain breakdown & top positions")
-
-@st.cache_data(ttl=120)
-def _fetch_zerion_cached(addr: str) -> dict:
-    from scanners.wallet import fetch_zerion_portfolio
-    return fetch_zerion_portfolio(addr)
-
-
-try:
-    _zerion_addr = st.session_state.get("defi_wallet_address_valid")
-    if _zerion_addr:
-        with st.spinner("Fetching wallet portfolio from Zerion…"):
-            try:
-                _zp = _fetch_zerion_cached(_zerion_addr)
-                _zp_err = _zp.get("error")
-                if _zp_err:
-                    st.warning(f"Zerion: {_zp_err}")
+                    except Exception:
+                        st.warning("Invalid address — failed checksum validation.")
                 else:
-                    # Summary metric
-                    _z_total = _zp.get("total_value_usd", 0.0)
-                    st.metric("Total Wallet Value (USD)", f"${_z_total:,.2f}")
+                    st.warning("Enter a valid 42-character 0x address.")
 
-                    # Chain breakdown chart
-                    _chain_bd = _zp.get("chain_breakdown") or {}
-                    if _chain_bd:
-                        import plotly.express as px
-                        _chain_df = pd.DataFrame([
-                            {"Chain": k, "Value (USD)": v}
-                            for k, v in _chain_bd.items() if v > 0
-                        ])
-                        if not _chain_df.empty:
-                            _fig_chain = px.pie(
-                                _chain_df, names="Chain", values="Value (USD)",
-                                title="Chain Breakdown",
-                                color_discrete_sequence=px.colors.sequential.Plasma_r,
-                            )
-                            _fig_chain.update_layout(
-                                paper_bgcolor="rgba(0,0,0,0)",
-                                plot_bgcolor="rgba(0,0,0,0)",
-                                font_color="#94a3b8",
-                                margin=dict(l=20, r=20, t=40, b=20),
-                                height=280,
-                                showlegend=True,
-                            )
-                            st.plotly_chart(_fig_chain, width="stretch", config={"displayModeBar": False})
+        if saved_wallets:
+            wallet_labels = [f"{w['label']}  ({w['address'][:6]}…{w['address'][-4:]})" for w in saved_wallets]
+            sel_idx = st.selectbox("Wallet", range(len(wallet_labels)), format_func=lambda i: wallet_labels[i], key="wallet_select")
+            col_check, col_remove = st.columns([3, 1])
+            with col_check:
+                if st.button("Check Balances", key="check_wallet_btn", width="stretch"):
+                    with st.spinner("Fetching on-chain balances…"):
+                        try:
+                            rows = _fetch_wallet_balances(saved_wallets[sel_idx]["address"])
+                            st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame(), width="stretch", hide_index=True)
+                            if not rows:
+                                st.info("No significant balances found.")
+                        except ImportError:
+                            st.warning("Install web3: `pip install web3`")
+                        except Exception as e:
+                            st.error(f"Error: {e}")
 
-                    # Top 10 positions table
-                    _z_positions = (_zp.get("positions") or [])[:10]
-                    if _z_positions:
-                        st.markdown("**Top 10 Positions**")
-                        _z_rows = []
-                        for _zpos in _z_positions:
-                            _chg = _zpos.get("change_1d_pct", 0)
-                            _chg_str = f"{_chg:+.2f}%" if _chg else "—"
-                            _z_rows.append({
-                                "Asset":     _zpos.get("name", "—"),
-                                "Chain":     _zpos.get("chain", "—"),
-                                "Value USD": f"${_zpos.get('value_usd', 0):,.2f}",
-                                "Quantity":  f"{_zpos.get('quantity', 0):,.4f}",
-                                "Price":     f"${_zpos.get('price', 0):,.4f}" if _zpos.get("price") else "—",
-                                "1d Change": _chg_str,
-                            })
-                        st.dataframe(pd.DataFrame(_z_rows), width="stretch", hide_index=True)
+                if st.button("🔍 Detect Positions", key="detect_pos_btn", width="stretch",
+                             help="Auto-detect Kinetic lending, sFLR staking, and stXRP staking from wallet"):
+                    with st.spinner("Scanning on-chain positions…"):
+                        try:
+                            suggestions = _detect_onchain_positions(saved_wallets[sel_idx]["address"])
+                            if suggestions:
+                                st.session_state["_pos_suggestions"] = suggestions
+                                st.success(f"Found {len(suggestions)} position(s). Review below ↓")
+                            else:
+                                st.info("No Kinetic / sFLR / stXRP positions detected for this wallet.")
+                        except ImportError:
+                            st.warning("Install web3: `pip install web3`")
+                        except Exception as e:
+                            st.error(f"Detection error: {e}")
 
-                    # DeFi protocols
-                    _protos = _zp.get("defi_protocols") or []
-                    if _protos:
-                        st.caption(f"DeFi protocols detected: {', '.join(_protos)}")
-
-                    st.caption(f"Data from Zerion · Read-only · Refreshes every 5 min · {_zp.get('timestamp', '')}")
-            except ImportError:
-                st.info("Zerion module unavailable.")
-            except Exception as _ze:
-                st.error(f"Zerion portfolio error: {_ze}")
-    else:
-        st.info("Connect wallet to see your DeFi positions. Enter your EVM address in the sidebar Wallet Import section.")
-except Exception as _outer_e:
-    st.warning(f"Wallet positions section error: {_outer_e}")
-
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-
-
-# ─── Positions Overview ───────────────────────────────────────────────────────
-
-pnl_results: list = []  # populated inside the positions block; defined here to avoid UnboundLocalError
-
-render_section_header("Your Positions", "P&L · fees earned · impermanent loss estimate")
-
-if positions:
-    total_value   = sum(p.get("current_value", 0) for p in positions)
-    total_fees    = sum(p.get("unclaimed_fees", 0) for p in positions)
-    total_deposit = sum(float(p.get("deposit_usd") or p.get("entry_value") or 0) for p in positions)
-    total_pnl     = total_value - total_deposit
-    pnl_color     = "#10b981" if total_pnl >= 0 else "#ef4444"
-
-    c1, c2, c3, c4 = st.columns(4)
-    for col, label, val, sub, cls in [
-        (c1, "Portfolio Value",   f"${total_value:,.0f}",             "",                       "card-blue"),
-        (c2, "Total P&L",         f"${total_pnl:+,.0f}",              f"vs ${total_deposit:,.0f} in", "card-green" if total_pnl >= 0 else "card-red"),
-        (c3, "Unclaimed Fees",    f"${total_fees:,.2f}",              "",                       "card-green"),
-        (c4, "Open Positions",    str(len(positions)),                 "",                       "card-blue"),
-    ]:
-        with col:
-            st.markdown(f"""
-            <div class="metric-card {cls}">
-                <div class="label">{label}</div>
-                <div class="big-number">{val}</div>
-                <div style="color:#475569; font-size:0.8rem; margin-top:4px;">{sub}</div>
-            </div>""", unsafe_allow_html=True)
+            # ── Detected position suggestions ─────────────────────────────────────
+            if st.session_state.get("_pos_suggestions"):
+                st.markdown("**Detected positions — confirm to add:**")
+                for i, sug in enumerate(st.session_state["_pos_suggestions"]):
+                    ca2, cb2 = st.columns([5, 1])
+                    with ca2:
+                        st.markdown(
+                            f"<div style='font-size:0.85rem; color:#94a3b8; padding:4px 0;'>"
+                            f"<b>{sug['pool']}</b> · {sug['protocol'].capitalize()} · "
+                            f"{sug['position_type']} · {sug.get('token_a_amount', 0):,.4f} {sug.get('token_a', '')}"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with cb2:
+                        if st.button("Add", key=f"add_sug_{i}", width="stretch"):
+                            new_pos = dict(sug)
+                            new_pos["id"] = f"pos_{int(datetime.now(timezone.utc).timestamp())}_{i}"
+                            positions.append(new_pos)
+                            save_positions(positions)
+                            st.session_state["_pos_suggestions"].pop(i)
+                            st.rerun()
+                if st.button("Clear suggestions", key="clear_sug_btn"):
+                    st.session_state["_pos_suggestions"] = []
+                    st.rerun()
+            with col_remove:
+                if st.button("Remove", key="remove_wallet_btn", width="stretch"):
+                    if sel_idx < len(saved_wallets):
+                        saved_wallets.pop(sel_idx)
+                        save_wallets(saved_wallets)
+                    st.rerun()
+        else:
+            st.caption("Add a wallet address above to start tracking.")
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-    # Compute P&L once for all positions — reused in cards and exit timeline below
-    pnl_results = [compute_position_pnl(pos, prices) for pos in positions]
 
-    # ── Export ────────────────────────────────────────────────────────────────
-    _exp_csv, _exp_pdf = st.columns([1, 1])
-    with _exp_csv:
-        _csv_bytes = _build_csv_export(positions, pnl_results)
-        st.download_button(
-            "⬇ Export CSV",
-            data=_csv_bytes,
-            file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            width="stretch",
-        )
-    with _exp_pdf:
-        _pdf_bytes = _build_pdf_export(positions, pnl_results)
-        if _pdf_bytes:
+    # ─── Zerion Wallet Positions (#111) ───────────────────────────────────────────
+
+    render_section_header("Wallet Positions", "Live DeFi portfolio via Zerion — chain breakdown & top positions")
+
+    @st.cache_data(ttl=120)
+    def _fetch_zerion_cached(addr: str) -> dict:
+        from scanners.wallet import fetch_zerion_portfolio
+        return fetch_zerion_portfolio(addr)
+
+
+    try:
+        _zerion_addr = st.session_state.get("defi_wallet_address_valid")
+        if _zerion_addr:
+            with st.spinner("Fetching wallet portfolio from Zerion…"):
+                try:
+                    _zp = _fetch_zerion_cached(_zerion_addr)
+                    _zp_err = _zp.get("error")
+                    if _zp_err:
+                        st.warning(f"Zerion: {_zp_err}")
+                    else:
+                        # Summary metric
+                        _z_total = _zp.get("total_value_usd", 0.0)
+                        st.metric("Total Wallet Value (USD)", f"${_z_total:,.2f}")
+
+                        # Chain breakdown chart
+                        _chain_bd = _zp.get("chain_breakdown") or {}
+                        if _chain_bd:
+                            import plotly.express as px
+                            _chain_df = pd.DataFrame([
+                                {"Chain": k, "Value (USD)": v}
+                                for k, v in _chain_bd.items() if v > 0
+                            ])
+                            if not _chain_df.empty:
+                                _fig_chain = px.pie(
+                                    _chain_df, names="Chain", values="Value (USD)",
+                                    title="Chain Breakdown",
+                                    color_discrete_sequence=px.colors.sequential.Plasma_r,
+                                )
+                                _fig_chain.update_layout(
+                                    paper_bgcolor="rgba(0,0,0,0)",
+                                    plot_bgcolor="rgba(0,0,0,0)",
+                                    font_color="#94a3b8",
+                                    margin=dict(l=20, r=20, t=40, b=20),
+                                    height=280,
+                                    showlegend=True,
+                                )
+                                st.plotly_chart(_fig_chain, width="stretch", config={"displayModeBar": False})
+
+                        # Top 10 positions table
+                        _z_positions = (_zp.get("positions") or [])[:10]
+                        if _z_positions:
+                            st.markdown("**Top 10 Positions**")
+                            _z_rows = []
+                            for _zpos in _z_positions:
+                                _chg = _zpos.get("change_1d_pct", 0)
+                                _chg_str = f"{_chg:+.2f}%" if _chg else "—"
+                                _z_rows.append({
+                                    "Asset":     _zpos.get("name", "—"),
+                                    "Chain":     _zpos.get("chain", "—"),
+                                    "Value USD": f"${_zpos.get('value_usd', 0):,.2f}",
+                                    "Quantity":  f"{_zpos.get('quantity', 0):,.4f}",
+                                    "Price":     f"${_zpos.get('price', 0):,.4f}" if _zpos.get("price") else "—",
+                                    "1d Change": _chg_str,
+                                })
+                            st.dataframe(pd.DataFrame(_z_rows), width="stretch", hide_index=True)
+
+                        # DeFi protocols
+                        _protos = _zp.get("defi_protocols") or []
+                        if _protos:
+                            st.caption(f"DeFi protocols detected: {', '.join(_protos)}")
+
+                        st.caption(f"Data from Zerion · Read-only · Refreshes every 5 min · {_zp.get('timestamp', '')}")
+                except ImportError:
+                    st.info("Zerion module unavailable.")
+                except Exception as _ze:
+                    st.error(f"Zerion portfolio error: {_ze}")
+        else:
+            st.info("Connect wallet to see your DeFi positions. Enter your EVM address in the sidebar Wallet Import section.")
+    except Exception as _outer_e:
+        st.warning(f"Wallet positions section error: {_outer_e}")
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+
+with _tab_pos:
+    # ─── Positions Overview ───────────────────────────────────────────────────────
+
+    pnl_results: list = []  # populated inside the positions block; defined here to avoid UnboundLocalError
+
+    render_section_header("Your Positions", "P&L · fees earned · impermanent loss estimate")
+
+    if positions:
+        total_value   = sum(p.get("current_value", 0) for p in positions)
+        total_fees    = sum(p.get("unclaimed_fees", 0) for p in positions)
+        total_deposit = sum(float(p.get("deposit_usd") or p.get("entry_value") or 0) for p in positions)
+        total_pnl     = total_value - total_deposit
+        pnl_color     = "#10b981" if total_pnl >= 0 else "#ef4444"
+
+        c1, c2, c3, c4 = st.columns(4)
+        for col, label, val, sub, cls in [
+            (c1, "Portfolio Value",   f"${total_value:,.0f}",             "",                       "card-blue"),
+            (c2, "Total P&L",         f"${total_pnl:+,.0f}",              f"vs ${total_deposit:,.0f} in", "card-green" if total_pnl >= 0 else "card-red"),
+            (c3, "Unclaimed Fees",    f"${total_fees:,.2f}",              "",                       "card-green"),
+            (c4, "Open Positions",    str(len(positions)),                 "",                       "card-blue"),
+        ]:
+            with col:
+                st.markdown(f"""
+                <div class="metric-card {cls}">
+                    <div class="label">{label}</div>
+                    <div class="big-number">{val}</div>
+                    <div style="color:#475569; font-size:0.8rem; margin-top:4px;">{sub}</div>
+                </div>""", unsafe_allow_html=True)
+
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+        # Compute P&L once for all positions — reused in cards and exit timeline below
+        pnl_results = [compute_position_pnl(pos, prices) for pos in positions]
+
+        # ── Export ────────────────────────────────────────────────────────────────
+        _exp_csv, _exp_pdf = st.columns([1, 1])
+        with _exp_csv:
+            _csv_bytes = _build_csv_export(positions, pnl_results)
             st.download_button(
-                "⬇ Export PDF",
-                data=_pdf_bytes,
-                file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.pdf",
-                mime="application/pdf",
+                "⬇ Export CSV",
+                data=_csv_bytes,
+                file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
+                mime="text/csv",
                 width="stretch",
             )
-        else:
-            st.caption("PDF: `pip install fpdf2`")
-
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-
-    for idx, pos in enumerate(positions):
-        pnl      = pnl_results[idx]
-        proto    = _html.escape(pos.get("protocol", "?").capitalize())
-        pool     = _html.escape(pos.get("pool", "?"))
-        ptype    = _html.escape(pos.get("position_type", "lp").upper())
-        vc       = pnl["value_change"]
-        vc_pct   = pnl["value_change_pct"]
-        vc_color = "#10b981" if vc >= 0 else "#ef4444"
-        days     = pnl["days_active"]
-        fees_est = pnl["fees_earned_est"]
-        il_pct   = pnl["il_pct"]
-        hodl     = pnl["hodl_value"]
-
-        # Feature 8: Risk grade per position
-        _ptype_lower = pos.get("position_type", "lp")
-        _il_risk = "high" if _ptype_lower == "lp" else "none"
-        _rs = 7.0 if _ptype_lower == "lp" else (2.0 if _ptype_lower == "lending" else 1.0)
-        _grade, _grade_color = risk_score_to_grade(_rs)
-        _grade_html = (
-            f"<span style='background:{_grade_color}; color:#000; font-size:0.65rem; "
-            f"font-weight:800; padding:1px 7px; border-radius:4px; margin-left:6px;'>{_grade}</span>"
-        )
-
-        days_str  = f"{days}d" if days > 0 else "—"
-        fees_html = f" · Est. fees earned: <span style='color:#10b981'>${fees_est:,.2f}</span>" if fees_est > 0 else ""
-        il_html   = f" · IL est: <span style='color:#f59e0b'>{il_pct:.1f}%</span>" if il_pct > 0.1 else ""
-        hodl_html = f" · HODL: <span style='color:#64748b'>${hodl:,.0f}</span>" if hodl > 0 else ""
-        # Build balance string — support both new format (token_a/token_b) and legacy (token0_balance/token1_balance)
-        bal_parts = []
-        if pos.get("token_a") and pos.get("token_a_amount", 0) > 0:
-            bal_parts.append(f"{pos['token_a_amount']:,.4f} {pos['token_a']}")
-        elif pos.get("token0_balance"):
-            bal_parts.append(pos["token0_balance"])
-        if pos.get("token_b") and pos.get("token_b_amount", 0) > 0:
-            bal_parts.append(f"{pos['token_b_amount']:,.4f} {pos['token_b']}")
-        elif pos.get("token1_balance"):
-            bal_parts.append(pos["token1_balance"])
-        bal_str = _html.escape(" · ".join(bal_parts))
-
-        col_card, col_del = st.columns([14, 1])
-        with col_card:
-            st.markdown(f"""
-            <div class="opp-card" style="border-left:3px solid {vc_color};">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                    <div>
-                        <span style="font-weight:700; color:#f1f5f9;">{pool}</span>
-                        <span style="color:#475569; margin:0 6px;">·</span>
-                        <span style="color:#64748b; font-size:0.88rem;">{proto}</span>
-                        <span style="color:#334155; font-size:0.75rem; margin-left:6px;">({ptype})</span>
-                        {_grade_html}
-                    </div>
-                    <span style="color:{vc_color}; font-weight:700;">{vc:+,.0f} ({vc_pct:+.1f}%)</span>
-                </div>
-                <div style="color:#475569; font-size:0.82rem; margin-top:10px;">
-                    <span style="color:#94a3b8">${pnl['current_value']:,.0f}</span> current ·
-                    <span style="color:#64748b">${pnl['deposit_usd']:,.0f}</span> deposited ·
-                    {days_str} active{fees_html}{il_html}{hodl_html}
-                </div>
-                <div style="color:#334155; font-size:0.78rem; margin-top:6px;">
-                    Unclaimed fees: <span style="color:#10b981">${pnl['unclaimed_fees']:,.2f}</span>{"  ·  " + bal_str if bal_str else ""}
-                </div>
-            </div>""", unsafe_allow_html=True)
-        with col_del:
-            if st.button("✕", key=f"del_pos_{idx}", help="Remove position"):
-                if idx < len(positions):
-                    positions.pop(idx)
-                    save_positions(positions)
-                    st.rerun()
-
-else:
-    st.markdown(
-        "<div style='color:#334155; font-size:0.9rem; padding:20px 0;'>"
-        "No positions tracked yet. Add your first position below.</div>",
-        unsafe_allow_html=True,
-    )
-
-# ── Add Position ──────────────────────────────────────────────────────────────
-with st.expander("➕ Track a New Position"):
-    with st.form("add_position_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            proto_key  = st.selectbox("Protocol", options=list(PROTOCOLS.keys()),
-                                      format_func=lambda k: PROTOCOLS[k]["name"])
-            pool_name  = st.text_input("Pool / Asset", placeholder="WFLR-USD0 or sFLR")
-            pos_type   = st.selectbox("Type", ["lp", "lending", "staking"])
-            entry_date = st.date_input("Entry date")
-        with c2:
-            deposit_usd    = st.number_input("Deposit ($)", min_value=0.0, value=1000.0, step=100.0)
-            entry_apy      = st.number_input("Entry APY (%)", min_value=0.0, value=0.0, step=1.0)
-            current_value  = st.number_input("Current value ($, 0 = same)", min_value=0.0, value=0.0, step=100.0)
-            unclaimed_fees = st.number_input("Unclaimed fees ($)", min_value=0.0, value=0.0, step=1.0)
-
-        st.markdown("<div style='color:#475569; font-size:0.8rem; margin-top:8px;'>Token details (LP / IL tracking)</div>", unsafe_allow_html=True)
-        tc1, tc2 = st.columns(2)
-        with tc1:
-            token_a        = st.text_input("Token A", placeholder="WFLR")
-            token_a_amount = st.number_input("Token A amount", min_value=0.0, value=0.0)
-            entry_price_a  = st.number_input("Token A entry price ($)", min_value=0.0, value=0.0, format="%.6f")
-        with tc2:
-            token_b        = st.text_input("Token B", placeholder="USD0")
-            token_b_amount = st.number_input("Token B amount", min_value=0.0, value=0.0)
-            entry_price_b  = st.number_input("Token B entry price ($)", min_value=0.0, value=0.0, format="%.6f")
-
-        notes = st.text_input("Notes (optional)")
-
-        if st.form_submit_button("Add Position", width="stretch"):
-            if not pool_name:
-                st.error("Pool / Asset name is required.")
-            elif float(deposit_usd) <= 0:
-                st.error("Deposit amount must be greater than $0.")
+        with _exp_pdf:
+            _pdf_bytes = _build_pdf_export(positions, pnl_results)
+            if _pdf_bytes:
+                st.download_button(
+                    "⬇ Export PDF",
+                    data=_pdf_bytes,
+                    file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    width="stretch",
+                )
             else:
-                positions.append({
-                    "id":             f"pos_{int(datetime.now(timezone.utc).timestamp())}",
-                    "protocol":       proto_key,
-                    "pool":           pool_name,
-                    "position_type":  pos_type,
-                    "entry_date":     entry_date.isoformat(),
-                    "deposit_usd":    float(deposit_usd),
-                    "entry_apy":      float(entry_apy),
-                    "current_value":  float(current_value) if current_value > 0 else float(deposit_usd),
-                    "unclaimed_fees": float(unclaimed_fees),
-                    "entry_value":    float(deposit_usd),
-                    "token_a":        token_a,
-                    "token_a_amount": float(token_a_amount),
-                    "entry_price_a":  float(entry_price_a),
-                    "token_b":        token_b,
-                    "token_b_amount": float(token_b_amount),
-                    "entry_price_b":  float(entry_price_b),
-                    "notes":          notes,
-                })
-                save_positions(positions)
-                st.success(f"Added: {pool_name}")
-                st.rerun()
+                st.caption("PDF: `pip install fpdf2`")
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+        for idx, pos in enumerate(positions):
+            pnl      = pnl_results[idx]
+            proto    = _html.escape(pos.get("protocol", "?").capitalize())
+            pool     = _html.escape(pos.get("pool", "?"))
+            ptype    = _html.escape(pos.get("position_type", "lp").upper())
+            vc       = pnl["value_change"]
+            vc_pct   = pnl["value_change_pct"]
+            vc_color = "#10b981" if vc >= 0 else "#ef4444"
+            days     = pnl["days_active"]
+            fees_est = pnl["fees_earned_est"]
+            il_pct   = pnl["il_pct"]
+            hodl     = pnl["hodl_value"]
 
-# ─── Exit Strategy ────────────────────────────────────────────────────────────
-
-render_section_header("Exit Strategy", "Incentive expiry countdown · price targets · exit timeline")
-
-try:
-    incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"].strip(), "%Y-%m-%d").replace(tzinfo=timezone.utc)
-except (ValueError, KeyError):
-    incentive_expiry = datetime(2026, 7, 1, tzinfo=timezone.utc)
-days_left        = max(0, (incentive_expiry - datetime.now(timezone.utc)).days)
-exp_color        = "#10b981" if days_left > 90 else ("#f59e0b" if days_left > 30 else "#ef4444")
-exp_msg          = (
-    "Monitor monthly. Consider setting a reminder for May 2026."
-    if days_left > 90 else
-    "Begin reducing high-IL LP positions." if days_left > 30 else
-    "URGENT — incentive-dependent APYs will drop sharply soon."
-)
-
-st.markdown(
-    f"<div class='warn-box' style='border-color:{exp_color}33;'>"
-    f"<span style='color:{exp_color}; font-weight:600;'>⏳ {days_left} days until incentive expiry</span>"
-    f"<div style='color:#64748b; font-size:0.85rem; margin-top:4px;'>{exp_msg}</div></div>",
-    unsafe_allow_html=True,
-)
-
-tab_targets, tab_timeline = st.tabs(["Price Targets", "Exit Timeline"])
-
-with tab_targets:
-    price_lookup = {p.get("symbol", ""): p.get("price_usd", 0) for p in (prices or [])}
-    _EXIT_FALLBACKS = {
-        "FLR":  FALLBACK_PRICES["FLR"],
-        "FXRP": FALLBACK_PRICES["FXRP"],
-        "sFLR": FALLBACK_PRICES["FLR"],   # sFLR ≈ FLR
-    }
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        asset_choice = st.selectbox("Asset", ["FLR", "FXRP", "sFLR", "Custom"], key="exit_asset")
-    with c2:
-        default_price = price_lookup.get(asset_choice) or _EXIT_FALLBACKS.get(asset_choice, FALLBACK_PRICES["FLR"])
-        asset_price = st.number_input("Current price ($)", min_value=0.0001,
-                                      value=float(default_price), format="%.6f", step=0.001,
-                                      key=f"exit_price_{asset_choice}")
-    with c3:
-        holdings = st.number_input("Holdings (tokens)", min_value=0.0, value=10000.0, step=1000.0, key="exit_holdings")
-
-    if asset_price > 0 and holdings > 0:
-        rows = []
-        for mult, label, action in [
-            (1.25, "+25%", "Take 10% profit"),
-            (1.50, "+50%", "Take 15–20% profit"),
-            (2.00, "+100%", "Take 25% profit"),
-            (3.00, "+200%", "Take 33% profit"),
-            (5.00, "+400%", "Consider full exit"),
-        ]:
-            tp   = asset_price * mult
-            val  = holdings * tp
-            gain = val - holdings * asset_price
-            rows.append({"Target": label, "Price": f"${tp:.6f}",
-                         "Value": f"${val:,.0f}", "Gain": f"+${gain:,.0f}", "Action": action})
-        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
-        st.caption("Planning targets only — not financial advice.")
-
-with tab_timeline:
-    if not positions:
-        st.info("Add positions above to see per-position exit guidance.")
-    else:
-        rows = []
-        for i, pos in enumerate(positions):
-            days_held = 0
-            if pos.get("entry_date"):
-                try:
-                    _held_dt = datetime.fromisoformat(pos["entry_date"])
-                    if _held_dt.tzinfo is None:
-                        _held_dt = _held_dt.replace(tzinfo=timezone.utc)
-                    days_held = max(0, (datetime.now(timezone.utc) - _held_dt).days)
-                except Exception:
-                    pass
-            proto_key    = pos.get("protocol", "")
-            is_incentive = proto_key in ("blazeswap", "enosys", "sparkdex")
-            pnl          = pnl_results[i]
-            rows.append({
-                "Position":     f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
-                "Type":         pos.get("position_type", "lp").upper(),
-                "Days Held":    days_held,
-                "Entry APY":    f"{(pos.get('entry_apy') or 0):.1f}%",
-                "P&L":          f"{pnl['value_change_pct']:+.1f}%" if pnl["deposit_usd"] > 0 else "—",
-                "Incentive":    "⚠️ YES" if is_incentive else "✅ Low",
-                "Exit By":      "Jun 2026" if is_incentive else "Flexible",
-            })
-        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
-        st.caption("DEX LP pools depend on RFLR incentives expiring ~July 2026. FlareDrop ended Jan 30 2026 — sFLR staking yields reduced. Lending positions have low incentive dependency.")
-
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-
-
-# ─── PnL vs HODL Comparison (Feature 5) ──────────────────────────────────────
-
-if positions:
-    render_section_header("PnL vs HODL", "Quantified LP vs holding cost — are your fees beating impermanent loss?")
-
-    hodl_rows = []
-    total_lp_val   = 0
-    total_hodl_val = 0
-    total_dep      = 0
-    total_fees_lp  = 0   # fees from LP-only positions (same filter as total_lp_val)
-    for i, pos in enumerate(positions):
-        pnl = pnl_results[i]
-        lp_val   = pnl["current_value"]
-        hodl_val = pnl["hodl_value"]
-        dep      = pnl["deposit_usd"]
-        fees_est = pnl["fees_earned_est"]
-        if hodl_val > 0 and lp_val > 0:
-            total_lp_val   += lp_val
-            total_hodl_val += hodl_val
-            total_dep      += dep
-            total_fees_lp  += fees_est   # only LP positions with valid HODL values
-            diff     = (lp_val + fees_est) - hodl_val
-            diff_pct = diff / hodl_val * 100 if hodl_val > 0 else 0
-            hodl_rows.append({
-                "Position":      f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
-                "Deposit":       f"${dep:,.0f}",
-                "LP Value":      f"${lp_val:,.0f}",
-                "Est. Fees":     f"${fees_est:,.2f}",
-                "HODL Value":    f"${hodl_val:,.0f}",
-                "LP+Fees vs HODL": f"{diff:+,.0f} ({diff_pct:+.1f}%)",
-            })
-
-    if hodl_rows:
-        st.dataframe(pd.DataFrame(hodl_rows), width="stretch", hide_index=True)
-        if total_hodl_val > 0:
-            net_diff = (total_lp_val + total_fees_lp) - total_hodl_val
-            net_color = "#10b981" if net_diff >= 0 else "#ef4444"
-            verdict   = "LP + fees is OUTPERFORMING HODL ✓" if net_diff >= 0 else "HODL would have been better — consider IL impact ⚠"
-            st.markdown(
-                f"<div style='font-size:0.84rem; color:{net_color}; margin-top:8px; font-weight:600;'>"
-                f"Overall: {verdict} (net {net_diff:+,.0f})</div>",
-                unsafe_allow_html=True,
+            # Feature 8: Risk grade per position
+            _ptype_lower = pos.get("position_type", "lp")
+            _il_risk = "high" if _ptype_lower == "lp" else "none"
+            _rs = 7.0 if _ptype_lower == "lp" else (2.0 if _ptype_lower == "lending" else 1.0)
+            _grade, _grade_color = risk_score_to_grade(_rs)
+            _grade_html = (
+                f"<span style='background:{_grade_color}; color:#000; font-size:0.65rem; "
+                f"font-weight:800; padding:1px 7px; border-radius:4px; margin-left:6px;'>{_grade}</span>"
             )
-        st.caption("HODL value = token amounts × current prices without providing liquidity. Fees are estimated from entry APY × days held.")
+
+            days_str  = f"{days}d" if days > 0 else "—"
+            fees_html = f" · Est. fees earned: <span style='color:#10b981'>${fees_est:,.2f}</span>" if fees_est > 0 else ""
+            il_html   = f" · IL est: <span style='color:#f59e0b'>{il_pct:.1f}%</span>" if il_pct > 0.1 else ""
+            hodl_html = f" · HODL: <span style='color:#64748b'>${hodl:,.0f}</span>" if hodl > 0 else ""
+            # Build balance string — support both new format (token_a/token_b) and legacy (token0_balance/token1_balance)
+            bal_parts = []
+            if pos.get("token_a") and pos.get("token_a_amount", 0) > 0:
+                bal_parts.append(f"{pos['token_a_amount']:,.4f} {pos['token_a']}")
+            elif pos.get("token0_balance"):
+                bal_parts.append(pos["token0_balance"])
+            if pos.get("token_b") and pos.get("token_b_amount", 0) > 0:
+                bal_parts.append(f"{pos['token_b_amount']:,.4f} {pos['token_b']}")
+            elif pos.get("token1_balance"):
+                bal_parts.append(pos["token1_balance"])
+            bal_str = _html.escape(" · ".join(bal_parts))
+
+            col_card, col_del = st.columns([14, 1])
+            with col_card:
+                st.markdown(f"""
+                <div class="opp-card" style="border-left:3px solid {vc_color};">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                        <div>
+                            <span style="font-weight:700; color:#f1f5f9;">{pool}</span>
+                            <span style="color:#475569; margin:0 6px;">·</span>
+                            <span style="color:#64748b; font-size:0.88rem;">{proto}</span>
+                            <span style="color:#334155; font-size:0.75rem; margin-left:6px;">({ptype})</span>
+                            {_grade_html}
+                        </div>
+                        <span style="color:{vc_color}; font-weight:700;">{vc:+,.0f} ({vc_pct:+.1f}%)</span>
+                    </div>
+                    <div style="color:#475569; font-size:0.82rem; margin-top:10px;">
+                        <span style="color:#94a3b8">${pnl['current_value']:,.0f}</span> current ·
+                        <span style="color:#64748b">${pnl['deposit_usd']:,.0f}</span> deposited ·
+                        {days_str} active{fees_html}{il_html}{hodl_html}
+                    </div>
+                    <div style="color:#334155; font-size:0.78rem; margin-top:6px;">
+                        Unclaimed fees: <span style="color:#10b981">${pnl['unclaimed_fees']:,.2f}</span>{"  ·  " + bal_str if bal_str else ""}
+                    </div>
+                </div>""", unsafe_allow_html=True)
+            with col_del:
+                if st.button("✕", key=f"del_pos_{idx}", help="Remove position"):
+                    if idx < len(positions):
+                        positions.pop(idx)
+                        save_positions(positions)
+                        st.rerun()
+
     else:
         st.markdown(
-            "<div style='color:#334155; font-size:0.85rem;'>Add LP positions with token amounts to see HODL comparison.</div>",
+            "<div style='color:#334155; font-size:0.9rem; padding:20px 0;'>"
+            "No positions tracked yet. Add your first position below.</div>",
             unsafe_allow_html=True,
         )
 
+    # ── Add Position ──────────────────────────────────────────────────────────────
+    with st.expander("➕ Track a New Position"):
+        with st.form("add_position_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                proto_key  = st.selectbox("Protocol", options=list(PROTOCOLS.keys()),
+                                          format_func=lambda k: PROTOCOLS[k]["name"])
+                pool_name  = st.text_input("Pool / Asset", placeholder="WFLR-USD0 or sFLR")
+                pos_type   = st.selectbox("Type", ["lp", "lending", "staking"])
+                entry_date = st.date_input("Entry date")
+            with c2:
+                deposit_usd    = st.number_input("Deposit ($)", min_value=0.0, value=1000.0, step=100.0)
+                entry_apy      = st.number_input("Entry APY (%)", min_value=0.0, value=0.0, step=1.0)
+                current_value  = st.number_input("Current value ($, 0 = same)", min_value=0.0, value=0.0, step=100.0)
+                unclaimed_fees = st.number_input("Unclaimed fees ($)", min_value=0.0, value=0.0, step=1.0)
+
+            st.markdown("<div style='color:#475569; font-size:0.8rem; margin-top:8px;'>Token details (LP / IL tracking)</div>", unsafe_allow_html=True)
+            tc1, tc2 = st.columns(2)
+            with tc1:
+                token_a        = st.text_input("Token A", placeholder="WFLR")
+                token_a_amount = st.number_input("Token A amount", min_value=0.0, value=0.0)
+                entry_price_a  = st.number_input("Token A entry price ($)", min_value=0.0, value=0.0, format="%.6f")
+            with tc2:
+                token_b        = st.text_input("Token B", placeholder="USD0")
+                token_b_amount = st.number_input("Token B amount", min_value=0.0, value=0.0)
+                entry_price_b  = st.number_input("Token B entry price ($)", min_value=0.0, value=0.0, format="%.6f")
+
+            notes = st.text_input("Notes (optional)")
+
+            if st.form_submit_button("Add Position", width="stretch"):
+                if not pool_name:
+                    st.error("Pool / Asset name is required.")
+                elif float(deposit_usd) <= 0:
+                    st.error("Deposit amount must be greater than $0.")
+                else:
+                    positions.append({
+                        "id":             f"pos_{int(datetime.now(timezone.utc).timestamp())}",
+                        "protocol":       proto_key,
+                        "pool":           pool_name,
+                        "position_type":  pos_type,
+                        "entry_date":     entry_date.isoformat(),
+                        "deposit_usd":    float(deposit_usd),
+                        "entry_apy":      float(entry_apy),
+                        "current_value":  float(current_value) if current_value > 0 else float(deposit_usd),
+                        "unclaimed_fees": float(unclaimed_fees),
+                        "entry_value":    float(deposit_usd),
+                        "token_a":        token_a,
+                        "token_a_amount": float(token_a_amount),
+                        "entry_price_a":  float(entry_price_a),
+                        "token_b":        token_b,
+                        "token_b_amount": float(token_b_amount),
+                        "entry_price_b":  float(entry_price_b),
+                        "notes":          notes,
+                    })
+                    save_positions(positions)
+                    st.success(f"Added: {pool_name}")
+                    st.rerun()
+
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
-# ─── Rewards & Incentives ─────────────────────────────────────────────────────
+    # ─── Exit Strategy ────────────────────────────────────────────────────────────
 
-if positions:
-    render_section_header("Rewards & Incentives", "Unclaimed fees · FTSO rewards · rFLR incentive tracker")
+    render_section_header("Exit Strategy", "Incentive expiry countdown · price targets · exit timeline")
 
-    # ── Claimable Rewards ──────────────────────────────────────────────────────
-    total_fees    = sum(float(p.get("unclaimed_fees", 0)) for p in positions)
-    total_rewards = sum(float(p.get("rewards", 0)) for p in positions if isinstance(p.get("rewards"), (int, float)))
+    try:
+        incentive_expiry = datetime.strptime(INCENTIVE_PROGRAM["expires"].strip(), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except (ValueError, KeyError):
+        incentive_expiry = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    days_left        = max(0, (incentive_expiry - datetime.now(timezone.utc)).days)
+    exp_color        = "#10b981" if days_left > 90 else ("#f59e0b" if days_left > 30 else "#ef4444")
+    exp_msg          = (
+        "Monitor monthly. Consider setting a reminder for May 2026."
+        if days_left > 90 else
+        "Begin reducing high-IL LP positions." if days_left > 30 else
+        "URGENT — incentive-dependent APYs will drop sharply soon."
+    )
 
-    _FTSO_RATE    = 0.043
-    flr_in_lp     = 0.0
-    for p in positions:
-        if p.get("position_type") == "lp":
-            tok_a = (p.get("token_a") or "").upper()
-            tok_b = (p.get("token_b") or "").upper()
-            price_lkp = {pr.get("symbol", ""): pr.get("price_usd", 0) for pr in (prices or [])}
-            flr_price = price_lkp.get("FLR") or FALLBACK_PRICES.get("FLR", 0.0088)
-            if "FLR" in (tok_a, tok_b) or "WFLR" in (tok_a, tok_b):
-                dep = float(p.get("deposit_usd", 0)) * 0.5
-                flr_in_lp += dep / flr_price if flr_price > 0 else 0
+    st.markdown(
+        f"<div class='warn-box' style='border-color:{exp_color}33;'>"
+        f"<span style='color:{exp_color}; font-weight:600;'>⏳ {days_left} days until incentive expiry</span>"
+        f"<div style='color:#64748b; font-size:0.85rem; margin-top:4px;'>{exp_msg}</div></div>",
+        unsafe_allow_html=True,
+    )
 
-    _days_to_jul2026 = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
-    days_to_expiry   = _days_to_jul2026
-    ftso_est_usd     = flr_in_lp * FALLBACK_PRICES.get("FLR", 0.0088) * _FTSO_RATE * (30 / 365)
+    tab_targets, tab_timeline = st.tabs(["Price Targets", "Exit Timeline"])
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f"""<div class="metric-card card-green">
-        <div class="label">Unclaimed LP Fees</div>
-        <div class="big-number" style="color:#10b981;">${total_fees:,.2f}</div>
-        <div style="color:#475569; font-size:0.8rem; margin-top:4px;">Across {len(positions)} position(s)</div>
-        </div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""<div class="metric-card card-blue">
-        <div class="label">FTSO Delegation Est.</div>
-        <div class="big-number">${ftso_est_usd:,.2f}</div>
-        <div style="color:#475569; font-size:0.8rem; margin-top:4px;">~30-day estimate @ 4.3% APY</div>
-        </div>""", unsafe_allow_html=True)
-    with c3:
-        st.markdown(f"""<div class="metric-card card-orange">
-        <div class="label">Incentives Expire In</div>
-        <div class="big-number" style="color:#f59e0b;">{days_to_expiry}d</div>
-        <div style="color:#475569; font-size:0.8rem; margin-top:4px;">rFLR program ends Jul 2026</div>
-        </div>""", unsafe_allow_html=True)
+    with tab_targets:
+        price_lookup = {p.get("symbol", ""): p.get("price_usd", 0) for p in (prices or [])}
+        _EXIT_FALLBACKS = {
+            "FLR":  FALLBACK_PRICES["FLR"],
+            "FXRP": FALLBACK_PRICES["FXRP"],
+            "sFLR": FALLBACK_PRICES["FLR"],   # sFLR ≈ FLR
+        }
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            asset_choice = st.selectbox("Asset", ["FLR", "FXRP", "sFLR", "Custom"], key="exit_asset")
+        with c2:
+            default_price = price_lookup.get(asset_choice) or _EXIT_FALLBACKS.get(asset_choice, FALLBACK_PRICES["FLR"])
+            asset_price = st.number_input("Current price ($)", min_value=0.0001,
+                                          value=float(default_price), format="%.6f", step=0.001,
+                                          key=f"exit_price_{asset_choice}")
+        with c3:
+            holdings = st.number_input("Holdings (tokens)", min_value=0.0, value=10000.0, step=1000.0, key="exit_holdings")
 
-    st.caption("Unclaimed fees pulled from tracked positions. FTSO estimate based on FLR in LP positions at 4.3% APY. Claim via app.flare.network.")
+        if asset_price > 0 and holdings > 0:
+            rows = []
+            for mult, label, action in [
+                (1.25, "+25%", "Take 10% profit"),
+                (1.50, "+50%", "Take 15–20% profit"),
+                (2.00, "+100%", "Take 25% profit"),
+                (3.00, "+200%", "Take 33% profit"),
+                (5.00, "+400%", "Consider full exit"),
+            ]:
+                tp   = asset_price * mult
+                val  = holdings * tp
+                gain = val - holdings * asset_price
+                rows.append({"Target": label, "Price": f"${tp:.6f}",
+                             "Value": f"${val:,.0f}", "Gain": f"+${gain:,.0f}", "Action": action})
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+            st.caption("Planning targets only — not financial advice.")
 
-    # ── rFLR Incentive Tracker ─────────────────────────────────────────────────
-    _incentive_positions = [p for p in positions if p.get("protocol", "") in ("blazeswap", "enosys", "sparkdex")]
-    if _incentive_positions:
-        st.markdown("##### rFLR Incentive Tracker")
-        _FLR_PRICE = (next((pr.get("price_usd", 0) for pr in (prices or []) if pr.get("symbol") == "FLR"), 0)
-                      or FALLBACK_PRICES.get("FLR", 0.0088))
-        rflr_rows = []
-        for p in _incentive_positions:
-            dep          = float(p.get("deposit_usd", 0))
-            entry_apy    = float(p.get("entry_apy", 0))
-            _reward_rate = max(0, (entry_apy - 5) / 100)
-            days_held    = 0
-            if p.get("entry_date"):
-                try:
-                    _p_entry_dt = datetime.fromisoformat(p["entry_date"])
-                    if _p_entry_dt.tzinfo is None:
-                        _p_entry_dt = _p_entry_dt.replace(tzinfo=timezone.utc)
-                    days_held = max(0, (datetime.now(timezone.utc) - _p_entry_dt).days)
-                except Exception:
-                    pass
-            earned_usd  = dep * _reward_rate * days_held / 365 if days_held > 0 else 0
-            earned_rflr = earned_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
-            proj_usd    = dep * _reward_rate * _days_to_jul2026 / 365
-            proj_rflr   = proj_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
-            rflr_rows.append({
-                "Position":           f"{p.get('pool','?')} ({p.get('protocol','?').capitalize()})",
-                "Deposit":            f"${dep:,.0f}",
-                "Days Held":          days_held,
-                "Est. rFLR Earned":   f"{earned_rflr:,.0f} FLR (≈${earned_usd:,.2f})",
-                f"Proj. to Jul 2026": f"{proj_rflr:,.0f} FLR (≈${proj_usd:,.2f})",
-            })
-        st.dataframe(pd.DataFrame(rflr_rows), width="stretch", hide_index=True)
-        st.caption(
-            f"rFLR rewards estimated from entry APY minus ~5% base fees. FLR price: ${_FLR_PRICE:.4f}. "
-            f"Incentive program ends July 1 2026 ({_days_to_jul2026} days). Claim via blazeswap.finance or enosys.finance."
-        )
+    with tab_timeline:
+        if not positions:
+            st.info("Add positions above to see per-position exit guidance.")
+        else:
+            rows = []
+            for i, pos in enumerate(positions):
+                days_held = 0
+                if pos.get("entry_date"):
+                    try:
+                        _held_dt = datetime.fromisoformat(pos["entry_date"])
+                        if _held_dt.tzinfo is None:
+                            _held_dt = _held_dt.replace(tzinfo=timezone.utc)
+                        days_held = max(0, (datetime.now(timezone.utc) - _held_dt).days)
+                    except Exception:
+                        pass
+                proto_key    = pos.get("protocol", "")
+                is_incentive = proto_key in ("blazeswap", "enosys", "sparkdex")
+                pnl          = pnl_results[i]
+                rows.append({
+                    "Position":     f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
+                    "Type":         pos.get("position_type", "lp").upper(),
+                    "Days Held":    days_held,
+                    "Entry APY":    f"{(pos.get('entry_apy') or 0):.1f}%",
+                    "P&L":          f"{pnl['value_change_pct']:+.1f}%" if pnl["deposit_usd"] > 0 else "—",
+                    "Incentive":    "⚠️ YES" if is_incentive else "✅ Low",
+                    "Exit By":      "Jun 2026" if is_incentive else "Flexible",
+                })
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+            st.caption("DEX LP pools depend on RFLR incentives expiring ~July 2026. FlareDrop ended Jan 30 2026 — sFLR staking yields reduced. Lending positions have low incentive dependency.")
+
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
-# ─── FTSO IL Calculator (Feature 4) ──────────────────────────────────────────
+    # ─── PnL vs HODL Comparison (Feature 5) ──────────────────────────────────────
 
-render_section_header("IL Calculator", "Real-time impermanent loss with FTSO price data")
-render_ftso_il_calculator(prices)
+    if positions:
+        render_section_header("PnL vs HODL", "Quantified LP vs holding cost — are your fees beating impermanent loss?")
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+        hodl_rows = []
+        total_lp_val   = 0
+        total_hodl_val = 0
+        total_dep      = 0
+        total_fees_lp  = 0   # fees from LP-only positions (same filter as total_lp_val)
+        for i, pos in enumerate(positions):
+            pnl = pnl_results[i]
+            lp_val   = pnl["current_value"]
+            hodl_val = pnl["hodl_value"]
+            dep      = pnl["deposit_usd"]
+            fees_est = pnl["fees_earned_est"]
+            if hodl_val > 0 and lp_val > 0:
+                total_lp_val   += lp_val
+                total_hodl_val += hodl_val
+                total_dep      += dep
+                total_fees_lp  += fees_est   # only LP positions with valid HODL values
+                diff     = (lp_val + fees_est) - hodl_val
+                diff_pct = diff / hodl_val * 100 if hodl_val > 0 else 0
+                hodl_rows.append({
+                    "Position":      f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
+                    "Deposit":       f"${dep:,.0f}",
+                    "LP Value":      f"${lp_val:,.0f}",
+                    "Est. Fees":     f"${fees_est:,.2f}",
+                    "HODL Value":    f"${hodl_val:,.0f}",
+                    "LP+Fees vs HODL": f"{diff:+,.0f} ({diff_pct:+.1f}%)",
+                })
 
-
-# ─── Net Worth Over Time Chart (Feature 2) ────────────────────────────────────
-
-render_section_header("Net Worth Projection", "Portfolio value over time — based on your positions + top opportunity APY")
-
-if positions:
-    total_dep_nw = sum(float(p.get("deposit_usd", 0)) for p in positions)
-    avg_apy      = 0.0
-    _latest_opps = (latest.get("models") or {}).get(ctx.get("profile", "medium")) or []
-    if _latest_opps:
-        avg_apy = sum(o.get("estimated_apy", 0) for o in _latest_opps[:3]) / min(3, len(_latest_opps))
-
-    if total_dep_nw > 0 and avg_apy > 0:
-        months     = list(range(0, 25))
-        lp_curve   = [total_dep_nw * ((1 + avg_apy / 100 / 12) ** m) for m in months]
-        hodl_curve = [total_dep_nw] * len(months)   # HODL = flat (no yield)
-
-        # Project post-incentive (after Jul 2026): drop to ~5% base fees only
-        _months_to_expiry = min(24, max(0, _days_to_jul2026 // 30))
-        base_fee_apy = max(5.0, avg_apy * 0.25)  # ~25% of current APY remains as base fees
-        post_expiry  = [lp_curve[_months_to_expiry] * ((1 + base_fee_apy / 100 / 12) ** (m - _months_to_expiry))
-                        for m in range(_months_to_expiry, len(months))]
-        lp_curve_adj = lp_curve[:_months_to_expiry] + post_expiry
-
-        now_dt = datetime.now(timezone.utc)
-        dates  = [(now_dt + timedelta(days=30 * m)).strftime("%b %Y") for m in months]
-
-        fig_nw = go.Figure()
-        fig_nw.add_trace(go.Scatter(
-            x=dates, y=lp_curve,
-            mode="lines", name=f"LP @ {avg_apy:.0f}% APY (current)",
-            line=dict(color="#3b82f6", width=2, dash="dash"),
-            opacity=0.5,
-        ))
-        fig_nw.add_trace(go.Scatter(
-            x=dates, y=lp_curve_adj,
-            mode="lines", name="LP (post-incentive adjusted)",
-            line=dict(color="#a78bfa", width=2),
-            fill="tozeroy", fillcolor="rgba(167,139,250,0.06)",
-        ))
-        fig_nw.add_trace(go.Scatter(
-            x=dates, y=hodl_curve,
-            mode="lines", name="HODL (no yield)",
-            line=dict(color="#475569", width=1, dash="dot"),
-        ))
-        # Mark incentive expiry — use add_shape instead of add_vline to avoid
-        # Plotly's _mean() TypeError when x-axis contains string categorical labels.
-        if 0 < _months_to_expiry < len(dates):
-            _expiry_x = dates[_months_to_expiry]
-            fig_nw.add_shape(
-                type="line",
-                x0=_expiry_x, x1=_expiry_x,
-                y0=0, y1=1,
-                xref="x", yref="paper",
-                line=dict(color="#f59e0b", dash="dot", width=1.5),
-                opacity=0.6,
+        if hodl_rows:
+            st.dataframe(pd.DataFrame(hodl_rows), width="stretch", hide_index=True)
+            if total_hodl_val > 0:
+                net_diff = (total_lp_val + total_fees_lp) - total_hodl_val
+                net_color = "#10b981" if net_diff >= 0 else "#ef4444"
+                verdict   = "LP + fees is OUTPERFORMING HODL ✓" if net_diff >= 0 else "HODL would have been better — consider IL impact ⚠"
+                st.markdown(
+                    f"<div style='font-size:0.84rem; color:{net_color}; margin-top:8px; font-weight:600;'>"
+                    f"Overall: {verdict} (net {net_diff:+,.0f})</div>",
+                    unsafe_allow_html=True,
+                )
+            st.caption("HODL value = token amounts × current prices without providing liquidity. Fees are estimated from entry APY × days held.")
+        else:
+            st.markdown(
+                "<div style='color:#334155; font-size:0.85rem;'>Add LP positions with token amounts to see HODL comparison.</div>",
+                unsafe_allow_html=True,
             )
-            fig_nw.add_annotation(
-                x=_expiry_x, y=1,
-                xref="x", yref="paper",
-                text="Incentive expiry",
-                showarrow=False,
-                font=dict(color="#f59e0b", size=10),
-                xanchor="left",
-                yanchor="top",
+
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+
+with _tab_rewards:
+    # ─── Rewards & Incentives ─────────────────────────────────────────────────────
+
+    if positions:
+        render_section_header("Rewards & Incentives", "Unclaimed fees · FTSO rewards · rFLR incentive tracker")
+
+        # ── Claimable Rewards ──────────────────────────────────────────────────────
+        total_fees    = sum(float(p.get("unclaimed_fees", 0)) for p in positions)
+        total_rewards = sum(float(p.get("rewards", 0)) for p in positions if isinstance(p.get("rewards"), (int, float)))
+
+        _FTSO_RATE    = 0.043
+        flr_in_lp     = 0.0
+        for p in positions:
+            if p.get("position_type") == "lp":
+                tok_a = (p.get("token_a") or "").upper()
+                tok_b = (p.get("token_b") or "").upper()
+                price_lkp = {pr.get("symbol", ""): pr.get("price_usd", 0) for pr in (prices or [])}
+                flr_price = price_lkp.get("FLR") or FALLBACK_PRICES.get("FLR", 0.0088)
+                if "FLR" in (tok_a, tok_b) or "WFLR" in (tok_a, tok_b):
+                    dep = float(p.get("deposit_usd", 0)) * 0.5
+                    flr_in_lp += dep / flr_price if flr_price > 0 else 0
+
+        _days_to_jul2026 = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
+        days_to_expiry   = _days_to_jul2026
+        ftso_est_usd     = flr_in_lp * FALLBACK_PRICES.get("FLR", 0.0088) * _FTSO_RATE * (30 / 365)
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f"""<div class="metric-card card-green">
+            <div class="label">Unclaimed LP Fees</div>
+            <div class="big-number" style="color:#10b981;">${total_fees:,.2f}</div>
+            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">Across {len(positions)} position(s)</div>
+            </div>""", unsafe_allow_html=True)
+        with c2:
+            st.markdown(f"""<div class="metric-card card-blue">
+            <div class="label">FTSO Delegation Est.</div>
+            <div class="big-number">${ftso_est_usd:,.2f}</div>
+            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">~30-day estimate @ 4.3% APY</div>
+            </div>""", unsafe_allow_html=True)
+        with c3:
+            st.markdown(f"""<div class="metric-card card-orange">
+            <div class="label">Incentives Expire In</div>
+            <div class="big-number" style="color:#f59e0b;">{days_to_expiry}d</div>
+            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">rFLR program ends Jul 2026</div>
+            </div>""", unsafe_allow_html=True)
+
+        st.caption("Unclaimed fees pulled from tracked positions. FTSO estimate based on FLR in LP positions at 4.3% APY. Claim via app.flare.network.")
+
+        # ── rFLR Incentive Tracker ─────────────────────────────────────────────────
+        _incentive_positions = [p for p in positions if p.get("protocol", "") in ("blazeswap", "enosys", "sparkdex")]
+        if _incentive_positions:
+            st.markdown("##### rFLR Incentive Tracker")
+            _FLR_PRICE = (next((pr.get("price_usd", 0) for pr in (prices or []) if pr.get("symbol") == "FLR"), 0)
+                          or FALLBACK_PRICES.get("FLR", 0.0088))
+            rflr_rows = []
+            for p in _incentive_positions:
+                dep          = float(p.get("deposit_usd", 0))
+                entry_apy    = float(p.get("entry_apy", 0))
+                _reward_rate = max(0, (entry_apy - 5) / 100)
+                days_held    = 0
+                if p.get("entry_date"):
+                    try:
+                        _p_entry_dt = datetime.fromisoformat(p["entry_date"])
+                        if _p_entry_dt.tzinfo is None:
+                            _p_entry_dt = _p_entry_dt.replace(tzinfo=timezone.utc)
+                        days_held = max(0, (datetime.now(timezone.utc) - _p_entry_dt).days)
+                    except Exception:
+                        pass
+                earned_usd  = dep * _reward_rate * days_held / 365 if days_held > 0 else 0
+                earned_rflr = earned_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
+                proj_usd    = dep * _reward_rate * _days_to_jul2026 / 365
+                proj_rflr   = proj_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
+                rflr_rows.append({
+                    "Position":           f"{p.get('pool','?')} ({p.get('protocol','?').capitalize()})",
+                    "Deposit":            f"${dep:,.0f}",
+                    "Days Held":          days_held,
+                    "Est. rFLR Earned":   f"{earned_rflr:,.0f} FLR (≈${earned_usd:,.2f})",
+                    f"Proj. to Jul 2026": f"{proj_rflr:,.0f} FLR (≈${proj_usd:,.2f})",
+                })
+            st.dataframe(pd.DataFrame(rflr_rows), width="stretch", hide_index=True)
+            st.caption(
+                f"rFLR rewards estimated from entry APY minus ~5% base fees. FLR price: ${_FLR_PRICE:.4f}. "
+                f"Incentive program ends July 1 2026 ({_days_to_jul2026} days). Claim via blazeswap.finance or enosys.finance."
             )
-        fig_nw.update_layout(
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+
+with _tab_pos:
+    # ─── FTSO IL Calculator (Feature 4) ──────────────────────────────────────────
+
+    render_section_header("IL Calculator", "Real-time impermanent loss with FTSO price data")
+    render_ftso_il_calculator(prices)
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+    # ─── Net Worth Over Time Chart (Feature 2) ────────────────────────────────────
+
+    render_section_header("Net Worth Projection", "Portfolio value over time — based on your positions + top opportunity APY")
+
+    if positions:
+        total_dep_nw = sum(float(p.get("deposit_usd", 0)) for p in positions)
+        avg_apy      = 0.0
+        _latest_opps = (latest.get("models") or {}).get(ctx.get("profile", "medium")) or []
+        if _latest_opps:
+            avg_apy = sum(o.get("estimated_apy", 0) for o in _latest_opps[:3]) / min(3, len(_latest_opps))
+
+        if total_dep_nw > 0 and avg_apy > 0:
+            months     = list(range(0, 25))
+            lp_curve   = [total_dep_nw * ((1 + avg_apy / 100 / 12) ** m) for m in months]
+            hodl_curve = [total_dep_nw] * len(months)   # HODL = flat (no yield)
+
+            # Project post-incentive (after Jul 2026): drop to ~5% base fees only
+            _months_to_expiry = min(24, max(0, _days_to_jul2026 // 30))
+            base_fee_apy = max(5.0, avg_apy * 0.25)  # ~25% of current APY remains as base fees
+            post_expiry  = [lp_curve[_months_to_expiry] * ((1 + base_fee_apy / 100 / 12) ** (m - _months_to_expiry))
+                            for m in range(_months_to_expiry, len(months))]
+            lp_curve_adj = lp_curve[:_months_to_expiry] + post_expiry
+
+            now_dt = datetime.now(timezone.utc)
+            dates  = [(now_dt + timedelta(days=30 * m)).strftime("%b %Y") for m in months]
+
+            fig_nw = go.Figure()
+            fig_nw.add_trace(go.Scatter(
+                x=dates, y=lp_curve,
+                mode="lines", name=f"LP @ {avg_apy:.0f}% APY (current)",
+                line=dict(color="#3b82f6", width=2, dash="dash"),
+                opacity=0.5,
+            ))
+            fig_nw.add_trace(go.Scatter(
+                x=dates, y=lp_curve_adj,
+                mode="lines", name="LP (post-incentive adjusted)",
+                line=dict(color="#a78bfa", width=2),
+                fill="tozeroy", fillcolor="rgba(167,139,250,0.06)",
+            ))
+            fig_nw.add_trace(go.Scatter(
+                x=dates, y=hodl_curve,
+                mode="lines", name="HODL (no yield)",
+                line=dict(color="#475569", width=1, dash="dot"),
+            ))
+            # Mark incentive expiry — use add_shape instead of add_vline to avoid
+            # Plotly's _mean() TypeError when x-axis contains string categorical labels.
+            if 0 < _months_to_expiry < len(dates):
+                _expiry_x = dates[_months_to_expiry]
+                fig_nw.add_shape(
+                    type="line",
+                    x0=_expiry_x, x1=_expiry_x,
+                    y0=0, y1=1,
+                    xref="x", yref="paper",
+                    line=dict(color="#f59e0b", dash="dot", width=1.5),
+                    opacity=0.6,
+                )
+                fig_nw.add_annotation(
+                    x=_expiry_x, y=1,
+                    xref="x", yref="paper",
+                    text="Incentive expiry",
+                    showarrow=False,
+                    font=dict(color="#f59e0b", size=10),
+                    xanchor="left",
+                    yanchor="top",
+                )
+            fig_nw.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                font_color="#475569",
+                xaxis=dict(gridcolor="rgba(148,163,184,0.15)", color="#475569"),
+                yaxis=dict(title="Portfolio Value ($)", gridcolor="rgba(148,163,184,0.15)", color="#475569",
+                           tickprefix="$", tickformat=",.0f"),
+                legend=dict(font=dict(size=10, color="#64748b"), bgcolor="rgba(0,0,0,0)"),
+                margin=dict(l=60, r=20, t=20, b=40),
+                height=290,
+            )
+            st.plotly_chart(fig_nw, width="stretch")
+            st.caption(
+                f"Starting from ${total_dep_nw:,.0f}. LP curve uses top-3 avg APY ({avg_apy:.0f}%). "
+                f"Post-incentive drops to ~{base_fee_apy:.0f}% (base fees only). Not financial advice."
+            )
+        else:
+            st.info("Add positions and run a scan to see the net worth projection.")
+    else:
+        st.info("Add positions to see the net worth projection chart.")
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+    # ─── Historical APY Chart ─────────────────────────────────────────────────────
+
+    render_section_header("Historical APY Trend", "Top opportunity APY — last 30 scans")
+
+    profile = ctx["profile"]
+    records = []
+    for run in runs[-30:]:
+        ts   = run.get("run_id", "")
+        opps = (run.get("models") or {}).get(profile) or []
+        if opps and ts:
+            try:
+                records.append({"date": datetime.fromisoformat(ts), "apy": opps[0].get("estimated_apy", 0)})
+            except Exception:
+                pass
+
+    if len(records) >= 2:
+        df  = pd.DataFrame(records).sort_values("date")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df["date"], y=df["apy"],
+            mode="lines+markers",
+            line=dict(color="#3b82f6", width=2),
+            marker=dict(size=5, color="#3b82f6"),
+            fill="tozeroy",
+            fillcolor="rgba(59,130,246,0.06)",
+        ))
+        fig.update_layout(
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
             font_color="#475569",
             xaxis=dict(gridcolor="rgba(148,163,184,0.15)", color="#475569"),
-            yaxis=dict(title="Portfolio Value ($)", gridcolor="rgba(148,163,184,0.15)", color="#475569",
-                       tickprefix="$", tickformat=",.0f"),
-            legend=dict(font=dict(size=10, color="#64748b"), bgcolor="rgba(0,0,0,0)"),
-            margin=dict(l=60, r=20, t=20, b=40),
-            height=290,
+            yaxis=dict(title="APY %", gridcolor="rgba(148,163,184,0.15)", color="#475569"),
+            margin=dict(l=40, r=20, t=20, b=40),
+            height=260,
+            showlegend=False,
         )
-        st.plotly_chart(fig_nw, width="stretch")
-        st.caption(
-            f"Starting from ${total_dep_nw:,.0f}. LP curve uses top-3 avg APY ({avg_apy:.0f}%). "
-            f"Post-incentive drops to ~{base_fee_apy:.0f}% (base fees only). Not financial advice."
-        )
+        st.plotly_chart(fig, width="stretch")
     else:
-        st.info("Add positions and run a scan to see the net worth projection.")
-else:
-    st.info("Add positions to see the net worth projection chart.")
+        st.info("Need at least 2 scans to show the chart.")
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
-# ─── Historical APY Chart ─────────────────────────────────────────────────────
+    # ─── Portfolio Correlation Matrix (Upgrade #5) ────────────────────────────────
 
-render_section_header("Historical APY Trend", "Top opportunity APY — last 30 scans")
+    render_section_header("Correlation Matrix", "How correlated are your positions? Warns on concentration risk.")
 
-profile = ctx["profile"]
-records = []
-for run in runs[-30:]:
-    ts   = run.get("run_id", "")
-    opps = (run.get("models") or {}).get(profile) or []
-    if opps and ts:
-        try:
-            records.append({"date": datetime.fromisoformat(ts), "apy": opps[0].get("estimated_apy", 0)})
-        except Exception:
-            pass
-
-if len(records) >= 2:
-    df  = pd.DataFrame(records).sort_values("date")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df["date"], y=df["apy"],
-        mode="lines+markers",
-        line=dict(color="#3b82f6", width=2),
-        marker=dict(size=5, color="#3b82f6"),
-        fill="tozeroy",
-        fillcolor="rgba(59,130,246,0.06)",
-    ))
-    fig.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#475569",
-        xaxis=dict(gridcolor="rgba(148,163,184,0.15)", color="#475569"),
-        yaxis=dict(title="APY %", gridcolor="rgba(148,163,184,0.15)", color="#475569"),
-        margin=dict(l=40, r=20, t=20, b=40),
-        height=260,
-        showlegend=False,
-    )
-    st.plotly_chart(fig, width="stretch")
-else:
-    st.info("Need at least 2 scans to show the chart.")
-
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    # Static pairwise token correlation matrix (based on known Flare ecosystem behaviour, Mar 2026).
+    # FLR/sFLR highly correlated; stables uncorrelated; cross-chain crypto partially correlated.
+    _TOKEN_CORR: dict = {
+        ("FLR",   "FLR"):   1.00,
+        ("FLR",   "sFLR"):  0.99,
+        ("FLR",   "WFLR"):  1.00,
+        ("FLR",   "FXRP"):  0.35,
+        ("FLR",   "XRP"):   0.35,
+        ("FLR",   "stXRP"): 0.35,
+        ("FLR",   "USD0"):  0.05,
+        ("FLR",   "USDT0"): 0.05,
+        ("FLR",   "USDC.e"):0.05,
+        ("FLR",   "wETH"):  0.55,
+        ("FLR",   "HLN"):   0.60,
+        ("sFLR",  "WFLR"):  0.99,
+        ("sFLR",  "FXRP"):  0.35,
+        ("sFLR",  "USD0"):  0.05,
+        ("FXRP",  "XRP"):   0.99,
+        ("FXRP",  "stXRP"): 0.98,
+        ("FXRP",  "USD0"):  0.05,
+        ("FXRP",  "USDT0"): 0.05,
+        ("FXRP",  "wETH"):  0.45,
+        ("FXRP",  "HLN"):   0.40,
+        ("XRP",   "stXRP"): 0.98,
+        ("wETH",  "USD0"):  0.05,
+        ("wETH",  "HLN"):   0.50,
+        ("USD0",  "USDT0"): 0.99,
+        ("USD0",  "USDC.e"):0.99,
+        ("USDT0", "USDC.e"):0.99,
+    }
 
 
-# ─── Portfolio Correlation Matrix (Upgrade #5) ────────────────────────────────
-
-render_section_header("Correlation Matrix", "How correlated are your positions? Warns on concentration risk.")
-
-# Static pairwise token correlation matrix (based on known Flare ecosystem behaviour, Mar 2026).
-# FLR/sFLR highly correlated; stables uncorrelated; cross-chain crypto partially correlated.
-_TOKEN_CORR: dict = {
-    ("FLR",   "FLR"):   1.00,
-    ("FLR",   "sFLR"):  0.99,
-    ("FLR",   "WFLR"):  1.00,
-    ("FLR",   "FXRP"):  0.35,
-    ("FLR",   "XRP"):   0.35,
-    ("FLR",   "stXRP"): 0.35,
-    ("FLR",   "USD0"):  0.05,
-    ("FLR",   "USDT0"): 0.05,
-    ("FLR",   "USDC.e"):0.05,
-    ("FLR",   "wETH"):  0.55,
-    ("FLR",   "HLN"):   0.60,
-    ("sFLR",  "WFLR"):  0.99,
-    ("sFLR",  "FXRP"):  0.35,
-    ("sFLR",  "USD0"):  0.05,
-    ("FXRP",  "XRP"):   0.99,
-    ("FXRP",  "stXRP"): 0.98,
-    ("FXRP",  "USD0"):  0.05,
-    ("FXRP",  "USDT0"): 0.05,
-    ("FXRP",  "wETH"):  0.45,
-    ("FXRP",  "HLN"):   0.40,
-    ("XRP",   "stXRP"): 0.98,
-    ("wETH",  "USD0"):  0.05,
-    ("wETH",  "HLN"):   0.50,
-    ("USD0",  "USDT0"): 0.99,
-    ("USD0",  "USDC.e"):0.99,
-    ("USDT0", "USDC.e"):0.99,
-}
+    def _get_corr(a: str, b: str) -> float:
+        a, b = a.upper(), b.upper()
+        if a == b:
+            return 1.0
+        return _TOKEN_CORR.get((a, b), _TOKEN_CORR.get((b, a), 0.30))  # default: weak positive
 
 
-def _get_corr(a: str, b: str) -> float:
-    a, b = a.upper(), b.upper()
-    if a == b:
-        return 1.0
-    return _TOKEN_CORR.get((a, b), _TOKEN_CORR.get((b, a), 0.30))  # default: weak positive
+    def _position_tokens(pos: dict) -> list:
+        """Extract the token symbols a position is exposed to."""
+        tokens = []
+        tok_a = (pos.get("token_a") or "").strip().upper()
+        tok_b = (pos.get("token_b") or "").strip().upper()
+        if tok_a:
+            tokens.append(tok_a)
+        if tok_b and tok_b != tok_a:
+            tokens.append(tok_b)
+        if not tokens:
+            # Guess from pool name
+            pool = (pos.get("pool") or "").replace("-", "/").replace("_", "/")
+            for part in pool.split("/"):
+                t = part.strip().upper()
+                if t and t not in tokens:
+                    tokens.append(t)
+        return tokens[:2]  # at most 2 tokens per LP
 
 
-def _position_tokens(pos: dict) -> list:
-    """Extract the token symbols a position is exposed to."""
-    tokens = []
-    tok_a = (pos.get("token_a") or "").strip().upper()
-    tok_b = (pos.get("token_b") or "").strip().upper()
-    if tok_a:
-        tokens.append(tok_a)
-    if tok_b and tok_b != tok_a:
-        tokens.append(tok_b)
-    if not tokens:
-        # Guess from pool name
-        pool = (pos.get("pool") or "").replace("-", "/").replace("_", "/")
-        for part in pool.split("/"):
-            t = part.strip().upper()
-            if t and t not in tokens:
-                tokens.append(t)
-    return tokens[:2]  # at most 2 tokens per LP
-
-
-if not positions or len(positions) < 2:
-    st.markdown(
-        "<div style='color:#334155; font-size:0.85rem;'>"
-        "Add at least 2 positions to see the correlation matrix.</div>",
-        unsafe_allow_html=True,
-    )
-else:
-    # Build position labels and compute pairwise correlation
-    pos_labels = [
-        f"{pos.get('pool', '?')} ({pos.get('protocol', '?').capitalize()})"
-        for pos in positions
-    ]
-    n = len(positions)
-    corr_matrix = [[0.0] * n for _ in range(n)]
-
-    for i in range(n):
-        for j in range(n):
-            if i == j:
-                corr_matrix[i][j] = 1.0
-                continue
-            toks_i = _position_tokens(positions[i])
-            toks_j = _position_tokens(positions[j])
-            if not toks_i or not toks_j:
-                corr_matrix[i][j] = 0.30   # unknown
-                continue
-            # Average pairwise correlation across all token combinations
-            pairs = [(a, b) for a in toks_i for b in toks_j]
-            corr_matrix[i][j] = sum(_get_corr(a, b) for a, b in pairs) / len(pairs)
-
-    # Plotly heatmap (go already imported at top of file)
-    fig_corr = go.Figure(data=go.Heatmap(
-        z=corr_matrix,
-        x=pos_labels,
-        y=pos_labels,
-        colorscale=[
-            [0.0,  "rgba(16,185,129,0.15)"],
-            [0.3,  "rgba(59,130,246,0.25)"],
-            [0.7,  "rgba(245,158,11,0.40)"],
-            [1.0,  "rgba(239,68,68,0.65)"],
-        ],
-        zmin=0, zmax=1,
-        text=[[f"{v:.2f}" for v in row] for row in corr_matrix],
-        texttemplate="%{text}",
-        textfont={"size": 11, "color": "#1e293b"},
-        hovertemplate="<b>%{y}</b> vs <b>%{x}</b><br>Correlation: %{z:.2f}<extra></extra>",
-    ))
-    fig_corr.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#475569",
-        xaxis=dict(tickangle=-30, tickfont=dict(size=10, color="#475569")),
-        yaxis=dict(tickfont=dict(size=10, color="#475569")),
-        margin=dict(l=20, r=20, t=20, b=80),
-        height=max(240, 80 + 60 * n),
-    )
-    st.plotly_chart(fig_corr, width="stretch")
-
-    # Concentration risk warning
-    high_corr_pairs = [
-        (pos_labels[i], pos_labels[j], corr_matrix[i][j])
-        for i in range(n) for j in range(i + 1, n)
-        if corr_matrix[i][j] >= 0.80
-    ]
-    if high_corr_pairs:
-        warn_lines = "".join(
-            f"<li>{_html.escape(a)} ↔ {_html.escape(b)} "
-            f"(<span style='color:#ef4444; font-weight:600;'>{c:.0%}</span>)</li>"
-            for a, b, c in high_corr_pairs
-        )
+    if not positions or len(positions) < 2:
         st.markdown(
-            f"<div class='warn-box'>"
-            f"<div style='font-weight:700; color:#f59e0b; margin-bottom:6px;'>⚠ Concentration Risk</div>"
-            f"<div style='color:#94a3b8; font-size:0.83rem; line-height:1.55;'>"
-            f"These positions move together — a single market event could hit all of them:<ul style='margin:6px 0 0 0;'>"
-            f"{warn_lines}</ul>"
-            f"<div style='margin-top:8px; color:#64748b;'>Consider diversifying into uncorrelated assets (stablecoins, wETH) or reducing position sizes.</div>"
-            f"</div></div>",
+            "<div style='color:#334155; font-size:0.85rem;'>"
+            "Add at least 2 positions to see the correlation matrix.</div>",
             unsafe_allow_html=True,
         )
     else:
-        st.markdown(
-            "<div style='color:#10b981; font-size:0.85rem; padding:4px 0;'>"
-            "✓ Portfolio is well-diversified — no highly correlated position pairs detected.</div>",
-            unsafe_allow_html=True,
+        # Build position labels and compute pairwise correlation
+        pos_labels = [
+            f"{pos.get('pool', '?')} ({pos.get('protocol', '?').capitalize()})"
+            for pos in positions
+        ]
+        n = len(positions)
+        corr_matrix = [[0.0] * n for _ in range(n)]
+
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    corr_matrix[i][j] = 1.0
+                    continue
+                toks_i = _position_tokens(positions[i])
+                toks_j = _position_tokens(positions[j])
+                if not toks_i or not toks_j:
+                    corr_matrix[i][j] = 0.30   # unknown
+                    continue
+                # Average pairwise correlation across all token combinations
+                pairs = [(a, b) for a in toks_i for b in toks_j]
+                corr_matrix[i][j] = sum(_get_corr(a, b) for a, b in pairs) / len(pairs)
+
+        # Plotly heatmap (go already imported at top of file)
+        fig_corr = go.Figure(data=go.Heatmap(
+            z=corr_matrix,
+            x=pos_labels,
+            y=pos_labels,
+            colorscale=[
+                [0.0,  "rgba(16,185,129,0.15)"],
+                [0.3,  "rgba(59,130,246,0.25)"],
+                [0.7,  "rgba(245,158,11,0.40)"],
+                [1.0,  "rgba(239,68,68,0.65)"],
+            ],
+            zmin=0, zmax=1,
+            text=[[f"{v:.2f}" for v in row] for row in corr_matrix],
+            texttemplate="%{text}",
+            textfont={"size": 11, "color": "#1e293b"},
+            hovertemplate="<b>%{y}</b> vs <b>%{x}</b><br>Correlation: %{z:.2f}<extra></extra>",
+        ))
+        fig_corr.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            font_color="#475569",
+            xaxis=dict(tickangle=-30, tickfont=dict(size=10, color="#475569")),
+            yaxis=dict(tickfont=dict(size=10, color="#475569")),
+            margin=dict(l=20, r=20, t=20, b=80),
+            height=max(240, 80 + 60 * n),
         )
-    st.caption("Correlations are estimates based on Flare ecosystem token relationships. Actual correlations vary with market conditions.")
+        st.plotly_chart(fig_corr, width="stretch")
 
-# ─── Portfolio Rebalancing Advisor (Phase 8) ──────────────────────────────────
-
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-render_section_header("Rebalancing Advisor", "Compare current allocation vs model recommendation — find drift")
-
-if positions and total_value > 0:
-    # ── Step 1: Current allocation by protocol type ──────────────────────────
-    _type_map = {k: v.get("type", "Other") for k, v in PROTOCOLS.items()}
-    _current_alloc: dict = {}
-    for pnl_idx, pos in enumerate(positions):
-        proto_key  = pos.get("protocol", "")
-        proto_type = _type_map.get(proto_key, "Other")
-        # Simplify types for comparison
-        if "DEX" in proto_type or "Perp" in proto_type:
-            bucket = "DEX / LP"
-        elif "Lending" in proto_type or "CDP" in proto_type:
-            bucket = "Lending"
-        elif "Staking" in proto_type or "Liquid" in proto_type:
-            bucket = "Staking"
-        elif "Yield" in proto_type:
-            bucket = "Yield Vault"
-        else:
-            bucket = "Other"
-        _current_alloc[bucket] = _current_alloc.get(bucket, 0) + pnl_results[pnl_idx]["current_value"]
-
-    _current_pct = {k: round(v / total_value * 100, 1) for k, v in _current_alloc.items()}
-
-    # ── Step 2: Target allocation from model recommendations ─────────────────
-    _prof_key    = ctx.get("profile", "medium")
-    _model_opps  = (latest.get("models") or {}).get(_prof_key) or []
-    _target_alloc: dict = {}
-    _total_kf = sum(o.get("kelly_fraction", 0) for o in _model_opps) or 1.0
-    for opp in _model_opps:
-        proto_key  = ""
-        proto_name = opp.get("protocol", "")
-        # Reverse-lookup protocol key from name
-        for k, v in PROTOCOLS.items():
-            if v.get("name") == proto_name:
-                proto_key = k
-                break
-        proto_type = _type_map.get(proto_key, "Other")
-        if "DEX" in proto_type or "Perp" in proto_type:
-            bucket = "DEX / LP"
-        elif "Lending" in proto_type or "CDP" in proto_type:
-            bucket = "Lending"
-        elif "Staking" in proto_type or "Liquid" in proto_type:
-            bucket = "Staking"
-        elif "Yield" in proto_type:
-            bucket = "Yield Vault"
-        else:
-            bucket = "Other"
-        kf = opp.get("kelly_fraction", 0) / _total_kf * 100
-        _target_alloc[bucket] = _target_alloc.get(bucket, 0) + kf
-
-    _target_pct = {k: round(v, 1) for k, v in _target_alloc.items()}
-
-    if _target_pct:
-        # ── Step 3: Show drift table ─────────────────────────────────────────
-        all_buckets = sorted(set(list(_current_pct.keys()) + list(_target_pct.keys())))
-        rebal_rows  = []
-        actions     = []
-        for bucket in all_buckets:
-            cur = _current_pct.get(bucket, 0.0)
-            tgt = _target_pct.get(bucket, 0.0)
-            drift = cur - tgt
-            if drift > 8:
-                action = "Reduce"
-                arrow  = "↓ Overweight"
-                dollar_adj = -(drift / 100) * total_value
-            elif drift < -8:
-                action = "Increase"
-                arrow  = "↑ Underweight"
-                dollar_adj = abs(drift / 100) * total_value
-            else:
-                action = "Hold"
-                arrow  = "✓ On target"
-                dollar_adj = 0.0
-            if action != "Hold":
-                actions.append({"bucket": bucket, "action": action, "drift": drift, "dollar_adj": dollar_adj})
-            rebal_rows.append({
-                "Strategy Type": bucket,
-                "Current %":     f"{cur:.1f}%",
-                "Model Target %": f"{tgt:.1f}%",
-                "Drift":         f"{drift:+.1f}%",
-                "Signal":        arrow,
-                "$ Adjustment":  f"${abs(dollar_adj):,.0f}" if dollar_adj != 0 else "—",
-            })
-
-        st.dataframe(pd.DataFrame(rebal_rows), width="stretch", hide_index=True)
-
-        # ── Step 4: Actionable suggestions ───────────────────────────────────
-        if actions:
+        # Concentration risk warning
+        high_corr_pairs = [
+            (pos_labels[i], pos_labels[j], corr_matrix[i][j])
+            for i in range(n) for j in range(i + 1, n)
+            if corr_matrix[i][j] >= 0.80
+        ]
+        if high_corr_pairs:
+            warn_lines = "".join(
+                f"<li>{_html.escape(a)} ↔ {_html.escape(b)} "
+                f"(<span style='color:#ef4444; font-weight:600;'>{c:.0%}</span>)</li>"
+                for a, b, c in high_corr_pairs
+            )
             st.markdown(
-                "<div style='font-weight:600; color:#a78bfa; font-size:0.88rem; margin:12px 0 8px;'>"
-                "Rebalancing Actions</div>",
+                f"<div class='warn-box'>"
+                f"<div style='font-weight:700; color:#f59e0b; margin-bottom:6px;'>⚠ Concentration Risk</div>"
+                f"<div style='color:#94a3b8; font-size:0.83rem; line-height:1.55;'>"
+                f"These positions move together — a single market event could hit all of them:<ul style='margin:6px 0 0 0;'>"
+                f"{warn_lines}</ul>"
+                f"<div style='margin-top:8px; color:#64748b;'>Consider diversifying into uncorrelated assets (stablecoins, wETH) or reducing position sizes.</div>"
+                f"</div></div>",
                 unsafe_allow_html=True,
             )
-            for act in sorted(actions, key=lambda x: abs(x["drift"]), reverse=True):
-                _act_color = "#ef4444" if act["action"] == "Reduce" else "#10b981"
-                _act_icon  = "▼" if act["action"] == "Reduce" else "▲"
-                _msg = (
-                    f"Withdraw ${abs(act['dollar_adj']):,.0f} from {act['bucket']} positions "
-                    f"(currently {_current_pct.get(act['bucket'], 0):.0f}% vs {_target_pct.get(act['bucket'], 0):.0f}% target)"
-                    if act["action"] == "Reduce"
-                    else f"Add ${abs(act['dollar_adj']):,.0f} to {act['bucket']} opportunities "
-                    f"({_current_pct.get(act['bucket'], 0):.0f}% current vs {_target_pct.get(act['bucket'], 0):.0f}% target)"
-                )
+        else:
+            st.markdown(
+                "<div style='color:#10b981; font-size:0.85rem; padding:4px 0;'>"
+                "✓ Portfolio is well-diversified — no highly correlated position pairs detected.</div>",
+                unsafe_allow_html=True,
+            )
+        st.caption("Correlations are estimates based on Flare ecosystem token relationships. Actual correlations vary with market conditions.")
+
+    # ─── Portfolio Rebalancing Advisor (Phase 8) ──────────────────────────────────
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    render_section_header("Rebalancing Advisor", "Compare current allocation vs model recommendation — find drift")
+
+    if positions and total_value > 0:
+        # ── Step 1: Current allocation by protocol type ──────────────────────────
+        _type_map = {k: v.get("type", "Other") for k, v in PROTOCOLS.items()}
+        _current_alloc: dict = {}
+        for pnl_idx, pos in enumerate(positions):
+            proto_key  = pos.get("protocol", "")
+            proto_type = _type_map.get(proto_key, "Other")
+            # Simplify types for comparison
+            if "DEX" in proto_type or "Perp" in proto_type:
+                bucket = "DEX / LP"
+            elif "Lending" in proto_type or "CDP" in proto_type:
+                bucket = "Lending"
+            elif "Staking" in proto_type or "Liquid" in proto_type:
+                bucket = "Staking"
+            elif "Yield" in proto_type:
+                bucket = "Yield Vault"
+            else:
+                bucket = "Other"
+            _current_alloc[bucket] = _current_alloc.get(bucket, 0) + pnl_results[pnl_idx]["current_value"]
+
+        _current_pct = {k: round(v / total_value * 100, 1) for k, v in _current_alloc.items()}
+
+        # ── Step 2: Target allocation from model recommendations ─────────────────
+        _prof_key    = ctx.get("profile", "medium")
+        _model_opps  = (latest.get("models") or {}).get(_prof_key) or []
+        _target_alloc: dict = {}
+        _total_kf = sum(o.get("kelly_fraction", 0) for o in _model_opps) or 1.0
+        for opp in _model_opps:
+            proto_key  = ""
+            proto_name = opp.get("protocol", "")
+            # Reverse-lookup protocol key from name
+            for k, v in PROTOCOLS.items():
+                if v.get("name") == proto_name:
+                    proto_key = k
+                    break
+            proto_type = _type_map.get(proto_key, "Other")
+            if "DEX" in proto_type or "Perp" in proto_type:
+                bucket = "DEX / LP"
+            elif "Lending" in proto_type or "CDP" in proto_type:
+                bucket = "Lending"
+            elif "Staking" in proto_type or "Liquid" in proto_type:
+                bucket = "Staking"
+            elif "Yield" in proto_type:
+                bucket = "Yield Vault"
+            else:
+                bucket = "Other"
+            kf = opp.get("kelly_fraction", 0) / _total_kf * 100
+            _target_alloc[bucket] = _target_alloc.get(bucket, 0) + kf
+
+        _target_pct = {k: round(v, 1) for k, v in _target_alloc.items()}
+
+        if _target_pct:
+            # ── Step 3: Show drift table ─────────────────────────────────────────
+            all_buckets = sorted(set(list(_current_pct.keys()) + list(_target_pct.keys())))
+            rebal_rows  = []
+            actions     = []
+            for bucket in all_buckets:
+                cur = _current_pct.get(bucket, 0.0)
+                tgt = _target_pct.get(bucket, 0.0)
+                drift = cur - tgt
+                if drift > 8:
+                    action = "Reduce"
+                    arrow  = "↓ Overweight"
+                    dollar_adj = -(drift / 100) * total_value
+                elif drift < -8:
+                    action = "Increase"
+                    arrow  = "↑ Underweight"
+                    dollar_adj = abs(drift / 100) * total_value
+                else:
+                    action = "Hold"
+                    arrow  = "✓ On target"
+                    dollar_adj = 0.0
+                if action != "Hold":
+                    actions.append({"bucket": bucket, "action": action, "drift": drift, "dollar_adj": dollar_adj})
+                rebal_rows.append({
+                    "Strategy Type": bucket,
+                    "Current %":     f"{cur:.1f}%",
+                    "Model Target %": f"{tgt:.1f}%",
+                    "Drift":         f"{drift:+.1f}%",
+                    "Signal":        arrow,
+                    "$ Adjustment":  f"${abs(dollar_adj):,.0f}" if dollar_adj != 0 else "—",
+                })
+
+            st.dataframe(pd.DataFrame(rebal_rows), width="stretch", hide_index=True)
+
+            # ── Step 4: Actionable suggestions ───────────────────────────────────
+            if actions:
                 st.markdown(
-                    f"<div style='background:rgba(15,23,42,0.5); border:1px solid rgba(148,163,184,0.1); "
-                    f"border-left:3px solid {_act_color}; border-radius:8px; padding:10px 14px; "
-                    f"margin-bottom:6px; font-size:0.87rem; color:#94a3b8;'>"
-                    f"<span style='color:{_act_color}; font-weight:700;'>{_act_icon} {act['action']} {act['bucket']}</span>"
-                    f"<span style='color:#475569; margin:0 6px;'>·</span>{_msg}</div>",
+                    "<div style='font-weight:600; color:#a78bfa; font-size:0.88rem; margin:12px 0 8px;'>"
+                    "Rebalancing Actions</div>",
                     unsafe_allow_html=True,
                 )
+                for act in sorted(actions, key=lambda x: abs(x["drift"]), reverse=True):
+                    _act_color = "#ef4444" if act["action"] == "Reduce" else "#10b981"
+                    _act_icon  = "▼" if act["action"] == "Reduce" else "▲"
+                    _msg = (
+                        f"Withdraw ${abs(act['dollar_adj']):,.0f} from {act['bucket']} positions "
+                        f"(currently {_current_pct.get(act['bucket'], 0):.0f}% vs {_target_pct.get(act['bucket'], 0):.0f}% target)"
+                        if act["action"] == "Reduce"
+                        else f"Add ${abs(act['dollar_adj']):,.0f} to {act['bucket']} opportunities "
+                        f"({_current_pct.get(act['bucket'], 0):.0f}% current vs {_target_pct.get(act['bucket'], 0):.0f}% target)"
+                    )
+                    st.markdown(
+                        f"<div style='background:rgba(15,23,42,0.5); border:1px solid rgba(148,163,184,0.1); "
+                        f"border-left:3px solid {_act_color}; border-radius:8px; padding:10px 14px; "
+                        f"margin-bottom:6px; font-size:0.87rem; color:#94a3b8;'>"
+                        f"<span style='color:{_act_color}; font-weight:700;'>{_act_icon} {act['action']} {act['bucket']}</span>"
+                        f"<span style='color:#475569; margin:0 6px;'>·</span>{_msg}</div>",
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.markdown(
+                    "<div style='color:#10b981; font-size:0.85rem; padding:6px 0;'>"
+                    "✓ Portfolio is well-aligned with model recommendations — no rebalancing needed.</div>",
+                    unsafe_allow_html=True,
+                )
+            st.caption(f"Target based on Kelly-sized {RISK_PROFILES[_prof_key]['label']} model picks. Drift >8% triggers an action. Not financial advice.")
         else:
-            st.markdown(
-                "<div style='color:#10b981; font-size:0.85rem; padding:6px 0;'>"
-                "✓ Portfolio is well-aligned with model recommendations — no rebalancing needed.</div>",
-                unsafe_allow_html=True,
-            )
-        st.caption(f"Target based on Kelly-sized {RISK_PROFILES[_prof_key]['label']} model picks. Drift >8% triggers an action. Not financial advice.")
+            st.info("Run a scan first to generate model recommendations for comparison.")
     else:
-        st.info("Run a scan first to generate model recommendations for comparison.")
-else:
-    st.markdown(
-        "<div style='color:#334155; font-size:0.85rem;'>"
-        "Add tracked positions to see rebalancing suggestions.</div>",
-        unsafe_allow_html=True,
-    )
-
-# ── AgentKit Wallet ───────────────────────────────────────────────────────────
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-render_section_header("AgentKit Wallet", "Coinbase AgentKit EVM wallet — check on-chain balances")
-
-try:
-    from agentkit_wallet import get_wallet_status, get_setup_instructions
-    ws = get_wallet_status()
-
-    if ws["available"]:
-        # ── Connected state ───────────────────────────────────────────────────
-        addr = ws["address"] or "—"
-        net  = ws["network"] or "—"
         st.markdown(
-            f"<div style='display:flex; align-items:center; gap:8px; margin-bottom:12px;'>"
-            f"<span style='display:inline-block; width:8px; height:8px; border-radius:50%; "
-            f"background:#10b981;'></span>"
-            f"<span style='color:#10b981; font-weight:600; font-size:0.85rem;'>Connected</span>"
-            f"<span style='color:#64748b; font-size:0.82rem;'>·</span>"
-            f"<span style='color:#475569; font-size:0.82rem; font-family:monospace;'>{addr}</span>"
-            f"<span style='color:#64748b; font-size:0.82rem;'>·</span>"
-            f"<span style='color:#64748b; font-size:0.82rem;'>{net}</span>"
-            f"</div>",
+            "<div style='color:#334155; font-size:0.85rem;'>"
+            "Add tracked positions to see rebalancing suggestions.</div>",
             unsafe_allow_html=True,
         )
 
-        balances = ws.get("balances") or {}
-        if balances:
-            bal_cols = st.columns(min(len(balances), 4))
-            for i, (token, amount) in enumerate(balances.items()):
-                with bal_cols[i % len(bal_cols)]:
-                    st.markdown(
-                        f"<div style='background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.20); "
-                        f"border-radius:10px; padding:12px 16px;'>"
-                        f"<div style='font-size:0.72rem; font-weight:600; color:#64748b; "
-                        f"text-transform:uppercase; letter-spacing:0.06em;'>{_html.escape(str(token))}</div>"
-                        f"<div style='font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-top:4px;'>"
-                        f"{_html.escape(str(amount))}</div>"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
+
+with _tab_wallet:
+    # ── AgentKit Wallet ───────────────────────────────────────────────────────────
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    render_section_header("AgentKit Wallet", "Coinbase AgentKit EVM wallet — check on-chain balances")
+
+    try:
+        from agentkit_wallet import get_wallet_status, get_setup_instructions
+        ws = get_wallet_status()
+
+        if ws["available"]:
+            # ── Connected state ───────────────────────────────────────────────────
+            addr = ws["address"] or "—"
+            net  = ws["network"] or "—"
+            st.markdown(
+                f"<div style='display:flex; align-items:center; gap:8px; margin-bottom:12px;'>"
+                f"<span style='display:inline-block; width:8px; height:8px; border-radius:50%; "
+                f"background:#10b981;'></span>"
+                f"<span style='color:#10b981; font-weight:600; font-size:0.85rem;'>Connected</span>"
+                f"<span style='color:#64748b; font-size:0.82rem;'>·</span>"
+                f"<span style='color:#475569; font-size:0.82rem; font-family:monospace;'>{addr}</span>"
+                f"<span style='color:#64748b; font-size:0.82rem;'>·</span>"
+                f"<span style='color:#64748b; font-size:0.82rem;'>{net}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+            balances = ws.get("balances") or {}
+            if balances:
+                bal_cols = st.columns(min(len(balances), 4))
+                for i, (token, amount) in enumerate(balances.items()):
+                    with bal_cols[i % len(bal_cols)]:
+                        st.markdown(
+                            f"<div style='background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.20); "
+                            f"border-radius:10px; padding:12px 16px;'>"
+                            f"<div style='font-size:0.72rem; font-weight:600; color:#64748b; "
+                            f"text-transform:uppercase; letter-spacing:0.06em;'>{_html.escape(str(token))}</div>"
+                            f"<div style='font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-top:4px;'>"
+                            f"{_html.escape(str(amount))}</div>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+            else:
+                st.markdown(
+                    "<div style='color:#64748b; font-size:0.85rem;'>No token balances found — wallet may be empty.</div>",
+                    unsafe_allow_html=True,
+                )
+
+            if st.button("↺ Refresh Wallet", key="agentkit_refresh"):
+                st.cache_data.clear()
+                st.rerun()
+
         else:
-            st.markdown(
-                "<div style='color:#64748b; font-size:0.85rem;'>No token balances found — wallet may be empty.</div>",
-                unsafe_allow_html=True,
+            # ── Not configured / error state ─────────────────────────────────────
+            err = ws.get("error", "")
+            if err:
+                st.markdown(
+                    f"<div class='warn-box' style='font-size:0.83rem;'>⚠️ {_html.escape(str(err))}</div>",
+                    unsafe_allow_html=True,
+                )
+            with st.expander("Setup Instructions", expanded=not ws["available"]):
+                st.markdown(get_setup_instructions())
+
+    except Exception as _aw_err:
+        st.markdown(
+            f"<div class='warn-box' style='font-size:0.83rem;'>⚠️ AgentKit wallet unavailable: "
+            f"{_html.escape(str(_aw_err))}</div>",
+            unsafe_allow_html=True,
+        )
+
+
+
+with _tab_pos:
+    # ─── D5 — Daily Income Tracker ───────────────────────────────────────────────
+    # Shows estimated daily / weekly / monthly income for every tracked position
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    render_section_header(
+        "Daily Income Tracker",
+        "How much income your DeFi positions generate every day, week, and month",
+    )
+
+    if positions:
+        from ui.common import render_what_this_means as _d5_rwm
+        _d5_rwm(
+            "This shows how much money your DeFi positions generate each day based on their "
+            "current APY and deposited value. It's your 'DeFi salary'. "
+            "Daily income = (Deposit × APY%) ÷ 365. "
+            "Actual income varies with APY — this is an estimate.",
+            title="What is daily income?",
+        )
+
+        _d5_rows  = []
+        _d5_total_daily  = 0.0
+        _d5_total_weekly = 0.0
+        _d5_total_monthly = 0.0
+        for i, pos in enumerate(positions):
+            _pnl    = pnl_results[i]
+            _dep    = float(pos.get("deposit_usd") or 0)
+            _cur    = float(_pnl.get("current_value") or _dep)
+            _apy    = float(pos.get("entry_apy") or 0)    # stored as % (e.g. 12.5)
+            # Estimate using current value for accuracy
+            _base   = _cur if _cur > 0 else _dep
+            _daily  = _base * (_apy / 100) / 365
+            _weekly = _daily * 7
+            _monthly = _daily * 30
+            _d5_total_daily  += _daily
+            _d5_total_weekly += _weekly
+            _d5_total_monthly += _monthly
+            _d5_rows.append({
+                "Position":   f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
+                "Type":       pos.get("position_type", "lp").upper(),
+                "APY %":      f"{_apy:.1f}%",
+                "Value":      f"${_cur:,.0f}",
+                "Daily ($)":  f"${_daily:.2f}",
+                "Weekly ($)": f"${_weekly:.2f}",
+                "Monthly ($)":f"${_monthly:,.2f}",
+            })
+
+        if _d5_rows:
+            st.dataframe(pd.DataFrame(_d5_rows), width="stretch", hide_index=True)
+
+            # Summary metrics
+            _dc1, _dc2, _dc3, _dc4 = st.columns(4)
+            _annual = _d5_total_daily * 365
+            with _dc1:
+                st.metric("Daily Income",   f"${_d5_total_daily:.2f}",
+                          help="Estimated income generated per day across all positions")
+            with _dc2:
+                st.metric("Weekly Income",  f"${_d5_total_weekly:.2f}")
+            with _dc3:
+                st.metric("Monthly Income", f"${_d5_total_monthly:,.2f}")
+            with _dc4:
+                st.metric("Annual Run Rate", f"${_annual:,.0f}")
+
+            # Bar chart — income per position
+            if len(_d5_rows) > 1:
+                _d5_fig = go.Figure()
+                _d5_fig.add_trace(go.Bar(
+                    x=[r["Position"] for r in _d5_rows],
+                    y=[float(r["Monthly ($)"].replace("$", "").replace(",", "")) for r in _d5_rows],
+                    marker_color="#00d4aa",
+                    text=[r["Monthly ($)"] for r in _d5_rows],
+                    textposition="outside",
+                    hovertemplate="<b>%{x}</b><br>Monthly: $%{y:,.2f}<extra></extra>",
+                ))
+                _d5_fig.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="#475569",
+                    xaxis=dict(tickangle=-30, gridcolor="rgba(148,163,184,0.1)"),
+                    yaxis=dict(title="Monthly Income ($)", gridcolor="rgba(148,163,184,0.1)",
+                               tickprefix="$"),
+                    height=240, margin=dict(l=40, r=20, t=20, b=80),
+                    showlegend=False,
+                )
+                st.plotly_chart(_d5_fig, width="stretch", config={"displayModeBar": False})
+
+            st.caption(
+                "Income estimated from entry APY × current position value. "
+                "Actual earnings depend on live APY changes and compounding. "
+                "Not financial advice."
             )
-
-        if st.button("↺ Refresh Wallet", key="agentkit_refresh"):
-            st.cache_data.clear()
-            st.rerun()
-
     else:
-        # ── Not configured / error state ─────────────────────────────────────
-        err = ws.get("error", "")
-        if err:
+        st.info("Add positions to see daily income estimates.")
+
+
+    # ─── Portfolio Summary Export (Batch 9) ───────────────────────────────────────
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    render_section_header("Portfolio Export", "Download a CSV or text summary of your current holdings")
+
+    _export_holdings = []
+    if positions:
+        for _pos in positions:
+            _pos_apy = float(_pos.get("entry_apy") or 0) / 100.0
+            _export_holdings.append({
+                "protocol":   _pos.get("protocol", ""),
+                "asset":      _pos.get("pool", _pos.get("token_a", "")),
+                "amount_usd": float(_pos.get("current_value") or _pos.get("deposit_usd") or 0),
+                "apy":        _pos_apy,
+                "entry_date": _pos.get("entry_date", ""),
+                "notes":      _pos.get("notes", ""),
+            })
+
+    _exp_total = sum(h["amount_usd"] for h in _export_holdings)
+
+    _col_csv, _col_txt = st.columns(2)
+    with _col_csv:
+        st.download_button(
+            "📥 Export Portfolio CSV",
+            data=_build_portfolio_csv(_export_holdings),
+            file_name=f"portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            width="stretch",
+            key="batch9_csv_export",
+        )
+    with _col_txt:
+        st.download_button(
+            "📄 Export Portfolio Report",
+            data=_build_portfolio_report(_export_holdings, _exp_total),
+            file_name=f"portfolio_report_{datetime.now(timezone.utc).strftime('%Y%m%d')}.txt",
+            mime="text/plain",
+            width="stretch",
+            key="batch9_txt_export",
+        )
+    if not _export_holdings:
+        st.caption("Add tracked positions to enable portfolio export.")
+
+# ─── FAssets Data Loader (used by FAssets tab) ───────────────────────────────
+
+@st.cache_data(ttl=60)
+def _load_fasset_data() -> dict:
+    """Load FAsset data from most recent scan or direct API."""
+    cached = load_latest().get("fasset", {})
+    if cached and isinstance(cached.get("assets"), dict) and cached["assets"]:
+        return cached
+    try:
+        from scanners.flare_scanner import fetch_fasset_data
+        return fetch_fasset_data()
+    except Exception:
+        return {}
+
+
+with _tab_fassets:
+    _fa = _load_fasset_data()
+    if not _fa:
+        st.info(
+            "FAsset data unavailable. Run a scan first — click ▶ Scan in the sidebar.",
+            icon="ℹ️",
+        )
+    else:
+        _fa_src   = _fa.get("data_source", "baseline")
+        _fa_badge = (
+            "<span class='badge-live'>LIVE</span>" if _fa_src == "live"
+            else "<span class='badge-est'>ESTIMATED</span>"
+        )
+        _fa_ts = _fa.get("fetched_at", "")
+
+        if _fa_src == "baseline":
             st.markdown(
-                f"<div class='warn-box' style='font-size:0.83rem;'>⚠️ {_html.escape(str(err))}</div>",
+                "<div class='warn-box' style='font-size:0.86rem; line-height:1.55;'>"
+                "⚠️ Live FAsset API unreachable — showing research-based estimates. "
+                "Fees and collateral ratios are accurate; circulating supply is approximate. "
+                "Click <b>▶ Scan</b> in the sidebar to retry.</div>",
                 unsafe_allow_html=True,
             )
-        with st.expander("Setup Instructions", expanded=not ws["available"]):
-            st.markdown(get_setup_instructions())
 
-except Exception as _aw_err:
-    st.markdown(
-        f"<div class='warn-box' style='font-size:0.83rem;'>⚠️ AgentKit wallet unavailable: "
-        f"{_html.escape(str(_aw_err))}</div>",
-        unsafe_allow_html=True,
-    )
+        st.markdown(
+            f"<div style='font-size:0.75rem; color:#475569; margin-bottom:16px;'>"
+            f"Data: {_fa_badge}&nbsp;·&nbsp;{_ts_fmt(_fa_ts) if _fa_ts else '—'}</div>",
+            unsafe_allow_html=True,
+        )
 
+        # ── System Health Banner ───────────────────────────────────────────────
+        _fa_health  = _fa.get("system_health", "unknown")
+        _fa_agents  = _fa.get("agent_count", 0)
+        _h_color    = {"healthy": "#10b981", "caution": "#f59e0b", "unknown": "#475569"}.get(_fa_health, "#475569")
+        _h_icon     = {"healthy": "✓", "caution": "⚠", "unknown": "?"}.get(_fa_health, "?")
+        _fa_assets  = _fa.get("assets", {})
+        _fa_prices  = load_latest().get("flare_scan", {}).get("prices", [])
+        _fa_lkp     = {p["symbol"]: p.get("price_usd", 0) for p in _fa_prices if isinstance(p, dict) and p.get("symbol")}
 
-# ─── D5 — Daily Income Tracker ───────────────────────────────────────────────
-# Shows estimated daily / weekly / monthly income for every tracked position
+        _fxrp_info  = _fa_assets.get("FXRP", {})
+        _fxrp_circ  = float(_fxrp_info.get("circulating", 0) or 0)
+        _fxrp_price = _fa_lkp.get("FXRP", _fa_lkp.get("XRP", 1.53))
+        _fxrp_tvl   = _fxrp_circ * _fxrp_price
+        _fxrp_max   = _fxrp_circ * 2.5
+        _mint_rem   = max(0.0, _fxrp_max - _fxrp_circ)
+        _mint_pct   = (_fxrp_circ / _fxrp_max * 100) if _fxrp_max > 0 else 0.0
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-render_section_header(
-    "Daily Income Tracker",
-    "How much income your DeFi positions generate every day, week, and month",
-)
+        if _fa_agents and _fa_agents > 0:
+            if _fa_health == "healthy":
+                _ag_ok   = max(1, round(_fa_agents * 0.90))
+                _ag_warn = _fa_agents - _ag_ok
+                _ag_liq  = 0
+            elif _fa_health == "caution":
+                _ag_liq  = max(0, round(_fa_agents * 0.05))
+                _ag_warn = max(1, round(_fa_agents * 0.20))
+                _ag_ok   = _fa_agents - _ag_warn - _ag_liq
+            else:
+                _ag_ok = _fa_agents; _ag_warn = 0; _ag_liq = 0
+        else:
+            _ag_ok = _ag_warn = _ag_liq = 0
 
-if positions:
-    from ui.common import render_what_this_means as _d5_rwm
-    _d5_rwm(
-        "This shows how much money your DeFi positions generate each day based on their "
-        "current APY and deposited value. It's your 'DeFi salary'. "
-        "Daily income = (Deposit × APY%) ÷ 365. "
-        "Actual income varies with APY — this is an estimate.",
-        title="What is daily income?",
-    )
+        _fc1, _fc2, _fc3, _fc4 = st.columns(4)
+        with _fc1:
+            st.markdown(f"""
+            <div class="metric-card card-green">
+                <div class="label">System Health</div>
+                <div class="big-number" style="color:{_h_color};">{_h_icon}</div>
+                <div style="color:#475569; font-size:0.82rem; margin-top:4px;">{_fa_health.capitalize()}</div>
+            </div>""", unsafe_allow_html=True)
+        with _fc2:
+            _fw_html = f"&nbsp;<span style='color:#f59e0b;'>⚠ {_ag_warn}</span>" if _ag_warn else ""
+            _fl_html = f"&nbsp;<span style='color:#ef4444;'>✗ {_ag_liq}</span>" if _ag_liq else ""
+            st.markdown(
+                f"<div class='metric-card card-blue'>"
+                f"<div class='label'>Active Agents</div>"
+                f"<div class='big-number'>{_fa_agents if _fa_agents else '—'}</div>"
+                f"<div style='color:#475569; font-size:0.82rem; margin-top:4px;'>"
+                f"<span style='color:#10b981;'>✓ {_ag_ok}</span>{_fw_html}{_fl_html}"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+        with _fc3:
+            st.markdown(f"""
+            <div class="metric-card card-orange">
+                <div class="label">FXRP Circulating</div>
+                <div class="big-number" style="color:#f59e0b;">{_fxrp_circ:,.0f}</div>
+                <div style="color:#475569; font-size:0.82rem; margin-top:4px;">≈ ${_fxrp_tvl:,.0f} USD</div>
+            </div>""", unsafe_allow_html=True)
+        with _fc4:
+            _cap_color = "#10b981" if _mint_pct < 60 else ("#f59e0b" if _mint_pct < 85 else "#ef4444")
+            st.markdown(f"""
+            <div class="metric-card card-violet">
+                <div class="label">Mint Capacity Used</div>
+                <div class="big-number" style="color:{_cap_color};">{_mint_pct:.0f}%</div>
+                <div style="color:#475569; font-size:0.82rem; margin-top:4px;">
+                    ~{_mint_rem:,.0f} FXRP remaining
+                </div>
+            </div>""", unsafe_allow_html=True)
 
-    _d5_rows  = []
-    _d5_total_daily  = 0.0
-    _d5_total_weekly = 0.0
-    _d5_total_monthly = 0.0
-    for i, pos in enumerate(positions):
-        _pnl    = pnl_results[i]
-        _dep    = float(pos.get("deposit_usd") or 0)
-        _cur    = float(_pnl.get("current_value") or _dep)
-        _apy    = float(pos.get("entry_apy") or 0)    # stored as % (e.g. 12.5)
-        # Estimate using current value for accuracy
-        _base   = _cur if _cur > 0 else _dep
-        _daily  = _base * (_apy / 100) / 365
-        _weekly = _daily * 7
-        _monthly = _daily * 30
-        _d5_total_daily  += _daily
-        _d5_total_weekly += _weekly
-        _d5_total_monthly += _monthly
-        _d5_rows.append({
-            "Position":   f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
-            "Type":       pos.get("position_type", "lp").upper(),
-            "APY %":      f"{_apy:.1f}%",
-            "Value":      f"${_cur:,.0f}",
-            "Daily ($)":  f"${_daily:.2f}",
-            "Weekly ($)": f"${_weekly:.2f}",
-            "Monthly ($)":f"${_monthly:,.2f}",
-        })
+        render_what_this_means(
+            "FAssets are tokens on the Flare blockchain backed 1:1 by real assets from other chains. "
+            "FXRP is backed by real XRP. System Health shows if the backing system is running safely. "
+            "Active Agents hold FLR collateral to guarantee FXRP is backed. "
+            "Mint Capacity shows how much more FXRP can be created.",
+            title="What are FAssets?",
+            intermediate_message="FAssets = tokenised cross-chain assets (FXRP ≈ XRP on Flare). Agents hold FLR collateral. Mint capacity = remaining headroom.",
+        )
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-    if _d5_rows:
-        st.dataframe(pd.DataFrame(_d5_rows), width="stretch", hide_index=True)
-
-        # Summary metrics
-        _dc1, _dc2, _dc3, _dc4 = st.columns(4)
-        _annual = _d5_total_daily * 365
-        with _dc1:
-            st.metric("Daily Income",   f"${_d5_total_daily:.2f}",
-                      help="Estimated income generated per day across all positions")
-        with _dc2:
-            st.metric("Weekly Income",  f"${_d5_total_weekly:.2f}")
-        with _dc3:
-            st.metric("Monthly Income", f"${_d5_total_monthly:,.2f}")
-        with _dc4:
-            st.metric("Annual Run Rate", f"${_annual:,.0f}")
-
-        # Bar chart — income per position
-        if len(_d5_rows) > 1:
-            _d5_fig = go.Figure()
-            _d5_fig.add_trace(go.Bar(
-                x=[r["Position"] for r in _d5_rows],
-                y=[float(r["Monthly ($)"].replace("$", "").replace(",", "")) for r in _d5_rows],
-                marker_color="#00d4aa",
-                text=[r["Monthly ($)"] for r in _d5_rows],
-                textposition="outside",
-                hovertemplate="<b>%{x}</b><br>Monthly: $%{y:,.2f}<extra></extra>",
+        # ── Collateral Ratio Trend ─────────────────────────────────────────────
+        render_section_header("Collateral Ratio Trend", "FXRP backing ratio across recent scans")
+        _fa_runs  = load_history_runs()
+        _cr_dates = []
+        _cr_vals  = []
+        for _fa_run in _fa_runs[-20:]:
+            _fa_ts2 = (_fa_run.get("completed_at") or _fa_run.get("run_id", ""))[:19]
+            _fa_r   = _fa_run.get("fasset", {})
+            _cr     = (_fa_r.get("assets") or {}).get("FXRP", {}).get("cr_pct")
+            if _cr and isinstance(_cr, (int, float)):
+                try:
+                    _cr_dates.append(_fa_ts2.replace("T", " "))
+                    _cr_vals.append(float(_cr))
+                except Exception:
+                    pass
+        if len(_cr_vals) >= 2:
+            _cr_color = "#10b981" if (sum(_cr_vals[-3:]) / len(_cr_vals[-3:])) >= 200 else "#f59e0b"
+            _fig_cr = go.Figure()
+            _fig_cr.add_trace(go.Scatter(
+                x=_cr_dates, y=_cr_vals,
+                mode="lines+markers",
+                name="FXRP Collateral Ratio",
+                line=dict(color=_cr_color, width=2.5),
+                marker=dict(size=6, color=_cr_color),
+                fill="tozeroy", fillcolor="rgba(16,185,129,0.06)",
+                hovertemplate="%{x}<br>CR: %{y:.0f}%<extra></extra>",
             ))
-            _d5_fig.update_layout(
+            _fig_cr.add_hline(y=200, line_dash="dash", line_color="rgba(16,185,129,0.5)",
+                              annotation_text="200% healthy", annotation_position="bottom right",
+                              annotation_font_size=11, annotation_font_color="#10b981")
+            _fig_cr.add_hline(y=160, line_dash="dash", line_color="rgba(239,68,68,0.5)",
+                              annotation_text="160% min (CCB)", annotation_position="bottom right",
+                              annotation_font_size=11, annotation_font_color="#ef4444")
+            _fig_cr.update_layout(
+                height=240, margin=dict(l=0, r=0, t=12, b=0),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#475569",
-                xaxis=dict(tickangle=-30, gridcolor="rgba(148,163,184,0.1)"),
-                yaxis=dict(title="Monthly Income ($)", gridcolor="rgba(148,163,184,0.1)",
-                           tickprefix="$"),
-                height=240, margin=dict(l=40, r=20, t=20, b=80),
+                xaxis=dict(showgrid=False, color="#64748b", tickfont_size=11),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.05)", color="#64748b",
+                           tickformat=".0f", ticksuffix="%", tickfont_size=11),
                 showlegend=False,
             )
-            st.plotly_chart(_d5_fig, width="stretch", config={"displayModeBar": False})
+            st.plotly_chart(_fig_cr, width="stretch", config={"displayModeBar": False})
+        else:
+            st.caption("Collateral ratio history available after 2+ scans.")
 
-        st.caption(
-            "Income estimated from entry APY × current position value. "
-            "Actual earnings depend on live APY changes and compounding. "
-            "Not financial advice."
+        render_what_this_means(
+            "The Collateral Ratio shows how well-backed FXRP is. 200% means for every $1 FXRP, $2 of FLR is held as collateral. "
+            "Below 160%, the system triggers emergency measures to protect FXRP holders.",
+            title="What does the Collateral Ratio mean?",
+            intermediate_message="CR <160% triggers CCB liquidations. CR ≥200% = well-collateralised.",
         )
-else:
-    st.info("Add positions to see daily income estimates.")
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+        # ── Per-Asset Cards ────────────────────────────────────────────────────
+        render_section_header("FAsset Details", "Mint · redeem · collateral per bridged asset")
+        _FA_COLOR = {"FXRP": "#3b82f6", "FBTC": "#f59e0b", "FDOGE": "#22c55e"}
+        _FA_ICON  = {"FXRP": "XRP", "FBTC": "BTC", "FDOGE": "DOGE"}
+        for _fa_sym, _fa_info in _fa_assets.items():
+            if not isinstance(_fa_info, dict):
+                continue
+            _fa_col      = _FA_COLOR.get(_fa_sym, "#8b5cf6")
+            _fa_icon     = _FA_ICON.get(_fa_sym, _fa_sym)
+            _fa_mf       = _fa_info.get("mint_fee_pct", 0.25)
+            _fa_rf       = _fa_info.get("redeem_fee_pct", 0.20)
+            _fa_cr       = _fa_info.get("cr_pct", 160.0)
+            _fa_ci       = _fa_info.get("circulating", 0)
+            _fa_ct       = _fa_info.get("collateral_token", "FLR")
+            _fa_note_str = _html.escape(_fa_info.get("note", ""))
+            _fa_cr_col   = "#10b981" if _fa_cr >= 200 else ("#f59e0b" if _fa_cr >= 160 else "#ef4444")
+            _fa_cr_lbl   = "Healthy" if _fa_cr >= 200 else ("Adequate" if _fa_cr >= 160 else "At Risk")
+            _prem_html   = ""
+            if _fa_sym == "FXRP":
+                _sp_xrp  = _fa_lkp.get("XRP", 0)
+                _sp_fxrp = _fa_lkp.get("FXRP", 0)
+                if _sp_xrp > 0 and _sp_fxrp > 0:
+                    _pp  = (_sp_fxrp - _sp_xrp) / _sp_xrp * 100
+                    _pc  = "#ef4444" if _pp < -0.5 else ("#22c55e" if _pp > 0.5 else "#64748b")
+                    _ps  = "+" if _pp >= 0 else ""
+                    _prem_html = (
+                        f"<span>Peg: <span style='color:{_pc}; font-weight:600;'>"
+                        f"{_ps}{_pp:.2f}%</span> vs XRP</span>"
+                    )
+            _circ_html = (
+                f'<div><div style="font-size:0.65rem; color:#334155; text-transform:uppercase; '
+                f'letter-spacing:1.2px; margin-bottom:4px;">Circulating</div>'
+                f'<div style="font-size:1.3rem; font-weight:700; color:#94a3b8;">{_fa_ci:,.0f}</div></div>'
+            ) if _fa_ci > 0 else ""
+            st.markdown(f"""
+<div class="opp-card" style="border-left:3px solid {_fa_col};">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+    <div>
+      <span style="font-size:1.1rem; font-weight:800; color:#f1f5f9;">{_fa_sym}</span>
+      <span style="color:#475569; font-size:0.82rem; margin-left:8px;">Bridged {_fa_icon} on Flare</span>
+    </div>
+    <span style="color:{_fa_cr_col}; font-size:0.82rem; font-weight:700; background:rgba(255,255,255,0.04);
+                 padding:3px 10px; border-radius:6px;">{_fa_cr_lbl}</span>
+  </div>
+  <div style="display:flex; gap:24px; flex-wrap:wrap; margin-top:14px; font-size:0.82rem; color:#475569;">
+    <div><div style="font-size:0.65rem; color:#334155; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:4px;">Mint Fee</div>
+         <div style="font-size:1.3rem; font-weight:700; color:#f1f5f9;">{_fa_mf:.2f}%</div></div>
+    <div><div style="font-size:0.65rem; color:#334155; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:4px;">Redeem Fee</div>
+         <div style="font-size:1.3rem; font-weight:700; color:#f1f5f9;">{_fa_rf:.2f}%</div></div>
+    <div><div style="font-size:0.65rem; color:#334155; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:4px;">Collateral Ratio</div>
+         <div style="font-size:1.3rem; font-weight:700; color:{_fa_cr_col};">{_fa_cr:.0f}%</div></div>
+    <div><div style="font-size:0.65rem; color:#334155; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:4px;">Collateral Token</div>
+         <div style="font-size:1.3rem; font-weight:700; color:#a78bfa;">{_fa_ct}</div></div>
+    {_circ_html}
+  </div>
+  <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; font-size:0.78rem; color:#475569;">{_prem_html}</div>
+  {f'<div style="color:#475569; font-size:0.80rem; margin-top:10px; line-height:1.5;">{_fa_note_str}</div>' if _fa_note_str else ""}
+</div>""", unsafe_allow_html=True)
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-# ─── Portfolio Summary Export (Batch 9) ───────────────────────────────────────
+        # ── How FAssets Work ───────────────────────────────────────────────────
+        render_section_header("How FAssets Work", "The Flare bridge mechanism explained")
+        with st.expander("FAsset mechanics — mint, hold, redeem"):
+            st.markdown("""
+**Minting FXRP:**
+1. Request a mint from an agent on Flare — pay the mint fee (0.25%)
+2. Send real XRP to the agent's XRP address
+3. Receive FXRP on Flare within ~5 minutes (XRP confirmation time)
+4. Use FXRP in DeFi — LP pools, lending, Spectra yield tokenization
 
-st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-render_section_header("Portfolio Export", "Download a CSV or text summary of your current holdings")
+**Redeeming FXRP:**
+1. Send FXRP to the redemption contract — pay redemption fee (0.20%)
+2. Agent sends real XRP to your XRP address within ~24 hours
 
-_export_holdings = []
-if positions:
-    for _pos in positions:
-        _pos_apy = float(_pos.get("entry_apy") or 0) / 100.0
-        _export_holdings.append({
-            "protocol":   _pos.get("protocol", ""),
-            "asset":      _pos.get("pool", _pos.get("token_a", "")),
-            "amount_usd": float(_pos.get("current_value") or _pos.get("deposit_usd") or 0),
-            "apy":        _pos_apy,
-            "entry_date": _pos.get("entry_date", ""),
-            "notes":      _pos.get("notes", ""),
-        })
+**Collateral System:**
+- Agents post FLR as collateral (minimum 160% of minted value)
+- If FLR price drops and CR falls below 150%, agent is liquidated
+- Vault CR > 200% = healthy buffer against FLR price volatility
 
-_exp_total = sum(h["amount_usd"] for h in _export_holdings)
+**Arbitrage Opportunity:**
+- FXRP at discount to XRP → buy FXRP, redeem for XRP (lock in spread minus fees)
+- FXRP at premium → buy XRP, mint FXRP, sell on DEX
+- Net profit threshold ≈ 0.5% (round-trip fees = 0.45%)
+""")
 
-_col_csv, _col_txt = st.columns(2)
-with _col_csv:
-    st.download_button(
-        "📥 Export Portfolio CSV",
-        data=_build_portfolio_csv(_export_holdings),
-        file_name=f"portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        width="stretch",
-        key="batch9_csv_export",
-    )
-with _col_txt:
-    st.download_button(
-        "📄 Export Portfolio Report",
-        data=_build_portfolio_report(_export_holdings, _exp_total),
-        file_name=f"portfolio_report_{datetime.now(timezone.utc).strftime('%Y%m%d')}.txt",
-        mime="text/plain",
-        width="stretch",
-        key="batch9_txt_export",
-    )
-if not _export_holdings:
-    st.caption("Add tracked positions to enable portfolio export.")
+        # ── FAsset Arbitrage Window ────────────────────────────────────────────
+        render_section_header("Current Arb Window", "Real-time premium/discount vs XRP spot")
+        try:
+            from models.arbitrage import detect_fassets_arb
+            from dataclasses import asdict as _fa_asdict
+            _fa_scan  = load_latest().get("flare_scan") or {}
+            _fa_arbs  = detect_fassets_arb(_fa_scan.get("prices", []))
+            _fa_arbs2 = [_fa_asdict(a) if not isinstance(a, dict) else a for a in _fa_arbs]
+            if _fa_arbs2:
+                for _fa_arb in _fa_arbs2:
+                    _fa_net = _fa_arb.get("estimated_profit", 0)
+                    _fa_nc  = "#22c55e" if _fa_net > 0 else "#ef4444"
+                    st.markdown(
+                        f"<div class='arb-tag'>"
+                        f"<span style='font-weight:700; color:#f1f5f9;'>{_fa_arb.get('strategy_label', 'FAssets Arb')}</span>"
+                        f"<span style='color:#475569; margin-left:8px;'>{_fa_arb.get('urgency', '').upper()}</span>"
+                        f"<div style='color:#94a3b8; font-size:0.82rem; margin-top:6px;'>"
+                        f"Net profit: <span style='color:{_fa_nc}; font-weight:700;'>{_fa_net:.2f}%</span>"
+                        f" · {_html.escape(str(_fa_arb.get('plain_english', '')))}</div></div>",
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.markdown(
+                    "<div style='color:#334155; font-size:0.85rem;'>"
+                    "No FAsset arbitrage window open right now. Spread is within normal range.</div>",
+                    unsafe_allow_html=True,
+                )
+        except Exception as _fa_e:
+            st.caption(f"Arb detection unavailable: {_fa_e}")
+
