@@ -1685,15 +1685,19 @@ def fetch_coin_universe() -> list[dict]:
     Must-haves always included even if below top-30.
     Cached 1 hour.
     """
-    import urllib.request
+    from utils.http import _SESSION as _cg_session, coingecko_limiter as _cg_limiter
     try:
-        url = (
-            "https://api.coingecko.com/api/v3/coins/markets"
-            "?vs_currency=usd&order=market_cap_desc&per_page=60&page=1"
-            "&sparkline=false&locale=en"
+        _cg_limiter.acquire()
+        _resp = _cg_session.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            params={
+                "vs_currency": "usd", "order": "market_cap_desc",
+                "per_page": "60", "page": "1",
+                "sparkline": "false", "locale": "en",
+            },
+            timeout=10,
         )
-        with urllib.request.urlopen(url, timeout=10) as _resp:
-            _data = json.loads(_resp.read())
+        _data = _resp.json() if _resp.status_code == 200 else []
 
         seen: set[str] = set()
         top30: list[dict] = []

@@ -336,6 +336,7 @@ def fetch_prices() -> list:
     else:
         url = f"{APIS['coingecko']}/simple/price"
         _cg_headers = None
+    coingecko_limiter.acquire()
     data = _get(url, params={
         "ids": ids,
         "vs_currencies": "usd",

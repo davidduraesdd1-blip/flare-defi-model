@@ -2618,8 +2618,8 @@ with _tab_intel:
                 if abs(_dpct) > 2: _ftso_alts.append((_sym2, _dpct, _fv, _gv))
             else:
                 _dstr, _stat = "—", "—"
-            _ftso_rows.append({"Token": _sym2, "FTSO Oracle": f"",
-                "CoinGecko": f"" if _gv else "—",
+            _ftso_rows.append({"Token": _sym2, "FTSO Oracle": f"${_fv:.5f}",
+                "CoinGecko": f"${_gv:.5f}" if _gv else "—",
                 "Divergence": _dstr, "Status": _stat})
         for _s2, _d2, _f2, _g2 in _ftso_alts:
             _dir2 = "above" if _d2 > 0 else "below"
