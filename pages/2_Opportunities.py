@@ -19,7 +19,7 @@ from ui.common import (
     render_what_this_means, render_yield_sustainability, signal_badge_html,
     get_user_level,
 )
-from config import RISK_PROFILES, RISK_PROFILE_NAMES
+from config import RISK_PROFILES, RISK_PROFILE_NAMES, INCENTIVE_PROGRAM
 from scanners.defillama import (
     fetch_yields_pools, fetch_protocol_risk_score, fetch_tvl_change_alert,
     fetch_governance_alerts, fetch_bridge_flows,
@@ -362,9 +362,30 @@ with _tab_yield:
 
 
     # ─── Starter Portfolios ───────────────────────────────────────────────────────
-    
-    render_section_header("Starter Portfolios", "Pre-built Kelly-sized allocations for each risk profile")
-    
+
+    render_section_header("Starter Portfolios", "Pre-built yield-weighted allocations for each risk profile")
+
+    # Compute incentive program days remaining for expiry badge
+    from datetime import datetime as _dt
+    try:
+        _exp_date    = _dt.strptime(INCENTIVE_PROGRAM["expires"], "%Y-%m-%d")
+        _days_left   = max(0, (_exp_date - _dt.now()).days)
+    except Exception:
+        _days_left   = 999
+    _reward_hide_pct  = float(INCENTIVE_PROGRAM.get("reward_hide_below_pct",  2.0))
+    _reward_warn_days = int(INCENTIVE_PROGRAM.get("reward_warn_below_days", 90))
+    _reward_gray_days = int(INCENTIVE_PROGRAM.get("reward_gray_below_days", 30))
+
+    # Incentive expiry banner (Beginner: simple banner; Intermediate+: days shown)
+    if _days_left <= _reward_gray_days:
+        _exp_msg = "⚠️ Bonus rewards have ended — only base fee yield shown." if _days_left == 0 else f"⚠️ Bonus rewards expire in {_days_left} day{'s' if _days_left != 1 else ''}. Base fee yield will continue after expiry."
+        st.warning(_exp_msg)
+    elif _days_left <= _reward_warn_days:
+        if _user_level == "beginner":
+            st.info("ℹ️ Note: Bonus RFLR/SPRK rewards are ending soon. Returns will be lower after July 2026.")
+        else:
+            st.info(f"ℹ️ RFLR/SPRK incentive program expires in **{_days_left} days** (July 2026). Allocations are weighted on sustainable base yield only.")
+
     for p in RISK_PROFILE_NAMES:
         opps = model_data.get(p) or []
         pcfg = RISK_PROFILES[p]
@@ -372,7 +393,22 @@ with _tab_yield:
         w    = weight if p == profile else 1.0
         if not opps:
             continue
-        with st.expander(f"{pcfg['label']} — {pcfg['target_apy_low']:.0f}–{pcfg['target_apy_high']:.0f}% target"):
+
+        # Compute the actual portfolio weighted APY for the expander header (dynamic target)
+        _total_kf     = sum(float(o.get("kelly_fraction", 0)) for o in opps)
+        _wtd_fee_apy  = sum(float(o.get("fee_apy", 0))    * float(o.get("kelly_fraction", 0)) for o in opps)
+        _wtd_rwd_apy  = sum(float(o.get("reward_apy", 0)) * float(o.get("kelly_fraction", 0)) for o in opps)
+        _wtd_fee_apy  = round(_wtd_fee_apy  / _total_kf, 1) if _total_kf > 0 else 0.0
+        _wtd_rwd_apy  = round(_wtd_rwd_apy  / _total_kf, 1) if _total_kf > 0 else 0.0
+        _wtd_total    = round(_wtd_fee_apy + _wtd_rwd_apy, 1)
+
+        # Dynamic target label: actual achievable weighted APY (not aspirational)
+        if _wtd_rwd_apy >= _reward_hide_pct and _days_left > _reward_gray_days:
+            _target_label = f"~{_wtd_fee_apy}% base + {_wtd_rwd_apy}% reward = {_wtd_total}% total today"
+        else:
+            _target_label = f"~{_wtd_fee_apy}% base yield (sustainable after July 2026)"
+
+        with st.expander(f"{pcfg['label']} — {_target_label}"):
             view = st.radio("View as", ["Cards", "Table"], key=f"view_{p}", horizontal=True)
             if view == "Cards":
                 for i, opp in enumerate(opps[:6]):
@@ -380,33 +416,67 @@ with _tab_yield:
             else:
                 rows = []
                 for opp in opps[:8]:
-                    kf        = opp.get("kelly_fraction", 0)
-                    grade, _  = risk_score_to_grade(opp.get("risk_score", 5))
+                    kf            = float(opp.get("kelly_fraction", 0))
+                    grade, _      = risk_score_to_grade(opp.get("risk_score", 5))
+                    fee_apy       = float(opp.get("fee_apy", 0))
+                    reward_apy    = float(opp.get("reward_apy", 0))
+                    reward_apy_raw= float(opp.get("reward_apy_raw", 0))
+
+                    # Reward badge: hide when tiny or expired; warn when expiring
+                    if reward_apy < _reward_hide_pct or _days_left <= _reward_gray_days:
+                        reward_label = "—"
+                    elif _days_left <= _reward_warn_days:
+                        reward_label = f"{reward_apy:.1f}% ⚠"
+                    else:
+                        reward_label = f"{reward_apy:.1f}%"
+
                     rows.append({
-                        "Protocol":     opp.get("protocol", "—"),
-                        "Pool / Asset": opp.get("asset_or_pool", "—"),
-                        "Est. APY":     f"{opp.get('estimated_apy', 0):.1f}%",
-                        "Safety Grade": grade,
-                        "Price Risk":   (opp.get("il_risk") or "—").upper(),
-                        "APY Range":    f"{opp.get('apy_low', 0):.0f}–{opp.get('apy_high', 0):.0f}%",
-                        "Suggested $":  f"${kf*portfolio_size:,.0f}" if portfolio_size > 0 else "—",
-                        "Alloc %":      f"{kf*100:.0f}%",
-                        "Action":       opp.get("action", opp.get("plain_english", "—")),
+                        "Protocol":      opp.get("protocol", "—"),
+                        "Pool / Asset":  opp.get("asset_or_pool", "—"),
+                        "Base APY":      f"{fee_apy:.1f}%",
+                        "Reward Bonus":  reward_label,
+                        "Total APY":     f"{fee_apy + reward_apy:.1f}%",
+                        "Safety Grade":  grade,
+                        "Price Risk":    (opp.get("il_risk") or "—").upper(),
+                        "APY Range":     f"{opp.get('apy_low', 0):.0f}–{opp.get('apy_high', 0):.0f}%",
+                        "Suggested $":   f"${kf * portfolio_size:,.0f}" if portfolio_size > 0 else "—",
+                        "Alloc %":       f"{kf * 100:.0f}%",
+                        "Action":        opp.get("action", opp.get("plain_english", "—")),
                     })
+
                 df_all = pd.DataFrame(rows)
-                # Beginner: show only the most important columns with plain-English labels
+
                 if _user_level == "beginner":
-                    beginner_cols = ["Protocol", "Pool / Asset", "Est. APY", "Safety Grade", "Price Risk", "Suggested $"]
-                    st.dataframe(df_all[[c for c in beginner_cols if c in df_all.columns]], width="stretch", hide_index=True)
-                    st.caption("Safety Grade: A = safest · F = riskiest. Price Risk: None = stable token, Low = small price swings, High = big price swings.")
+                    # Beginners see Base APY + simple columns; no reward confusion
+                    beginner_cols = ["Protocol", "Pool / Asset", "Base APY", "Safety Grade", "Price Risk", "Suggested $"]
+                    st.dataframe(df_all[[c for c in beginner_cols if c in df_all.columns]], use_container_width=True, hide_index=True)
+                    st.caption("Base APY: sustainable fee yield you keep after bonus rewards end. Safety Grade: A = safest · F = riskiest.")
                 elif _user_level == "intermediate":
-                    inter_cols = ["Protocol", "Pool / Asset", "Est. APY", "APY Range", "Safety Grade", "Price Risk", "Suggested $"]
-                    st.dataframe(df_all[[c for c in inter_cols if c in df_all.columns]], width="stretch", hide_index=True)
+                    inter_cols = ["Protocol", "Pool / Asset", "Base APY", "Reward Bonus", "Total APY", "APY Range", "Safety Grade", "Price Risk", "Suggested $"]
+                    st.dataframe(df_all[[c for c in inter_cols if c in df_all.columns]], use_container_width=True, hide_index=True)
+                    if _days_left <= _reward_warn_days:
+                        st.caption("⚠ = Reward bonus expires soon. Base APY continues indefinitely.")
                 else:
                     # Advanced: full table
-                    st.dataframe(df_all, width="stretch", hide_index=True)
+                    st.dataframe(df_all, use_container_width=True, hide_index=True)
+                    if _days_left <= _reward_warn_days:
+                        st.caption(f"⚠ Reward Bonus expires in {_days_left} days. Alloc % weighted on Base APY only to survive post-July 2026.")
+
+            # Portfolio footer: verifiable weighted APY numbers
+            _footer_parts = [f"Weighted base yield: **{_wtd_fee_apy:.1f}%**"]
+            if _wtd_rwd_apy >= _reward_hide_pct and _days_left > _reward_gray_days:
+                _footer_parts.append(f"Reward bonus today: **{_wtd_rwd_apy:.1f}%**")
+                _footer_parts.append(f"Total today: **{_wtd_total:.1f}%**")
+            if portfolio_size > 0:
+                _footer_parts.append(f"Monthly income: **${portfolio_size * _wtd_total / 100 / 12:,.0f}**")
+            st.markdown(
+                "<div style='margin-top:8px; padding:8px 12px; background:rgba(0,212,170,0.07); "
+                "border-radius:6px; border-left:3px solid #00d4aa; font-size:0.82rem;'>"
+                + "  ·  ".join(_footer_parts) + "</div>",
+                unsafe_allow_html=True,
+            )
             st.caption(pcfg.get("description", ""))
-    
+
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
     

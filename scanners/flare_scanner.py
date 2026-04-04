@@ -975,7 +975,9 @@ def fetch_clearpool_rates() -> list:
         return [LendingRate(
             protocol="clearpool",
             asset=p["symbol"] or "USD0",
-            supply_apy=p["apy"],
+            # QB fix: prefer apyBase (real lending rate) over total apy when available.
+            # apy may include minor reward components that inflate the quoted rate.
+            supply_apy=p["apy_base"] if p.get("apy_base", 0) > 0 else p["apy"],
             borrow_apy=0,
             utilisation=0.0,
             tvl_usd=p["tvl_usd"],
@@ -1041,7 +1043,8 @@ def fetch_mystic_rates() -> list:
             return [LendingRate(
                 protocol="mystic",
                 asset=p["symbol"],
-                supply_apy=p["apy"],
+                # QB fix: prefer apyBase (actual lending interest) over total apy.
+                supply_apy=p["apy_base"] if p.get("apy_base", 0) > 0 else p["apy"],
                 borrow_apy=0,
                 utilisation=0.0,
                 tvl_usd=p["tvl_usd"],
