@@ -292,7 +292,48 @@ _tab_yield, _tab_intel = st.tabs([
 ])
 
 with _tab_yield:
-    
+
+    # ── Global Yield Summary — top of page (Item 15: yield table first) ──────────
+    render_section_header(
+        "Global Yield Table",
+        "Top opportunities across all chains — sorted by risk-adjusted return",
+    )
+    @st.cache_data(ttl=900)
+    def _cached_top_global_yields_compact() -> list:
+        try:
+            pools = fetch_llama_yield_pools(min_tvl_usd=10_000_000, max_results=100) or []
+            return sorted(
+                [p for p in pools if float(p.get("apy") or 0) > 0],
+                key=lambda x: float(x.get("apy") or 0),
+                reverse=True,
+            )[:10]
+        except Exception:
+            return []
+
+    _top_global = _cached_top_global_yields_compact()
+    if _top_global:
+        _gyl_rows = []
+        for _gp in _top_global:
+            _gapy = float(_gp.get("apy") or 0)
+            _gtvl = float(_gp.get("tvlUsd") or 0)
+            _gchain = str(_gp.get("chain") or "—")
+            _gproto = str(_gp.get("project") or "—").replace("-", " ").title()
+            _gsym   = str(_gp.get("symbol") or "—")
+            _agent  = _agent_executable(_gp.get("project", ""), _gchain)
+            _gyl_rows.append({
+                "Protocol":  _gproto,
+                "Chain":     _gchain,
+                "Pool":      _gsym,
+                "APY":       f"{_gapy:.1f}%",
+                "TVL":       f"${_gtvl/1e6:.1f}M" if _gtvl >= 1e6 else f"${_gtvl:,.0f}",
+                "Agent":     _agent,
+            })
+        st.dataframe(pd.DataFrame(_gyl_rows), width="stretch", hide_index=True, height=300)
+        st.caption("Top 10 by APY · min $10M TVL · Full table in the Global Yield Opportunities section below")
+    else:
+        st.info("Global yield data loading…")
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
     # Beginner orientation (Phase 2, item 8)
     render_what_this_means(
         "This page shows real yield opportunities on the Flare Network. "
@@ -302,8 +343,8 @@ with _tab_yield:
         title="How do I use this page?",
         intermediate_message="Live yield opportunities on Flare — APY, risk grade, fee sustainability, and model confidence shown per card.",
     )
-    
-    
+
+
     # ─── Starter Portfolios ───────────────────────────────────────────────────────
     
     render_section_header("Starter Portfolios", "Pre-built Kelly-sized allocations for each risk profile")

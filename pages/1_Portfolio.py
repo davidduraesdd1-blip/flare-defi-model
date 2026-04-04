@@ -58,11 +58,128 @@ prices     = load_live_prices() or flare_scan.get("prices") or []
 
 st.title("💼 Portfolio")
 st.caption("Track your DeFi positions, wallet balances, P&L, and exit strategies across all Flare protocols")
-st.markdown(
-    "<div style='color:#475569; font-size:0.88rem; margin-bottom:24px;'>"
-    "Wallet balances · tracked positions · P&L · exit planning</div>",
-    unsafe_allow_html=True,
-)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# HERO CARD — total portfolio value, 24h change, allocation breakdown
+# ──────────────────────────────────────────────────────────────────────────────
+def _build_hero_metrics(positions: list, runs: list, latest: dict) -> dict:
+    """Compute hero card numbers from positions + history."""
+    total_value   = sum(float(p.get("current_value") or 0) for p in positions)
+    total_deposit = sum(float(p.get("deposit_usd") or p.get("entry_value") or 0) for p in positions)
+    total_pnl     = total_value - total_deposit
+    total_fees    = sum(float(p.get("unclaimed_fees") or 0) for p in positions)
+
+    # Approximate 24h change from history (last two scan runs)
+    change_24h = 0.0
+    if len(runs) >= 2:
+        try:
+            vals = [
+                sum(float(p.get("current_value") or 0) for p in (r.get("positions") or []))
+                for r in runs[-2:]
+            ]
+            if vals[0] > 0:
+                change_24h = ((vals[1] - vals[0]) / vals[0]) * 100
+        except Exception:
+            pass
+
+    # Allocation by protocol
+    alloc: dict = {}
+    for p in positions:
+        proto = str(p.get("protocol") or "Unknown").capitalize()
+        alloc[proto] = alloc.get(proto, 0) + float(p.get("current_value") or 0)
+
+    return {
+        "total_value":   total_value,
+        "total_pnl":     total_pnl,
+        "total_fees":    total_fees,
+        "change_24h":    change_24h,
+        "allocation":    alloc,
+        "position_count": len(positions),
+    }
+
+
+_hero = _build_hero_metrics(positions, runs, latest)
+
+if _hero["total_value"] > 0 or positions:
+    _v  = _hero["total_value"]
+    _pnl = _hero["total_pnl"]
+    _fees = _hero["total_fees"]
+    _chg  = _hero["change_24h"]
+    _chg_color = "#22c55e" if _chg >= 0 else "#ef4444"
+    _pnl_color = "#22c55e" if _pnl >= 0 else "#ef4444"
+
+    # Hero stat row
+    _c1, _c2, _c3, _c4 = st.columns(4)
+    _c1.metric("Total Portfolio", f"${_v:,.0f}",
+               delta=f"{_chg:+.2f}% 24h" if abs(_chg) > 0.001 else None,
+               delta_color="normal")
+    _c2.metric("Unrealized P&L", f"${_pnl:+,.0f}")
+    _c3.metric("Unclaimed Fees", f"${_fees:,.2f}")
+    _c4.metric("Positions", str(_hero["position_count"]))
+
+    # Allocation pie + net worth sparkline side by side
+    if _hero["allocation"]:
+        _col_pie, _col_spark = st.columns([1, 2])
+
+        with _col_pie:
+            _alloc_labels = list(_hero["allocation"].keys())
+            _alloc_vals   = list(_hero["allocation"].values())
+            _fig_pie = go.Figure(go.Pie(
+                labels=_alloc_labels, values=_alloc_vals,
+                hole=0.55,
+                marker_colors=["#00d4aa", "#3b82f6", "#f59e0b", "#8b5cf6", "#ef4444",
+                                "#22c55e", "#f97316", "#06b6d4"],
+                textfont_size=11,
+            ))
+            _fig_pie.update_layout(
+                showlegend=True, legend_font_size=11,
+                paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=20, b=0),
+                height=180,
+                annotations=[dict(
+                    text=f"${_v:,.0f}", x=0.5, y=0.5, showarrow=False,
+                    font=dict(size=14, color="#f1f5f9"), xref="paper", yref="paper"
+                )],
+            )
+            st.plotly_chart(_fig_pie, width="stretch", config={"displayModeBar": False})
+
+        with _col_spark:
+            # Net worth sparkline from history runs
+            _nw_dates  = []
+            _nw_values = []
+            for _r in (runs or []):
+                try:
+                    _ts = _r.get("timestamp") or _r.get("_ts") or ""
+                    _rv = sum(float(p.get("current_value") or 0) for p in (_r.get("positions") or []))
+                    if _ts and _rv > 0:
+                        _nw_dates.append(str(_ts)[:10])
+                        _nw_values.append(_rv)
+                except Exception:
+                    pass
+            # Fall back to current point only if no history
+            if not _nw_values:
+                _nw_dates  = [datetime.now(timezone.utc).strftime("%Y-%m-%d")]
+                _nw_values = [_v]
+
+            _fig_nw = go.Figure()
+            _fig_nw.add_trace(go.Scatter(
+                x=_nw_dates, y=_nw_values,
+                mode="lines", fill="tozeroy",
+                line=dict(color="#00d4aa", width=2),
+                fillcolor="rgba(0,212,170,0.08)",
+                name="Net Worth",
+            ))
+            _fig_nw.update_layout(
+                xaxis=dict(showgrid=False, tickfont_size=10, showticklabels=len(_nw_dates) > 1),
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.04)",
+                           tickprefix="$", tickfont_size=10),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#94a3b8", margin=dict(l=8, r=8, t=20, b=8),
+                height=180, title_text="Net Worth History", title_font_size=12,
+                showlegend=False,
+            )
+            st.plotly_chart(_fig_nw, width="stretch", config={"displayModeBar": False})
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ── Demo Mode Holdings (#67) ──────────────────────────────────────────────────
 if demo_mode:

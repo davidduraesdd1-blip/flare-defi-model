@@ -26,27 +26,29 @@ demo_mode  = ctx.get("demo_mode", False)  # #67 Demo/Sandbox mode
 user_level = ctx.get("user_level", get_user_level())
 
 st.title("🧠 Market Intelligence")
+st.caption("Sentiment · Macro · On-Chain · Ecosystem — all signals in one place")
 
-# ── Fear & Greed Trend (Phase 2, item 14) ─────────────────────────────────────
-render_section_header("Fear & Greed Index", "Current reading + 7-day + 30-day trend")
-render_fear_greed_trend(user_level=user_level)
-render_what_this_means(
-    "The Fear & Greed Index measures how emotional the crypto market is right now. "
-    "0–25 = Extreme Fear (everyone is scared and selling — can be a good time to buy). "
-    "25–50 = Fear. 50–75 = Greed (people are excited and buying). "
-    "75–100 = Extreme Greed (market is overheated — can be risky to buy). "
-    "It's a sentiment signal, not a buy/sell order. Use it alongside other data.",
-    title="What is the Fear & Greed Index?",
-    intermediate_message="F&G: 0–25 Extreme Fear (capitulation), 75–100 Extreme Greed (overheated). Contrarian signal — not a direct trade trigger.",
-)
-st.divider()
+_t_sent, _t_macro, _t_onchain, _t_eco = st.tabs([
+    "📊 Sentiment",
+    "🌍 Macro",
+    "⛓️ On-Chain",
+    "🌱 Ecosystem",
+])
 
-st.caption("Ecosystem monitor · AI model accuracy · macro intelligence · on-chain signals")
-st.markdown(
-    "<div style='color:#475569; font-size:0.88rem; margin-bottom:24px;'>"
-    "Ecosystem monitor · new protocols · news · AI model accuracy</div>",
-    unsafe_allow_html=True,
-)
+with _t_sent:
+    # ── Fear & Greed Trend ──────────────────────────────────────────────────────
+    render_section_header("Fear & Greed Index", "Current reading + 7-day + 30-day trend")
+    render_fear_greed_trend(user_level=user_level)
+    render_what_this_means(
+        "The Fear & Greed Index measures how emotional the crypto market is right now. "
+        "0–25 = Extreme Fear (everyone is scared and selling — can be a good time to buy). "
+        "25–50 = Fear. 50–75 = Greed (people are excited and buying). "
+        "75–100 = Extreme Greed (market is overheated — can be risky to buy). "
+        "It's a sentiment signal, not a buy/sell order. Use it alongside other data.",
+        title="What is the Fear & Greed Index?",
+        intermediate_message="F&G: 0–25 Extreme Fear (capitulation), 75–100 Extreme Greed (overheated). Contrarian signal — not a direct trade trigger.",
+    )
+    st.divider()
 
 
 # ─── DeFi Assistant (#87) ─────────────────────────────────────────────────────
@@ -157,12 +159,11 @@ try:
 except Exception as _assist_exc:
     st.info("DeFi Assistant unavailable. Check logs for details.")
 
-st.divider()
+# end _t_sent
 
 
-# ─── What's New ───────────────────────────────────────────────────────────────
-
-render_section_header("Ecosystem Monitor", "New protocols · recent news · on-chain activity")
+with _t_eco:
+    render_section_header("Ecosystem Monitor", "New protocols · recent news · on-chain activity")
 
 # Demo Mode: skip live fetches, show placeholder (#67)
 if demo_mode:
@@ -435,12 +436,11 @@ if feedback:
                 for p, w in weights.items()]
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
-st.divider()
+# end _t_eco (first block: Ecosystem Monitor + AI Model Health)
 
 
-# ─── Macro Intelligence ────────────────────────────────────────────────────────
-
-render_section_header("Macro Intelligence", "FRED + yfinance · 10Y yield · VIX · BTC rolling correlations")
+with _t_macro:
+    render_section_header("Macro Intelligence", "FRED + yfinance · 10Y yield · 2Y10Y spread · VIX · CPI · BTC rolling correlations")
 
 try:
     import macro_feeds as _mf
@@ -566,9 +566,11 @@ try:
 except Exception as _bits_err:
     st.caption(f"Blood in Streets signal unavailable: {_bits_err}")
 
-# ─── On-Chain Intelligence (Group 4) ─────────────────────────────────────────
-st.divider()
-render_section_header("On-Chain Intelligence", "CoinMetrics Community API · MVRV Z-Score · SOPR · no API key required")
+# end _t_macro
+
+
+with _t_onchain:
+    render_section_header("On-Chain Intelligence", "CoinMetrics · MVRV Z-Score · SOPR · Hash Ribbons · Puell Multiple")
 
 try:
     import macro_feeds as _mf4
@@ -652,8 +654,42 @@ try:
             )
             st.plotly_chart(_fig_mz, width="stretch")
 
+        # Hash Ribbons + Puell Multiple — added in composite signal sprint
+        _hr_sig  = _oc4.get("hash_ribbon_signal", "N/A")
+        _puell   = _oc4.get("puell_multiple")
+        _p_sig   = _oc4.get("puell_signal", "N/A")
+        _hr_color = {
+            "BUY": "#22c55e", "RECOVERY": "#00d4aa",
+            "CAPITULATION": "#ef4444", "CAPITULATION_START": "#f97316",
+        }.get(_hr_sig, "#6b7280")
+        _p_color = {
+            "EXTREME_BOTTOM": "#22c55e", "ACCUMULATION": "#00d4aa",
+            "FAIR_VALUE": "#6b7280", "DISTRIBUTION": "#f59e0b", "EXTREME_TOP": "#ef4444",
+        }.get(_p_sig, "#6b7280")
+
+        if _hr_sig != "N/A" or _puell is not None:
+            st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
+            _h1, _h2 = st.columns(2)
+            with _h1:
+                st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_hr_color};border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Hash Ribbons</div>
+  <div style="font-size:22px;font-weight:700;color:{_hr_color}">{_hr_sig.replace("_", " ") if _hr_sig != "N/A" else "—"}</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:8px">30d vs 60d hash rate MA · C. Edwards 2019</div>
+</div>
+""", unsafe_allow_html=True)
+            with _h2:
+                st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_p_color};border-radius:10px;padding:16px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Puell Multiple</div>
+  <div style="font-size:30px;font-weight:700;color:{_p_color}">{f"{_puell:.3f}" if _puell is not None else "—"}</div>
+  <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_p_sig.replace("_", " ")}</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:6px">Daily miner USD / 365d MA · D. Puell 2019</div>
+</div>
+""", unsafe_allow_html=True)
+
         _ts4 = _oc4.get("timestamp", "")[:19]
-        st.caption(f"Source: CoinMetrics Community · {_ts4} UTC · Cached 1h")
+        st.caption(f"Source: CoinMetrics Community · {_ts4} UTC · Cached 1h · MVRV (Mahmudov & Puell 2018) · SOPR (Shirakashi 2019)")
 except Exception as _oc_err:
     st.caption(f"On-chain data unavailable: {_oc_err}")
 
@@ -809,15 +845,15 @@ try:
 except Exception as _opt_err:
     st.caption(f"Options data unavailable: {_opt_err}")
 
-st.divider()
+# end _t_onchain
 
 
-# ── Claude DeFi Intent Taxonomy  (#87) ─────────────────────────────────────
-
-render_section_header(
-    "DeFi Intent Mapper",
-    "Describe what you want to do — Claude classifies your intent and recommends the best strategy",
-)
+# ── Ecosystem tab — second block (Intent Mapper + Protocol Revenue + RWA Credit) ──
+with _t_eco:
+    render_section_header(
+        "DeFi Intent Mapper",
+        "Describe what you want to do — Claude classifies your intent and recommends the best strategy",
+    )
 
 _intent_map = {
     "swap":    {"label": "Swap Tokens",       "icon": "🔄", "color": "#6366F1",
