@@ -663,6 +663,7 @@ with _tab_yield:
         "Pendle · EigenLayer · Ethena · Aerodrome · Morpho · Kamino — via DeFiLlama yields API",
     )
     
+    _MC_LOAD_TIMEOUT = 30  # seconds — aggregate timeout for all multi-chain fetches
     with st.spinner("Loading yield data from DeFiLlama..."):
         if demo_mode:
             _mc_pools = [
@@ -678,7 +679,19 @@ with _tab_yield:
                  "apy": 38.7, "apyBase": 12.0, "apyReward": 26.7, "tvlUsd": 580_000_000, "audits": 2, "ilRisk": "yes"},
             ]
         else:
-            _mc_pools = _cached_yields_pools(min_tvl_usd=5_000_000, max_results=20)
+            # Wrap in a 30s aggregate timeout so slow DeFiLlama responses never
+            # block the page indefinitely.
+            try:
+                with ThreadPoolExecutor(max_workers=1) as _mc_ex:
+                    _mc_fut = _mc_ex.submit(_cached_yields_pools, min_tvl_usd=5_000_000, max_results=20)
+                    _mc_pools = _mc_fut.result(timeout=_MC_LOAD_TIMEOUT) or []
+            except Exception:
+                _mc_pools = []
+                st.warning(
+                    "Multi-Chain Pools data timed out or unavailable — showing cached data if available. "
+                    "Refresh in 30 seconds.",
+                    icon="⏱️",
+                )
     
     if _mc_pools:
         # Beginner metric tooltips (#59) — show real computed stats from loaded data

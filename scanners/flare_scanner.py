@@ -5,12 +5,14 @@ Falls back to baseline research data when live APIs are unavailable.
 """
 
 import re
+import sqlite3
 import time
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
+from pathlib import Path
 from typing import Optional
 
 try:
@@ -20,8 +22,44 @@ except ImportError:
     Web3 = None  # type: ignore[assignment,misc]
     _WEB3_AVAILABLE = False
 
-from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS, FALLBACK_PRICES, COINGECKO_API_KEY
+from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS, FALLBACK_PRICES, COINGECKO_API_KEY, DB_FILE
 from utils.http import http_get as _get, http_post as _post
+
+
+# ─── Persistent KV store helpers (for FTSO backoff) ──────────────────────────
+
+def _kv_get(key: str, default: float = 0.0) -> float:
+    """Read a float value from the kv_store table in defi_model.db."""
+    try:
+        conn = sqlite3.connect(str(DB_FILE), timeout=5, check_same_thread=False)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS kv_store "
+            "(key TEXT PRIMARY KEY, value REAL NOT NULL)"
+        )
+        row = conn.execute("SELECT value FROM kv_store WHERE key=?", (key,)).fetchone()
+        conn.close()
+        return float(row[0]) if row else default
+    except Exception:
+        return default
+
+
+def _kv_set(key: str, value: float) -> None:
+    """Write/update a float value in the kv_store table in defi_model.db."""
+    try:
+        conn = sqlite3.connect(str(DB_FILE), timeout=5, check_same_thread=False)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS kv_store "
+            "(key TEXT PRIMARY KEY, value REAL NOT NULL)"
+        )
+        conn.execute(
+            "INSERT INTO kv_store(key, value) VALUES(?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 logger = logging.getLogger(__name__)
 
@@ -369,8 +407,9 @@ _FTSO_FEEDS = {
 
 # When all Flare FTSO endpoints fail, back off for this many seconds before
 # trying again — avoids hammering dead endpoints on every refresh cycle.
+# Persisted to SQLite so cold boots respect any in-progress backoff period.
 _FTSO_BACKOFF_SECS = 3600  # 1 hour
-_ftso_dead_until: float = 0.0  # epoch seconds; 0 = "not in backoff"
+_ftso_dead_until: float = _kv_get("ftso_dead_until", 0.0)  # survives cold boot
 
 
 def fetch_ftso_prices() -> dict:
@@ -452,6 +491,7 @@ def fetch_ftso_prices() -> dict:
         # All Flare paths failed — enter backoff to stop hammering dead endpoints
         if not results:
             _ftso_dead_until = time.time() + _FTSO_BACKOFF_SECS
+            _kv_set("ftso_dead_until", _ftso_dead_until)  # persist across cold boots
             logger.debug(
                 "All FTSO endpoints unavailable — skipping for %d min, using CoinGecko",
                 _FTSO_BACKOFF_SECS // 60,
