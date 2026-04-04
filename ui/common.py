@@ -739,6 +739,29 @@ def render_sidebar() -> dict:
             unsafe_allow_html=True,
         )
 
+        # ── Persistent Agent Status Badge (Item 17) ───────────────────────────
+        try:
+            from agents.agent_runner import get_state as _get_agent_state
+            _ag_state = _get_agent_state()
+            _ag_running = _ag_state.get("running", False)
+            _ag_estop   = _ag_state.get("emergency_stop_active", False)
+            _ag_mode    = _ag_state.get("mode", "PAPER")
+            if _ag_estop:
+                _ag_badge_color, _ag_badge_text = "#ef4444", "⛔ EMERGENCY STOP"
+            elif _ag_running:
+                _ag_badge_color, _ag_badge_text = "#22c55e", f"● Agent LIVE ({_ag_mode})"
+            else:
+                _ag_badge_color, _ag_badge_text = "#64748b", f"○ Agent PAUSED ({_ag_mode})"
+            st.markdown(
+                f"<div style='background:rgba(0,0,0,0.2);border:1px solid {_ag_badge_color}44;"
+                f"border-left:3px solid {_ag_badge_color};border-radius:6px;"
+                f"padding:5px 10px;margin:6px 0;font-size:0.72rem;"
+                f"color:{_ag_badge_color};font-weight:600;'>{_ag_badge_text}</div>",
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass
+
         col_r, col_s, col_all = st.columns(3)
         with col_r:
             if st.button("↺ Reload", key="sidebar_refresh", width="stretch",
