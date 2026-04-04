@@ -13,7 +13,10 @@ from dataclasses import dataclass, field, asdict, replace
 from datetime import datetime, timezone
 from typing import Optional
 
-from config import RISK_PROFILES, RISK_PROFILE_NAMES, PROTOCOLS, INCENTIVE_PROGRAM, RISK_FREE_RATE, MAX_KELLY_FRACTION
+from config import (
+    RISK_PROFILES, RISK_PROFILE_NAMES, PROTOCOLS, INCENTIVE_PROGRAM,
+    RISK_FREE_RATE, MAX_KELLY_FRACTION, risk_letter_grade,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1333,3 +1336,158 @@ def compute_concentrated_lp_metrics(
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PORTFOLIO MONTE CARLO SIMULATION
+# Runs N scenarios × 365 daily steps for a weighted portfolio of DeFi pools.
+# Returns annual return distribution with P10/P25/P50/P75/P90 percentiles.
+# Uses daily Normal distribution: drift = mean_daily_apy, vol = pool-specific.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_portfolio_monte_carlo(
+    opportunities: list,
+    n_scenarios: int = 10_000,
+    days: int = 365,
+    seed: int = 42,
+) -> dict:
+    """
+    Monte Carlo simulation for a weighted DeFi portfolio.
+
+    Args:
+        opportunities : list of Opportunity dicts (with kelly_fraction, fee_apy,
+                        reward_apy, il_estimate_pct, risk_score)
+        n_scenarios   : number of simulation paths (default 10,000; use 100,000 for stress)
+        days          : simulation horizon in days (default 365)
+        seed          : random seed for reproducibility
+
+    Returns dict with:
+        p10, p15, p25, p50, p75, p85, p90  : annual return percentiles (%)
+        mean, std                           : distribution statistics
+        bear_case, base_case, bull_case     : named scenario labels
+        var_95_annual                       : 95% VaR on annual basis (% loss)
+        cvar_95_annual                      : 95% CVaR (expected shortfall)
+        portfolio_apy_wtd                   : weighted mean APY input
+        scenarios_run                       : actual n_scenarios used
+    """
+    rng = np.random.default_rng(seed)
+
+    opps = [o for o in opportunities if float(o.get("kelly_fraction", 0)) > 0]
+    if not opps:
+        return {"error": "no_opportunities"}
+
+    weights     = np.array([float(o.get("kelly_fraction", 0)) for o in opps], dtype=np.float64)
+    weights     = weights / weights.sum()   # normalise to 1.0
+
+    # Pool-level APY inputs (annualised %)
+    fee_apys    = np.array([float(o.get("fee_apy", 0))    for o in opps], dtype=np.float64)
+    reward_apys = np.array([float(o.get("reward_apy", 0)) for o in opps], dtype=np.float64)
+    il_ests     = np.array([float(o.get("il_estimate_pct", 0)) for o in opps], dtype=np.float64)
+    risk_scores = np.array([float(o.get("risk_score", 5)) for o in opps], dtype=np.float64)
+
+    # Net expected daily return per pool (subtract IL drag)
+    net_annual_apys = fee_apys + reward_apys - il_ests
+    mean_daily      = net_annual_apys / 365.0 / 100.0   # fractional
+
+    # Daily volatility: calibrate from risk score (0–10 → 0.5%–4.0% daily vol)
+    # Conservative (score~2): ~0.5% daily vol. High risk (score~8): ~3.5% daily vol.
+    daily_vol = 0.005 + (risk_scores / 10.0) * 0.030   # 0.5%–3.5% daily
+
+    # Simulate: shape (n_scenarios, n_pools, days) → summed daily returns → annual
+    # Use vectorised operations to keep memory manageable at 100K scenarios
+    chunk = min(n_scenarios, 5_000)   # process in 5K-scenario chunks
+    all_annual = []
+
+    for start in range(0, n_scenarios, chunk):
+        size = min(chunk, n_scenarios - start)
+        # Random daily returns: (size, n_pools, days)
+        shocks    = rng.standard_normal((size, len(opps), days))
+        daily_ret = mean_daily[np.newaxis, :, np.newaxis] + daily_vol[np.newaxis, :, np.newaxis] * shocks
+        # Portfolio daily return = weighted sum across pools
+        port_daily = (daily_ret * weights[np.newaxis, :, np.newaxis]).sum(axis=1)   # (size, days)
+        # Compound: (1 + r1)(1 + r2)...(1 + r_n) - 1
+        port_annual = np.prod(1.0 + port_daily, axis=1) - 1.0   # (size,)
+        all_annual.append(port_annual)
+
+    annual_returns = np.concatenate(all_annual) * 100.0   # convert to %
+
+    # Percentiles
+    p10 = float(np.percentile(annual_returns, 10))
+    p15 = float(np.percentile(annual_returns, 15))
+    p25 = float(np.percentile(annual_returns, 25))
+    p50 = float(np.percentile(annual_returns, 50))
+    p75 = float(np.percentile(annual_returns, 75))
+    p85 = float(np.percentile(annual_returns, 85))
+    p90 = float(np.percentile(annual_returns, 90))
+
+    # VaR / CVaR at 95% confidence
+    var_95   = float(np.percentile(annual_returns, 5))   # worst 5% threshold
+    cvar_95  = float(annual_returns[annual_returns <= var_95].mean()) if (annual_returns <= var_95).any() else var_95
+
+    portfolio_apy_wtd = float((weights * (fee_apys + reward_apys - il_ests)).sum())
+
+    return {
+        "p10":                round(p10, 2),
+        "p15":                round(p15, 2),
+        "p25":                round(p25, 2),
+        "p50":                round(p50, 2),
+        "p75":                round(p75, 2),
+        "p85":                round(p85, 2),
+        "p90":                round(p90, 2),
+        "mean":               round(float(annual_returns.mean()), 2),
+        "std":                round(float(annual_returns.std()),  2),
+        "bear_case":          round(p10, 2),   # worst 10% of scenarios
+        "base_case":          round(p50, 2),   # median
+        "bull_case":          round(p90, 2),   # best 10% of scenarios
+        "var_95_annual":      round(var_95,  2),   # negative = loss
+        "cvar_95_annual":     round(cvar_95, 2),
+        "portfolio_apy_wtd":  round(portfolio_apy_wtd, 2),
+        "scenarios_run":      n_scenarios,
+    }
+
+
+def compute_v3_suggested_range(
+    current_price: float,
+    daily_vol_pct: float = 3.0,
+    lookback_days: int = 30,
+    multiplier: float = 1.5,
+) -> dict:
+    """
+    Suggest a Uniswap V3 LP price range based on current price and daily volatility.
+
+    Method: ±(multiplier × daily_vol × sqrt(lookback_days)) around current price.
+    multiplier=1.5 covers ~87% of price moves over the lookback period.
+
+    Args:
+        current_price   : current token price in USD
+        daily_vol_pct   : estimated daily volatility % (default 3.0%)
+        lookback_days   : how many days of price movement to cover (default 30)
+        multiplier      : standard deviation multiplier for range width (default 1.5)
+
+    Returns:
+        lower, upper, range_width_pct, coverage_pct, label
+    """
+    if current_price <= 0:
+        return {"error": "invalid price"}
+    import math
+    sigma_period = (daily_vol_pct / 100.0) * math.sqrt(lookback_days)
+    lower = round(current_price * (1.0 - multiplier * sigma_period), 6)
+    upper = round(current_price * (1.0 + multiplier * sigma_period), 6)
+    lower = max(lower, current_price * 0.01)   # floor at 1% of current price
+    range_width_pct = round((upper - lower) / current_price * 100, 1)
+    # Approximate coverage: 2×Φ(multiplier) - 1 using error function approximation
+    z = multiplier
+    t2 = 1 / (1 + 0.3275911 * z)
+    erf_v = 1 - (0.254829592*t2 - 0.284496736*t2**2 + 1.421413741*t2**3
+                 - 1.453152027*t2**4 + 1.061405429*t2**5) * math.exp(-z**2)
+    coverage_pct = round(erf_v * 100, 1)
+    return {
+        "lower":           lower,
+        "upper":           upper,
+        "range_width_pct": range_width_pct,
+        "coverage_pct":    coverage_pct,
+        "label": (
+            f"${lower:,.4f} – ${upper:,.4f} "
+            f"(covers ~{coverage_pct}% of {lookback_days}d price moves)"
+        ),
+    }

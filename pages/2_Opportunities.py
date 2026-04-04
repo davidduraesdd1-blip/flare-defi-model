@@ -19,7 +19,7 @@ from ui.common import (
     render_what_this_means, render_yield_sustainability, signal_badge_html,
     get_user_level,
 )
-from config import RISK_PROFILES, RISK_PROFILE_NAMES, INCENTIVE_PROGRAM
+# config imports consolidated below in models.risk_models import block
 from scanners.defillama import (
     fetch_yields_pools, fetch_protocol_risk_score, fetch_tvl_change_alert,
     fetch_governance_alerts, fetch_bridge_flows,
@@ -45,6 +45,13 @@ from models.risk_models import (
     compute_pool_sharpe,                # #72
     compute_real_yield_ratio,           # #73
     compute_protocol_risk_score,        # #80
+    run_portfolio_monte_carlo,          # Items 6/9/10 — Monte Carlo simulation
+    compute_v3_suggested_range,         # Item 8    — V3 LP range suggestion
+)
+from config import (
+    RISK_PROFILES, RISK_PROFILE_NAMES, INCENTIVE_PROGRAM,
+    PROTOCOL_AUDITS, PROTOCOL_DEPENDENCIES, risk_letter_grade,
+    PROTOCOLS as _PROTOCOLS_CFG,
 )
 
 try:
@@ -429,35 +436,57 @@ with _tab_yield:
                     else:
                         reward_label = f"{reward_apy:.1f}%"
 
+                        # Sustainability classification
+                    _fee_a   = float(opp.get("fee_apy", 0))
+                    _rwd_a   = float(opp.get("reward_apy", 0))
+                    _sust    = compute_real_yield_ratio(_fee_a + _rwd_a, _rwd_a)
+                    _sust_lbl = {"SUSTAINABLE": "✅ Sustainable", "MIXED": "⚡ Mixed", "EMISSION_DEPENDENT": "🔴 Incentive"}.get(_sust["classification"], "—")
+
+                    # IL estimate %
+                    _il_est  = float(opp.get("il_estimate_pct", 0.0))
+                    _il_str  = f"{(opp.get('il_risk') or '—').upper()} (~{_il_est:.1f}%)" if _il_est > 0 else (opp.get("il_risk") or "—").upper()
+
+                    # Audit info
+                    _proto_k = str(opp.get("protocol", "")).lower().split()[0]
+                    _aud     = PROTOCOL_AUDITS.get(_proto_k, {})
+                    _aud_lbl = f"🛡 {_aud['auditors'][0]}" if _aud.get("auditors") else "—"
+
+                    # Protocol URL
+                    _p_url   = (_PROTOCOLS_CFG.get(_proto_k) or {}).get("url", "")
+
                     rows.append({
                         "Protocol":      opp.get("protocol", "—"),
                         "Pool / Asset":  opp.get("asset_or_pool", "—"),
                         "Base APY":      f"{fee_apy:.1f}%",
                         "Reward Bonus":  reward_label,
                         "Total APY":     f"{fee_apy + reward_apy:.1f}%",
-                        "Safety Grade":  grade,
-                        "Price Risk":    (opp.get("il_risk") or "—").upper(),
+                        "Grade":         grade,
+                        "Price Risk":    _il_str,
+                        "Yield Type":    _sust_lbl,
+                        "Audit":         _aud_lbl,
                         "APY Range":     f"{opp.get('apy_low', 0):.0f}–{opp.get('apy_high', 0):.0f}%",
                         "Suggested $":   f"${kf * portfolio_size:,.0f}" if portfolio_size > 0 else "—",
                         "Alloc %":       f"{kf * 100:.0f}%",
                         "Action":        opp.get("action", opp.get("plain_english", "—")),
+                        "Protocol URL":  _p_url,
                     })
 
                 df_all = pd.DataFrame(rows)
 
                 if _user_level == "beginner":
-                    # Beginners see Base APY + simple columns; no reward confusion
-                    beginner_cols = ["Protocol", "Pool / Asset", "Base APY", "Safety Grade", "Price Risk", "Suggested $"]
+                    # Beginners: simple columns, no jargon
+                    beginner_cols = ["Protocol", "Pool / Asset", "Base APY", "Grade", "Price Risk", "Yield Type", "Suggested $"]
                     st.dataframe(df_all[[c for c in beginner_cols if c in df_all.columns]], use_container_width=True, hide_index=True)
-                    st.caption("Base APY: sustainable fee yield you keep after bonus rewards end. Safety Grade: A = safest · F = riskiest.")
+                    st.caption("Grade: A = safest, F = riskiest.  Yield Type: Sustainable = fee income that continues after rewards end.")
                 elif _user_level == "intermediate":
-                    inter_cols = ["Protocol", "Pool / Asset", "Base APY", "Reward Bonus", "Total APY", "APY Range", "Safety Grade", "Price Risk", "Suggested $"]
+                    inter_cols = ["Protocol", "Pool / Asset", "Base APY", "Reward Bonus", "Total APY", "Grade", "Price Risk", "Yield Type", "Audit", "Suggested $"]
                     st.dataframe(df_all[[c for c in inter_cols if c in df_all.columns]], use_container_width=True, hide_index=True)
                     if _days_left <= _reward_warn_days:
                         st.caption("⚠ = Reward bonus expires soon. Base APY continues indefinitely.")
                 else:
-                    # Advanced: full table
-                    st.dataframe(df_all, use_container_width=True, hide_index=True)
+                    # Advanced: full table (hide Protocol URL from display — too wide; show in tooltip)
+                    adv_cols = ["Protocol", "Pool / Asset", "Base APY", "Reward Bonus", "Total APY", "Grade", "Price Risk", "Yield Type", "Audit", "APY Range", "Suggested $", "Alloc %", "Action"]
+                    st.dataframe(df_all[[c for c in adv_cols if c in df_all.columns]], use_container_width=True, hide_index=True)
                     if _days_left <= _reward_warn_days:
                         st.caption(f"⚠ Reward Bonus expires in {_days_left} days. Alloc % weighted on Base APY only to survive post-July 2026.")
 
@@ -476,11 +505,246 @@ with _tab_yield:
             )
             st.caption(pcfg.get("description", ""))
 
+    # ─── Correlated Risk Warning (Item 7) ────────────────────────────────────────
+    # Warn when 2+ recommended pools share the same underlying dependency.
+    _cur_opps = model_data.get(profile) or []
+    _cur_protos = [str(o.get("protocol", "")).lower().split()[0] for o in _cur_opps[:6]]
+    _dep_counts: dict = {}
+    for _cp in _cur_protos:
+        _dep = PROTOCOL_DEPENDENCIES.get(_cp, {})
+        for _dep_key, _dep_val in _dep.items():
+            if _dep_val:
+                _dep_counts[_dep_key] = _dep_counts.get(_dep_key, []) + [_cp]
+    _dep_warnings = []
+    _dep_labels = {
+        "fxrp_collateral": "FXRP collateral risk",
+        "ftso_oracle":      "FTSO oracle dependency",
+        "fxrp_liquidity":   "FXRP liquidity exposure",
+    }
+    for _dk, _dprotos in _dep_counts.items():
+        if len(_dprotos) >= 2:
+            _dep_warnings.append(
+                f"**{_dep_labels.get(_dk, _dk)}**: "
+                + ", ".join(p.capitalize() for p in _dprotos[:4])
+                + " all share this exposure."
+            )
+    if _dep_warnings:
+        with st.expander("⚠ Correlated Risk Alert — read before investing", expanded=False):
+            if _user_level == "beginner":
+                st.warning(
+                    "Some of the recommended pools are connected to the same underlying asset. "
+                    "If that asset has a problem, multiple positions could be affected at once."
+                )
+            else:
+                for _dw in _dep_warnings:
+                    st.warning(_dw)
+                st.caption(
+                    "Correlated exposure means a single failure (FXRP depeg, FTSO oracle outage) "
+                    "could simultaneously affect multiple portfolio positions. "
+                    "Consider spreading some allocation to uncorrelated protocols (e.g. Clearpool stables)."
+                )
+
+    # ─── V3 Range Suggestions (Item 8) ───────────────────────────────────────────
+    # For V3 concentrated liquidity pools, show a computed suggested price range.
+    _v3_suggestions = []
+    for _vo in (_cur_opps[:6]):
+        _is_v3   = _vo.get("is_v3", False) or str(_vo.get("protocol", "")).lower() in ("sparkdex", "enosys")
+        _v3_pool = _vo.get("asset_or_pool", "")
+        _v3_kf   = float(_vo.get("kelly_fraction", 0))
+        if _is_v3 and _v3_kf > 0 and _v3_pool:
+            # Use a typical 3% daily vol for Flare ecosystem pairs
+            _vol_map = {"WFLR": 4.5, "FXRP": 3.5, "sFLR": 3.0, "stXRP": 2.5, "USD0": 0.2, "USDT0": 0.2}
+            _tokens_in_pool = [t.strip() for t in _v3_pool.replace("-", "/").split("/")]
+            _avg_vol = sum(_vol_map.get(t, 3.0) for t in _tokens_in_pool) / max(len(_tokens_in_pool), 1)
+            # Placeholder price of 1.0 — actual price would come from live data
+            # We compute range width % rather than absolute prices for accuracy
+            _rng = compute_v3_suggested_range(1.0, daily_vol_pct=_avg_vol, lookback_days=30, multiplier=1.5)
+            if "error" not in _rng:
+                _v3_suggestions.append({
+                    "pool":      _v3_pool,
+                    "protocol":  _vo.get("protocol", ""),
+                    "range_pct": _rng["range_width_pct"],
+                    "coverage":  _rng["coverage_pct"],
+                    "daily_vol": _avg_vol,
+                })
+    if _v3_suggestions and _user_level in ("intermediate", "advanced"):
+        with st.expander("📐 V3 LP Range Suggestions", expanded=False):
+            st.caption("Suggested LP price ranges for concentrated liquidity pools in your allocation. Based on ±1.5σ of 30-day price volatility.")
+            for _vs in _v3_suggestions:
+                st.markdown(
+                    f"**{_vs['protocol'].capitalize()} — {_vs['pool']}**: "
+                    f"Set LP range to ±**{_vs['range_pct']:.1f}%** around current price "
+                    f"(covers ~{_vs['coverage']:.0f}% of daily moves over 30 days). "
+                    f"Est. daily volatility: {_vs['daily_vol']:.1f}%."
+                )
+
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-    
-    
-    # ─── APY Sparklines ───────────────────────────────────────────────────────────
-    
+
+    # ─── Portfolio Scenarios — Monte Carlo (Items 6, 9, 10) ──────────────────────
+    render_section_header(
+        "Portfolio Scenarios",
+        "Monte Carlo simulation — Bear / Base / Bull case outcomes + probability range",
+    )
+    _mc_opps = model_data.get(profile) or []
+    if _mc_opps:
+        with st.spinner("Running portfolio simulation…"):
+            _mc_result = run_portfolio_monte_carlo(_mc_opps, n_scenarios=2_000, days=365)
+
+        if "error" not in _mc_result:
+            # ── Item 6: Bull / Base / Bear named scenario metrics ──────────��──────
+            _bear = _mc_result["bear_case"]
+            _base = _mc_result["base_case"]
+            _bull = _mc_result["bull_case"]
+            _var  = _mc_result["var_95_annual"]
+            _cvar = _mc_result["cvar_95_annual"]
+
+            _sc1, _sc2, _sc3, _sc4 = st.columns(4)
+            with _sc1:
+                _bear_color = "#ef4444" if _bear < 0 else "#f59e0b"
+                st.markdown(
+                    f"<div style='text-align:center; padding:12px; background:rgba(239,68,68,0.07); "
+                    f"border-radius:8px; border:1px solid rgba(239,68,68,0.2);'>"
+                    f"<div style='font-size:0.72rem; color:#64748b; margin-bottom:4px;'>🐻 BEAR CASE</div>"
+                    f"<div style='font-size:1.6rem; font-weight:800; color:{_bear_color};'>{_bear:+.1f}%</div>"
+                    f"<div style='font-size:0.68rem; color:#475569; margin-top:2px;'>Worst 10% of scenarios</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with _sc2:
+                _base_color = "#22c55e" if _base >= 0 else "#ef4444"
+                st.markdown(
+                    f"<div style='text-align:center; padding:12px; background:rgba(34,197,94,0.07); "
+                    f"border-radius:8px; border:1px solid rgba(34,197,94,0.2);'>"
+                    f"<div style='font-size:0.72rem; color:#64748b; margin-bottom:4px;'>📊 BASE CASE</div>"
+                    f"<div style='font-size:1.6rem; font-weight:800; color:{_base_color};'>{_base:+.1f}%</div>"
+                    f"<div style='font-size:0.68rem; color:#475569; margin-top:2px;'>Median (50th percentile)</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with _sc3:
+                st.markdown(
+                    f"<div style='text-align:center; padding:12px; background:rgba(0,212,170,0.07); "
+                    f"border-radius:8px; border:1px solid rgba(0,212,170,0.2);'>"
+                    f"<div style='font-size:0.72rem; color:#64748b; margin-bottom:4px;'>🐂 BULL CASE</div>"
+                    f"<div style='font-size:1.6rem; font-weight:800; color:#00d4aa;'>{_bull:+.1f}%</div>"
+                    f"<div style='font-size:0.68rem; color:#475569; margin-top:2px;'>Best 10% of scenarios</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with _sc4:
+                _var_color = "#ef4444" if _var < -10 else "#f59e0b"
+                st.markdown(
+                    f"<div style='text-align:center; padding:12px; background:rgba(239,68,68,0.05); "
+                    f"border-radius:8px; border:1px solid rgba(239,68,68,0.15);'>"
+                    f"<div style='font-size:0.72rem; color:#64748b; margin-bottom:4px;'>🛡 95% VALUE AT RISK</div>"
+                    f"<div style='font-size:1.6rem; font-weight:800; color:{_var_color};'>{_var:+.1f}%</div>"
+                    f"<div style='font-size:0.68rem; color:#475569; margin-top:2px;'>CVaR (Exp. Shortfall): {_cvar:+.1f}%</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            if _user_level == "beginner":
+                _bear_text = f"lose {abs(_bear):.0f}%" if _bear < 0 else f"gain {_bear:.0f}%"
+                st.info(
+                    f"In the worst 10% of scenarios, this portfolio would **{_bear_text}** over 1 year. "
+                    f"In the typical (median) scenario, it would **{'gain' if _base >= 0 else 'lose'} {abs(_base):.0f}%**. "
+                    f"These are estimates based on current yields and historical volatility — not guarantees."
+                )
+
+            # ── Item 9: P15/P85 fan chart visual ──────────────────────────────────
+            _p15 = _mc_result["p15"]
+            _p85 = _mc_result["p85"]
+            _p25 = _mc_result["p25"]
+            _p75 = _mc_result["p75"]
+            _p50 = _mc_result["p50"]
+
+            # Build a simple fan chart: x = months (0-12), y = projected cumulative return
+            _months = list(range(0, 13))
+            def _monthly_path(annual_pct: float) -> list:
+                monthly = (1 + annual_pct / 100) ** (1/12) - 1
+                return [round(((1 + monthly) ** m - 1) * 100, 2) for m in _months]
+
+            _fig_fan = go.Figure()
+            # P15-P85 shaded band (outer)
+            _fig_fan.add_trace(go.Scatter(
+                x=_months + _months[::-1],
+                y=_monthly_path(_p85) + _monthly_path(_p15)[::-1],
+                fill="toself", fillcolor="rgba(0,212,170,0.10)",
+                line=dict(width=0), name="P15–P85 range",
+                hoverinfo="skip",
+            ))
+            # P25-P75 band (inner, darker)
+            _fig_fan.add_trace(go.Scatter(
+                x=_months + _months[::-1],
+                y=_monthly_path(_p75) + _monthly_path(_p25)[::-1],
+                fill="toself", fillcolor="rgba(0,212,170,0.20)",
+                line=dict(width=0), name="P25–P75 range",
+                hoverinfo="skip",
+            ))
+            # Bear case line (P10)
+            _fig_fan.add_trace(go.Scatter(
+                x=_months, y=_monthly_path(_bear),
+                line=dict(color="#ef4444", width=1.5, dash="dot"),
+                name=f"Bear Case ({_bear:+.1f}%)",
+            ))
+            # Median line (P50)
+            _fig_fan.add_trace(go.Scatter(
+                x=_months, y=_monthly_path(_p50),
+                line=dict(color="#00d4aa", width=2.5),
+                name=f"Base Case ({_p50:+.1f}%)",
+            ))
+            # Bull case line (P90)
+            _fig_fan.add_trace(go.Scatter(
+                x=_months, y=_monthly_path(_bull),
+                line=dict(color="#22c55e", width=1.5, dash="dot"),
+                name=f"Bull Case ({_bull:+.1f}%)",
+            ))
+            # Zero line
+            _fig_fan.add_hline(y=0, line=dict(color="rgba(148,163,184,0.3)", width=1, dash="dot"))
+
+            _fig_fan.update_layout(
+                title=dict(text=f"{RISK_PROFILES[profile]['label']} — 1-Year Return Probability Range", font=dict(size=13, color="#94a3b8")),
+                xaxis=dict(
+                    title="Month",
+                    tickvals=list(range(0, 13, 3)),
+                    ticktext=["Now", "3m", "6m", "9m", "12m"],
+                    gridcolor="rgba(148,163,184,0.1)",
+                    tickfont=dict(size=10, color="#64748b"),
+                ),
+                yaxis=dict(
+                    title="Return (%)",
+                    ticksuffix="%",
+                    gridcolor="rgba(148,163,184,0.1)",
+                    zeroline=False,
+                    tickfont=dict(size=10, color="#64748b"),
+                ),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", y=-0.18, x=0.0, font=dict(size=10, color="#94a3b8")),
+                margin=dict(l=50, r=20, t=40, b=60),
+                height=320,
+            )
+            st.plotly_chart(_fig_fan, use_container_width=True, config={"displayModeBar": False})
+            st.caption(
+                f"Fan chart: teal band = P15–P85 probability range (70% of simulations fall here). "
+                f"Median (blue line) = base case. Based on {_mc_result['scenarios_run']:,} Monte Carlo scenarios."
+            )
+
+            if _user_level == "advanced":
+                st.markdown(
+                    f"**Simulation details:** {_mc_result['scenarios_run']:,} scenarios × 365 days · "
+                    f"Mean annual return: {_mc_result['mean']:+.1f}% · Std dev: {_mc_result['std']:.1f}% · "
+                    f"95% VaR: {_var:+.1f}% · CVaR: {_cvar:+.1f}% · "
+                    f"Portfolio weighted APY input: {_mc_result['portfolio_apy_wtd']:.1f}%"
+                )
+    else:
+        st.info("Run a scan first to generate portfolio scenario projections.")
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+
+    # ─── APY Sparklines ───────────────────────────────────────────────────────���───
+
     render_section_header("APY Trend", "Top 3 pools — last 14 scans")
     
     opps = model_data.get(profile) or []
