@@ -23,7 +23,7 @@ except ImportError:
     _WEB3_AVAILABLE = False
 
 from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS, FALLBACK_PRICES, COINGECKO_API_KEY, DB_FILE
-from utils.http import http_get as _get, http_post as _post
+from utils.http import http_get as _get, http_post as _post, coingecko_limiter
 
 
 # ─── Persistent KV store helpers (for FTSO backoff) ──────────────────────────
@@ -500,6 +500,7 @@ def fetch_ftso_prices() -> dict:
     # Final fallback: CoinGecko free API for FLR and XRP
     if not results:
         try:
+            coingecko_limiter.acquire()
             _cg_base = APIS.get("coingecko", "https://api.coingecko.com/api/v3")
             _cg = _get(
                 f"{_cg_base}/simple/price",
