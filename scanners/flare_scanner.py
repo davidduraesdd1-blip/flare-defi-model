@@ -393,12 +393,55 @@ def fetch_prices() -> list:
                 if xrp_up and fxrp:
                     fxrp.change_24h = xrp_up.change_24h
     else:
-        # Fallback: last known reasonable estimates (config.FALLBACK_PRICES)
-        logger.warning("CoinGecko unavailable — using price estimates")
-        results = [
-            TokenPrice(sym, price, 0.0, "estimate")
-            for sym, price in FALLBACK_PRICES.items()
-        ]
+        # Fallback tier 1: use in-memory stale cache if it has any data (even expired TTL)
+        with _price_cache_lock:
+            _stale = list(_price_cache) if _price_cache else []
+        if _stale:
+            logger.warning("CoinGecko unavailable — using in-memory stale prices")
+            results = [TokenPrice(p.symbol, p.price_usd, p.change_24h, "stale") for p in _stale]
+        else:
+            # Fallback tier 2: last prices stored in SQLite from a previous process run
+            _db_prices: dict = {}
+            try:
+                conn = sqlite3.connect(str(DB_FILE), timeout=5, check_same_thread=False)
+                rows = conn.execute("SELECT symbol, price_usd, change_24h FROM price_cache").fetchall()
+                conn.close()
+                _db_prices = {r[0]: (float(r[1]), float(r[2])) for r in rows}
+            except Exception:
+                pass
+            if _db_prices:
+                logger.warning("CoinGecko unavailable — using SQLite persisted prices")
+                results = [
+                    TokenPrice(sym, px, chg, "stale")
+                    for sym, (px, chg) in _db_prices.items()
+                ]
+            else:
+                # Fallback tier 3: hardcoded config estimates (last resort)
+                logger.warning("CoinGecko unavailable — using hardcoded price estimates")
+                results = [
+                    TokenPrice(sym, price, 0.0, "estimate")
+                    for sym, price in FALLBACK_PRICES.items()
+                ]
+
+    # Persist successful live fetches to SQLite so future cold-boot fallbacks have fresh data
+    if results and results[0].data_source not in ("stale", "estimate"):
+        try:
+            conn = sqlite3.connect(str(DB_FILE), timeout=5, check_same_thread=False)
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS price_cache "
+                "(symbol TEXT PRIMARY KEY, price_usd REAL NOT NULL, change_24h REAL NOT NULL, "
+                "updated_at TEXT NOT NULL)"
+            )
+            for p in results:
+                conn.execute(
+                    "INSERT OR REPLACE INTO price_cache (symbol, price_usd, change_24h, updated_at) "
+                    "VALUES (?, ?, ?, ?)",
+                    (p.symbol, p.price_usd, p.change_24h, datetime.now(timezone.utc).isoformat()),
+                )
+            conn.commit()
+            conn.close()
+        except Exception as _e:
+            logger.debug(f"price_cache SQLite write failed: {_e}")
 
     with _price_cache_lock:
         _price_cache    = results
@@ -538,10 +581,11 @@ def fetch_ftso_prices() -> dict:
 # Slugs verified against https://yields.llama.fi/pools (Flare chain)
 _DL_PROTOCOL_MAP = {
     "clearpool-lending":       "clearpool",
+    "kinetic":                 "kinetic",       # Compound V2 fork — live supply/borrow APYs
     "mystic-finance-lending":  "mystic",
     "sceptre-liquid":          "sceptre",
     "spectra-v2":              "spectra",
-    "spectra-metavaults":      "spectra",
+    "spectra-metavaults":      "spectra",       # FXRP metavault ($4.2M TVL)
     # upshift, firelight, cyclo, enosys, blazeswap not yet listed on DeFiLlama
 }
 
@@ -929,9 +973,12 @@ def _fetch_single_ktoken_rate(w3, asset: str, cfg: dict, n_tokens: int) -> Lendi
 
 def fetch_kinetic_rates() -> list:
     """
-    Fetch live Kinetic lending rates directly from on-chain kToken contracts
-    (Compound V2 fork on Flare mainnet).  Falls back to config baselines if
-    the RPC is unreachable or a call fails.
+    Fetch live Kinetic lending rates: on-chain RPC → DeFiLlama → config baseline.
+
+    Priority:
+      1. On-chain kToken contracts (most granular — utilisation, exact rates)
+      2. DeFiLlama yields API (live but less granular — no utilisation)
+      3. Config baseline (static research estimates — last resort)
     All kToken fetches are parallelised with ThreadPoolExecutor(max_workers=6).
     """
     w3       = _get_web3()
@@ -960,6 +1007,44 @@ def fetch_kinetic_rates() -> list:
                     tvl_usd=PROTOCOLS["kinetic"]["tvl_usd"] / max(1, n_tokens),
                     data_source="baseline",
                 )
+
+    # Secondary pass: upgrade any baseline results with DeFiLlama live data.
+    # This fires when the on-chain RPC is unreachable (the common case on free RPC tiers).
+    baseline_assets = [a for a, r in rate_map.items() if r.data_source == "baseline"]
+    if baseline_assets:
+        dl = _fetch_defillama_raw()
+        dl_kinetic_pools = dl.get("kinetic", [])
+        if dl_kinetic_pools:
+            # Build symbol → best pool (highest TVL wins when multiple entries exist)
+            dl_by_sym: dict[str, dict] = {}
+            for p in dl_kinetic_pools:
+                sym = (p.get("symbol") or "").upper()
+                if p.get("apy", 0) > 0 and (sym not in dl_by_sym or p.get("tvl_usd", 0) > dl_by_sym[sym].get("tvl_usd", 0)):
+                    dl_by_sym[sym] = p
+            # Alias: our config asset name (uppercased) → DeFiLlama pool symbol (uppercased).
+            # Needed when naming conventions differ between our config and DeFiLlama.
+            _sym_aliases = {
+                "FLR":    "WFLR",           # Flare native → DeFiLlama uses Wrapped FLR symbol
+                "USDT0":  "USD\u20ae0",     # our USDT0 → DeFiLlama USD₮0 (₮ = U+20AE Tugrik)
+                "USDT":   "USD\u20ae0",     # legacy variant; same underlying token
+            }
+            for asset in baseline_assets:
+                # Try direct match, then alias map
+                dl_key = asset.upper()
+                pool = dl_by_sym.get(dl_key) or dl_by_sym.get(_sym_aliases.get(dl_key, ""))
+                if pool:
+                    apy = pool.get("apy_base", 0) or pool.get("apy", 0)
+                    if apy > 0:
+                        rate_map[asset] = LendingRate(
+                            protocol="kinetic",
+                            asset=asset,
+                            supply_apy=round(apy, 2),
+                            borrow_apy=0.0,
+                            utilisation=0.0,
+                            tvl_usd=pool.get("tvl_usd", 0),
+                            data_source="live",
+                        )
+                        logger.debug(f"Kinetic {asset}: RPC failed → DeFiLlama live {apy:.1f}%")
 
     # Preserve original ordering (dict insertion order in Python 3.7+)
     return [rate_map[asset] for asset in k_tokens if asset in rate_map]
@@ -1022,23 +1107,17 @@ def fetch_clearpool_rates() -> list:
 
 # ─── Mystic (Morpho) Rates Scanner ───────────────────────────────────────────
 
-_MYSTIC_KNOWN_ASSETS: frozenset = frozenset(
-    cfg["asset"].upper() for cfg in PROTOCOLS["mystic"]["vaults"].values()
-)   # {"FXRP", "WFLR", "USD0"} — DeFiLlama occasionally returns cross-chain Morpho
-    # pools (e.g. "COREUSDT0", "COREWFLR") for the mystic-finance-lending project
-    # that are not actual Mystic vaults on Flare.  Filter to known vault assets only.
-
-
 def fetch_mystic_rates() -> list:
-    """Mystic Finance lending rates. Tries DeFiLlama first, then baseline."""
+    """
+    Mystic Finance (Morpho Blue) lending rates. Tries DeFiLlama first, then baseline.
+    _fetch_defillama_raw() already filters to chain="flare", so all returned pools
+    are genuine Flare Mystic vaults.  DeFiLlama uses vault-prefixed names like
+    COREUSDT0, COREWFLR, CSXRP — these are the real on-chain vault symbols.
+    """
     dl = _fetch_defillama_raw()
     mystic_pools = dl.get("mystic", [])
     if mystic_pools:
-        filtered = [
-            p for p in mystic_pools
-            if p["apy"] > 0
-            and (p.get("symbol") or "").upper() in _MYSTIC_KNOWN_ASSETS
-        ]
+        filtered = [p for p in mystic_pools if p.get("apy", 0) > 0]
         if filtered:
             return [LendingRate(
                 protocol="mystic",
@@ -1124,8 +1203,9 @@ def fetch_staking_yields() -> list:
 
     # ─── Spectra sFLR markets (PT fixed-rate + LP) ───────────────────────────
     # DeFiLlama uses "SW-SFLR" for both; lower APY = fixed-rate PT, higher = LP.
+    _spectra_all = dl.get("spectra", [])
     spectra_sflr = sorted(
-        [p for p in dl.get("spectra", []) if p.get("symbol") and "sflr" in p["symbol"].lower() and p.get("apy", 0) > 0],
+        [p for p in _spectra_all if p.get("symbol") and "sflr" in p["symbol"].lower() and p.get("apy", 0) > 0],
         key=lambda x: x.get("apy", 0),
     )
     if len(spectra_sflr) >= 1:
@@ -1154,6 +1234,44 @@ def fetch_staking_yields() -> list:
             protocol="spectra", token="LP-sFLR",
             apy=36.74, apy_low=30.0, apy_high=45.0,
             tvl_usd=291_762, data_source="research",
+        ))
+
+    # ─── Spectra stXRP markets (PT fixed-rate + LP) ─────────────────────────
+    # $9.1M TVL product on DeFiLlama: spectra-v2 STXRP pools.
+    # Use > 0.1 threshold to exclude YT (yield token) pools that DeFiLlama lists
+    # with ~0% APY alongside the PT and LP pools for the same market.
+    spectra_stxrp = sorted(
+        [p for p in _spectra_all if p.get("symbol") and "stxrp" in p["symbol"].lower() and p.get("apy", 0) > 0.1],
+        key=lambda x: x.get("apy", 0),
+    )
+    if spectra_stxrp:
+        _stxrp_pt = spectra_stxrp[0]   # lowest APY = fixed-rate PT
+        yields.append(StakingYield(
+            protocol="spectra", token="PT-stXRP",
+            apy=_stxrp_pt["apy"], apy_low=_stxrp_pt["apy"], apy_high=_stxrp_pt["apy"] * 1.10,
+            tvl_usd=_stxrp_pt["tvl_usd"], data_source="live",
+        ))
+        if len(spectra_stxrp) >= 2:
+            _stxrp_lp = spectra_stxrp[-1]  # highest APY = LP market
+            yields.append(StakingYield(
+                protocol="spectra", token="LP-stXRP",
+                apy=_stxrp_lp["apy"], apy_low=_stxrp_lp["apy"] * 0.70, apy_high=_stxrp_lp["apy"] * 1.40,
+                tvl_usd=_stxrp_lp["tvl_usd"], data_source="live",
+            ))
+
+    # ─── Spectra FXRP metavault (spectra-metavaults) ────────────────────────
+    # $4.2M TVL product — FXRP yield vault on DeFiLlama
+    _spectra_fxrp = next(
+        (p for p in _spectra_all if p.get("symbol") and "fxrp" in p["symbol"].lower() and p.get("apy", 0) > 0),
+        None,
+    )
+    if _spectra_fxrp:
+        yields.append(StakingYield(
+            protocol="spectra", token="FXRP Vault",
+            apy=_spectra_fxrp["apy"],
+            apy_low=_spectra_fxrp["apy"] * 0.80,
+            apy_high=_spectra_fxrp["apy"] * 1.20,
+            tvl_usd=_spectra_fxrp["tvl_usd"], data_source="live",
         ))
 
     # ─── Upshift earnXRP ─────────────────────────────────────────────────────
