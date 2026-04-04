@@ -354,10 +354,15 @@ RISK_PROFILES = {
         "label":           "Ultra Conservative",
         "color":           "#2ECC71",   # green
         "emoji":           "SAFE",
-        "target_apy_low":  15.0,
-        "target_apy_high": 40.0,
+        # Realistic post-decay Monte Carlo P15/P85 targets (updated 2026-04-04)
+        # Old static targets (15-40%) were aspirational pre-decay; these match actual achievable yield
+        "target_apy_low":  10.0,
+        "target_apy_high": 15.0,
         "max_il_risk":     "low",
         "leverage":        False,
+        # IL multiplier: how aggressively IL is penalised in the allocation weight formula.
+        # Conservative investors need maximum protection → 3.0x base IL estimate applied.
+        "il_multiplier":   3.0,
         "allowed_types":   ["Lending", "Liquid Staking", "Yield Vault", "Yield Tokenization"],
         "allowed_protocols": [
             "sceptre", "kinetic", "clearpool", "upshift",
@@ -374,10 +379,13 @@ RISK_PROFILES = {
         "label":           "Medium Risk",
         "color":           "#F39C12",   # orange
         "emoji":           "BALANCED",
-        "target_apy_low":  50.0,
-        "target_apy_high": 130.0,
+        # Realistic post-decay Monte Carlo P15/P85 targets (updated 2026-04-04)
+        "target_apy_low":  18.0,
+        "target_apy_high": 30.0,
         "max_il_risk":     "medium",
         "leverage":        False,
+        # IL multiplier: moderate sensitivity — accepts IL as cost of higher DEX yield
+        "il_multiplier":   2.0,
         "allowed_types":   ["DEX", "Lending", "Liquid Staking", "Yield Vault", "Yield Tokenization", "DEX + Perps"],
         "allowed_protocols": [
             "sceptre", "kinetic", "clearpool", "upshift", "firelight",
@@ -395,10 +403,13 @@ RISK_PROFILES = {
         "label":           "High Risk",
         "color":           "#E74C3C",   # red
         "emoji":           "AGGRESSIVE",
-        "target_apy_low":  150.0,
-        "target_apy_high": 265.0,
+        # Realistic post-decay Monte Carlo P15/P85 targets (updated 2026-04-04)
+        "target_apy_low":  22.0,
+        "target_apy_high": 38.0,
         "max_il_risk":     "high",
         "leverage":        True,
+        # IL multiplier: aggressive investors treat IL as acceptable cost of high-APY pools
+        "il_multiplier":   1.5,
         "allowed_types":   ["DEX", "Lending", "Liquid Staking", "Yield Vault",
                             "Yield Tokenization", "DEX + Perps", "Leveraged Yield",
                             "Perps (Cross-chain)"],
@@ -433,6 +444,10 @@ INCENTIVE_PROGRAM = {
         "DEX LP incentives (RFLR rewards) continue until ~July 2026. "
         "Plan to rebalance LP positions before June 2026 as RFLR incentives wind down."
     ),
+    # Reward display thresholds (QC — base/reward separation)
+    "reward_hide_below_pct":  2.0,   # hide reward column when current reward APY < 2%
+    "reward_warn_below_days": 90,    # show ⚠ warning badge when < 90 days remaining
+    "reward_gray_below_days": 30,    # gray out reward display when < 30 days remaining
 }
 
 # ─── Impermanent Loss Thresholds ─────────────────────────────────────────────
