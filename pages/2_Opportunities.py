@@ -26,6 +26,7 @@ from scanners.defillama import (
     fetch_llama_yield_pools,            # #68 global yield pools
     fetch_protocol_revenue,             # D4 — protocol revenue trend
     fetch_all_hacks,                    # D3 — hack history panel
+    fetch_pool_apy_history,             # Item 34 — real historical APY chart
     governance_fetch_failed,
 )
 from scanners.defi_protocols import (
@@ -1766,17 +1767,30 @@ with _tab_yield:
             _sp_proto  = (_sp.get("protocol") or "").replace("-", " ").title()
             _sp_sym    = _sp.get("symbol", "")
             _sp_chain  = _sp.get("chain", "")
-    
-            # Build a synthetic 7-point sparkline from current APY and 7d average
-            # Interpolate linearly between apy_7d and apy across 7 points
-            _spark_vals = [
-                round(_sp_apy7d + (_sp_apy - _sp_apy7d) * (i / 6), 2)
-                for i in range(7)
-            ]
-            _trending_up = _sp_apy >= _sp_apy7d
+            _sp_pid    = _sp.get("pool_id", "")
+
+            # Attempt real historical APY from DeFiLlama /chart/{pool_id}
+            # Falls back to synthetic 7-point interpolation if unavailable.
+            _spark_real  = fetch_pool_apy_history(_sp_pid, days=30) if _sp_pid else []
+            _is_real_data = len(_spark_real) >= 7
+            if _is_real_data:
+                # Use last 30 days of real data; x-axis is dates, y-axis is APY
+                _spark_x    = [h["timestamp"] for h in _spark_real]
+                _spark_vals = [h["apy"] for h in _spark_real]
+                _data_label = f"{len(_spark_real)}d real"
+            else:
+                # Synthetic: 7-point linear interpolation between apy_7d and apy
+                _spark_x    = None
+                _spark_vals = [
+                    round(_sp_apy7d + (_sp_apy - _sp_apy7d) * (i / 6), 2)
+                    for i in range(7)
+                ]
+                _data_label = "7d est."
+
+            _trending_up = _spark_vals[-1] >= _spark_vals[0] if _spark_vals else True
             _sp_line_col = "#22c55e" if _trending_up else "#ef4444"
             _sp_fill_col = "rgba(34,197,94,0.08)" if _trending_up else "rgba(239,68,68,0.08)"
-    
+
             with _sp_cols[_col_idx]:
                 st.markdown(
                     f"<div style='font-size:0.72rem;color:#64748b;text-align:center;margin-bottom:4px'>"
@@ -1787,14 +1801,18 @@ with _tab_yield:
                     unsafe_allow_html=True,
                 )
                 _fig_sp = go.Figure()
-                _fig_sp.add_trace(go.Scatter(
+                _spark_trace_kwargs = dict(
                     y=_spark_vals,
                     mode="lines",
                     line=dict(color=_sp_line_col, width=2),
                     fill="tozeroy",
                     fillcolor=_sp_fill_col,
-                    hovertemplate="%{y:.2f}%<extra></extra>",
-                ))
+                    hovertemplate="%{x}: %{y:.2f}%<extra></extra>" if _is_real_data
+                                  else "%{y:.2f}%<extra></extra>",
+                )
+                if _is_real_data:
+                    _spark_trace_kwargs["x"] = _spark_x
+                _fig_sp.add_trace(go.Scatter(**_spark_trace_kwargs))
                 _fig_sp.update_layout(
                     plot_bgcolor="rgba(0,0,0,0)",
                     paper_bgcolor="rgba(0,0,0,0)",
@@ -1808,7 +1826,8 @@ with _tab_yield:
                 _dir_sym = "▲" if _trending_up else "▼"
                 st.markdown(
                     f"<div style='text-align:center;font-size:0.73rem;color:{_sp_line_col};margin-top:-10px'>"
-                    f"{_dir_sym} {_sp_apy:.2f}% APY</div>",
+                    f"{_dir_sym} {_sp_apy:.2f}% APY "
+                    f"<span style='color:#475569;font-size:0.65rem'>({_data_label})</span></div>",
                     unsafe_allow_html=True,
                 )
             # Add new row of columns every 3 pools

@@ -754,6 +754,69 @@ def fetch_llama_yield_pools(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# POOL APY HISTORY  (Item 34)
+# DeFiLlama /chart/{pool_id} — real historical APY for sparklines
+# ─────────────────────────────────────────────────────────────────────────────
+
+_APY_HISTORY_TTL = 3600  # 1 hour — chart data changes slowly
+
+
+def fetch_pool_apy_history(pool_id: str, days: int = 30) -> list[dict]:
+    """Fetch real historical APY data for a single pool from DeFiLlama.
+
+    Endpoint: GET https://yields.llama.fi/chart/{pool_id}
+    Returns a list of dicts sorted oldest-first, trimmed to `days` entries.
+
+    Each dict:
+        timestamp : str  — ISO 8601 date string (YYYY-MM-DD)
+        apy       : float — APY % for that day
+
+    Returns [] on any error (caller falls back to synthetic sparkline).
+    Cache TTL: 1 hour per pool_id.
+    """
+    if not pool_id:
+        return []
+
+    cache_key = f"apy_history:{pool_id}:{days}"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and now - cached.get("_ts", 0) < _APY_HISTORY_TTL:
+            return cached.get("data", [])
+
+    try:
+        defillama_limiter.wait()
+        r = _SESSION.get(
+            f"{_DEFILLAMA_YIELDS}/chart/{pool_id}",
+            timeout=_REQUEST_TIMEOUT,
+        )
+        if r.status_code != 200:
+            return []
+        payload = r.json()
+        raw = payload.get("data") or []
+        result = []
+        for entry in raw:
+            try:
+                ts  = str(entry.get("timestamp", ""))[:10]  # YYYY-MM-DD
+                apy = float(entry.get("apy") or entry.get("apyBase") or 0)
+                if ts and apy >= 0:
+                    result.append({"timestamp": ts, "apy": round(apy, 4)})
+            except (TypeError, ValueError):
+                continue
+        # Sort oldest-first, keep last `days` entries
+        result.sort(key=lambda x: x["timestamp"])
+        result = result[-days:]
+    except Exception as exc:
+        logger.debug("[fetch_pool_apy_history] %s: %s", pool_id, exc)
+        result = []
+
+    with _cache_lock:
+        _cache[cache_key] = {"data": result, "_ts": now}
+
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PROTOCOL REVENUE HEALTH  (#57)
 # DeFiLlama fees summary endpoint for 24h/30d fee revenue trends
 # ─────────────────────────────────────────────────────────────────────────────
