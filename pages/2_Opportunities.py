@@ -317,7 +317,7 @@ with _tab_yield:
     @st.cache_data(ttl=900)
     def _cached_top_global_yields_compact() -> list:
         try:
-            pools = fetch_llama_yield_pools(min_tvl_usd=10_000_000, max_results=100) or []
+            pools = fetch_llama_yield_pools(min_tvl_usd=10_000_000, top_n=100) or []
             return sorted(
                 [p for p in pools if float(p.get("apy") or 0) > 0],
                 key=lambda x: float(x.get("apy") or 0),
@@ -2685,7 +2685,7 @@ with _tab_intel:
                 "Native Token %": f"{_tr['native_pct']:.0f}%",
                 "Health":         _hsym,
             })
-        st.dataframe(pd.DataFrame(_treas_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_treas_rows), width='stretch', hide_index=True)
 
         # Detail expander for top 5 holding breakdowns
         with st.expander("Top Holdings Breakdown", expanded=False):
@@ -2705,7 +2705,7 @@ with _tab_intel:
                                                 else f"${b['usd']:,.0f}"),
                                   "% of Treasury": f"{b['pct']:.1f}%"}
                                  for b in _bk]
-                    st.dataframe(pd.DataFrame(_bk_rows), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(_bk_rows), width='stretch', hide_index=True)
 
         render_what_this_means(
             "A protocol's treasury is its emergency fund — like a company's cash reserves. "
