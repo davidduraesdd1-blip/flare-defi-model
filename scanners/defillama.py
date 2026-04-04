@@ -1033,3 +1033,118 @@ def fetch_bridge_flows(chains: Optional[List[str]] = None) -> List[dict]:
     logger.info("[BridgeFlow] %d chains: %s",
                 len(flows), [(f["chain"], f["change_7d_pct"]) for f in flows])
     return flows
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROTOCOL TREASURY HEALTH  (Item 30)
+# DeFiLlama /api/treasuries  — native token vs stablecoin ratio per protocol
+# ─────────────────────────────────────────────────────────────────────────────
+
+_TREASURY_TTL = 3600  # 1 hour
+
+_DEFAULT_TREASURY_PROTOCOLS = [
+    "uniswap", "aave", "compound", "curve", "synthetix", "maker",
+    "sushi", "lido", "balancer", "convex",
+]
+
+
+def fetch_protocol_treasuries(protocols: list = None) -> list[dict]:
+    """Fetch treasury health data from DeFiLlama for key DeFi protocols.
+
+    Endpoint: GET https://api.llama.fi/treasury/{slug}
+    Returns list of dicts, one per protocol:
+        slug            : str
+        name            : str
+        tvl             : float  — total treasury USD value
+        stablecoin_pct  : float  — % of treasury in stablecoins (runway indicator)
+        native_pct      : float  — % in native token (concentration risk)
+        health          : "HEALTHY" | "CONCENTRATED" | "DEPLETED"
+        token_breakdown : list[{"symbol": str, "usd": float, "pct": float}]
+
+    health logic:
+        HEALTHY      — stablecoin_pct >= 20% AND tvl >= 5M
+        CONCENTRATED — stablecoin_pct < 20% (mostly native token — sell-off risk)
+        DEPLETED     — tvl < 5M (low runway)
+
+    Cache TTL: 1 hour.
+    Returns [] on total failure (non-blocking).
+    """
+    cache_key = "protocol_treasuries"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and now - cached.get("_ts", 0) < _TREASURY_TTL:
+            return cached.get("data", [])
+
+    slugs = protocols or _DEFAULT_TREASURY_PROTOCOLS
+    results: list[dict] = []
+
+    def _fetch_one(slug: str) -> dict | None:
+        try:
+            defillama_limiter.wait()
+            data = _get(f"{_DEFILLAMA_API}/treasury/{slug}", timeout=_REQUEST_TIMEOUT)
+            if not data:
+                return None
+            # Response: {name, tokenBreakdowns, tvl, ...}
+            _name  = str(data.get("name") or data.get("projectName") or slug)
+            _tvl   = float(data.get("tvl") or 0)
+            _breakdown = data.get("tokenBreakdowns") or []
+            if not _breakdown and isinstance(data.get("tokens"), list):
+                _breakdown = data["tokens"]
+
+            _stables = ("USDC", "USDT", "DAI", "FRAX", "LUSD", "BUSD", "GHO",
+                        "USDE", "USDP", "TUSD", "FDUSD")
+            _stable_usd = 0.0
+            _native_usd = 0.0
+            _token_list = []
+            for tok in (_breakdown if isinstance(_breakdown, list) else []):
+                _sym = str(tok.get("symbol") or tok.get("token") or "").upper()
+                _usd = float(tok.get("usd") or tok.get("value") or 0)
+                _token_list.append({"symbol": _sym, "usd": _usd})
+                if any(s in _sym for s in _stables):
+                    _stable_usd += _usd
+                else:
+                    _native_usd += _usd
+
+            _total = _stable_usd + _native_usd or _tvl or 1
+            _stable_pct = round(_stable_usd / _total * 100, 1)
+            _native_pct = round(_native_usd / _total * 100, 1)
+
+            # Sort token list by USD value descending, compute pct
+            _token_list.sort(key=lambda x: x["usd"], reverse=True)
+            for t in _token_list:
+                t["pct"] = round(t["usd"] / _total * 100, 1)
+
+            _health = ("DEPLETED"     if _tvl < 5_000_000 else
+                       "CONCENTRATED" if _stable_pct < 20 else
+                       "HEALTHY")
+
+            return {
+                "slug":             slug,
+                "name":             _name,
+                "tvl":              round(_tvl, 2),
+                "stablecoin_pct":   _stable_pct,
+                "native_pct":       _native_pct,
+                "health":           _health,
+                "token_breakdown":  _token_list[:5],  # top 5 holdings
+            }
+        except Exception as exc:
+            logger.debug("[fetch_protocol_treasuries] %s: %s", slug, exc)
+            return None
+
+    with ThreadPoolExecutor(max_workers=min(6, len(slugs))) as ex:
+        for item in as_completed({ex.submit(_fetch_one, s): s for s in slugs}):
+            try:
+                res = item.result()
+                if res:
+                    results.append(res)
+            except Exception:
+                pass
+
+    results.sort(key=lambda x: x["tvl"], reverse=True)
+
+    with _cache_lock:
+        _cache[cache_key] = {"data": results, "_ts": now}
+
+    logger.info("[fetch_protocol_treasuries] %d protocols loaded", len(results))
+    return results

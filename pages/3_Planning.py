@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from ui.common import page_setup, render_sidebar, render_section_header, render_what_this_means, get_user_level
 from config import FALLBACK_PRICES
 from scanners.defillama import fetch_yields_pools
+from scanners.flare_scanner import fetch_ftso_providers
 from models.risk_models import (
     calc_il_vs_hodl,
     calc_concentrated_lp_efficiency,
@@ -293,16 +294,15 @@ with tab3:
     # Feature 7: Risk-adjusted FTSO delegation optimizer
     # Score = reward_rate × (uptime/100)² × vote_power_factor
     # Vote power cap: providers >2.5% vote power get rewards cut off
-    ftso_providers = [
-        {"name": "Ankr",        "reward_rate": 4.5, "uptime": 99.2, "vote_power_pct": 8.2,  "note": "Large global infra — ABOVE 2.5% vote power cap ⚠"},
-        {"name": "AlphaOracle", "reward_rate": 4.4, "uptime": 99.0, "vote_power_pct": 1.8,  "note": "High uptime, consistent rewards"},
-        {"name": "SolidiFi",    "reward_rate": 4.2, "uptime": 98.8, "vote_power_pct": 2.1,  "note": "Community-run, near cap — monitor"},
-        {"name": "FlareOracle", "reward_rate": 4.3, "uptime": 98.9, "vote_power_pct": 1.4,  "note": "Flare-native, well under cap"},
-        {"name": "FTSO EU",     "reward_rate": 4.1, "uptime": 98.5, "vote_power_pct": 0.9,  "note": "European-based, decentralised"},
-        {"name": "BlockNG",     "reward_rate": 4.0, "uptime": 97.5, "vote_power_pct": 0.7,  "note": "Multi-chain infrastructure"},
-        {"name": "DelegateXRP", "reward_rate": 4.3, "uptime": 98.7, "vote_power_pct": 1.2,  "note": "XRP community focused"},
-        {"name": "OracleDeFi",  "reward_rate": 4.2, "uptime": 98.6, "vote_power_pct": 0.6,  "note": "DeFi-native, low vote power"},
-    ]
+    # Item 28: Hybrid feed — attempts flaremetrics.io live data, falls back to research data
+    with st.spinner("Loading FTSO provider data..."):
+        _ftso_feed   = fetch_ftso_providers()
+        ftso_providers = [dict(p) for p in _ftso_feed.get("providers", [])]
+        _ftso_source = _ftso_feed.get("source", "static")
+    if _ftso_source == "live":
+        st.caption("FTSO data: live from flaremetrics.io")
+    else:
+        st.caption("FTSO data: research-based estimates (flaremetrics.io unavailable)")
 
     _VOTE_CAP = 2.5   # providers above this % have reward eligibility risk
 

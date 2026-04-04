@@ -27,6 +27,7 @@ from scanners.defillama import (
     fetch_protocol_revenue,             # D4 — protocol revenue trend
     fetch_all_hacks,                    # D3 — hack history panel
     fetch_pool_apy_history,             # Item 34 — real historical APY chart
+    fetch_protocol_treasuries,          # Item 30 — protocol treasury health
     governance_fetch_failed,
 )
 from scanners.defi_protocols import (
@@ -2543,3 +2544,94 @@ with _tab_intel:
         if _ftso_rows:
             st.dataframe(pd.DataFrame(_ftso_rows), width="stretch", hide_index=True)
         st.caption("FTSO prices refresh every 2 min. Divergence >2% may indicate arb opportunity. Source: Flare Data Availability Layer.")
+
+with _tab_intel:
+    # ── Protocol Treasury Health (Item 30) ───────────────────────────────────
+    st.divider()
+    render_section_header(
+        "Protocol Treasury Health",
+        "Runway analysis — stablecoin vs native token treasury mix per protocol",
+    )
+
+    @st.cache_data(ttl=3600)
+    def _cached_treasuries() -> list:
+        return fetch_protocol_treasuries()
+
+    _treas_c1, _treas_c2 = st.columns([3, 1])
+    with _treas_c2:
+        if st.button("Refresh Treasuries", key="treas_refresh"):
+            _cached_treasuries.clear()
+    with st.spinner("Loading treasury data from DeFiLlama..."):
+        _treas_data = _cached_treasuries()
+
+    if not _treas_data:
+        st.info("Treasury data unavailable — DeFiLlama /treasury endpoint may be unreachable.")
+    else:
+        _health_col = {"HEALTHY": "#22c55e", "CONCENTRATED": "#f59e0b", "DEPLETED": "#ef4444"}
+        _health_sym = {"HEALTHY": "▲ Healthy", "CONCENTRATED": "■ Concentrated", "DEPLETED": "▼ Depleted"}
+
+        # Summary metric cards
+        _t_healthy   = sum(1 for t in _treas_data if t["health"] == "HEALTHY")
+        _t_conc      = sum(1 for t in _treas_data if t["health"] == "CONCENTRATED")
+        _t_dep       = sum(1 for t in _treas_data if t["health"] == "DEPLETED")
+        _t_total_usd = sum(t["tvl"] for t in _treas_data)
+        _tm1, _tm2, _tm3, _tm4 = st.columns(4)
+        with _tm1:
+            st.metric("Protocols Scanned", len(_treas_data))
+        with _tm2:
+            st.metric("Healthy", _t_healthy, help="Stablecoin mix ≥20% of treasury")
+        with _tm3:
+            st.metric("Concentrated Risk", _t_conc, help="<20% stablecoins — heavy native token exposure")
+        with _tm4:
+            _ttv = (f"${_t_total_usd/1e9:.1f}B" if _t_total_usd >= 1e9
+                    else f"${_t_total_usd/1e6:.0f}M")
+            st.metric("Total Treasury TVL", _ttv)
+
+        # Treasury table
+        _treas_rows = []
+        for _tr in _treas_data:
+            _hcol = _health_col.get(_tr["health"], "#94a3b8")
+            _hsym = _health_sym.get(_tr["health"], _tr["health"])
+            _tvl_str = (f"${_tr['tvl']/1e9:.2f}B" if _tr["tvl"] >= 1e9
+                        else f"${_tr['tvl']/1e6:.0f}M" if _tr["tvl"] >= 1e6
+                        else f"${_tr['tvl']:,.0f}")
+            _treas_rows.append({
+                "Protocol":       _tr["name"],
+                "Treasury":       _tvl_str,
+                "Stablecoin %":   f"{_tr['stablecoin_pct']:.0f}%",
+                "Native Token %": f"{_tr['native_pct']:.0f}%",
+                "Health":         _hsym,
+            })
+        st.dataframe(pd.DataFrame(_treas_rows), use_container_width=True, hide_index=True)
+
+        # Detail expander for top 5 holding breakdowns
+        with st.expander("Top Holdings Breakdown", expanded=False):
+            for _tr in _treas_data[:5]:
+                _hcol = _health_col.get(_tr["health"], "#94a3b8")
+                st.markdown(
+                    f"<div style='font-weight:600;color:{_hcol};margin:8px 0 2px'>"
+                    f"{_html.escape(_tr['name'])} "
+                    f"<span style='font-weight:400;font-size:0.8rem;color:#94a3b8'>"
+                    f"(${_tr['tvl']/1e6:.0f}M treasury)</span></div>",
+                    unsafe_allow_html=True,
+                )
+                _bk = _tr.get("token_breakdown", [])
+                if _bk:
+                    _bk_rows = [{"Token": b["symbol"],
+                                  "USD Value": (f"${b['usd']/1e6:.1f}M" if b["usd"] >= 1e6
+                                                else f"${b['usd']:,.0f}"),
+                                  "% of Treasury": f"{b['pct']:.1f}%"}
+                                 for b in _bk]
+                    st.dataframe(pd.DataFrame(_bk_rows), use_container_width=True, hide_index=True)
+
+        render_what_this_means(
+            "A protocol's treasury is its emergency fund — like a company's cash reserves. "
+            "Healthy treasuries hold at least 20% in stablecoins (USDC, DAI) so they can "
+            "pay developers and cover costs even if their own token crashes. "
+            "Concentrated treasuries hold mostly their own token — if the price drops, "
+            "they can run out of money fast. Always check treasury health before depositing "
+            "large amounts into a protocol.",
+            title="Why treasury health matters",
+            intermediate_message="Treasury: stablecoin mix indicates runway quality. <20% stables = sell-off risk.",
+        )
+        st.caption("Source: DeFiLlama /treasury/{slug} · refreshed hourly.")
