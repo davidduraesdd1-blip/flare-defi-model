@@ -430,6 +430,68 @@ with _ctrl_tab_export:
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+with _ctrl_tab_export:
+    # ─── Investment Committee PDF Report (Item 38) ───────────────────────────────
+    st.markdown("### Investment Committee Report")
+    st.markdown(
+        "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
+        "Generate a professional PDF report for your family office investment committee. "
+        "Includes portfolio positions, market context, top opportunities, treasury health, "
+        "and AI agent performance summary.</div>",
+        unsafe_allow_html=True,
+    )
+    if st.button("Generate Investment Committee PDF", key="ic_pdf_btn", use_container_width=True):
+        try:
+            from pdf_export import generate_investment_committee_pdf
+            from agents.agent_runner import AgentRunner as _AR
+            from agents.data_feed import get_agent_context
+            from scanners.defillama import fetch_protocol_treasuries as _fpt
+            from config import BRAND_NAME
+
+            _ar = _AR()
+            _ag_state  = _ar.get_state()
+            _positions = _ar.get_open_positions()
+            _ag_stats  = _ar.get_paper_stats()
+            _ag_stats["mode"] = _ag_state.get("mode", "PAPER")
+
+            # Minimal market context
+            try:
+                _mctx = get_agent_context(
+                    wallet_balance_usd=_ag_state.get("wallet_usd", 10000.0),
+                    daily_pnl_usd=0.0,
+                    open_positions=_positions,
+                    operating_mode=_ag_state.get("mode", "PAPER"),
+                )
+            except Exception:
+                _mctx = {}
+
+            _opps  = _mctx.get("top_opportunities", [])
+            _treas = _fpt()
+
+            _pdf_bytes = generate_investment_committee_pdf(
+                portfolio_positions = _positions,
+                top_opportunities   = _opps,
+                market_context      = _mctx.get("market_context", {}),
+                agent_stats         = _ag_stats,
+                treasury_data       = _treas,
+                family_office_name  = str(BRAND_NAME) if BRAND_NAME else "Family Office",
+            )
+            _ic_fname = f"investment_committee_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.pdf"
+            st.download_button(
+                label="Download Investment Committee PDF",
+                data=_pdf_bytes,
+                file_name=_ic_fname,
+                mime="application/pdf",
+                key="ic_pdf_download",
+                use_container_width=True,
+            )
+            st.success("Report generated successfully.")
+        except ImportError as _ie:
+            st.error(f"PDF generation requires reportlab: pip install reportlab ({_ie})")
+        except Exception as _ic_err:
+            st.error(f"Report generation failed: {_ic_err}")
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
 with _ctrl_tab_wallet:
