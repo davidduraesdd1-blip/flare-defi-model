@@ -2320,6 +2320,52 @@ with _tab_yield:
         "Concentrated Liquidity Range Monitor",
         "Uniswap v3 / Aerodrome CL — check if your position is in-range and earning fees",
     )
+
+    # ── Item 39: LP In-Range Alert Tracker ───────────────────────────────────
+    # Persistent session-state list of tracked CL positions with auto-alert banners
+    if "cl_tracked_positions" not in st.session_state:
+        st.session_state["cl_tracked_positions"] = []
+
+    _tracked = st.session_state["cl_tracked_positions"]
+    if _tracked:
+        _oor_count = 0
+        for _tp in _tracked:
+            _tp_cur  = float(_tp.get("current_price", 0))
+            _tp_low  = float(_tp.get("range_low", 0))
+            _tp_high = float(_tp.get("range_high", float("inf")))
+            _tp_in   = _tp_low <= _tp_cur <= _tp_high
+            if not _tp_in:
+                _oor_count += 1
+                _dist = ((_tp_low - _tp_cur) / _tp_cur * 100 if _tp_cur < _tp_low
+                         else (_tp_cur - _tp_high) / _tp_cur * 100)
+                st.warning(
+                    f"**{_html.escape(_tp.get('pair', 'Unknown'))}** out of range — "
+                    f"price ${_tp_cur:,.2f} is {_dist:.1f}% outside range "
+                    f"(${_tp_low:,.0f}–${_tp_high:,.0f}). Fee income stopped.",
+                    icon="🚨",
+                )
+        if _oor_count == 0:
+            st.success(
+                f"All {len(_tracked)} tracked CL position(s) are in range and earning fees.",
+                icon="✅",
+            )
+        with st.expander(f"Manage {len(_tracked)} tracked position(s)", expanded=False):
+            for _i, _tp in enumerate(_tracked):
+                _tc1, _tc2 = st.columns([5, 1])
+                with _tc1:
+                    _tp_in2 = (float(_tp.get("range_low", 0))
+                               <= float(_tp.get("current_price", 0))
+                               <= float(_tp.get("range_high", 0)))
+                    _st_sym = "▲ In range" if _tp_in2 else "▼ Out of range"
+                    st.write(
+                        f"**{_tp.get('pair')}** | "
+                        f"${_tp.get('range_low'):,.0f}–${_tp.get('range_high'):,.0f} | "
+                        f"Current: ${_tp.get('current_price'):,.2f} | {_st_sym}"
+                    )
+                with _tc2:
+                    if st.button("Remove", key=f"cl_remove_{_i}"):
+                        st.session_state["cl_tracked_positions"].pop(_i)
+                        st.rerun()
     
     render_what_this_means(
         "Concentrated liquidity (CL) pools let you earn higher fees but ONLY while the price "
@@ -2403,6 +2449,29 @@ with _tab_yield:
                 showlegend=False,
             )
             st.plotly_chart(_fig_cl, width="stretch", config={"displayModeBar": False})
+
+            # Item 39: add to alert tracker
+            if st.button("Track this position (add to alert list)", key="cl_track_btn"):
+                _new_pos = {
+                    "pair":          _cl_token_pair,
+                    "range_low":     _cl_range_low,
+                    "range_high":    _cl_range_high,
+                    "current_price": _cl_current,
+                    "deposit_usd":   _cl_deposit,
+                    "fee_apy":       _cl_fee_apy,
+                }
+                # Avoid exact duplicates
+                _already = any(
+                    p["pair"] == _new_pos["pair"]
+                    and p["range_low"] == _new_pos["range_low"]
+                    and p["range_high"] == _new_pos["range_high"]
+                    for p in st.session_state.get("cl_tracked_positions", [])
+                )
+                if not _already:
+                    st.session_state.setdefault("cl_tracked_positions", []).append(_new_pos)
+                    st.success(f"Position added to alert tracker. Alerts show at the top of this section.")
+                else:
+                    st.info("This position is already tracked.")
         else:
             st.warning("Range LOW must be less than Range HIGH.")
     
