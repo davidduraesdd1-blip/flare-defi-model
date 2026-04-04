@@ -416,11 +416,10 @@ with _tab_yield:
             else:
                 rows = []
                 for opp in opps[:8]:
-                    kf            = float(opp.get("kelly_fraction", 0))
-                    grade, _      = risk_score_to_grade(opp.get("risk_score", 5))
-                    fee_apy       = float(opp.get("fee_apy", 0))
-                    reward_apy    = float(opp.get("reward_apy", 0))
-                    reward_apy_raw= float(opp.get("reward_apy_raw", 0))
+                    kf         = float(opp.get("kelly_fraction", 0))
+                    grade, _   = risk_score_to_grade(opp.get("risk_score", 5))
+                    fee_apy    = float(opp.get("fee_apy", 0))
+                    reward_apy = float(opp.get("reward_apy", 0))
 
                     # Reward badge: hide when tiny or expired; warn when expiring
                     if reward_apy < _reward_hide_pct or _days_left <= _reward_gray_days:
