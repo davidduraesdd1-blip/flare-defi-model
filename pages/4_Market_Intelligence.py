@@ -889,6 +889,131 @@ except Exception as _opt_err:
 
 # end _t_onchain
 
+# ─── Item 37: In/Out of the Money metric for tracked coins ───────────────────
+with _t_onchain:
+    st.divider()
+    render_section_header(
+        "In / Out of the Money",
+        "What % of tracked coin holders are currently profitable (above average cost basis)",
+    )
+
+    @st.cache_data(ttl=1800)
+    def _fetch_iotm_data() -> list[dict]:
+        """Fetch price, ATH, and ATH change % from CoinGecko for tracked coins.
+        Computes an IOTM proxy score: % of holders estimated in profit.
+        Uses: distance from ATH as a proxy for holder profitability.
+        Methodology: CoinGecko ATH + ath_change_percentage + market_data.
+        """
+        from config import MUST_HAVE_COINS
+        import urllib.request, json as _json
+        _IOTM_COINS = {
+            "xrp": "XRP", "flare-networks": "FLR", "ripple": "XRP",
+            "stellar": "XLM", "xdc-network": "XDC", "hedera-hashgraph": "HBAR",
+            "stronghold-token": "SHX", "zebec-protocol": "ZBCN",
+            "bitcoin": "BTC", "ethereum": "ETH",
+        }
+        _ids = list(_IOTM_COINS.keys())
+        try:
+            _url = (
+                "https://api.coingecko.com/api/v3/coins/markets"
+                f"?vs_currency=usd&ids={','.join(_ids)}"
+                "&order=market_cap_desc&per_page=30&page=1"
+                "&price_change_percentage=7d,30d&locale=en"
+            )
+            with urllib.request.urlopen(_url, timeout=10) as _r:
+                _raw = _json.loads(_r.read())
+        except Exception:
+            return []
+
+        results = []
+        for coin in _raw:
+            _sym    = (_coin_id := coin.get("id", ""))
+            _symbol = _IOTM_COINS.get(_sym, coin.get("symbol", "").upper())
+            _price  = float(coin.get("current_price") or 0)
+            _ath    = float(coin.get("ath") or 0)
+            _ath_ch = float(coin.get("ath_change_percentage") or 0)  # negative = below ATH
+            _atl    = float(coin.get("atl") or 0.000001)
+            _p7d    = float(coin.get("price_change_percentage_7d_in_currency") or 0)
+            _p30d   = float(coin.get("price_change_percentage_30d_in_currency") or 0)
+            if _price <= 0 or _ath <= 0:
+                continue
+
+            # IOTM proxy: linear scale between ATL (0% in money) and ATH (100% in money)
+            # Accounts for fact that most buying happened when price was closer to ATH
+            _ath_distance = abs(_ath_ch) / 100.0  # 0 = at ATH, 1+ = far below
+            # Rough IOTM estimate: at ATH = 100% in money, 50% below ATH = ~35% in money
+            _iotm_pct = max(0.0, min(100.0, 100.0 * (1 - _ath_distance * 0.65)))
+
+            _status = ("In the Money" if _iotm_pct >= 60
+                       else "Mixed" if _iotm_pct >= 35
+                       else "Out of the Money")
+
+            results.append({
+                "symbol":    _symbol,
+                "name":      coin.get("name", _symbol),
+                "price":     _price,
+                "ath":       _ath,
+                "ath_pct":   round(_ath_ch, 1),
+                "iotm_pct":  round(_iotm_pct, 1),
+                "status":    _status,
+                "7d_chg":    round(_p7d, 2),
+                "30d_chg":   round(_p30d, 2),
+            })
+        results.sort(key=lambda x: x["iotm_pct"], reverse=True)
+        return results
+
+    _iotm_data = _fetch_iotm_data()
+    if not _iotm_data:
+        st.info("In/Out of the Money data unavailable — CoinGecko API may be rate-limited.")
+    else:
+        # Summary metrics
+        _itm  = [c for c in _iotm_data if c["status"] == "In the Money"]
+        _ootm = [c for c in _iotm_data if c["status"] == "Out of the Money"]
+        _mix  = [c for c in _iotm_data if c["status"] == "Mixed"]
+        _ic1, _ic2, _ic3 = st.columns(3)
+        with _ic1:
+            st.metric("In the Money", len(_itm),
+                      help="Coins where estimated >60% of holders are in profit")
+        with _ic2:
+            st.metric("Mixed", len(_mix),
+                      help="35-60% of holders estimated in profit")
+        with _ic3:
+            st.metric("Out of the Money", len(_ootm),
+                      help="Estimated <35% of holders in profit")
+
+        # IOTM table
+        _iotm_rows = []
+        for _c in _iotm_data:
+            _s = _c["status"]
+            _sym_col = ("▲ " if _s == "In the Money" else
+                        "■ " if _s == "Mixed" else "▼ ")
+            _iotm_rows.append({
+                "Coin":          _c["symbol"],
+                "Price":         f"${_c['price']:,.4g}",
+                "ATH":           f"${_c['ath']:,.4g}",
+                "From ATH":      f"{_c['ath_pct']:.1f}%",
+                "IOTM Est.":     f"{_c['iotm_pct']:.0f}%",
+                "Status":        f"{_sym_col}{_s}",
+                "7d Change":     f"{_c['7d_chg']:+.1f}%",
+                "30d Change":    f"{_c['30d_chg']:+.1f}%",
+            })
+        st.dataframe(pd.DataFrame(_iotm_rows), use_container_width=True, hide_index=True)
+
+        render_what_this_means(
+            "The 'In the Money' score estimates how many people who bought this coin are "
+            "currently making a profit. When a coin is close to its all-time high, almost "
+            "everyone is in profit. When it's far below the all-time high, most holders "
+            "are at a loss. Coins where most holders are at a loss often see selling pressure "
+            "as prices recover — people sell to break even.",
+            title="What is In/Out of the Money?",
+            intermediate_message="IOTM proxy: distance from ATH. High IOTM = potential sell pressure at recovery. Low IOTM = capitulation zone.",
+        )
+        st.caption(
+            "IOTM is a proxy estimate based on ATH distance. "
+            "True IOTM requires on-chain cost basis data (Glassnode/IntoTheBlock). "
+            "Source: CoinGecko · Cached 30 min."
+        )
+
 
 # ── Ecosystem tab — second block (Intent Mapper + Protocol Revenue + RWA Credit) ──
 with _t_eco:
@@ -1197,3 +1322,159 @@ if pro_mode:
 
     except Exception as _rwa_err:
         st.caption(f"RWA credit data unavailable: {_rwa_err}")
+
+
+# ─── Item 35: Unified Flare Ecosystem Panel ──────────────────────────────────
+
+with _t_eco:
+    st.divider()
+    render_section_header(
+        "Unified Flare Ecosystem",
+        "All whitelisted Flare protocols — TVL, APY, and agent-executable status in one view",
+    )
+
+    @st.cache_data(ttl=900)
+    def _cached_flare_eco():
+        try:
+            from scanners.defillama import fetch_yields_pools as _fup
+            _pools = _fup(min_tvl_usd=100_000) or []
+            return [p for p in _pools if str(p.get("chain", "")).lower() == "flare"]
+        except Exception:
+            return []
+
+    _flare_eco_pools = _cached_flare_eco()
+    # Known Flare whitelisted protocols
+    _FLARE_PROTO_INFO = {
+        "kinetic":   {"full_name": "Kinetic Finance",  "type": "Lending"},
+        "blazeswap": {"full_name": "BlazeSwap",        "type": "AMM DEX"},
+        "sparkdex":  {"full_name": "SparkDEX",         "type": "Perp DEX"},
+        "enosys":    {"full_name": "Enosys",            "type": "Liquid Staking"},
+        "clearpool": {"full_name": "Clearpool",         "type": "Institutional Lending"},
+        "spectra":   {"full_name": "Spectra Finance",   "type": "Fixed Rate Yield"},
+    }
+    try:
+        from agents.config import FLARE_PROTOCOL_WHITELIST as _FPW
+    except Exception:
+        _FPW = frozenset(_FLARE_PROTO_INFO.keys())
+
+    if _flare_eco_pools:
+        _eco_by_proto: dict = {}
+        for _ep in _flare_eco_pools:
+            _pr = str(_ep.get("project") or _ep.get("protocol") or "").lower()
+            if _pr not in _eco_by_proto:
+                _eco_by_proto[_pr] = []
+            _eco_by_proto[_pr].append(_ep)
+
+        _eco_rows = []
+        for _proto, _info in _FLARE_PROTO_INFO.items():
+            _ppools = _eco_by_proto.get(_proto, [])
+            _tvl    = sum(float(p.get("tvlUsd") or 0) for p in _ppools)
+            _best_a = max((float(p.get("apy") or 0) for p in _ppools), default=0.0)
+            _agent  = "✓ Agent" if _proto in _FPW else "—"
+            _tvl_s  = (f"${_tvl/1e6:.1f}M" if _tvl >= 1_000_000
+                       else f"${_tvl/1e3:.0f}K" if _tvl >= 1_000 else "—")
+            _eco_rows.append({
+                "Protocol":   _info["full_name"],
+                "Type":       _info["type"],
+                "TVL":        _tvl_s,
+                "Best APY":   f"{_best_a:.1f}%" if _best_a > 0 else "—",
+                "Pools":      len(_ppools),
+                "Agent":      _agent,
+            })
+        st.dataframe(pd.DataFrame(_eco_rows), use_container_width=True, hide_index=True)
+        st.caption("Source: DeFiLlama yields · Flare chain · Cached 15 min. Agent = executable by AI agent.")
+    else:
+        # Static fallback when DeFiLlama is unavailable
+        _eco_static = [
+            {"Protocol": "Kinetic Finance",   "Type": "Lending",              "TVL": "~$64M", "Best APY": "~8%",   "Pools": 4, "Agent": "✓ Agent"},
+            {"Protocol": "BlazeSwap",         "Type": "AMM DEX",              "TVL": "~$12M", "Best APY": "~15%",  "Pools": 6, "Agent": "✓ Agent"},
+            {"Protocol": "SparkDEX",          "Type": "Perp DEX",             "TVL": "~$8M",  "Best APY": "~25%",  "Pools": 3, "Agent": "✓ Agent"},
+            {"Protocol": "Enosys",            "Type": "Liquid Staking",       "TVL": "~$30M", "Best APY": "~5%",   "Pools": 2, "Agent": "✓ Agent"},
+            {"Protocol": "Clearpool",         "Type": "Institutional Lending","TVL": "~$46M", "Best APY": "~11%",  "Pools": 2, "Agent": "✓ Agent"},
+            {"Protocol": "Spectra Finance",   "Type": "Fixed Rate Yield",     "TVL": "~$5M",  "Best APY": "~18%",  "Pools": 3, "Agent": "✓ Agent"},
+        ]
+        st.dataframe(pd.DataFrame(_eco_static), use_container_width=True, hide_index=True)
+        st.caption("Showing research-based estimates — DeFiLlama live data unavailable.")
+
+
+# ─── Item 36: XRPL AMM + EVM Sidechain Unified Tracking ─────────────────────
+
+with _t_eco:
+    st.divider()
+    render_section_header(
+        "XRPL AMM & EVM Sidechain Tracker",
+        "XRP Ledger AMM pools + Flare EVM bridge activity — unified cross-chain view",
+    )
+
+    @st.cache_data(ttl=900)
+    def _cached_xrpl_pools():
+        try:
+            from scanners.defillama import fetch_yields_pools as _fup
+            _all = _fup(min_tvl_usd=10_000) or []
+            _xrpl = [p for p in _all if str(p.get("chain", "")).lower() in ("xrp", "xrpl")]
+            return _xrpl
+        except Exception:
+            return []
+
+    _xrpl_pools = _cached_xrpl_pools()
+
+    # XRPL AMM Pools
+    st.markdown(
+        "<div style='font-size:0.85rem;font-weight:600;color:#00d4aa;margin-bottom:8px'>"
+        "XRPL Native AMM Pools</div>",
+        unsafe_allow_html=True,
+    )
+    if _xrpl_pools:
+        _xrpl_rows = []
+        for _xp in _xrpl_pools:
+            _xpro = str(_xp.get("project") or "xrpl_amm")
+            _xapy = float(_xp.get("apy") or 0)
+            _xtvl = float(_xp.get("tvlUsd") or 0)
+            _xsym = str(_xp.get("symbol") or "")
+            _xil  = str(_xp.get("ilRisk") or "no").lower()
+            _xrpl_rows.append({
+                "Pool":     _xsym,
+                "Protocol": _xpro.replace("_", " ").title(),
+                "APY":      f"{_xapy:.1f}%",
+                "TVL":      (f"${_xtvl/1e6:.1f}M" if _xtvl >= 1e6 else f"${_xtvl:,.0f}"),
+                "IL Risk":  "Yes" if "yes" in _xil else "No",
+            })
+        st.dataframe(pd.DataFrame(_xrpl_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("XRPL AMM pool data unavailable — using research estimates below.")
+        _xrpl_static = [
+            {"Pool": "XRP/USDC", "Protocol": "XRPL AMM", "APY": "~3-8%", "TVL": "~$5M+", "IL Risk": "Yes"},
+            {"Pool": "XRP/BTC",  "Protocol": "XRPL AMM", "APY": "~2-5%", "TVL": "~$2M+", "IL Risk": "Yes"},
+            {"Pool": "XRP/ETH",  "Protocol": "XRPL AMM", "APY": "~2-6%", "TVL": "~$1M+", "IL Risk": "Yes"},
+        ]
+        st.dataframe(pd.DataFrame(_xrpl_static), use_container_width=True, hide_index=True)
+
+    # EVM Sidechain bridge flows: Flare ↔ Ethereum + Flare ↔ XRP
+    st.markdown(
+        "<div style='font-size:0.85rem;font-weight:600;color:#00d4aa;margin:12px 0 8px'>"
+        "Flare EVM Bridge Activity (7-Day Flow)</div>",
+        unsafe_allow_html=True,
+    )
+    try:
+        from scanners.defillama import fetch_bridge_flows as _fbf
+        _xrpl_flows = _fbf(["Flare", "Ethereum", "XRP"])
+        if _xrpl_flows:
+            _flow_r = []
+            for _f in _xrpl_flows:
+                _s = _f.get("flow_signal", "STABLE")
+                _a = "▲" if _s == "INFLOW" else ("▼" if _s == "OUTFLOW" else "■")
+                _d7 = _f.get("change_7d_pct", 0) or 0
+                _flow_r.append({
+                    "Chain":    _f.get("chain", ""),
+                    "TVL":      (f"${_f.get('tvl_usd', 0)/1e9:.2f}B" if _f.get("tvl_usd", 0) >= 1e9
+                                 else f"${_f.get('tvl_usd', 0)/1e6:.0f}M"),
+                    "7d Flow":  f"{_a} {abs(_d7):.1f}%",
+                    "Signal":   _s,
+                })
+            st.dataframe(pd.DataFrame(_flow_r), use_container_width=True, hide_index=True)
+        else:
+            st.caption("Bridge flow data unavailable.")
+    except Exception:
+        st.caption("Bridge flow data unavailable.")
+    st.caption("XRPL AMM: native AMM (XRPL 1.12+) · no wrapped tokens · instant settlement. "
+               "Flare EVM: cross-chain via LayerZero/Wanchain · FAssets bridge (FLR↔XRP).")
