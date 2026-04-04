@@ -154,7 +154,49 @@ try:
             st.info("Protocol risk scores are shown in the Opportunities tab — look for the 'Risk Score' column in the Multi-Chain Pools table.")
 
         elif _primary == "BRIDGE":
-            st.info("Use Li.Fi or Stargate for cross-chain transfers. TVL and bridge flow data is in the Opportunities tab (TVL Change Alerts section).")
+            st.markdown(
+                "<div style='font-size:0.9rem;color:#94a3b8;margin-bottom:8px'>"
+                "Cross-chain bridge options for Flare Network — capital flow data from DeFiLlama"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+            # Show bridge recommendations and live chain flow data
+            _bridge_protocols = [
+                {"name": "LayerZero", "chains": "ETH → Flare, Base → Flare", "type": "Message passing + token bridge", "url_hint": "layerzero.network"},
+                {"name": "Li.Fi",     "chains": "15+ EVM chains incl. Flare", "type": "DEX aggregator + bridge router", "url_hint": "li.fi"},
+                {"name": "Stargate",  "chains": "ETH, BSC, Polygon, Arbitrum", "type": "Liquidity bridge (USDC/USDT)", "url_hint": "stargate.finance"},
+                {"name": "Wanchain",  "chains": "XRP Ledger ↔ Flare, ETH ↔ Flare", "type": "Cross-chain atomic swaps", "url_hint": "wanchain.org"},
+            ]
+            _bp_rows = [
+                {"Bridge": r["name"], "Supported Routes": r["chains"], "Type": r["type"]}
+                for r in _bridge_protocols
+            ]
+            st.dataframe(pd.DataFrame(_bp_rows), use_container_width=True, hide_index=True)
+            # Live capital flow data from DeFiLlama
+            try:
+                from scanners.defillama import fetch_bridge_flows as _fetch_bf
+                _flows = _fetch_bf(["Flare", "Ethereum", "Base", "Arbitrum", "Polygon"])
+                if _flows:
+                    st.markdown(
+                        "<div style='font-size:0.8rem;color:#64748b;margin:10px 0 4px'>Live chain TVL flows (7-day):</div>",
+                        unsafe_allow_html=True,
+                    )
+                    _flow_rows = []
+                    for _f in _flows:
+                        _sig   = _f.get("flow_signal", "STABLE")
+                        _arrow = "▲" if _sig == "INFLOW" else ("▼" if _sig == "OUTFLOW" else "■")
+                        _col   = "#22c55e" if _sig == "INFLOW" else ("#ef4444" if _sig == "OUTFLOW" else "#94a3b8")
+                        _d7    = _f.get("change_7d_pct", 0) or 0
+                        _flow_rows.append({
+                            "Chain":    _f.get("chain", ""),
+                            "TVL":      f"${_f.get('tvl_usd', 0)/1e9:.2f}B" if _f.get("tvl_usd", 0) >= 1e9
+                                        else f"${_f.get('tvl_usd', 0)/1e6:.0f}M",
+                            "7d Flow":  f"{_arrow} {abs(_d7):.1f}%",
+                            "Signal":   _sig,
+                        })
+                    st.dataframe(pd.DataFrame(_flow_rows), use_container_width=True, hide_index=True)
+            except Exception:
+                pass
 
 except Exception as _assist_exc:
     st.info("DeFi Assistant unavailable. Check logs for details.")
