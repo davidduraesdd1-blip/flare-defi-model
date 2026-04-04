@@ -112,6 +112,20 @@ def _cached_flare_gecko_pools():
     return fetch_flare_gecko_pools(pages=5, min_tvl_usd=5_000)
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_bridge_flows():
+    """Streamlit-managed bridge flow cache (TTL=10 min).
+
+    Explicitly pops the module-level _cache entry in defillama.py before
+    calling fetch_bridge_flows() so that stale zeros from a previous
+    (now-fixed) implementation never survive Streamlit hot-reloads.
+    Streamlit's @st.cache_data is the authoritative cache for this data.
+    """
+    import scanners.defillama as _dl
+    _dl._cache.pop("bridge_flows", None)
+    return _dl.fetch_bridge_flows()
+
+
 @st.cache_data(ttl=300)
 def _cached_erc4626_yield_data():
     """Cached wrapper for fetch_erc4626_yield_data(). TTL=5 min."""
@@ -1465,7 +1479,7 @@ with _tab_yield:
                 except Exception:
                     _flows = []
             else:
-                _flows = fetch_bridge_flows()
+                _flows = _cached_bridge_flows()
     
         if _flows:
             _fl_cols = st.columns(min(len(_flows), 4))
