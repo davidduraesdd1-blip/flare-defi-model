@@ -57,9 +57,19 @@ AUDITED_ONLY:            bool  = True        # reject unaudited protocols uncond
 # ONLY these protocols can receive execution instructions.
 # Adding a new protocol requires a code change here + approval. Never dynamic.
 FLARE_PROTOCOL_WHITELIST: frozenset = frozenset({
-    "kinetic",    # Lending — lowest risk, start here
+    "kinetic",    # Lending — lowest risk, start here (Compound V2 fork, audited)
     "blazeswap",  # DEX AMM — Uniswap V2 fork, audited
     "sparkdex",   # DEX CL — Uniswap V3 fork, audited
+    # ── Tier 2 additions — approved in sprint (David, 2026-04-03) ──
+    "enosys",     # Native Flare DEX — SparkDEX/BlazeSwap competitor, audited by Certik
+    "clearpool",  # Permissioned credit lending — institutional borrowers, audited
+    "spectra",    # Yield tokenization (PT/YT/LP) — Pendle fork, audited by Spearbit
+                  # SPECTRA SPECIAL RULES (maturity-aware lifecycle required):
+                  # 1. agent must track maturity_date on every Spectra position
+                  # 2. do NOT enter PT/YT positions within 14 days of maturity
+                  # 3. auto-exit LP positions 7 days before pool maturity
+                  # 4. PT positions held to maturity redeem at full principal — no early exit needed
+                  # 5. YT positions lose all value at maturity — exit before then
 })
 
 XRPL_PROTOCOL_WHITELIST: frozenset = frozenset({
@@ -68,6 +78,18 @@ XRPL_PROTOCOL_WHITELIST: frozenset = frozenset({
 })
 
 ALL_WHITELISTED_PROTOCOLS: frozenset = FLARE_PROTOCOL_WHITELIST | XRPL_PROTOCOL_WHITELIST
+
+# ─── Spectra Protocol Configuration ──────────────────────────────────────────
+# Spectra is a yield tokenization protocol (Pendle-fork on Flare).
+# Each market has a fixed maturity date. PT = principal token (redeems at par).
+# YT = yield token (loses all value at maturity — MUST exit before expiry).
+# LP = liquidity position (exposed to both PT and YT price risk).
+#
+# Agent lifecycle rules (enforced by risk_guard.validate()):
+SPECTRA_MIN_DAYS_TO_MATURITY:  int   = 14    # refuse new PT/YT entries within 14 days
+SPECTRA_LP_EXIT_DAYS_BEFORE:   int   = 7     # auto-exit LP positions 7 days before maturity
+SPECTRA_YT_EXIT_DAYS_BEFORE:   int   = 21    # exit YT positions 3 weeks before maturity
+SPECTRA_POSITION_TYPES: frozenset = frozenset({"PT", "YT", "LP"})
 
 # ─── Whitelisted Actions ──────────────────────────────────────────────────────
 ALLOWED_ACTIONS: frozenset = frozenset({
