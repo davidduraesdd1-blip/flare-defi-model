@@ -22,6 +22,14 @@ from agents.config import (
     MAX_DAILY_LOSS_PCT, MAX_OPEN_POSITIONS,
 )
 
+try:
+    from utils.http import _SESSION as _http_session, coingecko_limiter as _cg_limiter
+    _HTTP_OK = True
+except ImportError:
+    _HTTP_OK = False
+    _http_session = None
+    _cg_limiter = None
+
 # Use existing scanners — they already have caching + rate limiting
 try:
     from scanners.defillama import fetch_yields_pools
@@ -44,6 +52,20 @@ except (ImportError, Exception):
     _FG_OK = False
     _fetch_fg_history = None
 
+# Composite signal model
+try:
+    from models.composite_signal import compute_composite_signal
+    _COMPOSITE_OK = True
+except ImportError:
+    _COMPOSITE_OK = False
+
+# Macro data feeds (DXY, VIX, CPI, 2Y10Y + on-chain MVRV/SOPR/Ribbons/Puell)
+try:
+    from macro_feeds import fetch_all_macro_data, fetch_coinmetrics_onchain
+    _MACRO_OK = True
+except ImportError:
+    _MACRO_OK = False
+
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -57,24 +79,34 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
 
 
 def _get_live_prices() -> dict:
-    """Fetch live FLR and XRP prices from CoinGecko fallback."""
-    import requests
+    """Fetch live FLR and XRP prices from CoinGecko, respecting the shared rate limiter."""
+    fallback = {k: FALLBACK_PRICES.get(k, 0) for k in ("FLR", "XRP", "FXRP")}
     try:
-        r = requests.get(
-            "https://api.coingecko.com/api/v3/simple/price",
-            params={"ids": "flare-networks,ripple", "vs_currencies": "usd"},
-            timeout=6,
-        )
+        if _HTTP_OK and _cg_limiter is not None and _http_session is not None:
+            _cg_limiter.wait()
+            r = _http_session.get(
+                "https://api.coingecko.com/api/v3/simple/price",
+                params={"ids": "flare-networks,ripple", "vs_currencies": "usd"},
+                timeout=6,
+            )
+        else:
+            import requests as _requests
+            r = _requests.get(
+                "https://api.coingecko.com/api/v3/simple/price",
+                params={"ids": "flare-networks,ripple", "vs_currencies": "usd"},
+                timeout=6,
+            )
         if r.status_code == 200:
             data = r.json()
+            xrp = _safe_float(data.get("ripple", {}).get("usd"), FALLBACK_PRICES.get("XRP", 2.30))
             return {
                 "FLR":  _safe_float(data.get("flare-networks", {}).get("usd"), FALLBACK_PRICES.get("FLR", 0.018)),
-                "XRP":  _safe_float(data.get("ripple", {}).get("usd"), FALLBACK_PRICES.get("XRP", 2.30)),
-                "FXRP": _safe_float(data.get("ripple", {}).get("usd"), FALLBACK_PRICES.get("XRP", 2.30)) * 0.998,
+                "XRP":  xrp,
+                "FXRP": xrp * 0.998,
             }
     except Exception:
         pass
-    return {k: FALLBACK_PRICES.get(k, 0) for k in ("FLR", "XRP", "FXRP")}
+    return fallback
 
 
 def _get_top_opportunities(n: int = 5) -> list[dict]:
@@ -82,7 +114,9 @@ def _get_top_opportunities(n: int = 5) -> list[dict]:
     if not _LLAMA_OK:
         return []
     try:
-        pools = fetch_yields_pools(chain="Flare", min_tvl=1_000_000) or []
+        pools = fetch_yields_pools(min_tvl_usd=1_000_000) or []
+        # Filter to Flare chain only (fetch_yields_pools has no chain param)
+        pools = [p for p in pools if str(p.get("chain", "")).lower() == "flare"]
         out = []
         for p in pools[:50]:
             proto = str(p.get("project") or p.get("protocol") or "").lower()
@@ -200,6 +234,22 @@ def get_agent_context(
     opps        = _get_top_opportunities(n=5)
     fear_greed  = _get_fear_greed()
 
+    # Composite market environment signal (3-layer: macro + sentiment + on-chain)
+    composite_signal: dict = {}
+    if _COMPOSITE_OK and _MACRO_OK:
+        try:
+            macro_data   = fetch_all_macro_data()
+            onchain_data = fetch_coinmetrics_onchain(days=400)
+            fg_val       = fear_greed.get("value")
+            composite_signal = compute_composite_signal(
+                macro_data    = macro_data,
+                onchain_data  = onchain_data,
+                fg_value      = fg_val,
+                put_call_ratio= None,   # populated when Deribit data available
+            )
+        except Exception:
+            composite_signal = {}
+
     ctx = {
         "timestamp":       _utcnow(),
         "operating_mode":  operating_mode,
@@ -220,6 +270,7 @@ def get_agent_context(
             "flr_price_usd":     prices.get("FLR", 0),
             "xrp_price_usd":     prices.get("XRP", 0),
             "fxrp_price_usd":    prices.get("FXRP", 0),
+            "composite_signal":  composite_signal,
         },
         "limits": {
             "max_trade_usd":            round(wallet_balance_usd * MAX_TRADE_SIZE_PCT, 2),

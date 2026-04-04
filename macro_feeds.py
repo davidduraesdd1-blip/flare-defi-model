@@ -70,29 +70,57 @@ def clear_macro_caches() -> None:
 _FRED_SERIES = {
     "m2_supply_bn":      "M2SL",
     "ten_yr_yield":      "DGS10",
+    "two_yr_yield":      "DGS2",          # 2-year Treasury (for 2Y10Y spread)
     "ism_manufacturing": "NAPM",
     "wti_crude":         "DCOILWTICO",
+    "yield_spread_2y10y": "T10Y2Y",       # Direct 2Y-10Y spread from FRED (positive = normal curve)
+    "cpi_index":         "CPIAUCSL",      # CPI All Urban Consumers — used to compute YoY%
 }
 
 _FRED_FALLBACKS = {
-    "m2_supply_bn":      21_500.0,
-    "ten_yr_yield":          4.35,
-    "ism_manufacturing":    52.0,
-    "wti_crude":            67.5,
+    "m2_supply_bn":       21_500.0,
+    "ten_yr_yield":           4.35,
+    "two_yr_yield":           4.70,
+    "ism_manufacturing":     52.0,
+    "wti_crude":             67.5,
+    "yield_spread_2y10y":    -0.35,   # Slightly inverted as of early 2026
+    "cpi_yoy":                3.1,    # CPI YoY % — computed from cpi_index history
+    "cpi_index":            314.0,    # Raw index fallback
 }
 
 
 def _fetch_single_fred(key: str, series_id: str) -> tuple[str, float | None]:
-    """Fetch a single FRED series CSV and return (key, latest_value)."""
+    """Fetch a single FRED series CSV and return (key, latest_value).
+    For CPIAUCSL: returns the YoY% change as 'cpi_yoy' and raw index as 'cpi_index'.
+    """
     url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
     _FRED_LIMITER.acquire()
     try:
         resp = _SESSION.get(url, timeout=10)
         if resp.status_code == 200:
-            for line in reversed(resp.text.strip().split("\n")[1:]):
-                parts = line.split(",")
-                if len(parts) == 2 and parts[1].strip() not in (".", ""):
-                    return key, round(float(parts[1].strip()), 4)
+            lines = [l for l in resp.text.strip().split("\n")[1:] if l.strip()]
+            # For CPI: need 13 valid rows to compute YoY
+            if series_id == "CPIAUCSL":
+                valid = []
+                for line in reversed(lines):
+                    parts = line.split(",")
+                    if len(parts) == 2 and parts[1].strip() not in (".", ""):
+                        try:
+                            valid.append(float(parts[1].strip()))
+                        except ValueError:
+                            pass
+                    if len(valid) >= 13:
+                        break
+                if len(valid) >= 13:
+                    yoy = (valid[0] / valid[12] - 1) * 100
+                    return key, round(yoy, 2)   # key = "cpi_index" but we return YoY
+                elif valid:
+                    return key, round(valid[0], 2)
+            else:
+                for line in reversed(lines):
+                    parts = line.split(",")
+                    if len(parts) == 2 and parts[1].strip() not in (".", ""):
+                        return key, round(float(parts[1].strip()), 4)
     except Exception as e:
         logger.debug("[FRED] %s: %s", series_id, e)
     return key, None
@@ -104,7 +132,7 @@ def fetch_fred_macro() -> dict[str, Any]:
     """
     def _fetch():
         result: dict = {}
-        with ThreadPoolExecutor(max_workers=4) as ex:
+        with ThreadPoolExecutor(max_workers=7) as ex:
             futs = {
                 ex.submit(_fetch_single_fred, key, series_id): key
                 for key, series_id in _FRED_SERIES.items()
@@ -119,6 +147,18 @@ def fetch_fred_macro() -> dict[str, Any]:
                     logger.debug("[FRED] parallel fetch for %s failed: %s", key, e)
         if not result:
             return None
+
+        # CPI: _fetch_single_fred returned YoY% under key "cpi_index" — rename it
+        if "cpi_index" in result:
+            result["cpi_yoy"] = result.pop("cpi_index")
+
+        # Compute 2Y10Y spread from individual yields if T10Y2Y direct series failed
+        if "yield_spread_2y10y" not in result:
+            t10 = result.get("ten_yr_yield")
+            t2  = result.get("two_yr_yield")
+            if t10 is not None and t2 is not None:
+                result["yield_spread_2y10y"] = round(t10 - t2, 4)
+
         for k, v in _FRED_FALLBACKS.items():
             result.setdefault(k, v)
         result["source"]    = "FRED"
@@ -350,7 +390,9 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             base_url,
             params={
                 "assets":     "btc",
-                "metrics":    "CapMrktCurUSD,CapRealUSD,SoprNtv,AdrActCnt",
+                # HashRate for Hash Ribbons (Charles Edwards 2019)
+                # RevNtv for Puell Multiple (David Puell 2019)
+                "metrics":    "CapMrktCurUSD,CapRealUSD,SoprNtv,AdrActCnt,HashRate,RevNtv",
                 "start_time": start,
                 "frequency":  "1d",
                 "page_size":  days + 10,
@@ -368,6 +410,8 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
 
         mvrv_vals, mvrv_dates, real_caps = [], [], []
         sopr_vals, sopr_dates, active_addrs = [], [], []
+        hash_vals, hash_dates = [], []
+        rev_vals,  rev_dates  = [], []
 
         for row in rows:
             t  = row.get("time", "")[:10]
@@ -375,6 +419,9 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             rc = row.get("CapRealUSD")
             sp = row.get("SoprNtv")
             aa = row.get("AdrActCnt")
+            hr = row.get("HashRate")
+            rv = row.get("RevNtv")
+
             if mc and rc:
                 try:
                     rc_f = float(rc)
@@ -396,10 +443,24 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
                     active_addrs.append(int(float(aa)))
                 except ValueError:
                     pass
+            if hr:
+                try:
+                    hash_vals.append(float(hr))
+                    hash_dates.append(t)
+                except ValueError:
+                    pass
+            if rv:
+                try:
+                    rev_vals.append(float(rv))
+                    rev_dates.append(t)
+                except ValueError:
+                    pass
 
         if not mvrv_vals:
             return {"error": "no MVRV data", "source": "coinmetrics"}
 
+        # ── MVRV Z-Score (Mahmudov & Puell, 2018) ────────────────────────────────
+        # Calibrated on BTC 2011-2024: Z>7=top, Z<0=bottom, full-history std dev
         window   = min(365, len(mvrv_vals))
         trailing = mvrv_vals[-window:]
         mean_mv  = _stats.mean(trailing)
@@ -412,6 +473,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         elif mvrv_z < 3.0: mvrv_signal = "OVERVALUED"
         else:               mvrv_signal = "EXTREME_HEAT"
 
+        # ── SOPR (Shirakashi, 2019) ───────────────────────────────────────────────
         sopr = sopr_vals[-1] if sopr_vals else None
         if sopr is None:    sopr_signal = "N/A"
         elif sopr < 0.99:   sopr_signal = "CAPITULATION"
@@ -419,23 +481,74 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         elif sopr < 1.02:   sopr_signal = "NORMAL"
         else:               sopr_signal = "PROFIT_TAKING"
 
+        # ── Hash Ribbons (Charles Edwards, 2019) ─────────────────────────────────
+        # Uses 30-day MA vs 60-day MA of BTC hash rate.
+        # Capitulation: 30d MA < 60d MA (miners shutting off)
+        # Recovery/Buy: 30d MA crosses above 60d MA (miners back online)
+        hash_ribbon_signal = "N/A"
+        hash_ma_30 = None
+        hash_ma_60 = None
+        if len(hash_vals) >= 60:
+            hash_ma_30 = _stats.mean(hash_vals[-30:])
+            hash_ma_60 = _stats.mean(hash_vals[-60:])
+            prev_ma_30 = _stats.mean(hash_vals[-31:-1]) if len(hash_vals) >= 31 else hash_ma_30
+            prev_ma_60 = _stats.mean(hash_vals[-61:-1]) if len(hash_vals) >= 61 else hash_ma_60
+            if hash_ma_30 >= hash_ma_60 and prev_ma_30 < prev_ma_60:
+                hash_ribbon_signal = "BUY"          # fresh cross above — capitulation ending
+            elif hash_ma_30 >= hash_ma_60:
+                hash_ribbon_signal = "RECOVERY"     # 30d above 60d — healthy network
+            elif hash_ma_30 < hash_ma_60 and prev_ma_30 >= prev_ma_60:
+                hash_ribbon_signal = "CAPITULATION_START"  # just crossed below
+            else:
+                hash_ribbon_signal = "CAPITULATION"  # 30d below 60d — miner stress
+
+        # ── Puell Multiple (David Puell, 2019) ───────────────────────────────────
+        # Daily miner issuance USD / 365-day MA of daily issuance USD
+        # < 0.5 = historically strong buy (miner capitulation)
+        # > 4.0 = historically strong sell (miner excess profit)
+        puell_multiple = None
+        puell_signal   = "N/A"
+        if len(rev_vals) >= 365:
+            cur_rev      = rev_vals[-1]
+            ma_365       = _stats.mean(rev_vals[-365:])
+            if ma_365 > 0:
+                puell_multiple = round(cur_rev / ma_365, 3)
+                if puell_multiple < 0.5:     puell_signal = "EXTREME_BOTTOM"
+                elif puell_multiple < 1.0:   puell_signal = "ACCUMULATION"
+                elif puell_multiple < 2.0:   puell_signal = "FAIR_VALUE"
+                elif puell_multiple < 4.0:   puell_signal = "DISTRIBUTION"
+                else:                        puell_signal = "EXTREME_TOP"
+        elif len(rev_vals) >= 30:
+            # Partial data — still compute with available history
+            cur_rev = rev_vals[-1]
+            ma_avail = _stats.mean(rev_vals)
+            if ma_avail > 0:
+                puell_multiple = round(cur_rev / ma_avail, 3)
+                puell_signal = "PARTIAL_DATA"
+
         result: dict[str, Any] = {
-            "mvrv_ratio":       round(cur_mvrv, 3),
-            "mvrv_z":           mvrv_z,
-            "mvrv_signal":      mvrv_signal,
-            "realized_cap":     real_caps[-1] if real_caps else None,
-            "sopr":             round(sopr, 4) if sopr is not None else None,
-            "sopr_signal":      sopr_signal,
-            "active_addresses": active_addrs[-1] if active_addrs else None,
-            "mvrv_history":     {mvrv_dates[i]: round(mvrv_vals[i], 3) for i in range(len(mvrv_dates))},
-            "sopr_history":     {sopr_dates[i]: round(sopr_vals[i], 4) for i in range(len(sopr_dates))},
-            "source":           "coinmetrics_community",
-            "timestamp":        _dt.datetime.now(_dt.timezone.utc).isoformat(),
-            "error":            None,
-            "_ts":              time.time(),
+            "mvrv_ratio":         round(cur_mvrv, 3),
+            "mvrv_z":             mvrv_z,
+            "mvrv_signal":        mvrv_signal,
+            "realized_cap":       real_caps[-1] if real_caps else None,
+            "sopr":               round(sopr, 4) if sopr is not None else None,
+            "sopr_signal":        sopr_signal,
+            "active_addresses":   active_addrs[-1] if active_addrs else None,
+            "hash_ribbon_signal": hash_ribbon_signal,
+            "hash_ma_30":         round(hash_ma_30, 2) if hash_ma_30 is not None else None,
+            "hash_ma_60":         round(hash_ma_60, 2) if hash_ma_60 is not None else None,
+            "puell_multiple":     puell_multiple,
+            "puell_signal":       puell_signal,
+            "mvrv_history":       {mvrv_dates[i]: round(mvrv_vals[i], 3) for i in range(len(mvrv_dates))},
+            "sopr_history":       {sopr_dates[i]: round(sopr_vals[i], 4) for i in range(len(sopr_dates))},
+            "source":             "coinmetrics_community",
+            "timestamp":          _dt.datetime.now(_dt.timezone.utc).isoformat(),
+            "error":              None,
+            "_ts":                time.time(),
         }
         # Free large intermediate lists after building result (#69 memory opt)
         del rows, mvrv_vals, mvrv_dates, real_caps, sopr_vals, sopr_dates, active_addrs
+        del hash_vals, hash_dates, rev_vals, rev_dates
         gc.collect()
         _CM_CACHE_D[cache_key] = result
         return result

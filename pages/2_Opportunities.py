@@ -45,6 +45,14 @@ from models.risk_models import (
     compute_protocol_risk_score,        # #80
 )
 
+try:
+    from models.composite_signal import compute_composite_signal
+    from macro_feeds import fetch_all_macro_data, fetch_coinmetrics_onchain
+    from ui.common import fetch_fear_greed_history as _fetch_fg_history
+    _COMPOSITE_AVAIL = True
+except ImportError:
+    _COMPOSITE_AVAIL = False
+
 # Agent-executable protocol sets (used to label Multi-Chain Pool rows)
 try:
     from agents.config import FLARE_PROTOCOL_WHITELIST, XRPL_PROTOCOL_WHITELIST
@@ -149,6 +157,30 @@ def _cached_all_hacks():
     """Cached wrapper for fetch_all_hacks(). TTL=24 hours. (D3)"""
     return fetch_all_hacks()
 
+
+@st.cache_data(ttl=3600)
+def _cached_composite_signal() -> dict:
+    """Compute composite market environment signal. Cached 1 hour."""
+    if not _COMPOSITE_AVAIL:
+        return {}
+    try:
+        macro_data   = fetch_all_macro_data()
+        onchain_data = fetch_coinmetrics_onchain(days=400)
+        fg_val = None
+        try:
+            hist = _fetch_fg_history(7)
+            fg_val = int(hist[0]["value"]) if hist else None
+        except Exception:
+            pass
+        return compute_composite_signal(
+            macro_data=macro_data,
+            onchain_data=onchain_data,
+            fg_value=fg_val,
+        )
+    except Exception:
+        return {}
+
+
 page_setup("Opportunities · Flare DeFi")
 
 ctx            = render_sidebar()
@@ -186,6 +218,59 @@ st.markdown(
     "Starter portfolios · APY trends · options strategies</div>",
     unsafe_allow_html=True,
 )
+
+# ── Market Environment Banner (composite signal) ──────────────────────────────
+_csig = _cached_composite_signal()
+if _csig:
+    _score  = _csig.get("score", 0.0)
+    _signal = _csig.get("signal", "NEUTRAL")
+    _layers = _csig.get("layers", {})
+
+    # Color coding
+    if _score >= 0.3:
+        _sig_color, _sig_bg = "#22c55e", "rgba(34,197,94,0.07)"
+    elif _score >= 0.1:
+        _sig_color, _sig_bg = "#00d4aa", "rgba(0,212,170,0.07)"
+    elif _score >= -0.1:
+        _sig_color, _sig_bg = "#f59e0b", "rgba(245,158,11,0.07)"
+    elif _score >= -0.3:
+        _sig_color, _sig_bg = "#f97316", "rgba(249,115,22,0.07)"
+    else:
+        _sig_color, _sig_bg = "#ef4444", "rgba(239,68,68,0.07)"
+
+    _signal_label = _signal.replace("_", " ")
+    _score_pct    = int((_score + 1) / 2 * 100)   # convert -1..+1 to 0..100%
+
+    if _user_level == "beginner":
+        # Beginner: plain English + color
+        _beginner_txt = _csig.get("beginner_summary", "")
+        st.html(
+            f"<div style='background:{_sig_bg};border:1px solid {_sig_color}33;"
+            f"border-left:4px solid {_sig_color};border-radius:8px;padding:12px 18px;"
+            f"margin-bottom:16px;'>"
+            f"<span style='color:{_sig_color};font-weight:700;font-size:0.92rem;'>■ Market Conditions</span>"
+            f"<span style='color:#94a3b8;font-size:0.85rem;margin-left:12px;'>{_beginner_txt}</span>"
+            f"</div>"
+        )
+    else:
+        # Intermediate/Advanced: signal score + layer breakdown
+        _macro_s   = _layers.get("macro",     {}).get("score", 0)
+        _sent_s    = _layers.get("sentiment", {}).get("score", 0)
+        _chain_s   = _layers.get("onchain",   {}).get("score", 0)
+        def _s(v): return f"+{v:.2f}" if v >= 0 else f"{v:.2f}"
+        st.html(
+            f"<div style='background:{_sig_bg};border:1px solid {_sig_color}33;"
+            f"border-left:4px solid {_sig_color};border-radius:8px;padding:12px 18px;"
+            f"margin-bottom:16px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;'>"
+            f"<div><span style='color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;'>Market Environment</span>"
+            f"<div style='color:{_sig_color};font-weight:800;font-size:1.1rem;'>{_signal_label}</div>"
+            f"<div style='color:#64748b;font-size:0.78rem;'>Score {_s(_score)}</div></div>"
+            f"<div style='color:#475569;font-size:0.8rem;border-left:1px solid #1e293b;padding-left:20px;'>"
+            f"<div>Macro <span style='color:{'#22c55e' if _macro_s>=0 else '#ef4444'};font-weight:600;'>{_s(_macro_s)}</span></div>"
+            f"<div>Sentiment <span style='color:{'#22c55e' if _sent_s>=0 else '#ef4444'};font-weight:600;'>{_s(_sent_s)}</span></div>"
+            f"<div>On-Chain <span style='color:{'#22c55e' if _chain_s>=0 else '#ef4444'};font-weight:600;'>{_s(_chain_s)}</span></div>"
+            f"</div></div>"
+        )
 
 # Agent scope banner — always visible so users understand what the agent can act on
 st.html(
