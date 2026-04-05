@@ -1463,17 +1463,28 @@ def render_incentive_warning() -> None:
 
 def render_yield_hero_cards(positions: list, opps: list, portfolio_size: float) -> None:
     total_value = sum(p.get("current_value", 0) for p in positions) or portfolio_size
-    avg_apy     = (sum(o.get("estimated_apy", 0) for o in opps[:3]) / min(3, len(opps))) if opps else 0.0
+    if opps:
+        top3 = opps[:3]
+        # Net APY: subtract expected IL so LP positions don't overstate projected returns.
+        # For lending/staking (il_estimate_pct=0) this is identical to gross APY.
+        net_apys = [max(0.0, o.get("estimated_apy", 0) - o.get("il_estimate_pct", 0)) for o in top3]
+        avg_apy  = sum(net_apys) / len(net_apys)
+    else:
+        avg_apy = 0.0
 
-    weekly_yield  = total_value * (avg_apy / 100) / 52
-    monthly_yield = total_value * (avg_apy / 100) / 12
+    # Compound interest: derive weekly/monthly equivalent rates from annual APY.
+    # APY is a compounded annual figure; simple division (APY/52) overstates by ~6-7%.
+    weekly_rate   = (1 + avg_apy / 100) ** (1 / 52) - 1
+    monthly_rate  = (1 + avg_apy / 100) ** (1 / 12) - 1
+    weekly_yield  = total_value * weekly_rate
+    monthly_yield = total_value * monthly_rate
     annual_yield  = total_value * (avg_apy / 100)
 
     c1, c2, c3 = st.columns(3)
     for col, label, value, sub, cls, accent, uid in [
-        (c1, "Est. This Week",  f"${weekly_yield:,.2f}",  f"{avg_apy/52:.3f}% weekly",   "card-green",  "#22c55e", "yield-hero-week"),
-        (c2, "Est. This Month", f"${monthly_yield:,.2f}", f"on ${total_value:,.0f}",      "card-blue",   "#3b82f6", "yield-hero-month"),
-        (c3, "Est. This Year",  f"${annual_yield:,.2f}",  f"{avg_apy:.1f}% APY (top-3)", "card-orange", "#f59e0b", "yield-hero-year"),
+        (c1, "Est. This Week",  f"${weekly_yield:,.2f}",  f"{weekly_rate*100:.3f}% weekly", "card-green",  "#22c55e", "yield-hero-week"),
+        (c2, "Est. This Month", f"${monthly_yield:,.2f}", f"on ${total_value:,.0f}",         "card-blue",   "#3b82f6", "yield-hero-month"),
+        (c3, "Est. This Year",  f"${annual_yield:,.2f}",  f"{avg_apy:.1f}% net APY (top-3)","card-orange", "#f59e0b", "yield-hero-year"),
     ]:
         with col:
             st.markdown(f"""
