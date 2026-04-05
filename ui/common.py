@@ -638,10 +638,14 @@ def _scan_progress_fragment() -> None:
         _hist_ts = ""
     if _hist_ts and _hist_ts != st.session_state.get("_scan_baseline", ""):
         st.session_state._scanning = False
-        # Targeted clear: only invalidate scan data (OPT-44)
+        # Clear ALL scan-derived caches so every calculation refreshes from the new data:
+        # 1. history file cache (opportunity APYs, model results, arbitrage)
+        # 2. process-level history singleton
+        # 3. AI feedback cache (model weights update after every scan)
         try:
             _load_history_file.clear()
-            _get_history_cache()["data"] = None   # coherence: clear shared resource cache too
+            _get_history_cache()["data"] = None
+            _FEEDBACK_CACHE["data"] = None
         except Exception:
             pass
         st.rerun()
@@ -669,7 +673,8 @@ def render_sidebar() -> dict:
         # Do NOT clear _build_css (24h TTL), _get_api_status (5-min own TTL),
         # or load_wallets/load_positions (user data that doesn't change on auto-refresh).
         _load_history_file.clear()
-        _get_history_cache()["data"] = None   # coherence: clear shared resource cache too
+        _get_history_cache()["data"] = None
+        _FEEDBACK_CACHE["data"] = None   # model weights updated by background scans
         load_live_prices.clear()
         st.rerun()
 
@@ -1088,9 +1093,28 @@ def render_sidebar() -> dict:
 
 # ─── Data Loaders ─────────────────────────────────────────────────────────────
 
+def _history_mtime() -> float:
+    """Return history.json modification time (seconds since epoch), or 0.0 if absent.
+
+    Used as a cache-key dependency so _load_history_file auto-invalidates the
+    moment the scheduler writes a new scan — regardless of whether the scan was
+    triggered via the UI button or the background auto-scheduler.
+    """
+    try:
+        return HISTORY_FILE.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
 @st.cache_data(ttl=60)
-def _load_history_file() -> dict:
-    """Single cached read of history.json — shared by load_latest() and load_history_runs()."""
+def _load_history_file(_mtime: float = 0.0) -> dict:
+    """Single cached read of history.json — shared by load_latest() and load_history_runs().
+
+    _mtime is the file's modification time and acts as the primary cache-busting
+    key: any new scan that writes to history.json produces a new mtime, which
+    Streamlit treats as a cache miss, forcing an immediate fresh read.
+    The ttl=60 is a safety net for edge cases (file unchanged but data stale).
+    """
     if not HISTORY_FILE.exists():
         return {}
     try:
@@ -1105,11 +1129,11 @@ def _load_history_file() -> dict:
 
 
 def load_latest() -> dict:
-    return _load_history_file().get("latest") or {}
+    return _load_history_file(_history_mtime()).get("latest") or {}
 
 
 def load_history_runs() -> list:
-    return _load_history_file().get("runs") or []
+    return _load_history_file(_history_mtime()).get("runs") or []
 
 
 @st.cache_data(ttl=60)
