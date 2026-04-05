@@ -214,7 +214,7 @@ with tab1:
             ("FTSO Delegation",              4.3,  "None",   "Delegate vote power, keep your FLR"),
             ("Kinetic Lending (USDT0)",      8.0,  "None",   "Lend stablecoins, no price risk"),
             ("Clearpool X-Pool (USD0)",     11.5,  "None",   "Institutional lending, higher yield"),
-            ("Clearpool USDX T-Pool",        9.1,  "None",   "T-bill backed, ~$38M TVL, new March 2026"),
+            ("Clearpool USDX T-Pool",        9.1,  "None",   "T-bill backed, ~$38M TVL, launched 2026"),
             ("earnXRP Vault (Upshift)",      7.0,  "None",   "Deposit FXRP → earn 4–10% via conc. liquidity"),
             ("Blazeswap LP (sFLR-WFLR)",    37.0,  "Low",    "Provide liquidity, earn fees + RFLR rewards"),
             ("Mystic Finance (USD0)",        9.0,  "None",   "Morpho-style optimised lending"),
@@ -802,6 +802,9 @@ with tab5:
             # Summary metrics — all decay-adjusted
             blended_apy = sum(p["apy_est"] * p["alloc_pct"] / total_alloc for p in _plans) if total_alloc > 0 else 0.0
             annual_usd  = capital * blended_apy / 100
+            # Monthly: compound interest equivalent (matches hero card math)
+            _monthly_rate = (1 + blended_apy / 100) ** (1 / 12) - 1 if blended_apy > 0 else 0.0
+            monthly_usd   = capital * _monthly_rate
             _decay_note = f" · RFLR incentives decay-adjusted (~{_incentive_decay_factor()*100:.0f}% remaining)" if any(
                 p["protocol"].lower().split()[0] in {"blazeswap","enosys","sparkdex"} for p in _plans
             ) else ""
@@ -813,7 +816,7 @@ with tab5:
                 f"<span>Capital: <b style='color:#f1f5f9;'>${capital:,.0f}</b></span>"
                 f"<span>Blended APY: <b style='color:#22c55e;'>{blended_apy:.1f}%</b></span>"
                 f"<span>Est. Annual Yield: <b style='color:#22c55e;'>${annual_usd:,.0f}</b></span>"
-                f"<span>Est. Monthly: <b style='color:#22c55e;'>${annual_usd/12:,.0f}</b></span>"
+                f"<span>Est. Monthly: <b style='color:#22c55e;'>${monthly_usd:,.0f}</b></span>"
                 f"</div></div>",
                 unsafe_allow_html=True,
             )

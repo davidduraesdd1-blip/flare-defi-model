@@ -131,9 +131,12 @@ def score_macro_layer(macro_data: dict[str, Any]) -> dict[str, Any]:
     s_yc   = _score_yield_curve(y2y10)
     s_cpi  = _score_cpi(cpi)
 
-    # Equal-weight the 4 macro sub-indicators
-    scores = [s for s in [s_dxy, s_vix, s_yc, s_cpi] if s != 0.0]
-    raw    = sum([s_dxy, s_vix, s_yc, s_cpi]) / 4
+    # Equal-weight only the active (non-zero) macro sub-indicators.
+    # A score of 0.0 means the underlying data was unavailable (None input),
+    # not that it returned a neutral signal. Excluding zeros prevents dividing
+    # by 4 when only 2-3 indicators have real data, which dilutes the signal.
+    active = [s for s in [s_dxy, s_vix, s_yc, s_cpi] if s != 0.0]
+    raw    = (sum(active) / len(active)) if active else 0.0
     layer  = _clamp(raw)
 
     return {
