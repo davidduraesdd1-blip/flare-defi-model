@@ -492,7 +492,7 @@ with _ctrl_tab_export:
             )
             st.success("Report generated successfully.")
         except ImportError as _ie:
-            st.error(f"PDF generation requires reportlab: pip install reportlab ({_ie})")
+            st.error(f"PDF generation unavailable - missing dependency: {_ie}")
         except Exception as _ic_err:
             st.error(f"Report generation failed: {_ic_err}")
 
