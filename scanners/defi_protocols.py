@@ -1398,13 +1398,28 @@ def _ensure_web3() -> None:
         try:
             from web3 import Web3 as _Web3Cls
             _Web3 = _Web3Cls
-            _W3   = _Web3Cls(_Web3Cls.HTTPProvider(
-                "https://eth.llamarpc.com", request_kwargs={"timeout": 5}
-            ))
-            try:
-                _WEB3_AVAIL = _W3.is_connected()
-            except Exception:
-                _WEB3_AVAIL = False
+            # Try multiple public Ethereum RPCs in order — first that connects wins.
+            # eth.llamarpc.com is rate-limited on Streamlit Cloud (429s); fallbacks
+            # provide resilience without requiring a paid API key.
+            _ETH_RPCS = [
+                "https://rpc.ankr.com/eth",
+                "https://ethereum.publicnode.com",
+                "https://eth.llamarpc.com",
+                "https://cloudflare-eth.com",
+            ]
+            _W3 = None
+            _WEB3_AVAIL = False
+            for _rpc in _ETH_RPCS:
+                try:
+                    _candidate = _Web3Cls(_Web3Cls.HTTPProvider(
+                        _rpc, request_kwargs={"timeout": 5}
+                    ))
+                    if _candidate.is_connected():
+                        _W3 = _candidate
+                        _WEB3_AVAIL = True
+                        break
+                except Exception:
+                    continue
         except Exception:
             _Web3       = None
             _W3         = None
