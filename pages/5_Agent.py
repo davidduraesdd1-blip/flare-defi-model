@@ -596,15 +596,15 @@ with st.expander("Audit Log (last 200 events)", expanded=True):
                 _pdf.ln()
                 _pdf.set_text_color(0, 0, 0)
                 _pdf.set_font("Helvetica", "", 6)
+                def _ps(s: str) -> str:
+                    """Sanitize text for FPDF Helvetica (latin-1 only)."""
+                    return (str(s).replace("\u2014", "-").replace("\u2013", "-")
+                             .replace("\u2018", "'").replace("\u2019", "'")
+                             .replace("\u201c", '"').replace("\u201d", '"')
+                             .encode("latin-1", errors="replace").decode("latin-1"))
                 for _i, _a in enumerate(audit_rows):
                     _fill = _i % 2 == 0
                     _pdf.set_fill_color(241, 245, 249) if _fill else _pdf.set_fill_color(255, 255, 255)
-                    def _ps(s: str) -> str:
-                        """Sanitize text for FPDF Helvetica (latin-1 only)."""
-                        return (s.replace("\u2014", "-").replace("\u2013", "-")
-                                 .replace("\u2018", "'").replace("\u2019", "'")
-                                 .replace("\u201c", '"').replace("\u201d", '"')
-                                 .encode("latin-1", errors="replace").decode("latin-1"))
                     _row_vals = [
                         _ps(str(_a.get("timestamp", ""))[:16]),
                         _ps(str(_a.get("event_type", ""))[:16]),

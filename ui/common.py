@@ -836,7 +836,12 @@ def render_sidebar() -> dict:
                         latest.get("completed_at") or latest.get("run_id") or ""
                     )
                 except Exception as _e:
-                    st.error(f"Could not start scan: {_e}")
+                    # Streamlit Cloud restricts subprocess spawning.
+                    # The auto-scheduler runs on startup — manual scan not available on Cloud.
+                    if "cloud" in str(_e).lower() or sys.platform != "win32":
+                        st.info("Manual scan not available on Streamlit Cloud. Data refreshes automatically every 4 hours.")
+                    else:
+                        st.error(f"Could not start scan: {_e}")
 
         # ─── Scan completion polling (OPT-43) ─────────────────────────────────
         # _scan_progress_fragment is a module-level @st.fragment(run_every=0.5).

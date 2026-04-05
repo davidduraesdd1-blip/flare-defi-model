@@ -108,6 +108,15 @@ _ALLOWED_HOSTS: frozenset = frozenset({
     "app.renzoprotocol.com",      # Renzo protocol points API (#71)
     "bridges.llama.fi",           # DeFiLlama bridge flows API (#85)
     "api.zerion.io",              # Zerion wallet portfolio API (#111)
+    "flaremetrics.io",            # FTSO provider vote power + uptime (flare_scanner.py)
+    "eth.llamarpc.com",           # Ethereum public RPC for ERC-4626 Multicall3 (defi_protocols.py)
+    "rpc.ankr.com",               # Ankr public multi-chain RPC fallback (defi_protocols.py)
+    "ethereum.publicnode.com",    # PublicNode Ethereum RPC fallback (defi_protocols.py)
+    "cloudflare-eth.com",         # Cloudflare Ethereum RPC fallback (defi_protocols.py)
+    "api.portals.fi",             # Portals token price API (flare_scanner.py)
+    "api.kinetic.market",         # Kinetic lending rates (flare_scanner.py)
+    "app.sceptre.fi",             # Sceptre staking rates (flare_scanner.py)
+    "api.upshift.fi",             # Upshift vault APY (flare_scanner.py)
 })
 
 
