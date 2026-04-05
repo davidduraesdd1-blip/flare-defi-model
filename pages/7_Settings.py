@@ -204,7 +204,7 @@ with _ctrl_tab_alerts:
 
     with col_save:
         if st.button("Save Settings", key="save_alerts",
-                         use_container_width=True):
+                         width='stretch'):
             new_config = {
                 "email":    {"enabled": enabled, "address": email_addr, "smtp_server": smtp_srv,
                              "smtp_port": int(smtp_port), "username": smtp_user, "password": smtp_pass},
@@ -218,7 +218,7 @@ with _ctrl_tab_alerts:
 
     with col_test_e:
         if st.button("Send Test Email", key="test_email_btn",
-                         use_container_width=True):
+                         width='stretch'):
             _test_cfg = {"email": {"enabled": enabled, "address": email_addr,
                                    "smtp_server": smtp_srv, "smtp_port": int(smtp_port),
                                    "username": smtp_user, "password": smtp_pass}}
@@ -227,7 +227,7 @@ with _ctrl_tab_alerts:
 
     with col_test_t:
         if st.button("Send Test Telegram", key="test_tg_btn",
-                         use_container_width=True):
+                         width='stretch'):
             _test_cfg = {"telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id}}
             ok, msg = test_telegram(_test_cfg)
             st.success(msg) if ok else st.error(msg)
@@ -235,13 +235,13 @@ with _ctrl_tab_alerts:
     col_test_d, col_test_w, _ = st.columns(3)
     with col_test_d:
         if st.button("Test Discord", key="test_discord_btn",
-                         use_container_width=True):
+                         width='stretch'):
             _test_cfg = {"discord": {"enabled": discord_enabled, "webhook_url": discord_url}}
             ok, msg = test_discord(_test_cfg)
             st.success(msg) if ok else st.error(msg)
     with col_test_w:
         if st.button("Test Webhook", key="test_webhook_btn",
-                         use_container_width=True):
+                         width='stretch'):
             _test_cfg = {"webhook": {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret}}
             ok, msg = test_webhook(_test_cfg)
             st.success(msg) if ok else st.error(msg)
@@ -359,7 +359,7 @@ with _ctrl_tab_export:
             file_name=fname,
             mime="text/html",
             key="pdf_export_btn",
-            use_container_width=True,
+            width='stretch',
         )
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -428,7 +428,7 @@ with _ctrl_tab_export:
                 file_name=_csv_fname,
                 mime="text/csv",
                 key="tax_csv_btn",
-                use_container_width=True,
+                width='stretch',
             )
             st.caption(f"Top 5 opportunities per profile per scan · {len(_tax_runs)} scan(s) in history")
 
@@ -445,7 +445,7 @@ with _ctrl_tab_export:
         "and AI agent performance summary.</div>",
         unsafe_allow_html=True,
     )
-    if st.button("Generate Investment Committee PDF", key="ic_pdf_btn", use_container_width=True):
+    if st.button("Generate Investment Committee PDF", key="ic_pdf_btn", width='stretch'):
         try:
             from pdf_export import generate_investment_committee_pdf
             from agents.agent_runner import AgentRunner as _AR
@@ -488,7 +488,7 @@ with _ctrl_tab_export:
                 file_name=_ic_fname,
                 mime="application/pdf",
                 key="ic_pdf_download",
-                use_container_width=True,
+                width='stretch',
             )
             st.success("Report generated successfully.")
         except ImportError as _ie:
@@ -607,12 +607,12 @@ with _ctrl_tab_cache:
     _cc1, _cc2 = st.columns(2)
     with _cc1:
         if st.button("🗑️ Clear All Streamlit Cache", key="clear_all_cache",
-                         use_container_width=True,
+                         width='stretch',
                      help="Clears all @st.cache_data caches across all pages"):
             st.cache_data.clear()
             st.success("All Streamlit caches cleared — data will refresh on next load.")
         if st.button("🔄 Force Macro Data Refresh", key="clear_macro_cache",
-                         use_container_width=True,
+                         width='stretch',
                      help="Forces fresh fetch of DXY, VIX, CPI, yield curve data"):
             try:
                 from macro_feeds import _macro_cache as _mc
@@ -623,12 +623,12 @@ with _ctrl_tab_cache:
             st.success("Macro data cache cleared.")
     with _cc2:
         if st.button("🔄 Force Scan Data Refresh", key="clear_scan_cache",
-                         use_container_width=True,
+                         width='stretch',
                      help="Forces the next scan to re-fetch all DeFiLlama and scanner data"):
             st.cache_data.clear()
             st.success("Scan cache cleared — next scan will fetch fresh data.")
         if st.button("🔄 Force Price Data Refresh", key="clear_price_cache",
-                         use_container_width=True,
+                         width='stretch',
                      help="Forces fresh CoinGecko price fetch"):
             st.cache_data.clear()
             st.success("Price cache cleared.")
