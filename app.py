@@ -283,7 +283,7 @@ else:
 
 # ── FXRP Ecosystem Metrics ────────────────────────────────────────────────────
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-render_section_header("FXRP Ecosystem", "FAssets live metrics · March 2026")
+render_section_header("FXRP Ecosystem", "FAssets live metrics · April 2026")
 _fxrp_cols = st.columns(4)
 
 # Wire live values where available; fall back to known estimates.
