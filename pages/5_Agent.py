@@ -576,7 +576,7 @@ with st.expander("Audit Log (last 200 events)", expanded=True):
             try:
                 from fpdf import FPDF
                 from fpdf.enums import XPos, YPos
-                _report_dt = pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+                _report_dt = pd.Timestamp.now("UTC").strftime("%Y-%m-%d %H:%M UTC")
                 _pdf = FPDF()
                 _pdf.set_auto_page_break(auto=True, margin=10)
                 _pdf.add_page()
@@ -599,13 +599,19 @@ with st.expander("Audit Log (last 200 events)", expanded=True):
                 for _i, _a in enumerate(audit_rows):
                     _fill = _i % 2 == 0
                     _pdf.set_fill_color(241, 245, 249) if _fill else _pdf.set_fill_color(255, 255, 255)
+                    def _ps(s: str) -> str:
+                        """Sanitize text for FPDF Helvetica (latin-1 only)."""
+                        return (s.replace("\u2014", "-").replace("\u2013", "-")
+                                 .replace("\u2018", "'").replace("\u2019", "'")
+                                 .replace("\u201c", '"').replace("\u201d", '"')
+                                 .encode("latin-1", errors="replace").decode("latin-1"))
                     _row_vals = [
-                        str(_a.get("timestamp", ""))[:16],
-                        str(_a.get("event_type", ""))[:16],
-                        str(_a.get("protocol", "—"))[:12],
-                        str(_a.get("action", "—"))[:12],
+                        _ps(str(_a.get("timestamp", ""))[:16]),
+                        _ps(str(_a.get("event_type", ""))[:16]),
+                        _ps(str(_a.get("protocol", "-"))[:12]),
+                        _ps(str(_a.get("action", "-"))[:12]),
                         "YES" if _a.get("approved") else "NO",
-                        str(_a.get("reason", ""))[:40],
+                        _ps(str(_a.get("reason", ""))[:40]),
                     ]
                     for _v, _w in zip(_row_vals, _widths):
                         _pdf.cell(_w, 5, _v, border=1, fill=_fill)
