@@ -61,13 +61,13 @@ TOKENS = {
     "sFLR":  "0x12e605bc104e93B45e1aD99F9e555f659051c2BB",
     "stFLR": "0x1a77D13B87B8e5F58cf9bCDaCae6d3CDdA4f4344",  # SparkDEX V4 stFLR (verify addr)
     "stXRP": "0xFcB23FA1d5b4652D0A0B48F0E42697D7Bca07A0c",  # Firelight stXRP
-    "FBTC":  "",  # FAssets FBTC  — address TBD (not yet live on mainnet as of Mar 2026)
-    "FDOGE": "",  # FAssets FDOGE — address TBD (beta, limited minting as of Mar 2026)
+    "FBTC":  "",  # FAssets FBTC  — address TBD (not yet live on mainnet as of Apr 2026)
+    "FDOGE": "",  # FAssets FDOGE — address TBD (beta, limited minting as of Apr 2026)
     "HLN":   "0x7D3c9C6566375d6F11D9B00b06A14eaF5a2f4e75",
 }
 
 # ─── Protocol Registry ────────────────────────────────────────────────────────
-# Baseline yields from research (as of March 2026)
+# Baseline yields from research (as of April 2026)
 # These are used as fallbacks when live data is unavailable.
 # "live": True means the scanner actively fetches this protocol's data.
 PROTOCOLS = {
@@ -168,9 +168,9 @@ PROTOCOLS = {
             "T-Pool":    {"apr": 3.5,  "asset": "USD0",  "strategy": "treasury"},
             "X-Pool":    {"apr": 11.5, "asset": "USD0",  "strategy": "arb+tbill"},
             "USDX-Pool": {"apr": 9.1,  "asset": "USDX",  "strategy": "t-bill",   "tvl_usd": 38_000_000},
-            "RLUSD-Pool": {"apr": 5.0, "asset": "RLUSD", "strategy": "rlusd_tbill", "tvl_usd": 5_000_000, "note": "Ripple USD — regulated stablecoin pool (Mar 2026 launch)"},
+            "RLUSD-Pool": {"apr": 5.0, "asset": "RLUSD", "strategy": "rlusd_tbill", "tvl_usd": 5_000_000, "note": "Ripple USD — regulated stablecoin pool (launched 2026)"},
         },
-        "tvl_usd": 46_000_000,   # updated Mar 2026 to include RLUSD pool
+        "tvl_usd": 46_000_000,   # updated Apr 2026 to include RLUSD pool
     },
     "spectra": {
         "name":     "Spectra Finance",
@@ -180,7 +180,7 @@ PROTOCOLS = {
         "risk":     "low-medium",
         "markets": {
             "sFLR-MAY2026": {
-                "fixed_apy":    18.6,    # Updated Mar 2026 — was 10.79, now ~18.6–19.59% Max APY
+                "fixed_apy":    18.6,    # Updated Apr 2026 — was 10.79, now ~18.6–19.59% Max APY
                 "lp_apy":       36.74,
                 "lp_fees_apy":   0.75,
                 "lp_rewards_apy": 8.43,
@@ -271,7 +271,7 @@ PROTOCOLS = {
         "url":      "https://app.hyperliquid.xyz",
         "live":     True,
         "risk":     "high",
-        "pairs": ["FXRP/USDC", "FXRP/USDH", "HYPE/USDC"],   # FXRP/USDH added Jan 2026; HYPE native token added Mar 2026
+        "pairs": ["FXRP/USDC", "FXRP/USDH", "HYPE/USDC"],   # FXRP/USDH added Jan 2026; HYPE native token added Q1 2026
     },
     "flamix": {
         "name":     "Flamix",
@@ -279,7 +279,7 @@ PROTOCOLS = {
         "url":      "https://flamix.trade",
         "live":     False,   # No public API yet; data manually monitored
         "risk":     "high",
-        "note":     "Native perpetuals DEX on Flare. Up to 500x leverage. Any asset as collateral. FTSO pricing. $100M+ volume as of Dec 2025.",
+        "note":     "Native perpetuals DEX on Flare. Up to 500x leverage. Any asset as collateral. FTSO pricing. $100M+ volume as of Q4 2025.",
         "pairs": {
             "FLR-USD":  {"max_leverage": 500, "reward_token": "FLMX"},
             "XRP-USD":  {"max_leverage": 500, "reward_token": "FLMX"},

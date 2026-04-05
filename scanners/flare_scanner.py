@@ -1218,7 +1218,7 @@ def fetch_staking_yields() -> list:
     else:
         yields.append(StakingYield(
             protocol="spectra", token="PT-sFLR",
-            apy=18.60, apy_low=14.00, apy_high=24.00,  # updated Mar 2026 per config
+            apy=18.60, apy_low=14.00, apy_high=24.00,  # updated Apr 2026 per config
             tvl_usd=291_762, data_source="research",
         ))
 

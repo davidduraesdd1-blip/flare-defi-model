@@ -1015,8 +1015,8 @@ with _tab_yield:
     with st.spinner("Loading yield data from DeFiLlama..."):
         if demo_mode:
             _mc_pools = [
-                {"project": "pendle", "chain": "Ethereum", "symbol": "PT-USDe 29Jun2025",
-                 "apy": 12.4, "apyBase": 8.2, "apyReward": 4.2, "tvlUsd": 420_000_000, "audits": 3, "ilRisk": "no"},
+                {"project": "pendle", "chain": "Ethereum", "symbol": "PT-USDe 25Sep2026",
+                 "apy": 11.8, "apyBase": 7.9, "apyReward": 3.9, "tvlUsd": 380_000_000, "audits": 3, "ilRisk": "no"},
                 {"project": "ether.fi", "chain": "Ethereum", "symbol": "eETH",
                  "apy": 6.1, "apyBase": 6.1, "apyReward": 0.0, "tvlUsd": 6_200_000_000, "audits": 5, "ilRisk": "no"},
                 {"project": "morpho", "chain": "Ethereum", "symbol": "USDC vault",
