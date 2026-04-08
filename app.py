@@ -19,7 +19,16 @@ except ImportError:
 # ─── Sentry error monitoring (free tier — only loads when DSN is set) ──────────
 
 def _scrub_sentry_event(event, hint):
-    """Remove API keys and PII from Sentry events before sending."""
+    """Remove API keys, PII, and expected-noise events from Sentry before sending."""
+    _msg = str(event.get("message", "") or "")
+    _exc_values = (event.get("exception") or {}).get("values") or []
+    _exc_msgs = " ".join(str((v.get("value") or "")) for v in _exc_values)
+    _combined = (_msg + " " + _exc_msgs).lower()
+
+    # Anthropic credit exhaustion — billing issue, already handled in code
+    if "credit balance" in _combined and ("anthropic" in _combined or "400" in _combined):
+        return None
+
     if "request" in event:
         event["request"].pop("cookies", None)
         event["request"].pop("headers", None)
