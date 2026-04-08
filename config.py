@@ -614,6 +614,12 @@ INITIAL_POSITIONS = [
 
 SENTRY_DSN: str | None = os.environ.get("DEFI_SENTRY_DSN")
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")
+
+# ─── Anthropic / AI master switch ────────────────────────────────────────────
+# Set to True when Anthropic credits are funded and AI features should be active.
+# False = all Claude API calls are skipped; apps show graceful fallback text.
+# To enable: change False → True here (one line, all AI features restore instantly).
+ANTHROPIC_ENABLED: bool = False
 COINGECKO_API_KEY: str | None = os.environ.get("DEFI_COINGECKO_API_KEY")
 COINMETRICS_API_KEY: str | None = os.environ.get("DEFI_COINMETRICS_API_KEY")  # coinmetrics.io free community key
 DEFI_WEBHOOK_URL: str = os.environ.get("DEFI_WEBHOOK_URL", "")       # Discord / Telegram / generic webhook
@@ -621,7 +627,7 @@ DEFI_TELEGRAM_CHAT_ID: str = os.environ.get("DEFI_TELEGRAM_CHAT_ID", "")  # Tele
 
 FEATURES: dict = {
     # Legacy keys — kept for backward compatibility
-    "ai_analysis":      bool(ANTHROPIC_API_KEY),
+    "ai_analysis":      ANTHROPIC_ENABLED and bool(ANTHROPIC_API_KEY),
     "coingecko_pro":    bool(COINGECKO_API_KEY),
     "coinmetrics":      bool(COINMETRICS_API_KEY),
     "cdp_agentkit":     bool(CDP_API_KEY_NAME and CDP_API_KEY_PRIVATE),
@@ -630,8 +636,8 @@ FEATURES: dict = {
     "hyperliquid":      True,        # free public API
     "defillama":        True,        # free public API
     "coingecko_free":   True,        # always available
-    # Batch 8 feature flags — auto-enabled by API key presence
-    "anthropic_ai":     bool(ANTHROPIC_API_KEY),
+    # Batch 8 feature flags — auto-enabled by API key presence AND master switch
+    "anthropic_ai":     ANTHROPIC_ENABLED and bool(ANTHROPIC_API_KEY),
     "fred":             bool(os.environ.get("FRED_API_KEY", "")),
     "coinmetrics_pro":  bool(COINMETRICS_API_KEY),
     "zerion":           bool(os.environ.get("ZERION_API_KEY", "")),
