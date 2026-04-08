@@ -10,7 +10,15 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+try:
+    from config import ANTHROPIC_ENABLED as _ANTHROPIC_ENABLED
+except Exception:
+    _ANTHROPIC_ENABLED = False
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +94,8 @@ _SYSTEM_PROMPT = (
 
 def _call_haiku(query: str) -> dict | None:
     """Call Claude Haiku to classify the query.  Returns parsed dict or None."""
+    if not _ANTHROPIC_ENABLED:
+        return None
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         return None

@@ -25,11 +25,12 @@ try:
 except ImportError:
     _ANTHROPIC_OK = False
 
-# Get API key from main config
+# Get API key and master switch from main config
 try:
-    from config import ANTHROPIC_API_KEY
+    from config import ANTHROPIC_API_KEY, ANTHROPIC_ENABLED
 except ImportError:
-    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+    ANTHROPIC_API_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
+    ANTHROPIC_ENABLED   = False
 
 _SYSTEM_PROMPT = """You are a conservative autonomous DeFi yield optimizer.
 Your job: analyze the market context and make ONE clear decision per cycle.
@@ -184,14 +185,14 @@ class DecisionEngine:
     def __init__(self, api_key: str = ""):
         self._api_key = api_key or ANTHROPIC_API_KEY or os.environ.get("ANTHROPIC_API_KEY", "")
         self._client  = None
-        if _ANTHROPIC_OK and self._api_key:
+        if ANTHROPIC_ENABLED and _ANTHROPIC_OK and self._api_key:
             try:
                 self._client = anthropic.Anthropic(api_key=self._api_key)
             except Exception:
                 pass
 
     def is_available(self) -> bool:
-        return self._client is not None
+        return ANTHROPIC_ENABLED and self._client is not None
 
     def decide(self, context: dict) -> TradeDecision:
         """
