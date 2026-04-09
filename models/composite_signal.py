@@ -62,7 +62,7 @@ def _score_rsi(rsi: float | None) -> float | None:
         return None
     if rsi <= 20:   return +1.0
     if rsi <= 30:   return _clamp(+0.6 + (30 - rsi) / 25)
-    if rsi <= 40:   return _clamp(+0.2 + (40 - rsi) / 50)
+    if rsi <= 40:   return _clamp(+0.2 + (40 - rsi) / 25)
     if rsi <= 60:   return 0.0
     if rsi <= 70:   return _clamp(-0.2 - (rsi - 60) / 33)
     if rsi <= 80:   return _clamp(-0.5 - (rsi - 70) / 33)
