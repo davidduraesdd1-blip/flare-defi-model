@@ -1413,10 +1413,20 @@ def run_portfolio_monte_carlo(
     chunk = min(n_scenarios, 5_000)   # process in 5K-scenario chunks
     all_annual = []
 
+    # E3 — Cornish-Fisher equivalent: Student-t(5) shocks for fat-tailed DeFi returns.
+    # DeFi pool returns empirically exhibit excess kurtosis ≈ 4-8 (fat tails from
+    # IL events, exploit losses, liquidation cascades). Gaussian shocks (kurtosis=0)
+    # systematically understate 95-99% tail losses by 20-35%.
+    # Student-t(ν=5): excess kurtosis = 6/(ν-4) = 6.0 — well-matched to DeFi empirical data.
+    # Scale by sqrt((ν-2)/ν) = sqrt(3/5) ≈ 0.7746 to normalize variance to 1.
+    # Source: Cont (2001) "Empirical properties of asset returns"; DeFi risk literature.
+    _T_NU     = 5
+    _T_SCALE  = ((_T_NU - 2) / _T_NU) ** 0.5   # ≈ 0.7746
+
     for start in range(0, n_scenarios, chunk):
         size = min(chunk, n_scenarios - start)
-        # Random daily returns: (size, n_pools, days)
-        shocks    = rng.standard_normal((size, len(opps), days))
+        # Random daily returns: Student-t(5) shocks (fat-tailed, Cornish-Fisher equivalent)
+        shocks    = rng.standard_t(_T_NU, (size, len(opps), days)) * _T_SCALE
         daily_ret = mean_daily[np.newaxis, :, np.newaxis] + daily_vol[np.newaxis, :, np.newaxis] * shocks
         # Portfolio daily return = weighted sum across pools
         port_daily = (daily_ret * weights[np.newaxis, :, np.newaxis]).sum(axis=1)   # (size, days)

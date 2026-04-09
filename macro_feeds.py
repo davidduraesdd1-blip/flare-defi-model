@@ -152,6 +152,27 @@ def fetch_fred_macro() -> dict[str, Any]:
         if "cpi_index" in result:
             result["cpi_yoy"] = result.pop("cpi_index")
 
+        # C4: M2 YoY growth rate (needs 13 monthly observations — same pattern as CPI)
+        try:
+            m2_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL"
+            m2_resp = _SESSION.get(m2_url, timeout=10)
+            if m2_resp.status_code == 200:
+                m2_lines = [l for l in m2_resp.text.strip().split("\n")[1:] if l.strip()]
+                m2_vals: list = []
+                for _line in reversed(m2_lines):
+                    _parts = _line.split(",")
+                    if len(_parts) == 2 and _parts[1].strip() not in (".", ""):
+                        try:
+                            m2_vals.append(float(_parts[1].strip()))
+                        except ValueError:
+                            pass
+                    if len(m2_vals) >= 13:
+                        break
+                if len(m2_vals) >= 13 and m2_vals[12] > 0:
+                    result["m2_yoy"] = round((m2_vals[0] / m2_vals[12] - 1) * 100, 2)
+        except Exception:
+            pass
+
         # Compute 2Y10Y spread from individual yields if T10Y2Y direct series failed
         if "yield_spread_2y10y" not in result:
             t10 = result.get("ten_yr_yield")
@@ -402,7 +423,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
                 "assets":     "btc",
                 # HashRate for Hash Ribbons (Charles Edwards 2019)
                 # RevNtv for Puell Multiple (David Puell 2019)
-                "metrics":    "CapMrktCurUSD,CapRealUSD,SoprNtv,AdrActCnt,HashRate,RevNtv",
+                "metrics":    "CapMrktCurUSD,CapRealUSD,SoprNtv,AdrActCnt,HashRate,RevNtv,TxTfrValAdjUSD",
                 "start_time": start,
                 "frequency":  "1d",
                 "page_size":  6000,  # All-time BTC data (~5400 days 2010–present)
@@ -422,6 +443,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         sopr_vals, sopr_dates, active_addrs = [], [], []
         hash_vals, hash_dates = [], []
         rev_vals,  rev_dates  = [], []
+        nvt_vals = []   # A1: NVT = CapMrktCurUSD / TxTfrValAdjUSD
 
         for row in rows:
             t  = row.get("time", "")[:10]
@@ -431,6 +453,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             aa = row.get("AdrActCnt")
             hr = row.get("HashRate")
             rv = row.get("RevNtv")
+            tx = row.get("TxTfrValAdjUSD")   # A1: on-chain adjusted transfer volume (USD)
 
             if mc and rc:
                 try:
@@ -465,6 +488,14 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
                     rev_dates.append(t)
                 except ValueError:
                     pass
+            # A1: NVT = market cap / daily adjusted on-chain transfer volume
+            if mc and tx:
+                try:
+                    tx_f = float(tx)
+                    if tx_f > 0:
+                        nvt_vals.append(float(mc) / tx_f)
+                except (ValueError, ZeroDivisionError):
+                    pass
 
         if not mvrv_vals:
             return {"error": "no MVRV data", "source": "coinmetrics"}
@@ -483,13 +514,42 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         elif mvrv_z < 3.0: mvrv_signal = "OVERVALUED"
         else:               mvrv_signal = "EXTREME_HEAT"
 
-        # ── SOPR (Shirakashi, 2019) ───────────────────────────────────────────────
+        # ── aSOPR — Adjusted SOPR (A2: 7-day EMA smoothing as free-tier aSOPR proxy) ──────
+        # Raw SOPR includes all UTXOs including <1-hour change outputs (high noise).
+        # Adjusted SOPR (aSOPR) filters out short-lived UTXOs, revealing true market
+        # profit/loss sentiment. Premium Glassnode: indicators/sopr_adjusted.
+        # Free-tier best practice: 7-day EMA of daily SoprNtv from CoinMetrics.
+        # A 7-day EMA dampens the noise from daily settlement spikes and weekend effects
+        # that dominate the raw SOPR, closely approximating the aSOPR signal shape.
+        # Source: Shirakashi (2019); CheckOnChain research (2021) validating EMA smoothing.
         sopr = sopr_vals[-1] if sopr_vals else None
-        if sopr is None:    sopr_signal = "N/A"
-        elif sopr < 0.99:   sopr_signal = "CAPITULATION"
-        elif sopr < 1.0:    sopr_signal = "MILD_LOSS"
-        elif sopr < 1.02:   sopr_signal = "NORMAL"
-        else:               sopr_signal = "PROFIT_TAKING"
+        sopr_7d_ema = None
+        if len(sopr_vals) >= 7:
+            _alpha = 2.0 / (7 + 1)   # EMA alpha for period=7
+            _ema = sopr_vals[0]
+            for _v in sopr_vals[1:]:
+                _ema = _alpha * _v + (1 - _alpha) * _ema
+            sopr_7d_ema = round(_ema, 4)
+
+        # Use smoothed aSOPR proxy as the primary SOPR signal
+        sopr_for_signal = sopr_7d_ema if sopr_7d_ema is not None else sopr
+        if sopr_for_signal is None: sopr_signal = "N/A"
+        elif sopr_for_signal < 0.99:   sopr_signal = "CAPITULATION"
+        elif sopr_for_signal < 1.0:    sopr_signal = "MILD_LOSS"
+        elif sopr_for_signal < 1.02:   sopr_signal = "NORMAL"
+        else:                          sopr_signal = "PROFIT_TAKING"
+
+        # ── NVT Ratio / NVT Signal (A1 — Willy Woo 2017; Kalichkin 2018) ────────
+        # NVT = Market Cap / Daily On-Chain Transfer Volume (USD)
+        # High NVT = network overvalued vs utility; Low NVT = undervalued.
+        # NVT Signal = 90-day SMA of daily NVT (smoother signal per Kalichkin).
+        # Calibrated thresholds from Glassnode / CheckOnChain cycle analysis:
+        #   NVT > 150 = overvalued (Dec 2017: ~250, Apr 2021: ~180)
+        #   NVT < 45  = undervalued (Dec 2018: ~30, Mar 2020: ~25, Nov 2022: ~35)
+        nvt_ratio = nvt_vals[-1] if nvt_vals else None
+        nvt_signal_90d = None
+        if len(nvt_vals) >= 90:
+            nvt_signal_90d = round(_stats.mean(nvt_vals[-90:]), 1)
 
         # ── Hash Ribbons (Charles Edwards, 2019) ─────────────────────────────────
         # Uses 30-day MA vs 60-day MA of BTC hash rate.
@@ -542,6 +602,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             "mvrv_signal":        mvrv_signal,
             "realized_cap":       real_caps[-1] if real_caps else None,
             "sopr":               round(sopr, 4) if sopr is not None else None,
+            "sopr_7d_ema":        sopr_7d_ema,   # aSOPR proxy (7-day EMA — A2)
             "sopr_signal":        sopr_signal,
             "active_addresses":   active_addrs[-1] if active_addrs else None,
             "hash_ribbon_signal": hash_ribbon_signal,
@@ -549,6 +610,8 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             "hash_ma_60":         round(hash_ma_60, 2) if hash_ma_60 is not None else None,
             "puell_multiple":     puell_multiple,
             "puell_signal":       puell_signal,
+            "nvt_ratio":          round(nvt_ratio, 1) if nvt_ratio is not None else None,   # A1
+            "nvt_signal_90d":     nvt_signal_90d,   # A1: 90d SMA of NVT (Kalichkin signal)
             "mvrv_history":       {mvrv_dates[i]: round(mvrv_vals[i], 3) for i in range(max(0, len(mvrv_dates) - days), len(mvrv_dates))},
             "sopr_history":       {sopr_dates[i]: round(sopr_vals[i], 4) for i in range(max(0, len(sopr_dates) - days), len(sopr_dates))},
             "source":             "coinmetrics_community",
@@ -558,7 +621,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         }
         # Free large intermediate lists after building result (#69 memory opt)
         del rows, mvrv_vals, mvrv_dates, real_caps, sopr_vals, sopr_dates, active_addrs
-        del hash_vals, hash_dates, rev_vals, rev_dates
+        del hash_vals, hash_dates, rev_vals, rev_dates, nvt_vals
         gc.collect()
         _CM_CACHE_D[cache_key] = result
         return result
@@ -597,7 +660,8 @@ def fetch_btc_ta_signals() -> dict[str, Any]:
             return None
 
         try:
-            hist = yf.Ticker("BTC-USD").history(period="250d")
+            # E5: Pi Cycle Top needs 350d; fetch 400d for buffer
+            hist = yf.Ticker("BTC-USD").history(period="400d")
             if hist.empty or len(hist) < 30:
                 return {"source": "insufficient_data"}
             closes = hist["Close"].dropna().values.tolist()
@@ -653,12 +717,47 @@ def fetch_btc_ta_signals() -> dict[str, Any]:
             ma20 = sum(closes[-20:]) / 20
             above_20sma = closes[-1] > ma20
 
+        # ── E5: Pi Cycle Top (Checkmate 2019) — 111d×2 vs 350d SMA ──────────
+        pi_cycle_ratio = None
+        if len(closes) >= 350:
+            ma111 = sum(closes[-111:]) / 111
+            ma350 = sum(closes[-350:]) / 350
+            if ma350 > 0:
+                pi_cycle_ratio = round((ma111 * 2) / ma350, 4)
+
+        # ── E2: Weekly RSI-14 confirmation (higher timeframe filter) ──────────
+        # Fetch BTC weekly candles separately. Prevents false signals in weekly
+        # overbought/oversold zones (Murphy 1999, Elder 2002 triple-screen method).
+        rsi_14_weekly = None
+        try:
+            hist_w = yf.Ticker("BTC-USD").history(period="2y", interval="1wk")
+            if hist_w is not None and len(hist_w) >= 16:
+                w_closes = hist_w["Close"].dropna().values.tolist()
+                if len(w_closes) >= 16:
+                    w_period = 14
+                    w_deltas = [w_closes[i] - w_closes[i - 1] for i in range(1, len(w_closes))]
+                    w_gains  = [max(d, 0.0) for d in w_deltas]
+                    w_losses = [abs(min(d, 0.0)) for d in w_deltas]
+                    w_avg_g  = sum(w_gains[:w_period]) / w_period
+                    w_avg_l  = sum(w_losses[:w_period]) / w_period
+                    for i in range(w_period, len(w_deltas)):
+                        w_avg_g = (w_avg_g * (w_period - 1) + w_gains[i])  / w_period
+                        w_avg_l = (w_avg_l * (w_period - 1) + w_losses[i]) / w_period
+                    if w_avg_l > 0:
+                        rsi_14_weekly = round(100 - 100 / (1 + w_avg_g / w_avg_l), 2)
+                    else:
+                        rsi_14_weekly = 100.0
+        except Exception:
+            pass
+
         return {
             "rsi_14":          rsi_14,
+            "rsi_14_weekly":   rsi_14_weekly,
             "ma_signal":       ma_signal,
             "price_momentum":  price_momentum,
             "above_200ma":     above_200ma,
             "above_20sma":     above_20sma,
+            "pi_cycle_ratio":  pi_cycle_ratio,
             "btc_price":       round(closes[-1], 2) if closes else None,
             "source":          "yfinance",
         }
