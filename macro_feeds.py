@@ -192,7 +192,9 @@ def fetch_yfinance_macro() -> dict[str, Any]:
         def _fetch_one(ticker_tuple: tuple) -> tuple:
             key, symbol = ticker_tuple
             try:
-                return key, yf.Ticker(symbol).history(period="5d")["Close"]
+                # E4: DXY needs 35 days to compute 30d rate-of-change
+                period = "35d" if key == "dxy" else "5d"
+                return key, yf.Ticker(symbol).history(period=period)["Close"]
             except Exception:
                 return key, None
 
@@ -211,6 +213,11 @@ def fetch_yfinance_macro() -> dict[str, Any]:
                     _, series = result_item
                     if series is not None and not series.empty:
                         result[key] = round(float(series.iloc[-1]), 2)
+                        # E4: compute 30d ROC for DXY (momentum vs absolute level)
+                        if key == "dxy" and len(series) >= 30:
+                            cur   = float(series.iloc[-1])
+                            past  = float(series.iloc[-30])
+                            result["dxy_30d_roc"] = round((cur - past) / past * 100, 2) if past else None
                 except Exception as e:
                     logger.debug("[yfinance] %s: %s", key, e)
 
@@ -369,8 +376,11 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
     """
     import statistics as _stats
     import os as _os
-    start     = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=days)).strftime("%Y-%m-%d")
-    cache_key = f"cm_oc_{days}"
+    # MVRV Z-Score requires all-time normalization (Mahmudov & Puell, 2018 / Glassnode reference).
+    # Fetch from BTC genesis — `days` parameter still controls display history window.
+    _MVRV_START = "2010-07-17"
+    start     = _MVRV_START
+    cache_key = "cm_oc_alltime"
 
     hit = _CM_CACHE_D.get(cache_key)
     if hit and (time.time() - hit.get("_ts", 0)) < _CM_TTL_D:
@@ -395,7 +405,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
                 "metrics":    "CapMrktCurUSD,CapRealUSD,SoprNtv,AdrActCnt,HashRate,RevNtv",
                 "start_time": start,
                 "frequency":  "1d",
-                "page_size":  days + 10,
+                "page_size":  6000,  # All-time BTC data (~5400 days 2010–present)
                 **params_extra,
             },
             timeout=15,
@@ -460,11 +470,11 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             return {"error": "no MVRV data", "source": "coinmetrics"}
 
         # ── MVRV Z-Score (Mahmudov & Puell, 2018) ────────────────────────────────
-        # Calibrated on BTC 2011-2024: Z>7=top, Z<0=bottom, full-history std dev
-        window   = min(365, len(mvrv_vals))
-        trailing = mvrv_vals[-window:]
-        mean_mv  = _stats.mean(trailing)
-        std_mv   = _stats.stdev(trailing) if len(trailing) > 1 else 1.0
+        # All-time normalization: std dev computed over full BTC history from 2010.
+        # Glassnode reference implementation uses all-time std dev — NOT 365-day.
+        # 365-day window produces a different baseline than published cycle thresholds.
+        mean_mv  = _stats.mean(mvrv_vals)
+        std_mv   = _stats.stdev(mvrv_vals) if len(mvrv_vals) > 1 else 1.0
         cur_mvrv = mvrv_vals[-1]
         mvrv_z   = round((cur_mvrv - mean_mv) / max(std_mv, 1e-6), 2)
 
@@ -516,7 +526,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
                 if puell_multiple < 0.5:     puell_signal = "EXTREME_BOTTOM"
                 elif puell_multiple < 1.0:   puell_signal = "ACCUMULATION"
                 elif puell_multiple < 2.0:   puell_signal = "FAIR_VALUE"
-                elif puell_multiple < 4.0:   puell_signal = "DISTRIBUTION"
+                elif puell_multiple < 3.0:   puell_signal = "DISTRIBUTION"
                 else:                        puell_signal = "EXTREME_TOP"
         elif len(rev_vals) >= 30:
             # Partial data — still compute with available history
@@ -539,8 +549,8 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             "hash_ma_60":         round(hash_ma_60, 2) if hash_ma_60 is not None else None,
             "puell_multiple":     puell_multiple,
             "puell_signal":       puell_signal,
-            "mvrv_history":       {mvrv_dates[i]: round(mvrv_vals[i], 3) for i in range(len(mvrv_dates))},
-            "sopr_history":       {sopr_dates[i]: round(sopr_vals[i], 4) for i in range(len(sopr_dates))},
+            "mvrv_history":       {mvrv_dates[i]: round(mvrv_vals[i], 3) for i in range(max(0, len(mvrv_dates) - days), len(mvrv_dates))},
+            "sopr_history":       {sopr_dates[i]: round(sopr_vals[i], 4) for i in range(max(0, len(sopr_dates) - days), len(sopr_dates))},
             "source":             "coinmetrics_community",
             "timestamp":          _dt.datetime.now(_dt.timezone.utc).isoformat(),
             "error":              None,
@@ -637,11 +647,18 @@ def fetch_btc_ta_signals() -> dict[str, Any]:
         if len(closes) >= 31 and closes[-31] > 0:
             price_momentum = round((closes[-1] - closes[-31]) / closes[-31] * 100, 2)
 
+        # ── E1: 20d SMA for Hash Ribbon price confirmation gate ───────────────
+        above_20sma = None
+        if len(closes) >= 20:
+            ma20 = sum(closes[-20:]) / 20
+            above_20sma = closes[-1] > ma20
+
         return {
             "rsi_14":          rsi_14,
             "ma_signal":       ma_signal,
             "price_momentum":  price_momentum,
             "above_200ma":     above_200ma,
+            "above_20sma":     above_20sma,
             "btc_price":       round(closes[-1], 2) if closes else None,
             "source":          "yfinance",
         }

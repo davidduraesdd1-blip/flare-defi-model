@@ -528,9 +528,13 @@ with _ctrl_tab_export:
                 _md  = fetch_all_macro_data()
                 _ocd = fetch_coinmetrics_onchain(days=400)
                 _tad = fetch_btc_ta_signals()
-                _fgl = _fgh(7)
-                _fgv = int(_fgl[0]["value"]) if _fgl else None
-                _csig_ria = compute_composite_signal(_md, _ocd, _fgv, ta_data=_tad)
+                _fgl = _fgh(30)
+                _fgv, _fg30 = None, None
+                if _fgl:
+                    _fgv  = int(_fgl[0]["value"])
+                    _fgv30 = [int(h["value"]) for h in _fgl if "value" in h]
+                    _fg30  = round(sum(_fgv30) / len(_fgv30), 1) if _fgv30 else None
+                _csig_ria = compute_composite_signal(_md, _ocd, _fgv, ta_data=_tad, fg_30d_avg=_fg30)
             except Exception:
                 pass
 

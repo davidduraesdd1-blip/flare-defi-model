@@ -282,6 +282,7 @@ def get_agent_context(
                 fg_value      = fg_val,
                 put_call_ratio= None,   # populated when Deribit data available
                 ta_data       = ta_data,
+                fg_30d_avg    = fear_greed.get("avg_30d"),
             )
         except Exception:
             composite_signal = {}

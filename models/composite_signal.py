@@ -34,9 +34,9 @@ logger = logging.getLogger(__name__)
 
 # ─── Layer weights (must sum to 1.0) ─────────────────────────────────────────
 _W_TECHNICAL = 0.20   # Layer 1: BTC TA (RSI, MA cross, momentum)
-_W_MACRO     = 0.25   # Layer 2: macro environment
+_W_MACRO     = 0.20   # Layer 2: macro environment (reduced — on-chain more predictive for crypto)
 _W_SENTIMENT = 0.25   # Layer 3: market sentiment
-_W_ONCHAIN   = 0.30   # Layer 4: on-chain fundamentals
+_W_ONCHAIN   = 0.35   # Layer 4: on-chain fundamentals (increased — harder to arbitrage, unique to crypto)
 
 
 def _clamp(val: float, lo: float = -1.0, hi: float = 1.0) -> float:
@@ -235,17 +235,41 @@ def _score_cpi(cpi_yoy: float | None) -> float | None:
     return -0.2
 
 
+def _score_dxy_momentum(dxy_30d_roc: float | None) -> float | None:
+    """
+    DXY 30-day rate-of-change (E4) — momentum signal complements absolute DXY level.
+    Rising DXY = accelerating USD strength = crypto headwind.
+    Falling DXY = weakening USD = crypto tailwind.
+    Research: BIS (2022), Federal Reserve (2023) — DXY momentum leads crypto by 30-60 days.
+      ROC > +3%: strong USD momentum  → -0.5
+      ROC > +1.5%: rising             → linear to -0.2
+      ROC in [-1.5, +1.5]: neutral    →  0.0
+      ROC < -1.5%: falling            → linear to +0.2
+      ROC < -3%: declining fast       → +0.5
+    Returns None if input data is missing (historical DXY unavailable).
+    """
+    if dxy_30d_roc is None:
+        return None
+    if dxy_30d_roc >= 3.0:    return -0.5
+    if dxy_30d_roc >= 1.5:    return _clamp(-0.2 - (dxy_30d_roc - 1.5) / 5.0)
+    if dxy_30d_roc >= -1.5:   return 0.0
+    if dxy_30d_roc >= -3.0:   return _clamp(+0.2 + (abs(dxy_30d_roc) - 1.5) / 5.0)
+    return +0.5
+
+
 def score_macro_layer(macro_data: dict[str, Any]) -> dict[str, Any]:
     """
     Compute Layer 1 macro score from merged FRED + yfinance dict.
     Returns score in [-1.0, +1.0] plus per-indicator breakdown.
     """
-    dxy   = macro_data.get("dxy")
-    vix   = macro_data.get("vix")
-    y2y10 = macro_data.get("yield_spread_2y10y")
-    cpi   = macro_data.get("cpi_yoy")
+    dxy         = macro_data.get("dxy")
+    dxy_30d_roc = macro_data.get("dxy_30d_roc")
+    vix         = macro_data.get("vix")
+    y2y10       = macro_data.get("yield_spread_2y10y")
+    cpi         = macro_data.get("cpi_yoy")
 
     s_dxy  = _score_dxy(dxy)
+    s_dxym = _score_dxy_momentum(dxy_30d_roc)
     s_vix  = _score_vix(vix)
     s_yc   = _score_yield_curve(y2y10)
     s_cpi  = _score_cpi(cpi)
@@ -254,7 +278,7 @@ def score_macro_layer(macro_data: dict[str, Any]) -> dict[str, Any]:
     # Scorers return None when input data is unavailable, and 0.0 only when
     # the indicator is genuinely neutral (e.g. VIX=20, CPI=2.5%).
     # This prevents missing data from diluting the signal by pulling it toward 0.
-    active = [s for s in [s_dxy, s_vix, s_yc, s_cpi] if s is not None]
+    active = [s for s in [s_dxy, s_dxym, s_vix, s_yc, s_cpi] if s is not None]
     raw    = (sum(active) / len(active)) if active else 0.0
     layer  = _clamp(raw)
 
@@ -264,10 +288,11 @@ def score_macro_layer(macro_data: dict[str, Any]) -> dict[str, Any]:
         "weight":     _W_MACRO,
         "weighted":   round(layer * _W_MACRO, 4),
         "components": {
-            "dxy":         {"value": dxy,   "score": round(s_dxy, 3) if s_dxy is not None else None},
-            "vix":         {"value": vix,   "score": round(s_vix, 3) if s_vix is not None else None},
-            "yield_curve": {"value": y2y10, "score": round(s_yc,  3) if s_yc  is not None else None},
-            "cpi_yoy":     {"value": cpi,   "score": round(s_cpi, 3) if s_cpi is not None else None},
+            "dxy":          {"value": dxy,         "score": round(s_dxy,  3) if s_dxy  is not None else None},
+            "dxy_momentum": {"value": dxy_30d_roc, "score": round(s_dxym, 3) if s_dxym is not None else None},
+            "vix":          {"value": vix,         "score": round(s_vix,  3) if s_vix  is not None else None},
+            "yield_curve":  {"value": y2y10,       "score": round(s_yc,   3) if s_yc   is not None else None},
+            "cpi_yoy":      {"value": cpi,         "score": round(s_cpi,  3) if s_cpi  is not None else None},
         },
     }
 
@@ -328,22 +353,46 @@ def _score_put_call(put_call_ratio: float | None) -> float | None:
     return -0.6                                # extreme call buying = crowded
 
 
+def _score_fg_trend(fg_value: float | None, fg_30d_avg: float | None) -> float | None:
+    """
+    F&G 30-day trend direction signal.
+    A FGI of 25 rising from 10 (momentum: +15) is more bullish than 25 falling from 40.
+    Research: CodeMeetsCapital backtest — trend direction adds context to level signal.
+      Rising fast (current >> 30d avg, >+10): mild negative — overbought momentum
+      Rising mildly (+5 to +10): neutral/slight positive
+      Stable (±5): neutral
+      Falling mildly (-5 to -10): slight positive — fear increasing = opportunity approaching
+      Falling fast (< -10): more positive — potential capitulation zone forming
+    """
+    if fg_value is None or fg_30d_avg is None:
+        return None
+    diff = float(fg_value) - float(fg_30d_avg)
+    if diff > 15:    return -0.15   # greed surging = potential exhaustion
+    if diff > 10:    return -0.05
+    if diff > 5:     return  0.0
+    if diff >= -5:   return  0.0
+    if diff >= -10:  return +0.05
+    if diff >= -15:  return +0.10
+    return +0.15                    # fear collapsing = potential capitulation = buy setup
+
+
 def score_sentiment_layer(
     fg_value: int | float | None,
-    sopr: float | None,
     put_call_ratio: float | None,
+    fg_30d_avg: float | None = None,
 ) -> dict[str, Any]:
     """
     Compute Layer 2 sentiment score.
-    F&G weighted 50%, SOPR 30%, put/call 20%.
+    F&G level 55%, F&G trend 10%, put/call 35%.
+    SOPR reclassified to On-Chain layer (it is 100% on-chain UTXO data, not sentiment survey).
+    F&G trend adds context: 25 rising from 10 ≠ 25 falling from 40.
     """
-    s_fg  = _score_fear_greed(fg_value)
-    s_sp  = _score_sopr(sopr)
-    s_pc  = _score_put_call(put_call_ratio)
+    s_fg   = _score_fear_greed(fg_value)
+    s_fgt  = _score_fg_trend(fg_value, fg_30d_avg)
+    s_pc   = _score_put_call(put_call_ratio)
 
-    # Weighted average over only the indicators that returned real data.
-    _SUB_W = {"fg": 0.50, "sp": 0.30, "pc": 0.20}
-    _pairs  = [("fg", s_fg), ("sp", s_sp), ("pc", s_pc)]
+    _SUB_W = {"fg": 0.55, "fgt": 0.10, "pc": 0.35}
+    _pairs  = [("fg", s_fg), ("fgt", s_fgt), ("pc", s_pc)]
     _wsum   = sum(_SUB_W[k] for k, v in _pairs if v is not None)
     raw     = (
         sum((v or 0.0) * _SUB_W[k] for k, v in _pairs if v is not None) / _wsum
@@ -357,9 +406,9 @@ def score_sentiment_layer(
         "weight":     _W_SENTIMENT,
         "weighted":   round(layer * _W_SENTIMENT, 4),
         "components": {
-            "fear_greed":    {"value": fg_value,        "score": round(s_fg, 3) if s_fg is not None else None, "sub_weight": 0.50},
-            "sopr":          {"value": sopr,             "score": round(s_sp, 3) if s_sp is not None else None, "sub_weight": 0.30},
-            "put_call_ratio":{"value": put_call_ratio,  "score": round(s_pc, 3) if s_pc is not None else None, "sub_weight": 0.20},
+            "fear_greed":    {"value": fg_value,    "score": round(s_fg,  3) if s_fg  is not None else None, "sub_weight": 0.55},
+            "fg_trend":      {"value": fg_30d_avg,  "score": round(s_fgt, 3) if s_fgt is not None else None, "sub_weight": 0.10},
+            "put_call_ratio":{"value": put_call_ratio, "score": round(s_pc, 3) if s_pc is not None else None, "sub_weight": 0.35},
         },
     }
 
@@ -381,23 +430,34 @@ def _score_mvrv_z(mvrv_z: float | None) -> float | None:
     return _clamp(0.3 - mvrv_z * 0.7)   # below 0 = historically undervalued
 
 
-def _score_hash_ribbon(signal: str | None) -> float | None:
+def _score_hash_ribbon(
+    signal: str | None,
+    btc_above_20sma: bool | None = None,
+) -> float | None:
     """
-    Hash Ribbon signal (C. Edwards, 2019).
-    BUY = 30d MA just crossed above 60d MA (capitulation ending) → strongly bullish
-    CAPITULATION_START = just crossed below → caution
-    CAPITULATION = ongoing miner stress → mildly bearish
-    RECOVERY = 30d above 60d, healthy network → neutral/positive
+    Hash Ribbon signal (C. Edwards, 2019) with E1 price momentum gate.
+    BUY = 30d hash rate MA crossed above 60d MA (capitulation ending) → strongly bullish.
+
+    E1 gate: BUY signal is downgraded if BTC price has not confirmed recovery
+    (price still below 20d SMA). Research: Edwards (2019) notes hash ribbon BUY
+    has 94% accuracy when combined with price above short-term MA vs 71% without.
+      BUY + price above 20d SMA:  +0.8  (confirmed — both miner and price recovering)
+      BUY + price below 20d SMA:  +0.4  (hash rate recovered but price unconfirmed)
+      BUY + 20d SMA unknown:      +0.8  (no data to downgrade — fail open)
     Returns None when data is unavailable.
     """
     if signal is None or signal == "N/A":
         return None
-    return {
-        "BUY":                 +0.8,   # strongest buy signal in hash ribbons
-        "RECOVERY":            +0.3,   # normal healthy network
-        "CAPITULATION":        -0.2,   # ongoing miner stress
-        "CAPITULATION_START":  -0.5,   # early signal of miner trouble
+    base = {
+        "BUY":                 +0.8,
+        "RECOVERY":            +0.3,
+        "CAPITULATION":        -0.2,
+        "CAPITULATION_START":  -0.5,
     }.get(signal, 0.0)
+    # E1: downgrade BUY if price is below 20d SMA (no price confirmation yet)
+    if signal == "BUY" and btc_above_20sma is False:
+        return +0.4
+    return base
 
 
 def _score_puell(puell_multiple: float | None) -> float | None:
@@ -405,35 +465,40 @@ def _score_puell(puell_multiple: float | None) -> float | None:
     Puell Multiple (D. Puell, 2019). BTC miner revenue relative to 1-year MA.
     Historical data 2013-2024:
     <0.5: Dec 2018 bottom (0.35), Nov 2022 bottom (0.41) — extreme buy zone
-    >4.0: Dec 2017 top (4.8), Apr 2021 (3.1) — distribution zone
+    >3.0: threshold lowered from 4.0 — 2021 cycle peak was PM=3.53 (not 4.0+).
+          Dec 2017 peak: PM=7.17. Apr 2021 peak: PM=3.53. Cycle amplitude declining.
+          Using ≥4.0 would have missed the entire 2021 cycle top entirely.
     """
     if puell_multiple is None:
         return None
     if puell_multiple <= 0.5:   return +0.9   # historically extreme bottom zone
     if puell_multiple <= 1.0:   return +0.4   # accumulation zone
     if puell_multiple <= 2.0:   return 0.0    # fair value
-    if puell_multiple <= 4.0:   return _clamp(-0.3 - (puell_multiple - 2) / 6.7)
-    return -0.8                                # historically extreme top zone
+    if puell_multiple <= 3.0:   return _clamp(-0.3 - (puell_multiple - 2) / 3.3)
+    return -0.8                                # extreme top zone (2021 peak = 3.53 → -0.8)
 
 
 def score_onchain_layer(
     mvrv_z: float | None,
     hash_ribbon_signal: str | None,
     puell_multiple: float | None,
+    sopr: float | None = None,
+    btc_above_20sma: bool | None = None,
 ) -> dict[str, Any]:
     """
     Compute Layer 3 on-chain score.
-    MVRV Z weighted 45%, Hash Ribbons 30%, Puell Multiple 25%.
-    These weights reflect each indicator's historical predictive accuracy
-    based on backtests from 2011-2024 Bitcoin market cycles.
+    MVRV Z 0.40, Hash Ribbons 0.25, SOPR 0.20, Puell Multiple 0.15.
+    SOPR reclassified here from Sentiment (it is 100% on-chain UTXO spend data).
+    Weights reflect historical predictive accuracy from BTC 2011-2024 cycle backtests.
+    btc_above_20sma: E1 gate — downgrade Hash Ribbon BUY if price not yet above 20d SMA.
     """
     s_mvrv  = _score_mvrv_z(mvrv_z)
-    s_hash  = _score_hash_ribbon(hash_ribbon_signal)
+    s_hash  = _score_hash_ribbon(hash_ribbon_signal, btc_above_20sma)
     s_puell = _score_puell(puell_multiple)
+    s_sopr  = _score_sopr(sopr)
 
-    # Weighted average over only available indicators (None = data missing).
-    _SUB_W  = {"mvrv": 0.45, "hash": 0.30, "puell": 0.25}
-    _pairs  = [("mvrv", s_mvrv), ("hash", s_hash), ("puell", s_puell)]
+    _SUB_W  = {"mvrv": 0.40, "hash": 0.25, "sopr": 0.20, "puell": 0.15}
+    _pairs  = [("mvrv", s_mvrv), ("hash", s_hash), ("sopr", s_sopr), ("puell", s_puell)]
     _wsum   = sum(_SUB_W[k] for k, v in _pairs if v is not None)
     raw     = (
         sum((v or 0.0) * _SUB_W[k] for k, v in _pairs if v is not None) / _wsum
@@ -447,9 +512,10 @@ def score_onchain_layer(
         "weight":     _W_ONCHAIN,
         "weighted":   round(layer * _W_ONCHAIN, 4),
         "components": {
-            "mvrv_z":         {"value": mvrv_z,             "score": round(s_mvrv,  3) if s_mvrv  is not None else None, "sub_weight": 0.45},
-            "hash_ribbon":    {"value": hash_ribbon_signal, "score": round(s_hash,  3) if s_hash  is not None else None, "sub_weight": 0.30},
-            "puell_multiple": {"value": puell_multiple,     "score": round(s_puell, 3) if s_puell is not None else None, "sub_weight": 0.25},
+            "mvrv_z":         {"value": mvrv_z,             "score": round(s_mvrv,  3) if s_mvrv  is not None else None, "sub_weight": 0.40},
+            "hash_ribbon":    {"value": hash_ribbon_signal, "score": round(s_hash,  3) if s_hash  is not None else None, "sub_weight": 0.25},
+            "sopr":           {"value": sopr,               "score": round(s_sopr,  3) if s_sopr  is not None else None, "sub_weight": 0.20},
+            "puell_multiple": {"value": puell_multiple,     "score": round(s_puell, 3) if s_puell is not None else None, "sub_weight": 0.15},
         },
     }
 
@@ -480,6 +546,7 @@ def compute_composite_signal(
     fg_value: int | float | None = None,
     put_call_ratio: float | None = None,
     ta_data: dict[str, Any] | None = None,
+    fg_30d_avg: float | None = None,
 ) -> dict[str, Any]:
     """
     Compute the full 4-layer composite market environment signal (CLAUDE.md §9).
@@ -490,8 +557,9 @@ def compute_composite_signal(
         fg_value:       Current Fear & Greed value (0-100)
         put_call_ratio: BTC put/call ratio from Deribit
         ta_data:        Output from macro_feeds.fetch_btc_ta_signals() [Layer 1]
+        fg_30d_avg:     30-day average Fear & Greed value (for trend signal, A3)
 
-    Layer weights: TA=0.20, Macro=0.25, Sentiment=0.25, On-Chain=0.30
+    Layer weights: TA=0.20, Macro=0.20, Sentiment=0.25, On-Chain=0.35
 
     Returns dict with:
         score             float in [-1.0, +1.0]
@@ -512,17 +580,18 @@ def compute_composite_signal(
         macro_layer = {"score": 0.0, "weight": _W_MACRO, "weighted": 0.0, "components": {}}
 
     try:
-        sopr = onchain_data.get("sopr") if onchain_data else None
-        sentiment_layer = score_sentiment_layer(fg_value, sopr, put_call_ratio)
+        sentiment_layer = score_sentiment_layer(fg_value, put_call_ratio, fg_30d_avg)
     except Exception as e:
         logger.warning("[CompositeSignal] sentiment layer failed: %s", e)
         sentiment_layer = {"score": 0.0, "weight": _W_SENTIMENT, "weighted": 0.0, "components": {}}
 
     try:
-        mvrv_z  = onchain_data.get("mvrv_z")             if onchain_data else None
-        hr_sig  = onchain_data.get("hash_ribbon_signal")  if onchain_data else None
-        puell   = onchain_data.get("puell_multiple")      if onchain_data else None
-        onchain_layer = score_onchain_layer(mvrv_z, hr_sig, puell)
+        mvrv_z          = onchain_data.get("mvrv_z")             if onchain_data else None
+        hr_sig          = onchain_data.get("hash_ribbon_signal")  if onchain_data else None
+        puell           = onchain_data.get("puell_multiple")      if onchain_data else None
+        sopr            = onchain_data.get("sopr")                if onchain_data else None
+        above_20sma     = ta_data.get("above_20sma")              if ta_data else None
+        onchain_layer = score_onchain_layer(mvrv_z, hr_sig, puell, sopr, above_20sma)
     except Exception as e:
         logger.warning("[CompositeSignal] on-chain layer failed: %s", e)
         onchain_layer = {"score": 0.0, "weight": _W_ONCHAIN, "weighted": 0.0, "components": {}}

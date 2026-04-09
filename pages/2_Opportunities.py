@@ -193,10 +193,13 @@ def _cached_composite_signal() -> dict:
         macro_data   = fetch_all_macro_data()
         onchain_data = fetch_coinmetrics_onchain(days=400)
         ta_data      = fetch_btc_ta_signals()
-        fg_val = None
+        fg_val, fg_30d_avg = None, None
         try:
-            hist = _fetch_fg_history(7)
-            fg_val = int(hist[0]["value"]) if hist else None
+            hist = _fetch_fg_history(30)
+            if hist:
+                fg_val     = int(hist[0]["value"])
+                vals_30     = [int(h["value"]) for h in hist if "value" in h]
+                fg_30d_avg  = round(sum(vals_30) / len(vals_30), 1) if vals_30 else None
         except Exception:
             pass
         return compute_composite_signal(
@@ -204,6 +207,7 @@ def _cached_composite_signal() -> dict:
             onchain_data=onchain_data,
             fg_value=fg_val,
             ta_data=ta_data,
+            fg_30d_avg=fg_30d_avg,
         )
     except Exception:
         return {}
