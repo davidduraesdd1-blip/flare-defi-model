@@ -1,0 +1,62 @@
+name: Feedback Evaluator — Daily (DeFi Model)
+
+# Runs every 6 hours to evaluate pending AI predictions and export checkpoint.
+# Works even when the Streamlit app is completely idle.
+# On success, commits the updated feedback_checkpoint.json back to the repo
+# so accumulated model intelligence is never lost.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours UTC
+  workflow_dispatch:         # allow manual trigger from GitHub UI
+
+permissions:
+  contents: write            # needed to commit checkpoint back to repo
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          # Install only what evaluate_headless.py needs (no streamlit/heavy deps)
+          pip install anthropic requests numpy python-dotenv apscheduler 2>/dev/null || true
+          # Install the full requirements if available
+          pip install -r requirements.txt 2>/dev/null || true
+
+      - name: Run headless evaluator
+        run: python evaluate_headless.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        continue-on-error: true   # don't block commit step if evaluation partially fails
+
+      - name: Commit feedback checkpoint
+        run: |
+          git config user.name  "GitHub Actions — Feedback Evaluator"
+          git config user.email "actions@github.com"
+          # Only commit if the checkpoint was actually updated
+          if git diff --quiet data/feedback_checkpoint.json 2>/dev/null; then
+            echo "No checkpoint changes — nothing to commit"
+          else
+            git add data/feedback_checkpoint.json data/headless_evaluator.log 2>/dev/null || true
+            git commit -m "ci: feedback checkpoint update $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+            Automated evaluation via GitHub Actions.
+            Updates model weights and resolves pending predictions.
+            Checkpoint loaded on next app startup to restore accumulated intelligence."
+            git push
+          fi

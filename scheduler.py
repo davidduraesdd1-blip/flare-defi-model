@@ -737,6 +737,14 @@ def start_scheduler() -> None:
     logger.info("Scheduler running. Press Ctrl+C to stop.")
     logger.info(f"Next scans: {', '.join(run_times)} {tz}")
 
+    # P1: Startup catch-up — restore checkpoint weights and detect overdue predictions
+    if _FEEDBACK_AVAILABLE:
+        try:
+            from ai.feedback_loop import startup_catchup_evaluation
+            startup_catchup_evaluation()
+        except Exception as _su:
+            logger.debug(f"Startup catch-up (non-critical): {_su}")
+
     # Run once immediately on startup so the UI has data right away
     logger.info("Running initial scan on startup...")
     run_full_scan()

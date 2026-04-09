@@ -81,11 +81,12 @@ def record_prediction(model_results: dict) -> None:
         top3 = opps[:3]
         prediction["profiles"][profile] = [
             {
-                "rank":          o.get("rank"),
-                "protocol":      o.get("protocol"),
-                "pool":          o.get("asset_or_pool"),
-                "predicted_apy": o.get("estimated_apy"),
-                "confidence":    o.get("confidence"),
+                "rank":            o.get("rank"),
+                "protocol":        o.get("protocol"),
+                "pool":            o.get("asset_or_pool"),
+                "predicted_apy":   o.get("estimated_apy"),
+                "confidence":      o.get("confidence"),
+                "price_at_signal": o.get("estimated_apy"),  # P8: snapshot APY at signal time for retro accuracy
             }
             for o in top3
         ]
@@ -318,6 +319,7 @@ def update_model_weights() -> dict:
     history["model_weights"] = weights
     save_history(history)
     logger.info(f"Model weights updated: {weights}")
+    export_feedback_checkpoint()   # P4: keep git checkpoint current after every weight update
     return weights
 
 
@@ -415,3 +417,145 @@ def get_profile_win_rates() -> dict:
         if acc["win_rate"] is not None:
             rates[profile] = round(acc["win_rate"] / 100, 4)   # convert % → decimal
     return rates
+
+
+# ─── Persistent Feedback Intelligence (Proposals 1 / 4 / 7) ──────────────────
+
+_CHECKPOINT_FILE = Path(__file__).parent.parent / "data" / "feedback_checkpoint.json"
+
+
+def export_feedback_checkpoint() -> bool:
+    """Export compact feedback metrics to a git-tracked JSON file (Proposal 4).
+
+    Called after every update_model_weights() so the checkpoint always reflects
+    the latest accumulated intelligence.  Survives fresh clones, Streamlit resets,
+    and process restarts — loaded back on startup via restore_from_checkpoint().
+    """
+    import json as _json
+    try:
+        history = load_history()
+        preds   = history.get("predictions") or []
+        weights = history.get("model_weights", _default_weights())
+
+        per_profile: dict = {}
+        for profile in RISK_PROFILE_NAMES:
+            acc = compute_accuracy(profile, history=history)
+            per_profile[profile] = {
+                "win_rate":     acc.get("win_rate"),
+                "accuracy_pct": acc.get("accuracy_pct"),
+                "grade":        acc.get("grade"),
+                "health_score": acc.get("health_score"),
+                "sample_count": acc.get("sample_count"),
+            }
+
+        # Most recent 20 resolved predictions (top pick per profile only)
+        resolved = sorted(
+            [p for p in preds if p.get("evaluated") and p.get("evaluated_at")],
+            key=lambda p: p.get("evaluated_at", ""),
+            reverse=True,
+        )[:20]
+        recent_signals: list = []
+        for pred in resolved:
+            for profile, picks in pred.get("profiles", {}).items():
+                for pick in picks[:1]:
+                    recent_signals.append({
+                        "timestamp":     pred.get("timestamp"),
+                        "evaluated_at":  pred.get("evaluated_at"),
+                        "profile":       profile,
+                        "protocol":      pick.get("protocol"),
+                        "pool":          pick.get("pool"),
+                        "predicted_apy": pick.get("predicted_apy"),
+                        "actual_apy":    pick.get("actual_apy"),
+                        "accurate":      pick.get("accurate"),
+                    })
+
+        checkpoint = {
+            "version":        2,
+            "app":            "defi_model",
+            "last_updated":   datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            "total_preds":    len(preds),
+            "evaluated":      sum(1 for p in preds if p.get("evaluated")),
+            "model_weights":  weights,
+            "per_profile":    per_profile,
+            "recent_signals": recent_signals,
+        }
+
+        _CHECKPOINT_FILE.parent.mkdir(exist_ok=True)
+        with open(_CHECKPOINT_FILE, "w", encoding="utf-8") as _cf:
+            _json.dump(checkpoint, _cf, indent=2, default=str)
+
+        logger.debug("[Feedback] Checkpoint exported — %d preds, %d evaluated",
+                     len(preds), checkpoint["evaluated"])
+        return True
+    except Exception as e:
+        logger.warning("[Feedback] Checkpoint export failed (non-critical): %s", e)
+        return False
+
+
+def restore_from_checkpoint() -> bool:
+    """Restore model weights from checkpoint if history.json is empty/missing (Proposal 7).
+
+    Does NOT restore full prediction history — only the trained model weights so
+    the feedback loop doesn't reset to 1.0 baseline on every fresh deploy.
+    Returns True if weights were successfully restored.
+    """
+    if not _CHECKPOINT_FILE.exists():
+        return False
+    try:
+        import json as _json
+        checkpoint = _json.loads(_CHECKPOINT_FILE.read_text(encoding="utf-8"))
+        weights    = checkpoint.get("model_weights", {})
+        if not weights:
+            return False
+
+        history = load_history()
+        # Only restore when we have no calibrated weights (fresh start)
+        current = history.get("model_weights", {})
+        if current and any(abs(v - 1.0) > 0.01 for v in current.values()):
+            return False  # Already calibrated — don't overwrite
+
+        history["model_weights"] = weights
+        if save_history(history):
+            logger.info("[Feedback] Model weights restored from git checkpoint: %s", weights)
+            return True
+        return False
+    except Exception as e:
+        logger.warning("[Feedback] Checkpoint restore failed (non-critical): %s", e)
+        return False
+
+
+def startup_catchup_evaluation() -> bool:
+    """Startup hook: restore checkpoint weights and detect overdue predictions (Proposal 1).
+
+    Called once per process start (from scheduler.py or app.py).  If any
+    predictions are overdue they will be evaluated at the next scheduled scan.
+    Returns True if action was needed.
+    """
+    restored = restore_from_checkpoint()
+
+    try:
+        history = load_history()
+        preds   = history.get("predictions") or []
+        now     = datetime.now(timezone.utc).replace(tzinfo=None)
+        overdue: list = []
+        for p in preds:
+            if p.get("evaluated") or not p.get("timestamp"):
+                continue
+            try:
+                ts = datetime.fromisoformat(p["timestamp"].replace("Z", ""))
+                if ts.tzinfo is not None:
+                    ts = ts.replace(tzinfo=None)
+                if (now - ts).total_seconds() > EVAL_WINDOW_24H:
+                    overdue.append(p)
+            except Exception:
+                pass
+
+        if overdue:
+            logger.info("[Feedback] Startup catch-up: %d overdue prediction(s) — "
+                        "will evaluate at next scan", len(overdue))
+            export_feedback_checkpoint()
+            return True
+    except Exception as e:
+        logger.warning("[Feedback] Startup catch-up detection failed (non-critical): %s", e)
+
+    return restored
