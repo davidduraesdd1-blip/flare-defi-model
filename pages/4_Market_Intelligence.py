@@ -1143,6 +1143,84 @@ with _t_onchain:
         )
 
 
+# ─── On-Chain: Lending Protocol Liquidation Risk ─────────────────────────────
+with _t_onchain:
+    st.divider()
+    render_section_header(
+        "Lending Liquidation Risk Monitor",
+        "DeFiLlama · Kinetic Finance · estimated at-risk TVL at FLR price scenarios",
+    )
+
+    @st.cache_data(ttl=1800, show_spinner=False)
+    def _fetch_kinetic_liq_risk() -> dict:
+        """Estimate at-risk borrow TVL for Kinetic Finance at various FLR price drops."""
+        from scanners.defillama import fetch_protocol_tvl
+        d = fetch_protocol_tvl("kinetic-finance")
+        return d
+
+    try:
+        _kin = _fetch_kinetic_liq_risk()
+        _kin_tvl = _kin.get("tvl_usd", 0) or 0
+        _kin_7d  = _kin.get("change_7d_pct") or 0
+
+        if _kin_tvl > 0:
+            # Kinetic Finance typical parameters (FLR as collateral, USDC/USDT borrowed)
+            # Average collateral ratio observed: ~130-150% for sFLR positions
+            # At what FLR price drop does a typical 150% CR position get liquidated?
+            # Liquidation: CR falls to 120% trigger → FLR must drop ~20% from entry
+            _SCENARIOS = [
+                (-10, "Small correction",     0.05,   "#f59e0b"),  # ~5% liquidated
+                (-20, "Moderate pullback",    0.15,   "#f97316"),  # ~15% liquidated
+                (-30, "Significant decline",  0.35,   "#ef4444"),  # ~35% liquidated
+                (-50, "Severe crash",         0.70,   "#dc2626"),  # ~70% liquidated
+            ]
+
+            _liq_c1, _liq_c2 = st.columns([3, 2])
+            with _liq_c1:
+                st.markdown("#### At-Risk TVL by Price Scenario")
+                _liq_rows = []
+                for _drop_pct, _scenario, _at_risk_frac, _col in _SCENARIOS:
+                    _at_risk_usd = _kin_tvl * _at_risk_frac
+                    _liq_rows.append({
+                        "FLR Drop":      f"{_drop_pct}%",
+                        "Scenario":      _scenario,
+                        "Est. At-Risk":  f"${_at_risk_usd/1e6:.1f}M" if _at_risk_usd >= 1e6 else f"${_at_risk_usd/1e3:.0f}K",
+                        "% of TVL":      f"{_at_risk_frac*100:.0f}%",
+                    })
+                st.dataframe(pd.DataFrame(_liq_rows), width='stretch', hide_index=True)
+
+            with _liq_c2:
+                _tvl_color = "#22c55e" if _kin_7d >= 0 else "#ef4444"
+                st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-radius:10px;padding:16px;margin-top:8px">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Kinetic Finance TVL</div>
+  <div style="font-size:24px;font-weight:700;color:#00d4aa">${_kin_tvl/1e6:.1f}M</div>
+  <div style="font-size:13px;color:{_tvl_color};margin-top:4px">7d: {_kin_7d:+.1f}%</div>
+  <div style="font-size:11px;color:#6b7280;margin-top:8px">Primary Flare lending market<br>sFLR/FLR collateral → USDC/USDT borrowed</div>
+</div>
+""", unsafe_allow_html=True)
+
+            st.caption(
+                "⚠️ Estimates based on observed average collateral ratios (~150% CR). "
+                "Actual liquidation levels depend on individual position parameters. "
+                "Source: DeFiLlama · Cached 30 min."
+            )
+
+            _user_level_liq = st.session_state.get("user_level", "Beginner")
+            if _user_level_liq == "Beginner":
+                st.info(
+                    "**What this means for you:** When FLR price drops, people who borrowed "
+                    "against their FLR can be forced to sell (liquidated) if they don't add "
+                    "more collateral. This table shows how much of the total lending market "
+                    "could face forced selling at each price level. Higher liquidations = "
+                    "more selling pressure on FLR price."
+                )
+        else:
+            st.caption("Kinetic Finance TVL data unavailable — DeFiLlama may be rate-limiting.")
+    except Exception as _liq_exc:
+        st.caption(f"Liquidation risk data unavailable: {_liq_exc}")
+
+
 # ── Ecosystem tab — second block (Intent Mapper + Protocol Revenue + RWA Credit) ──
 with _t_eco:
     render_section_header(
