@@ -4,6 +4,7 @@ Opportunities — Full opportunity tables, starter portfolios, sparklines, optio
 
 import sys
 import html as _html
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -12,6 +13,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+
+logger = logging.getLogger(__name__)
 
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
@@ -2103,7 +2106,8 @@ with _tab_yield:
         else:
             st.info("ERC-4626 vault data unavailable. Check RPC connectivity.")
     except Exception as _e4626:
-        st.warning(f"ERC-4626 vault read error: {_e4626}")
+        logger.warning("[Opportunities] ERC-4626 vault read failed: %s", _e4626)
+        st.warning("ERC-4626 vault data temporarily unavailable — check RPC connectivity.")
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
@@ -2410,7 +2414,8 @@ with _tab_yield:
                 unsafe_allow_html=True,
             )
         except Exception as _ilbe_err:
-            st.warning(f"Calculator error — check inputs: {_ilbe_err}")
+            logger.warning("[Opportunities] IL break-even calc failed: %s", _ilbe_err)
+            st.warning("Calculator error — please check your inputs and try again.")
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
