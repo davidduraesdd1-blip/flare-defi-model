@@ -597,18 +597,19 @@ def fetch_btc_ta_signals() -> dict[str, Any]:
 
         # ── RSI-14 ────────────────────────────────────────────────────────────
         def _rsi(prices: list, period: int = 14) -> float | None:
+            """Wilder (1978) smoothed RSI. Seed on first `period` deltas, smooth forward."""
             if len(prices) < period + 1:
                 return None
             deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
             gains  = [max(d, 0.0) for d in deltas]
             losses = [abs(min(d, 0.0)) for d in deltas]
-            avg_gain = sum(gains[-period:]) / period
-            avg_loss = sum(losses[-period:]) / period
-            for i in range(len(deltas) - period):
-                g = gains[period + i]
-                l = losses[period + i]
-                avg_gain = (avg_gain * (period - 1) + g) / period
-                avg_loss = (avg_loss * (period - 1) + l) / period
+            # Seed: simple average of first `period` values (Wilder spec)
+            avg_gain = sum(gains[:period]) / period
+            avg_loss = sum(losses[:period]) / period
+            # Wilder smoothing through remaining deltas
+            for i in range(period, len(deltas)):
+                avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+                avg_loss = (avg_loss * (period - 1) + losses[i]) / period
             if avg_loss == 0:
                 return 100.0
             rs = avg_gain / avg_loss

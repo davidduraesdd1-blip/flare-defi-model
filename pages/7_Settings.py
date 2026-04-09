@@ -510,14 +510,13 @@ with _ctrl_tab_export:
     if st.button("Generate RIA Advisor PDF", key="ria_pdf_btn", width='stretch'):
         try:
             from pdf_export import generate_ria_advisor_pdf
-            from agents.data_feed import get_agent_context
             from models.composite_signal import compute_composite_signal
             from macro_feeds import fetch_all_macro_data, fetch_coinmetrics_onchain, fetch_btc_ta_signals
-            from ui.common import fetch_fear_greed_history as _fgh
+            from ui.common import fetch_fear_greed_history as _fgh, load_latest as _load_lat
             from config import BRAND_NAME as _BN
 
-            _mctx_ria   = get_agent_context()
-            _results_ria = _mctx_ria.get("opportunities", {})
+            # load_latest() returns {conservative:[...], medium:[...], high:[...]} — the RIA PDF format
+            _results_ria = _load_lat()
 
             # Try to get composite signal for market context section
             _csig_ria = {}
