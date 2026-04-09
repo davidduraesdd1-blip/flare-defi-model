@@ -556,6 +556,131 @@ try:
 except Exception as _macro_err:
     st.caption(f"Macro data unavailable: {_macro_err}")
 
+# ─── BTC Technical Analysis (Layer 1 TA signals) ──────────────────────────────
+st.divider()
+render_section_header("BTC Technical Analysis", "Layer 1 · RSI-14 · MA Cross · 30d Momentum · yfinance daily OHLCV")
+
+try:
+    import macro_feeds as _mf_ta
+    _ta = _mf_ta.fetch_btc_ta_signals()
+
+    _rsi_val   = _ta.get("rsi_14")
+    _ma_sig    = _ta.get("ma_signal", "NEUTRAL")
+    _mom_30    = _ta.get("price_momentum")
+    _ab200     = _ta.get("above_200ma")
+    _btc_px    = _ta.get("btc_price")
+
+    # RSI color + label
+    if _rsi_val is None:
+        _rsi_color, _rsi_label = "#6b7280", "N/A"
+    elif _rsi_val < 30:
+        _rsi_color, _rsi_label = "#22c55e", "Oversold — buy zone"
+    elif _rsi_val > 70:
+        _rsi_color, _rsi_label = "#ef4444", "Overbought — caution"
+    else:
+        _rsi_color, _rsi_label = "#f59e0b", "Neutral range"
+
+    # MA cross color + icon
+    _ma_meta = {
+        "GOLDEN_CROSS": ("#22c55e", "▲ Golden Cross", "50d crossed above 200d · bullish trend"),
+        "DEATH_CROSS":  ("#ef4444", "▼ Death Cross",  "50d crossed below 200d · bearish trend"),
+        "NEUTRAL":      ("#9ca3af", "■ Neutral",       "No definitive MA cross signal"),
+    }
+    _ma_c, _ma_icon, _ma_desc = _ma_meta.get(_ma_sig, ("#9ca3af", "■ Neutral", ""))
+
+    # Momentum color
+    if _mom_30 is None:
+        _mom_color, _mom_str = "#6b7280", "N/A"
+    elif _mom_30 > 10:
+        _mom_color, _mom_str = "#22c55e", f"+{_mom_30:.1f}%"
+    elif _mom_30 < -10:
+        _mom_color, _mom_str = "#ef4444", f"{_mom_30:.1f}%"
+    else:
+        _mom_color, _mom_str = "#f59e0b", f"{_mom_30:+.1f}%"
+
+    # 200MA position
+    _ab200_str   = "Above 200d MA ▲" if _ab200 else "Below 200d MA ▼"
+    _ab200_color = "#22c55e" if _ab200 else "#ef4444"
+
+    # Pre-compute display strings (avoid complex expressions inside f-strings)
+    _rsi_disp  = f"{_rsi_val:.1f}" if _rsi_val is not None else "N/A"
+    _btc_disp  = f"${_btc_px:,.0f} BTC/USD" if _btc_px else "Price N/A"
+    if _mom_30 is not None and _mom_30 > 10:
+        _mom_trend = "Strong uptrend"
+    elif _mom_30 is not None and _mom_30 < -10:
+        _mom_trend = "Strong downtrend"
+    else:
+        _mom_trend = "Mild drift"
+
+    _tac1, _tac2, _tac3, _tac4 = st.columns(4)
+
+    with _tac1:
+        st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_rsi_color};
+            border-radius:10px;padding:16px;text-align:center">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">RSI-14</div>
+  <div style="font-size:26px;font-weight:700;color:{_rsi_color}">{_rsi_disp}</div>
+  <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_rsi_label}</div>
+  <div style="font-size:10px;color:#6b7280;margin-top:6px">Wilder 1978 · 14-day</div>
+</div>
+""", unsafe_allow_html=True)
+
+    with _tac2:
+        st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_ma_c};
+            border-radius:10px;padding:16px;text-align:center">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MA Cross</div>
+  <div style="font-size:18px;font-weight:700;color:{_ma_c}">{_ma_icon}</div>
+  <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_ma_desc}</div>
+  <div style="font-size:10px;color:#6b7280;margin-top:6px">50d vs 200d · Glassnode 71% accuracy</div>
+</div>
+""", unsafe_allow_html=True)
+
+    with _tac3:
+        st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mom_color};
+            border-radius:10px;padding:16px;text-align:center">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">30d Momentum</div>
+  <div style="font-size:26px;font-weight:700;color:{_mom_color}">{_mom_str}</div>
+  <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_mom_trend}</div>
+  <div style="font-size:10px;color:#6b7280;margin-top:6px">Price change: 30 days</div>
+</div>
+""", unsafe_allow_html=True)
+
+    with _tac4:
+        st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_ab200_color};
+            border-radius:10px;padding:16px;text-align:center">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">200d MA Position</div>
+  <div style="font-size:16px;font-weight:700;color:{_ab200_color}">{_ab200_str}</div>
+  <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_btc_disp}</div>
+  <div style="font-size:10px;color:#6b7280;margin-top:6px">Long-term trend filter</div>
+</div>
+""", unsafe_allow_html=True)
+
+    # Beginner explanation
+    _user_level = st.session_state.get("user_level", "Beginner")
+    if _user_level == "Beginner":
+        _ta_summary_parts = []
+        if _rsi_val is not None:
+            if _rsi_val < 30:
+                _ta_summary_parts.append("BTC is in an **oversold** zone — historically a good time to consider buying")
+            elif _rsi_val > 70:
+                _ta_summary_parts.append("BTC appears **overbought** — momentum may slow or reverse")
+            else:
+                _ta_summary_parts.append("BTC momentum is in a **neutral** range")
+        if _ma_sig == "GOLDEN_CROSS":
+            _ta_summary_parts.append("the short-term trend is crossing **above** the long-term average (bullish)")
+        elif _ma_sig == "DEATH_CROSS":
+            _ta_summary_parts.append("the short-term trend has dropped **below** the long-term average (bearish)")
+        if _ta_summary_parts:
+            st.info("What this means for you: " + "; ".join(_ta_summary_parts) + ".")
+
+    st.caption(f"Source: {_ta.get('source', 'yfinance')} · Cached 1 hour · Layer 1 Technical Analysis")
+
+except Exception as _ta_err:
+    st.caption(f"BTC technical signals unavailable: {_ta_err}")
+
 # ─── Blood in the Streets · DCA Multiplier (Group 3) ─────────────────────────
 st.divider()
 render_section_header("Blood in the Streets", "Multi-factor capitulation signal · DCA sizing guide")

@@ -160,16 +160,18 @@ with st.expander("📋 What's in each tab?", expanded=(_user_level == "Beginner"
         "| 📡 **FTSO Delegation** | Delegate FLR vote power to earn rewards every ~3.5 days — nothing locked |\n"
         "| 🌐 **FAssets** | Bring BTC, XRP & DOGE on-chain to earn DeFi yields without selling |\n"
         "| 🎯 **Strategy Planner** | Answer 3 questions — get a personalised Flare DeFi strategy |\n"
-        "| 📈 **Compound Calculator** | Project how yields grow over time with daily compounding & top-ups |"
+        "| 📈 **Compound Calculator** | Project how yields grow over time with daily compounding & top-ups |\n"
+        "| ⚖️ **Break-Even Calculator** | At what price does IL wipe out your yield? Find your safety buffer |"
     )
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "💰  Income Planner",
     "🔒  Spectra Fixed-Rate",
     "📡  FTSO Delegation",
     "🌐  FAssets",
     "🎯  Strategy Planner",
     "📈  Compound Calculator",
+    "⚖️  Break-Even",
 ])
 
 
@@ -1322,3 +1324,204 @@ holding period. Based on 2% assumed daily price volatility.
                 """)
     except Exception as _opt_exc:
         st.warning(f"Concentrated LP calculator error: {_opt_exc}")
+
+
+# ─── Tab 7: Break-Even LP Calculator ─────────────────────────────────────────
+
+with tab7:
+    import math as _math
+
+    render_section_header(
+        "Break-Even LP Calculator",
+        "At what price change does impermanent loss wipe out all yield earned?",
+    )
+
+    if _user_level == "Beginner":
+        st.info(
+            "**What this means for you:** When you provide liquidity in a DeFi pool, "
+            "you can lose money if the price of one token moves far from where it was "
+            "when you entered. This calculator tells you exactly how far the price has "
+            "to move before those losses cancel out your yield — your personal safety buffer."
+        )
+
+    st.markdown(
+        "<div style='color:#475569; font-size:0.85rem; margin-bottom:20px;'>"
+        "Based on the x·y=k AMM formula (Uniswap V2 / Curve V2 / most Flare DEXs). "
+        "IL = 2√P/(1+P) − 1 where P = new/old price ratio.</div>",
+        unsafe_allow_html=True,
+    )
+
+    _be_c1, _be_c2, _be_c3 = st.columns(3)
+    with _be_c1:
+        _be_apy    = st.number_input("Pool APY (%)", min_value=0.1, max_value=500.0,
+                                     value=15.0, step=0.5, key="be_apy",
+                                     help="Annual APY from fees + incentives shown on the pool card")
+    with _be_c2:
+        _be_days   = st.number_input("Holding period (days)", min_value=1, max_value=1095,
+                                     value=90, step=1, key="be_days",
+                                     help="How long you plan to keep capital in the pool")
+    with _be_c3:
+        _be_cap    = st.number_input("Capital ($)", min_value=100.0, max_value=10_000_000.0,
+                                     value=10_000.0, step=500.0, key="be_cap",
+                                     help="Initial USD value of both tokens combined")
+
+    _be_r1, _be_r2 = st.columns(2)
+    with _be_r1:
+        _be_token_a = st.text_input("Token A name", value="FLR", key="be_tok_a")
+    with _be_r2:
+        _be_token_b = st.text_input("Token B name", value="USDC", key="be_tok_b")
+
+    st.divider()
+
+    # ── Core math ────────────────────────────────────────────────────────────
+    # Yield earned over period
+    _be_yield_pct  = (_be_apy / 100.0) * (_be_days / 365.0)   # e.g. 0.037 = 3.7%
+    _be_yield_usd  = _be_cap * _be_yield_pct
+
+    # IL break-even: solve 2√r/(1+r) = 1 − yield_pct  →  quadratic in √r
+    # Let y = yield_pct (capped to 0.99 to avoid degenerate case)
+    _y = min(_be_yield_pct, 0.99)
+    # (1-y)·r - 2·√r + (1-y) = 0   [standard quadratic form with x=√r]
+    # discriminant = 4 - 4(1-y)² = 4(1-(1-y)²) = 4·y·(2-y)
+    _disc = 4.0 * _y * (2.0 - _y)
+    _a_coef = 1.0 - _y
+    # x = √r = [2 ± √disc] / (2*(1-y))  →  two solutions → one price up, one price down
+    _x_up   = (2.0 + _math.sqrt(_disc)) / (2.0 * _a_coef) if _a_coef > 0 else None
+    _x_dn   = (2.0 - _math.sqrt(_disc)) / (2.0 * _a_coef) if _a_coef > 0 else None
+    _r_up   = _x_up ** 2 if _x_up is not None else None  # price ratio that breaks even upside
+    _r_dn   = _x_dn ** 2 if _x_dn is not None else None  # price ratio that breaks even downside
+
+    # How % must token_a move to trigger break-even
+    _pct_up = (_r_up - 1.0) * 100.0 if _r_up is not None else None   # positive = price rise
+    _pct_dn = (_r_dn - 1.0) * 100.0 if _r_dn is not None else None   # negative = price fall
+
+    # IL at those break-even points (for verification — should equal yield_pct)
+    def _il_at(r: float) -> float:
+        return 2.0 * _math.sqrt(r) / (1.0 + r) - 1.0
+
+    # ── Result cards ─────────────────────────────────────────────────────────
+    _rm1, _rm2, _rm3 = st.columns(3)
+
+    with _rm1:
+        _yield_color = "#22c55e" if _be_yield_pct > 0.01 else "#f59e0b"
+        st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_yield_color};
+            border-radius:10px;padding:18px;text-align:center">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Yield Earned in {_be_days}d</div>
+  <div style="font-size:28px;font-weight:700;color:{_yield_color}">{_be_yield_pct*100:.2f}%</div>
+  <div style="font-size:14px;color:#22c55e;margin-top:2px">${_be_yield_usd:,.0f}</div>
+  <div style="font-size:11px;color:#9ca3af;margin-top:6px">This is what IL must exceed to put you underwater</div>
+</div>
+""", unsafe_allow_html=True)
+
+    with _rm2:
+        _pu_str = f"+{_pct_up:.1f}%" if _pct_up is not None else "N/A"
+        _pu_col = "#f59e0b" if _pct_up and _pct_up < 50 else "#22c55e"
+        st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_pu_col};
+            border-radius:10px;padding:18px;text-align:center">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Break-Even: {_be_token_a} Rises</div>
+  <div style="font-size:28px;font-weight:700;color:{_pu_col}">{_pu_str}</div>
+  <div style="font-size:11px;color:#9ca3af;margin-top:6px">Price must rise MORE than this before IL > yield</div>
+  <div style="font-size:10px;color:#6b7280;margin-top:4px">{"Wide buffer — safer zone" if _pct_up and _pct_up > 50 else "Narrow buffer — watch closely"}</div>
+</div>
+""", unsafe_allow_html=True)
+
+    with _rm3:
+        _pd_str = f"{_pct_dn:.1f}%" if _pct_dn is not None else "N/A"
+        _pd_col = "#f59e0b" if _pct_dn and abs(_pct_dn) < 30 else "#22c55e"
+        st.markdown(f"""
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_pd_col};
+            border-radius:10px;padding:18px;text-align:center">
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Break-Even: {_be_token_a} Falls</div>
+  <div style="font-size:28px;font-weight:700;color:{_pd_col}">{_pd_str}</div>
+  <div style="font-size:11px;color:#9ca3af;margin-top:6px">Price must fall MORE than this before IL > yield</div>
+  <div style="font-size:10px;color:#6b7280;margin-top:4px">{"Wide buffer — safer zone" if _pct_dn and abs(_pct_dn) > 30 else "Narrow buffer — watch closely"}</div>
+</div>
+""", unsafe_allow_html=True)
+
+    # ── IL sweep chart ────────────────────────────────────────────────────────
+    try:
+        import plotly.graph_objects as _go_be
+        import numpy as _np_be
+
+        _ratios  = _np_be.linspace(0.1, 4.0, 500)
+        _il_vals = [(_il_at(r) * 100) for r in _ratios]
+        _pct_chg = [(_r - 1.0) * 100 for _r in _ratios]
+
+        _fig_be = _go_be.Figure()
+
+        # IL curve
+        _fig_be.add_trace(_go_be.Scatter(
+            x=_pct_chg, y=_il_vals, mode="lines", name="Impermanent Loss",
+            line=dict(color="#ef4444", width=2),
+        ))
+
+        # Yield earned flat line
+        _fig_be.add_hline(
+            y=-_be_yield_pct * 100,
+            line_dash="dash", line_color="#22c55e",
+            annotation_text=f"Yield earned: {_be_yield_pct*100:.2f}%",
+            annotation_position="bottom right",
+        )
+
+        # Break-even vertical markers
+        if _pct_up is not None:
+            _fig_be.add_vline(x=_pct_up, line_dash="dot", line_color="#f59e0b",
+                              annotation_text=f"Break-even ↑ {_pct_up:+.1f}%",
+                              annotation_position="top right")
+        if _pct_dn is not None:
+            _fig_be.add_vline(x=_pct_dn, line_dash="dot", line_color="#f59e0b",
+                              annotation_text=f"Break-even ↓ {_pct_dn:.1f}%",
+                              annotation_position="top left")
+
+        _fig_be.update_layout(
+            height=320,
+            title=dict(text=f"IL vs Price Change — {_be_token_a}/{_be_token_b} pool", font=dict(size=13)),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e2e8f0", size=11),
+            margin=dict(l=0, r=0, t=40, b=0),
+            xaxis=dict(title="Price change (%)", gridcolor="rgba(255,255,255,0.07)",
+                       zeroline=True, zerolinecolor="rgba(255,255,255,0.2)"),
+            yaxis=dict(title="IL (%)", gridcolor="rgba(255,255,255,0.07)"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        st.plotly_chart(_fig_be, width='stretch')
+
+    except Exception:
+        pass  # chart is supplementary; don't block the calculator
+
+    # ── IL sweep table ────────────────────────────────────────────────────────
+    st.markdown("#### IL at Common Price Moves")
+    _sweep_pcts = [-75, -50, -40, -30, -20, -10, +10, +20, +30, +50, +100, +200]
+    _sweep_rows = []
+    for _sp in _sweep_pcts:
+        _r  = 1.0 + _sp / 100.0
+        if _r <= 0:
+            continue
+        _il = _il_at(_r) * 100.0
+        _net = _be_yield_pct * 100.0 + _il   # IL is negative, yield positive
+        _status = "✅ Profitable" if _net > 0 else "❌ Net loss"
+        _sweep_rows.append({
+            "Price change": f"{_sp:+d}%",
+            "IL": f"{_il:.2f}%",
+            f"Yield ({_be_days}d)": f"+{_be_yield_pct*100:.2f}%",
+            "Net P&L": f"{_net:+.2f}%",
+            "Status": _status,
+        })
+    st.dataframe(pd.DataFrame(_sweep_rows), use_container_width=True, hide_index=True)
+
+    st.caption(
+        "Formula: IL = 2√P/(1+P) − 1 · Uniswap V2 AMM · "
+        "Break-even solves (1−y)r − 2√r + (1−y) = 0 where y = yield earned"
+    )
+
+    if _user_level == "Beginner":
+        st.markdown("""
+**Reading this table:**
+- **IL** = the % you lose relative to just holding both tokens (always 0 or negative)
+- **Net P&L** = your actual gain/loss after combining yield earned and IL
+- A green ✅ means the pool was profitable even with price movement
+- A red ❌ means IL erased more than your yield — you'd have done better holding
+        """)
