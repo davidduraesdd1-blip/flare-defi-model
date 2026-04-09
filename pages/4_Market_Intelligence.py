@@ -137,7 +137,7 @@ try:
                                          if float(_ap.get('tvlUsd',0)) >= 1e6
                                          else f"${float(_ap.get('tvlUsd',0)):,.0f}"),
                         })
-                    st.dataframe(pd.DataFrame(_assist_rows), width='stretch', hide_index=True)
+                    st.dataframe(pd.DataFrame(_assist_rows), use_container_width=True, hide_index=True)
             except Exception:
                 pass
 
@@ -171,7 +171,7 @@ try:
                 {"Bridge": r["name"], "Supported Routes": r["chains"], "Type": r["type"]}
                 for r in _bridge_protocols
             ]
-            st.dataframe(pd.DataFrame(_bp_rows), width='stretch', hide_index=True)
+            st.dataframe(pd.DataFrame(_bp_rows), use_container_width=True, hide_index=True)
             # Live capital flow data from DeFiLlama
             try:
                 from scanners.defillama import fetch_bridge_flows as _fetch_bf
@@ -194,7 +194,7 @@ try:
                             "7d Flow":  f"{_arrow} {abs(_d7):.1f}%",
                             "Signal":   _sig,
                         })
-                    st.dataframe(pd.DataFrame(_flow_rows), width='stretch', hide_index=True)
+                    st.dataframe(pd.DataFrame(_flow_rows), use_container_width=True, hide_index=True)
             except Exception:
                 pass
 
@@ -317,7 +317,7 @@ else:
                 )
                 if isinstance(data, dict)
             ]
-            st.dataframe(pd.DataFrame(tvl_rows), width='stretch', hide_index=True)
+            st.dataframe(pd.DataFrame(tvl_rows), use_container_width=True, hide_index=True)
 
     # News
     news_items = digest.get("news_items") or []
@@ -476,7 +476,7 @@ if feedback:
         rows = [{"Profile": p.capitalize(), "Weight": f"{w:.4f}",
                  "Effect": "Boosted" if w > 1.0 else ("Reduced" if w < 0.9 else "Neutral")}
                 for p, w in weights.items()]
-        st.dataframe(pd.DataFrame(rows), width='stretch', hide_index=True)
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 # end _t_eco (first block: Ecosystem Monitor + AI Model Health)
 
@@ -547,14 +547,15 @@ try:
                 xaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
-            st.plotly_chart(_fig, width='stretch')
+            st.plotly_chart(_fig, use_container_width=True)
         else:
             st.info("Loading macro timeseries… (yfinance required)")
     else:
         st.info("Install yfinance for BTC macro correlations: `pip install yfinance`")
 
 except Exception as _macro_err:
-    st.caption(f"Macro data unavailable: {_macro_err}")
+    logger.warning("[MarketIntel] macro data failed: %s", _macro_err)
+    st.caption("Macro data temporarily unavailable — try refreshing in a few minutes.")
 
 # ─── BTC Technical Analysis (Layer 1 TA signals) ──────────────────────────────
 st.divider()
@@ -679,7 +680,8 @@ try:
     st.caption(f"Source: {_ta.get('source', 'yfinance')} · Cached 1 hour · Layer 1 Technical Analysis")
 
 except Exception as _ta_err:
-    st.caption(f"BTC technical signals unavailable: {_ta_err}")
+    logger.warning("[MarketIntel] BTC TA failed: %s", _ta_err)
+    st.caption("BTC technical signals temporarily unavailable — try refreshing in a few minutes.")
 
 # ─── Blood in the Streets · DCA Multiplier (Group 3) ─────────────────────────
 st.divider()
@@ -731,7 +733,8 @@ try:
 </div>
 """, unsafe_allow_html=True)
 except Exception as _bits_err:
-    st.caption(f"Blood in Streets signal unavailable: {_bits_err}")
+    logger.warning("[MarketIntel] Blood in Streets failed: %s", _bits_err)
+    st.caption("Market signal temporarily unavailable — try refreshing in a few minutes.")
 
 # end _t_macro
 
@@ -819,7 +822,7 @@ try:
                 xaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
                 showlegend=False,
             )
-            st.plotly_chart(_fig_mz, width='stretch')
+            st.plotly_chart(_fig_mz, use_container_width=True)
 
         # Hash Ribbons + Puell Multiple — added in composite signal sprint
         _hr_sig  = _oc4.get("hash_ribbon_signal", "N/A")
@@ -858,7 +861,8 @@ try:
         _ts4 = _oc4.get("timestamp", "")[:19]
         st.caption(f"Source: CoinMetrics Community · {_ts4} UTC · Cached 1h · MVRV (Mahmudov & Puell 2018) · SOPR (Shirakashi 2019)")
 except Exception as _oc_err:
-    st.caption(f"On-chain data unavailable: {_oc_err}")
+    logger.warning("[MarketIntel] on-chain data failed: %s", _oc_err)
+    st.caption("On-chain data temporarily unavailable — try refreshing in a few minutes.")
 
 # ── GROUP 5: Options Flow ─────────────────────────────────────────────────────
 st.markdown("---")
@@ -983,7 +987,7 @@ try:
                     xaxis=dict(tickangle=-45, gridcolor="rgba(255,255,255,0.05)"),
                     yaxis=dict(gridcolor="rgba(255,255,255,0.07)", title="OI (contracts)"),
                 )
-                st.plotly_chart(_fig5d, width='stretch')
+                st.plotly_chart(_fig5d, use_container_width=True)
 
         with _col5R:
             if _ts5d:
@@ -1005,12 +1009,13 @@ try:
                     xaxis=dict(title="Days to Expiry", gridcolor="rgba(255,255,255,0.05)"),
                     yaxis=dict(title="IV (%)", gridcolor="rgba(255,255,255,0.07)"),
                 )
-                st.plotly_chart(_fig5e, width='stretch')
+                st.plotly_chart(_fig5e, use_container_width=True)
 
         _ts5_txt = _oc5.get("timestamp", "")[:19]
         st.caption(f"Source: Deribit · {_ts5_txt} UTC · Cached 15 min")
 except Exception as _opt_err:
-    st.caption(f"Options data unavailable: {_opt_err}")
+    logger.warning("[MarketIntel] options data failed: %s", _opt_err)
+    st.caption("Options data temporarily unavailable — try refreshing in a few minutes.")
 
 # end _t_onchain
 
@@ -1125,7 +1130,7 @@ with _t_onchain:
                 "7d Change":     f"{_c['7d_chg']:+.1f}%",
                 "30d Change":    f"{_c['30d_chg']:+.1f}%",
             })
-        st.dataframe(pd.DataFrame(_iotm_rows), width='stretch', hide_index=True)
+        st.dataframe(pd.DataFrame(_iotm_rows), use_container_width=True, hide_index=True)
 
         render_what_this_means(
             "The 'In the Money' score estimates how many people who bought this coin are "
@@ -1187,7 +1192,7 @@ with _t_onchain:
                         "Est. At-Risk":  f"${_at_risk_usd/1e6:.1f}M" if _at_risk_usd >= 1e6 else f"${_at_risk_usd/1e3:.0f}K",
                         "% of TVL":      f"{_at_risk_frac*100:.0f}%",
                     })
-                st.dataframe(pd.DataFrame(_liq_rows), width='stretch', hide_index=True)
+                st.dataframe(pd.DataFrame(_liq_rows), use_container_width=True, hide_index=True)
 
             with _liq_c2:
                 _tvl_color = "#22c55e" if _kin_7d >= 0 else "#ef4444"
@@ -1218,7 +1223,8 @@ with _t_onchain:
         else:
             st.caption("Kinetic Finance TVL data unavailable — DeFiLlama may be rate-limiting.")
     except Exception as _liq_exc:
-        st.caption(f"Liquidation risk data unavailable: {_liq_exc}")
+        logger.warning("[LiquidationRisk] fetch failed: %s", _liq_exc)
+        st.caption("Liquidation risk data temporarily unavailable — try refreshing in a few minutes.")
 
 
 # ── Ecosystem tab — second block (Intent Mapper + Protocol Revenue + RWA Credit) ──
@@ -1320,7 +1326,7 @@ if _intent_input:
 
     if _matched_opps:
         st.markdown(f"**Matching opportunities ({len(_matched_opps)}):**")
-        st.dataframe(pd.DataFrame(_matched_opps).drop_duplicates(), width='stretch', hide_index=True)
+        st.dataframe(pd.DataFrame(_matched_opps).drop_duplicates(), use_container_width=True, hide_index=True)
     else:
         st.info("No matching opportunities found in current scan. Try running a scan first.")
 
@@ -1429,7 +1435,8 @@ if pro_mode:
             st.info("Protocol revenue data unavailable. Check API connectivity.")
 
     except Exception as _pr_err:
-        st.caption(f"Protocol revenue data unavailable: {_pr_err}")
+        logger.warning("[MarketIntel] protocol revenue failed: %s", _pr_err)
+        st.caption("Protocol revenue data temporarily unavailable — try refreshing in a few minutes.")
 
 
 # ─── RWA Credit Protocol Health (#58) ────────────────────────────────────────
@@ -1527,7 +1534,8 @@ if pro_mode:
         )
 
     except Exception as _rwa_err:
-        st.caption(f"RWA credit data unavailable: {_rwa_err}")
+        logger.warning("[MarketIntel] RWA credit data failed: %s", _rwa_err)
+        st.caption("RWA credit data temporarily unavailable — try refreshing in a few minutes.")
 
 
 # ─── Item 35: Unified Flare Ecosystem Panel ──────────────────────────────────
@@ -1587,7 +1595,7 @@ with _t_eco:
                 "Pools":      len(_ppools),
                 "Agent":      _agent,
             })
-        st.dataframe(pd.DataFrame(_eco_rows), width='stretch', hide_index=True)
+        st.dataframe(pd.DataFrame(_eco_rows), use_container_width=True, hide_index=True)
         st.caption("Source: DeFiLlama yields · Flare chain · Cached 15 min. Agent = executable by AI agent.")
     else:
         # Static fallback when DeFiLlama is unavailable
@@ -1599,7 +1607,7 @@ with _t_eco:
             {"Protocol": "Clearpool",         "Type": "Institutional Lending","TVL": "~$46M", "Best APY": "~11%",  "Pools": 2, "Agent": "✓ Agent"},
             {"Protocol": "Spectra Finance",   "Type": "Fixed Rate Yield",     "TVL": "~$5M",  "Best APY": "~18%",  "Pools": 3, "Agent": "✓ Agent"},
         ]
-        st.dataframe(pd.DataFrame(_eco_static), width='stretch', hide_index=True)
+        st.dataframe(pd.DataFrame(_eco_static), use_container_width=True, hide_index=True)
         st.caption("Showing research-based estimates — DeFiLlama live data unavailable.")
 
 
@@ -1645,7 +1653,7 @@ with _t_eco:
                 "TVL":      (f"${_xtvl/1e6:.1f}M" if _xtvl >= 1e6 else f"${_xtvl:,.0f}"),
                 "IL Risk":  "Yes" if "yes" in _xil else "No",
             })
-        st.dataframe(pd.DataFrame(_xrpl_rows), width='stretch', hide_index=True)
+        st.dataframe(pd.DataFrame(_xrpl_rows), use_container_width=True, hide_index=True)
     else:
         st.info("XRPL AMM pool data unavailable — using research estimates below.")
         _xrpl_static = [
@@ -1653,7 +1661,7 @@ with _t_eco:
             {"Pool": "XRP/BTC",  "Protocol": "XRPL AMM", "APY": "~2-5%", "TVL": "~$2M+", "IL Risk": "Yes"},
             {"Pool": "XRP/ETH",  "Protocol": "XRPL AMM", "APY": "~2-6%", "TVL": "~$1M+", "IL Risk": "Yes"},
         ]
-        st.dataframe(pd.DataFrame(_xrpl_static), width='stretch', hide_index=True)
+        st.dataframe(pd.DataFrame(_xrpl_static), use_container_width=True, hide_index=True)
 
     # EVM Sidechain bridge flows: Flare ↔ Ethereum + Flare ↔ XRP
     st.markdown(
@@ -1677,7 +1685,7 @@ with _t_eco:
                     "7d Flow":  f"{_a} {abs(_d7):.1f}%",
                     "Signal":   _s,
                 })
-            st.dataframe(pd.DataFrame(_flow_r), width='stretch', hide_index=True)
+            st.dataframe(pd.DataFrame(_flow_r), use_container_width=True, hide_index=True)
         else:
             st.caption("Bridge flow data unavailable.")
     except Exception:

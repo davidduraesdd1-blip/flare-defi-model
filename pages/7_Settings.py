@@ -494,7 +494,8 @@ with _ctrl_tab_export:
         except ImportError as _ie:
             st.error(f"PDF generation unavailable - missing dependency: {_ie}")
         except Exception as _ic_err:
-            st.error(f"Report generation failed: {_ic_err}")
+            logger.warning("[Settings] report generation failed: %s", _ic_err)
+            st.error("Report generation failed — please try again. If this persists, check your data connection.")
 
     # ─── RIA Advisor PDF Report ──────────────────────────────────────────────────
     st.markdown("### RIA Advisor Report")
@@ -550,7 +551,8 @@ with _ctrl_tab_export:
         except ImportError as _ie:
             st.error(f"PDF generation unavailable — install fpdf2: pip install fpdf2")
         except Exception as _ria_err:
-            st.error(f"RIA report generation failed: {_ria_err}")
+            logger.warning("[Settings] RIA report generation failed: %s", _ria_err)
+            st.error("RIA report generation failed — please try again. If this persists, check your data connection.")
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
