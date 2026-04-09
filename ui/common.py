@@ -23,6 +23,8 @@ except ImportError:
         @staticmethod
         def utc(): return _tz.utc
 
+logger = logging.getLogger(__name__)
+
 # OPT-41: module-level TTL cache for get_feedback_dashboard() to avoid re-reading
 # history.json + recomputing accuracy metrics on every sidebar render (~300ms saved).
 _FEEDBACK_CACHE: dict = {"data": None, "expires": 0.0}
@@ -880,7 +882,8 @@ def render_sidebar() -> dict:
                     if "cloud" in str(_e).lower() or sys.platform != "win32":
                         st.info("Manual scan not available on Streamlit Cloud. Data refreshes automatically every 4 hours.")
                     else:
-                        st.error(f"Could not start scan: {_e}")
+                        logger.warning("[common] scan launch error: %s", _e)
+                        st.error("Could not start scan — please try again in a moment.")
 
         # ─── Scan completion polling (OPT-43) ─────────────────────────────────
         # _scan_progress_fragment is a module-level @st.fragment(run_every=0.5).

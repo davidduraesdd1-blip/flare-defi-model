@@ -214,7 +214,8 @@ with _tab_pos:
                 st.dataframe(pd.DataFrame(_demo_rows), use_container_width=True, hide_index=True)
                 st.metric("Total Portfolio Value", f"${_demo_total:,.0f}")
         except Exception as _e:
-            st.info(f"Demo data unavailable: {_e}")
+            logger.warning("[Portfolio] demo data error: %s", _e)
+            st.info("Demo data temporarily unavailable — refresh to try again.")
 
 
 
