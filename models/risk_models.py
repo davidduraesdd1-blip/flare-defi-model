@@ -232,11 +232,12 @@ def compute_real_yield_ratio(total_apy: float, emission_apy: float) -> dict:
 
 def kelly_fraction(win_prob: float, win_pct: float, loss_pct: float) -> float:
     """
-    Kelly f* = (win_prob * win_pct - loss_prob * loss_pct) / (win_pct * loss_pct)
-    Correct asymmetric form.  When loss_pct == 0 (zero IL risk, e.g. lending /
-    staking) the denominator is undefined — the bet is always +EV so Kelly
-    recommends betting the full bankroll; we use win_prob as a conservative
-    proxy before applying the hard cap.
+    Kelly f* = (win_prob * win_pct - loss_prob * loss_pct) / win_pct
+    Standard asymmetric Kelly: f* = (b*p - q) / b where b = win_pct / loss_pct.
+    Simplifies to (p*win_pct - q*loss_pct) / win_pct.
+    When loss_pct == 0 (zero IL risk — lending/staking) the bet is always +EV;
+    Kelly recommends full bankroll. We use win_prob as a conservative proxy
+    before applying the hard cap.
     Returns suggested fraction of capital as a decimal (capped at MAX_KELLY_FRACTION).
     """
     loss_prob = 1 - win_prob
@@ -246,7 +247,7 @@ def kelly_fraction(win_prob: float, win_pct: float, loss_pct: float) -> float:
         # Zero-loss scenario (lending / staking with no IL): f* → ∞, use win_prob
         k = win_prob
     else:
-        k = (win_prob * win_pct - loss_prob * loss_pct) / (win_pct * loss_pct)
+        k = (win_prob * win_pct - loss_prob * loss_pct) / win_pct
     k = max(0.0, min(k, MAX_KELLY_FRACTION))   # cap Kelly fraction for safety
     return round(k, 4)
 
@@ -323,11 +324,12 @@ def build_opportunity(
     profile_win_rate: float = None,
     tvl_history:      list  = None,   # Upgrade #1: TVL velocity
     ftso_signal:      float = 0.0,    # Upgrade #3: FTSO oracle confidence boost (0–10)
+    risk_free_rate:   float = None,   # live T-bill rate (decimal); falls back to config
 ) -> Opportunity:
 
     _proto_info = PROTOCOLS.get(protocol_key, {"name": protocol_key})
     profile = RISK_PROFILES[risk_profile]
-    rf_rate = RISK_FREE_RATE
+    rf_rate = risk_free_rate if risk_free_rate is not None else RISK_FREE_RATE
 
     apr = max(0.0, apr)  # guard: negative APY is not a valid yield opportunity
 
@@ -752,6 +754,7 @@ def _build_candidate_list(
     tvl_history_map: dict = None,
     win_rate_map: dict = None,
     ftso_signal: float = 0.0,
+    macro_data: dict = None,   # passed through to fetch live risk-free rate
 ) -> list:
     """
     Convert raw scan data into candidate Opportunity objects.
@@ -759,10 +762,19 @@ def _build_candidate_list(
     tvl_history_map: {(protocol_name, pool_name): [tvl, ...]} for TVL velocity (Upgrade #1).
     win_rate_map:    {profile: win_rate_decimal} from feedback loop (used for Kelly).
     ftso_signal:     confidence boost from FTSO oracle agreement (Upgrade #3).
+    macro_data:      output of fetch_all_macro_data() — used to get live risk-free rate.
     """
     apy_history_map = apy_history_map or {}
     tvl_history_map = tvl_history_map or {}
     win_rate_map    = win_rate_map    or {}
+
+    # Fetch live risk-free rate once for all candidates in this batch
+    try:
+        from macro_feeds import get_live_risk_free_rate as _get_rfr
+        _rf_rate = _get_rfr(macro_data)
+    except Exception:
+        _rf_rate = RISK_FREE_RATE   # config fallback
+
     # Candidates are built at "high" profile then cloned per profile in run_all_models;
     # use the "high" profile win rate for initial Kelly sizing (conservatively)
     candidate_win_rate = win_rate_map.get("high")
@@ -794,6 +806,7 @@ def _build_candidate_list(
             profile_win_rate=candidate_win_rate,
             tvl_history=tvl_history_map.get((proto_name, pool_name), []),
             ftso_signal=ftso_signal,
+            risk_free_rate=_rf_rate,
         ))
         rank += 1
 
@@ -818,6 +831,7 @@ def _build_candidate_list(
             apy_history=apy_history_map.get((proto_name, asset), []),
             tvl_history=tvl_history_map.get((proto_name, asset), []),
             ftso_signal=ftso_signal,
+            risk_free_rate=_rf_rate,
         ))
         rank += 1
 
@@ -842,6 +856,7 @@ def _build_candidate_list(
             apy_history=apy_history_map.get((proto_name, token), []),
             tvl_history=tvl_history_map.get((proto_name, token), []),
             ftso_signal=ftso_signal,
+            risk_free_rate=_rf_rate,
         ))
         rank += 1
 

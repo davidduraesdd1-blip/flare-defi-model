@@ -89,14 +89,18 @@ def detect_lending_rate_arb(lending_data: list) -> list:
 def detect_cross_dex_arb(pools_data: list) -> list:
     """
     Find the same token pair priced differently across Blazeswap / SparkDEX / Enosys.
+    Requires actual spot price data (price0 / price1 fields on the pool) for a
+    valid signal. APR differences reflect different reward programs, NOT price gaps —
+    so we never use APR as a price proxy.
     """
     opps = []
 
-    # Group pools by normalised pair name
-    by_pair = {}
+    # Group pools by normalised pair name, keeping only those with real spot prices
+    by_pair: dict = {}
     for pool in pools_data:
-        t0 = pool.get("token0", "")
-        t1 = pool.get("token1", "")
+        t0     = pool.get("token0", "")
+        t1     = pool.get("token1", "")
+        price0 = pool.get("price0")   # spot price of token0 in USD (optional)
         if not t0 or not t1:
             continue
         pair = frozenset([t0, t1])
@@ -105,35 +109,41 @@ def detect_cross_dex_arb(pools_data: list) -> list:
     for pair, pools in by_pair.items():
         if len(pools) < 2:
             continue
-        # Compare APRs as a proxy for price inefficiency
-        # (a big APR difference on same pair = price gap creating arb)
-        aprs = [(p.get("protocol", "?"), p.get("apr", 0)) for p in pools]
-        aprs.sort(key=lambda x: x[1])
-        low_p, low_apr  = aprs[0]
-        high_p, high_apr = aprs[-1]
-        spread = high_apr - low_apr
 
-        # Only flag if spread suggests real price difference (> 2%)
-        if spread >= 2.0:
+        # Only fire when at least two pools both have a real spot price for token0.
+        priced = [(p.get("protocol", "?"), p.get("price0")) for p in pools
+                  if p.get("price0") is not None and p.get("price0") > 0]
+        if len(priced) < 2:
+            continue   # no real spot data — skip rather than fabricate a signal
+
+        priced.sort(key=lambda x: x[1])
+        low_p, low_px  = priced[0]
+        high_p, high_px = priced[-1]
+        pct_spread = (high_px - low_px) / low_px * 100
+
+        # DEX arb is real only when there's a meaningful spot price gap
+        if pct_spread >= 0.8:   # 0.8% min (covers gas + slippage on Flare)
             token_str = "-".join(sorted(pair))
-            opps.append(ArbitrageOpportunity(
-                strategy="cross_dex",
-                strategy_label="Cross-DEX Arbitrage",
-                token_or_pair=token_str,
-                buy_where=f"Buy on {low_p} (lower price implied by {low_apr:.1f}% APR)",
-                sell_where=f"Sell on {high_p} (higher price implied by {high_apr:.1f}% APR)",
-                estimated_profit=round(min(spread * 0.1, 2.0), 2),  # ~10% of spread is capturable
-                capital_needed=500,
-                urgency="act_soon" if spread > 10 else "monitor",
-                plain_english=(
-                    f"The {token_str} pool has a price gap between {low_p} and {high_p}. "
-                    f"Buy on the cheaper exchange, sell on the expensive one. "
-                    f"Estimated one-time profit: ~{round(min(spread*0.1,2.0),1)}%."
-                ),
-                risk_level="medium",
-                applicable_profiles=["medium", "high"],
-                data_source=pools[0].get("data_source", "live"),
-            ))
+            net_profit = round(pct_spread - 0.5, 2)   # deduct ~0.5% gas+slippage
+            if net_profit >= MIN_PROFIT_PCT:
+                opps.append(ArbitrageOpportunity(
+                    strategy="cross_dex",
+                    strategy_label="Cross-DEX Price Arbitrage",
+                    token_or_pair=token_str,
+                    buy_where=f"Buy on {low_p} @ ${low_px:.4f}",
+                    sell_where=f"Sell on {high_p} @ ${high_px:.4f}",
+                    estimated_profit=net_profit,
+                    capital_needed=500,
+                    urgency="act_soon" if pct_spread > 3.0 else "monitor",
+                    plain_english=(
+                        f"{token_str} is priced {round(pct_spread, 1)}% cheaper on {low_p} "
+                        f"than on {high_p} right now. Buy on {low_p}, sell on {high_p}. "
+                        f"Net profit after gas: ~{net_profit}%."
+                    ),
+                    risk_level="medium",
+                    applicable_profiles=["medium", "high"],
+                    data_source=pools[0].get("data_source", "live"),
+                ))
 
     return opps
 
@@ -250,32 +260,46 @@ def detect_cyclo_arb(staking_data: list) -> list:
     If cysFLR price < sFLR price by > 2%: buy cysFLR, redeem for sFLR.
     This is a unique Flare-specific opportunity.
     """
-    sflr = next((s for s in staking_data if s.get("token") == "sFLR"), None)
+    sflr   = next((s for s in staking_data if s.get("token") == "sFLR"),   None)
+    cysflr = next((s for s in staking_data if s.get("token") == "cysFLR"), None)
     if not sflr:
         return []
 
-    # cysFLR typically trades at a discount to sFLR (the market prices in unlock risk)
-    # Estimated discount from research: 5–15%
-    estimated_discount = 8.0  # % — using research estimate; replace with live price when available
+    sflr_price   = sflr.get("price_usd")   or sflr.get("nav_per_token")
+    cysflr_price = cysflr.get("price_usd") if cysflr else None
+
+    # Only surface this opportunity when we have real live prices for both tokens.
+    # A hardcoded estimate would misrepresent the actual discount and could send users
+    # into a trade that no longer exists or is smaller than gas costs.
+    if not sflr_price or not cysflr_price or sflr_price <= 0 or cysflr_price <= 0:
+        logger.debug("detect_cyclo_arb: live cysFLR or sFLR price unavailable — skipping")
+        return []
+
+    live_discount = (sflr_price - cysflr_price) / sflr_price * 100
+    if live_discount < 2.0:
+        return []   # discount too small to be worth gas + unlock risk
+
+    net_profit = round(live_discount - 1.0, 2)   # deduct ~1% for gas + unlock period cost
+    if net_profit < MIN_PROFIT_PCT:
+        return []
 
     return [ArbitrageOpportunity(
         strategy="cyclo_cysflr",
         strategy_label="Cyclo cysFLR Discount Arbitrage",
         token_or_pair="cysFLR/sFLR",
-        buy_where="Buy cysFLR at a discount on SparkDEX",
-        sell_where="Lock/redeem for sFLR at 1:1 via Cyclo protocol",
-        estimated_profit=round(estimated_discount - 1.0, 2),
+        buy_where=f"Buy cysFLR at ${cysflr_price:.4f} on SparkDEX",
+        sell_where=f"Redeem for sFLR at ${sflr_price:.4f} via Cyclo protocol (1:1 backing)",
+        estimated_profit=net_profit,
         capital_needed=1000,
-        urgency="monitor",
+        urgency="act_soon" if live_discount > 8 else "monitor",
         plain_english=(
-            f"cysFLR is backed by sFLR 1-to-1, but often trades cheaper. "
-            f"Buy cysFLR at the discount (~{estimated_discount:.0f}% below sFLR), "
-            f"then convert it back to sFLR. Profit: ~{estimated_discount-1:.0f}%. "
-            f"Note: discount is a research estimate — verify live price before acting."
+            f"cysFLR is backed by sFLR 1-to-1, but is trading {round(live_discount, 1)}% cheaper. "
+            f"Buy cysFLR at ${cysflr_price:.4f}, redeem for sFLR at ${sflr_price:.4f}. "
+            f"Net profit after fees: ~{net_profit}%."
         ),
         risk_level="high",
         applicable_profiles=["high"],
-        data_source="research",
+        data_source=cysflr.get("data_source", "live") if cysflr else "live",
     )]
 
 

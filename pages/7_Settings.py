@@ -496,6 +496,63 @@ with _ctrl_tab_export:
         except Exception as _ic_err:
             st.error(f"Report generation failed: {_ic_err}")
 
+    # ─── RIA Advisor PDF Report ──────────────────────────────────────────────────
+    st.markdown("### RIA Advisor Report")
+    st.markdown(
+        "<div style='color:#475569; font-size:0.85rem; margin-bottom:12px;'>"
+        "Generate a compliance-ready PDF for RIA/advisor client meetings. "
+        "Includes GIPS-compatible language, 'suggested allocation' framing, risk grades, "
+        "market environment summary, and a full regulatory disclaimer.</div>",
+        unsafe_allow_html=True,
+    )
+    _ria_advisor = st.text_input("Advisor Name (optional)", key="ria_advisor_name", placeholder="Jane Smith, CFP")
+    _ria_client  = st.text_input("Client Name (optional)",  key="ria_client_name",  placeholder="Smith Family Account")
+    if st.button("Generate RIA Advisor PDF", key="ria_pdf_btn", width='stretch'):
+        try:
+            from pdf_export import generate_ria_advisor_pdf
+            from agents.data_feed import get_agent_context
+            from models.composite_signal import compute_composite_signal
+            from macro_feeds import fetch_all_macro_data, fetch_coinmetrics_onchain, fetch_btc_ta_signals
+            from ui.common import fetch_fear_greed_history as _fgh
+            from config import BRAND_NAME as _BN
+
+            _mctx_ria   = get_agent_context()
+            _results_ria = _mctx_ria.get("opportunities", {})
+
+            # Try to get composite signal for market context section
+            _csig_ria = {}
+            try:
+                _md  = fetch_all_macro_data()
+                _ocd = fetch_coinmetrics_onchain(days=400)
+                _tad = fetch_btc_ta_signals()
+                _fgl = _fgh(7)
+                _fgv = int(_fgl[0]["value"]) if _fgl else None
+                _csig_ria = compute_composite_signal(_md, _ocd, _fgv, ta_data=_tad)
+            except Exception:
+                pass
+
+            _ria_bytes = generate_ria_advisor_pdf(
+                model_results    = _results_ria,
+                composite_signal = _csig_ria,
+                advisor_name     = _ria_advisor,
+                client_name      = _ria_client,
+                brand_name       = _BN or "DeFi Intelligence Platform",
+            )
+            _ria_fname = f"ria_advisor_report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.pdf"
+            st.download_button(
+                label="Download RIA Advisor PDF",
+                data=_ria_bytes,
+                file_name=_ria_fname,
+                mime="application/pdf",
+                key="ria_pdf_download",
+                width='stretch',
+            )
+            st.success("RIA report generated.")
+        except ImportError as _ie:
+            st.error(f"PDF generation unavailable — install fpdf2: pip install fpdf2")
+        except Exception as _ria_err:
+            st.error(f"RIA report generation failed: {_ria_err}")
+
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 

@@ -701,3 +701,16 @@ EXCHANGE_FALLBACK: list[str] = ["binance", "okx", "gate", "bybit", "kucoin", "co
 # 2-line rebrand when ready — no restructuring required.
 BRAND_NAME: str = os.environ.get("DEFI_BRAND_NAME", "")
 BRAND_LOGO_PATH: str = os.environ.get("DEFI_BRAND_LOGO_PATH", "")
+
+# ─── RIA / Advisor Integration ────────────────────────────────────────────────
+# EMBED_MODE: when True, hides sidebar, navigation chrome, and top branding header
+#             for clean iframe embedding into advisor platforms (e.g. UX Wealth Partners).
+#             Activate: DEFI_EMBED_MODE=1 (env var) or ?embed=1 query param.
+# GIPS_MODE:  when True, adds GIPS-compatible disclosures to all performance figures,
+#             adjusts return labels to time-weighted terminology (TWR), and adds
+#             required disclaimer banners for RIA/advisor usage.
+#             Activate: DEFI_GIPS_MODE=1 (env var).
+_embed_env = os.environ.get("DEFI_EMBED_MODE", "0")
+EMBED_MODE: bool = _embed_env in ("1", "true", "True", "yes")
+_gips_env  = os.environ.get("DEFI_GIPS_MODE", "0")
+GIPS_MODE: bool  = _gips_env in ("1", "true", "True", "yes")

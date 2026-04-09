@@ -81,8 +81,10 @@ def _startup_db_check() -> bool:
     try:
         from database import check_db_integrity
         return check_db_integrity()
+    except ImportError:
+        return True   # database module missing — new install, no DB to check yet
     except Exception:
-        return True   # don't block startup on import error
+        return False  # DB module exists but check raised — treat as integrity failure
 
 
 page_setup("Dashboard · Flare DeFi")

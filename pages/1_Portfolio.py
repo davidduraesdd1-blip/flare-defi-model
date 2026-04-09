@@ -572,7 +572,10 @@ with _tab_wallet:
                             new_pos["id"] = f"pos_{int(datetime.now(timezone.utc).timestamp())}_{i}"
                             positions.append(new_pos)
                             save_positions(positions)
-                            st.session_state["_pos_suggestions"].pop(i)
+                            # Build a new list excluding this index — never pop during iteration
+                            st.session_state["_pos_suggestions"] = [
+                                s for j, s in enumerate(st.session_state["_pos_suggestions"]) if j != i
+                            ]
                             st.rerun()
                 if st.button("Clear suggestions", key="clear_sug_btn"):
                     st.session_state["_pos_suggestions"] = []
