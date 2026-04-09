@@ -5,9 +5,9 @@ Produces a single score from -1.0 (extreme risk-off) to +1.0 (extreme risk-on)
 by combining four independent signal layers per CLAUDE.md §9:
 
   Layer 1 — TECHNICAL   weight 0.20  BTC RSI-14 + 50/200d MA cross + 30d momentum
-  Layer 2 — MACRO       weight 0.25  DXY + VIX + 2Y10Y yield curve + CPI
-  Layer 3 — SENTIMENT   weight 0.25  Fear & Greed + SOPR + Deribit put/call
-  Layer 4 — ON-CHAIN    weight 0.30  MVRV Z-Score + Hash Ribbons + Puell Multiple
+  Layer 2 — MACRO       weight 0.20  DXY + VIX + 2Y10Y yield curve + CPI + M2 YoY
+  Layer 3 — SENTIMENT   weight 0.25  Fear & Greed + F&G trend + Deribit put/call
+  Layer 4 — ON-CHAIN    weight 0.35  MVRV Z-Score + Hash Ribbons + SOPR + Puell + Realized Price + NVT
 
 Historical research sources:
   - RSI-14:         Wilder (1978). BTC backtested 2013-2024: avg 30d return +18% when RSI<30.
