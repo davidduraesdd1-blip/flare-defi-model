@@ -233,7 +233,7 @@ def _build_csv_export(positions: list, pnl_results: list) -> bytes:
     ])
     for pos, pnl in zip(positions, pnl_results):
         writer.writerow([
-            pos.get("protocol", "").capitalize(),
+            str(pos.get("protocol") or "").capitalize(),
             pos.get("pool", ""),
             pos.get("position_type", ""),
             pos.get("entry_date", ""),
@@ -305,7 +305,7 @@ def _build_pdf_export(positions: list, pnl_results: list) -> bytes:
         fill = i % 2 == 0
         pdf.set_fill_color(241, 245, 249) if fill else pdf.set_fill_color(255, 255, 255)
         row = [
-            pos.get("protocol", "").capitalize()[:12],
+            str(pos.get("protocol") or "").capitalize()[:12],
             pos.get("pool", "")[:20],
             f"${pnl['deposit_usd']:,.0f}",
             f"${pnl['current_value']:,.0f}",
@@ -564,7 +564,7 @@ with _tab_wallet:
                     with ca2:
                         st.markdown(
                             f"<div style='font-size:0.85rem; color:#94a3b8; padding:4px 0;'>"
-                            f"<b>{sug['pool']}</b> · {sug['protocol'].capitalize()} · "
+                            f"<b>{sug['pool']}</b> · {str(sug.get('protocol') or '').capitalize()} · "
                             f"{sug['position_type']} · {sug.get('token_a_amount', 0):,.4f} {sug.get('token_a', '')}"
                             f"</div>",
                             unsafe_allow_html=True,
@@ -745,7 +745,7 @@ with _tab_pos:
 
         for idx, pos in enumerate(positions):
             pnl      = pnl_results[idx]
-            proto    = _html.escape(pos.get("protocol", "?").capitalize())
+            proto    = _html.escape(str(pos.get("protocol") or "?").capitalize())
             pool     = _html.escape(pos.get("pool", "?"))
             ptype    = _html.escape(pos.get("position_type", "lp").upper())
             vc       = pnl["value_change"]
@@ -960,7 +960,7 @@ with _tab_pos:
                 is_incentive = proto_key in ("blazeswap", "enosys", "sparkdex")
                 pnl          = pnl_results[i]
                 rows.append({
-                    "Position":     f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
+                    "Position":     f"{pos.get('pool','?')} ({str(pos.get('protocol') or '?').capitalize()})",
                     "Type":         pos.get("position_type", "lp").upper(),
                     "Days Held":    days_held,
                     "Entry APY":    f"{(pos.get('entry_apy') or 0):.1f}%",
@@ -1044,7 +1044,7 @@ with _tab_pos:
                 eth_diff = (lp_val + fees_est) - eth_val if eth_val > 0 else 0.0
 
                 row = {
-                    "Position":        f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
+                    "Position":        f"{pos.get('pool','?')} ({str(pos.get('protocol') or '?').capitalize()})",
                     "Deposit":         f"${dep:,.0f}",
                     "LP+Fees":         f"${lp_val + fees_est:,.0f}",
                     "vs USD (0%)":     f"{usd_diff:+,.0f}",
@@ -1165,7 +1165,7 @@ with _tab_rewards:
                 proj_usd    = dep * _reward_rate * _days_to_jul2026 / 365
                 proj_rflr   = proj_usd / _FLR_PRICE if _FLR_PRICE > 0 else 0
                 rflr_rows.append({
-                    "Position":           f"{p.get('pool','?')} ({p.get('protocol','?').capitalize()})",
+                    "Position":           f"{p.get('pool','?')} ({str(p.get('protocol') or '?').capitalize()})",
                     "Deposit":            f"${dep:,.0f}",
                     "Days Held":          days_held,
                     "Est. rFLR Earned":   f"{earned_rflr:,.0f} FLR (≈${earned_usd:,.2f})",
@@ -1390,7 +1390,7 @@ with _tab_pos:
     else:
         # Build position labels and compute pairwise correlation
         pos_labels = [
-            f"{pos.get('pool', '?')} ({pos.get('protocol', '?').capitalize()})"
+            f"{pos.get('pool', '?')} ({str(pos.get('protocol') or '?').capitalize()})"
             for pos in positions
         ]
         n = len(positions)
@@ -1708,7 +1708,7 @@ with _tab_pos:
             _d5_total_weekly += _weekly
             _d5_total_monthly += _monthly
             _d5_rows.append({
-                "Position":   f"{pos.get('pool','?')} ({pos.get('protocol','?').capitalize()})",
+                "Position":   f"{pos.get('pool','?')} ({str(pos.get('protocol') or '?').capitalize()})",
                 "Type":       pos.get("position_type", "lp").upper(),
                 "APY %":      f"{_apy:.1f}%",
                 "Value":      f"${_cur:,.0f}",
@@ -1852,7 +1852,7 @@ with _tab_fassets:
         )
 
         # ── System Health Banner ───────────────────────────────────────────────
-        _fa_health  = _fa.get("system_health", "unknown")
+        _fa_health  = str(_fa.get("system_health") or "unknown")
         _fa_agents  = _fa.get("agent_count", 0)
         _h_color    = {"healthy": "#10b981", "caution": "#f59e0b", "unknown": "#475569"}.get(_fa_health, "#475569")
         _h_icon     = {"healthy": "✓", "caution": "⚠", "unknown": "?"}.get(_fa_health, "?")

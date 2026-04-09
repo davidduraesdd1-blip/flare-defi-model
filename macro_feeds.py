@@ -111,7 +111,7 @@ def _fetch_single_fred(key: str, series_id: str) -> tuple[str, float | None]:
                             pass
                     if len(valid) >= 13:
                         break
-                if len(valid) >= 13:
+                if len(valid) >= 13 and valid[12] > 0:
                     yoy = (valid[0] / valid[12] - 1) * 100
                     return key, round(yoy, 2)   # key = "cpi_index" but we return YoY
                 elif valid:
@@ -634,7 +634,7 @@ def fetch_btc_ta_signals() -> dict[str, Any]:
 
         # ── 30d Momentum ──────────────────────────────────────────────────────
         price_momentum = None
-        if len(closes) >= 31:
+        if len(closes) >= 31 and closes[-31] > 0:
             price_momentum = round((closes[-1] - closes[-31]) / closes[-31] * 100, 2)
 
         return {
