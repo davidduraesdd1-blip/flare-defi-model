@@ -620,6 +620,9 @@ ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")
 # False = all Claude API calls are skipped; apps show graceful fallback text.
 # To enable: change False → True here (one line, all AI features restore instantly).
 ANTHROPIC_ENABLED: bool = False
+# Claude model IDs — single source of truth for all AI files in this app
+CLAUDE_MODEL:       str = "claude-sonnet-4-6"
+CLAUDE_HAIKU_MODEL: str = "claude-haiku-4-5-20251001"
 COINGECKO_API_KEY: str | None = os.environ.get("DEFI_COINGECKO_API_KEY")
 COINMETRICS_API_KEY: str | None = os.environ.get("DEFI_COINMETRICS_API_KEY")  # coinmetrics.io free community key
 DEFI_WEBHOOK_URL: str = os.environ.get("DEFI_WEBHOOK_URL", "")       # Discord / Telegram / generic webhook

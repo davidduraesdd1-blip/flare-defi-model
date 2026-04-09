@@ -25,12 +25,22 @@ try:
 except ImportError:
     _ANTHROPIC_OK = False
 
-# Get API key and master switch from main config
+# Get API key, master switch, and model IDs from main config
 try:
-    from config import ANTHROPIC_API_KEY, ANTHROPIC_ENABLED
+    from config import ANTHROPIC_API_KEY, ANTHROPIC_ENABLED, CLAUDE_MODEL
 except ImportError:
-    ANTHROPIC_API_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
-    ANTHROPIC_ENABLED   = False
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+    ANTHROPIC_ENABLED = False
+    CLAUDE_MODEL      = "claude-sonnet-4-6"
+
+# ─── Credit exhaustion circuit breaker ───────────────────────────────────────
+# Mirrors the pattern used in llm_analysis.py.
+# Once credit exhaustion is detected (HTTP 400 with "credit" body), all
+# subsequent decide() calls return HOLD immediately without touching the API.
+# Cleared on next app restart. Re-enable by funding credits + restarting.
+import threading as _threading
+_credits_exhausted: bool = not ANTHROPIC_ENABLED
+_credits_lock = _threading.Lock()
 
 _SYSTEM_PROMPT = """You are a conservative autonomous DeFi yield optimizer.
 Your job: analyze the market context and make ONE clear decision per cycle.
@@ -202,6 +212,12 @@ class DecisionEngine:
         if not self.is_available():
             return _hold("Claude API unavailable — no API key or anthropic package missing")
 
+        # Credit exhaustion circuit breaker — avoid repeated API calls after exhaustion
+        global _credits_exhausted
+        with _credits_lock:
+            if _credits_exhausted:
+                return _hold("Claude API credit balance exhausted — fund credits and restart")
+
         context_json = json.dumps(context, indent=2, default=str)
         user_message = (
             f"Here is the current market context. Make your decision now.\n\n"
@@ -210,7 +226,7 @@ class DecisionEngine:
 
         try:
             response = self._client.messages.create(
-                model     = "claude-sonnet-4-6",
+                model     = CLAUDE_MODEL,
                 max_tokens = 512,
                 system    = _SYSTEM_PROMPT,
                 messages  = [{"role": "user", "content": user_message}],
@@ -230,4 +246,14 @@ class DecisionEngine:
         except json.JSONDecodeError as e:
             return _hold(f"Claude response was not valid JSON: {e}")
         except Exception as e:
+            err_str = str(e)
+            # Detect credit exhaustion (HTTP 400 with "credit balance" in body)
+            if "credit" in err_str.lower() and ("400" in err_str or "balance" in err_str.lower()):
+                with _credits_lock:
+                    _credits_exhausted = True
+                import logging
+                logging.getLogger(__name__).info(
+                    "[DecisionEngine] Claude credit balance exhausted — disabling AI calls"
+                )
+                return _hold("Claude API credit balance exhausted — fund credits and restart")
             return _hold(f"Claude API error: {type(e).__name__}: {e}")
