@@ -27,17 +27,36 @@ from utils.http import http_get as _get, http_post as _post, coingecko_limiter
 
 
 # ─── Persistent KV store helpers (for FTSO backoff) ──────────────────────────
+# Module-level singleton connection reused across all _kv_get / _kv_set calls.
+# Opening a new sqlite3.connect() on every call wastes file descriptors and
+# slows down high-frequency FTSO backoff checks. A single connection with a
+# threading lock is safe because check_same_thread=False and we serialise
+# writes explicitly.
+
+_kv_lock: threading.Lock = threading.Lock()
+_kv_conn: sqlite3.Connection | None = None
+
+
+def _get_kv_conn() -> sqlite3.Connection:
+    """Return (and lazily create) the module-level KV store connection."""
+    global _kv_conn
+    if _kv_conn is None:
+        _kv_conn = sqlite3.connect(str(DB_FILE), timeout=5, check_same_thread=False)
+        _kv_conn.execute(
+            "CREATE TABLE IF NOT EXISTS kv_store "
+            "(key TEXT PRIMARY KEY, value REAL NOT NULL)"
+        )
+        _kv_conn.commit()
+    return _kv_conn
+
 
 def _kv_get(key: str, default: float = 0.0) -> float:
     """Read a float value from the kv_store table in defi_model.db."""
     try:
-        conn = sqlite3.connect(str(DB_FILE), timeout=5, check_same_thread=False)
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS kv_store "
-            "(key TEXT PRIMARY KEY, value REAL NOT NULL)"
-        )
-        row = conn.execute("SELECT value FROM kv_store WHERE key=?", (key,)).fetchone()
-        conn.close()
+        with _kv_lock:
+            row = _get_kv_conn().execute(
+                "SELECT value FROM kv_store WHERE key=?", (key,)
+            ).fetchone()
         return float(row[0]) if row else default
     except Exception:
         return default
@@ -46,18 +65,14 @@ def _kv_get(key: str, default: float = 0.0) -> float:
 def _kv_set(key: str, value: float) -> None:
     """Write/update a float value in the kv_store table in defi_model.db."""
     try:
-        conn = sqlite3.connect(str(DB_FILE), timeout=5, check_same_thread=False)
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS kv_store "
-            "(key TEXT PRIMARY KEY, value REAL NOT NULL)"
-        )
-        conn.execute(
-            "INSERT INTO kv_store(key, value) VALUES(?,?) "
-            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (key, value),
-        )
-        conn.commit()
-        conn.close()
+        with _kv_lock:
+            conn = _get_kv_conn()
+            conn.execute(
+                "INSERT INTO kv_store(key, value) VALUES(?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, value),
+            )
+            conn.commit()
     except Exception:
         pass
 

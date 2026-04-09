@@ -69,7 +69,7 @@ from config import (
     RISK_PROFILES, RISK_PROFILE_NAMES, INCENTIVE_PROGRAM, HISTORY_FILE,
     POSITIONS_FILE, WALLETS_FILE, PROTOCOLS, TOKENS, FLARE_RPC_URLS,
     MONITOR_DIGEST_FILE, SCHEDULER, BRAND_NAME, BRAND_LOGO_PATH,
-    PROTOCOL_AUDITS, risk_letter_grade,
+    PROTOCOL_AUDITS, risk_letter_grade, EMBED_MODE, GIPS_MODE,
 )
 from utils.file_io import atomic_json_write
 from utils.http import _SESSION as _http_session, coingecko_limiter
@@ -113,15 +113,54 @@ def load_live_prices() -> list:
 
 # ─── Page Bootstrap ───────────────────────────────────────────────────────────
 
+def _is_embed_mode() -> bool:
+    """
+    Return True when running in embed/iframe mode.
+    Activated via:
+      - DEFI_EMBED_MODE=1 environment variable (set at server launch), OR
+      - ?embed=1 query parameter in the URL (allows per-session embedding)
+    """
+    if EMBED_MODE:
+        return True
+    try:
+        params = st.query_params
+        return str(params.get("embed", "0")) in ("1", "true", "True")
+    except Exception:
+        return False
+
+
 def page_setup(title: str = "Flare DeFi Model") -> None:
     """Must be the first call in every page."""
+    _embed = _is_embed_mode()
     st.set_page_config(
         page_title=title,
         page_icon="⚡",
         layout="wide",
-        initial_sidebar_state="expanded",
+        initial_sidebar_state="collapsed" if _embed else "expanded",
     )
     _inject_css()
+    if _embed:
+        # Embed mode: hide sidebar, navigation arrows, top toolbar, and Streamlit chrome.
+        # This gives a clean iframe-embeddable surface for advisor platforms.
+        st.markdown("""
+<style>
+[data-testid="stSidebar"],
+[data-testid="collapsedControl"],
+[data-testid="stSidebarNavLink"],
+section[data-testid="stSidebarNav"],
+header[data-testid="stHeader"],
+#MainMenu, footer { display: none !important; visibility: hidden !important; }
+.block-container { padding-top: 0.5rem !important; }
+</style>""", unsafe_allow_html=True)
+    if GIPS_MODE:
+        st.markdown("""
+<div style='background:#1e293b;border:1px solid #334155;border-left:3px solid #00d4aa;
+border-radius:6px;padding:8px 16px;margin-bottom:12px;font-size:0.78rem;color:#94a3b8;'>
+<strong style='color:#00d4aa;'>GIPS Disclosure</strong> — Performance figures shown are
+time-weighted suggested allocations (TWR). Past DeFi yield rates are not a guarantee of
+future performance. All APY data is sourced from live protocol feeds and is provided for
+informational purposes only. Not investment advice. Consult a licensed advisor.
+</div>""", unsafe_allow_html=True)
 
 
 @st.cache_data(ttl=86400)

@@ -56,7 +56,7 @@ from config import (
 
 try:
     from models.composite_signal import compute_composite_signal
-    from macro_feeds import fetch_all_macro_data, fetch_coinmetrics_onchain
+    from macro_feeds import fetch_all_macro_data, fetch_coinmetrics_onchain, fetch_btc_ta_signals
     from ui.common import fetch_fear_greed_history as _fetch_fg_history
     _COMPOSITE_AVAIL = True
 except ImportError:
@@ -183,12 +183,13 @@ def _cached_all_hacks():
 
 @st.cache_data(ttl=3600)
 def _cached_composite_signal() -> dict:
-    """Compute composite market environment signal. Cached 1 hour."""
+    """Compute composite market environment signal (4-layer). Cached 1 hour."""
     if not _COMPOSITE_AVAIL:
         return {}
     try:
         macro_data   = fetch_all_macro_data()
         onchain_data = fetch_coinmetrics_onchain(days=400)
+        ta_data      = fetch_btc_ta_signals()
         fg_val = None
         try:
             hist = _fetch_fg_history(7)
@@ -199,6 +200,7 @@ def _cached_composite_signal() -> dict:
             macro_data=macro_data,
             onchain_data=onchain_data,
             fg_value=fg_val,
+            ta_data=ta_data,
         )
     except Exception:
         return {}
@@ -276,7 +278,8 @@ if _csig:
             f"</div>"
         )
     else:
-        # Intermediate/Advanced: signal score + layer breakdown
+        # Intermediate/Advanced: signal score + 4-layer breakdown
+        _ta_s      = _layers.get("technical", {}).get("score", 0)
         _macro_s   = _layers.get("macro",     {}).get("score", 0)
         _sent_s    = _layers.get("sentiment", {}).get("score", 0)
         _chain_s   = _layers.get("onchain",   {}).get("score", 0)
@@ -289,6 +292,7 @@ if _csig:
             f"<div style='color:{_sig_color};font-weight:800;font-size:1.1rem;'>{_signal_label}</div>"
             f"<div style='color:#64748b;font-size:0.78rem;'>Score {_s(_score)}</div></div>"
             f"<div style='color:#475569;font-size:0.8rem;border-left:1px solid #1e293b;padding-left:20px;'>"
+            f"<div>Technical <span style='color:{'#22c55e' if _ta_s>=0 else '#ef4444'};font-weight:600;'>{_s(_ta_s)}</span></div>"
             f"<div>Macro <span style='color:{'#22c55e' if _macro_s>=0 else '#ef4444'};font-weight:600;'>{_s(_macro_s)}</span></div>"
             f"<div>Sentiment <span style='color:{'#22c55e' if _sent_s>=0 else '#ef4444'};font-weight:600;'>{_s(_sent_s)}</span></div>"
             f"<div>On-Chain <span style='color:{'#22c55e' if _chain_s>=0 else '#ef4444'};font-weight:600;'>{_s(_chain_s)}</span></div>"

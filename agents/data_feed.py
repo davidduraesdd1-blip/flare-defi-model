@@ -267,18 +267,21 @@ def get_agent_context(
     opps        = _get_top_opportunities(n=5)
     fear_greed  = _get_fear_greed()
 
-    # Composite market environment signal (3-layer: macro + sentiment + on-chain)
+    # Composite market environment signal (4-layer: TA + macro + sentiment + on-chain)
     composite_signal: dict = {}
     if _COMPOSITE_OK and _MACRO_OK:
         try:
+            from macro_feeds import fetch_btc_ta_signals as _fetch_ta
             macro_data   = fetch_all_macro_data()
             onchain_data = fetch_coinmetrics_onchain(days=400)
+            ta_data      = _fetch_ta()
             fg_val       = fear_greed.get("value")
             composite_signal = compute_composite_signal(
                 macro_data    = macro_data,
                 onchain_data  = onchain_data,
                 fg_value      = fg_val,
                 put_call_ratio= None,   # populated when Deribit data available
+                ta_data       = ta_data,
             )
         except Exception:
             composite_signal = {}

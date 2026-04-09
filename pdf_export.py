@@ -407,3 +407,169 @@ def generate_investment_committee_pdf(
 
     _footer_line(pdf, f"{family_office_name} | DeFi Investment Committee | {ts} | Confidential")
     return bytes(pdf.output())
+
+
+# ─── RIA Advisor Report (GIPS-compatible, compliance-ready) ──────────────────
+
+def generate_ria_advisor_pdf(
+    model_results: dict,
+    composite_signal: dict = None,
+    advisor_name: str = "",
+    client_name: str = "",
+    brand_name: str = "",
+) -> bytes:
+    """
+    Generate an RIA-grade advisor PDF suitable for client meetings and platform
+    integration (e.g. UX Wealth Partners / TAMP embed).
+
+    Compliant language:
+      - "Suggested allocation" (not "buy" or "recommendation to trade")
+      - GIPS-compatible return labeling: APY displayed as time-weighted yield
+      - Risk score displayed with letter grade + compliance caveat
+      - Full disclaimer section required for RIA use
+
+    Args:
+        model_results:    {risk_profile: [opportunity, ...]}
+        composite_signal: composite signal dict (optional — adds market context)
+        advisor_name:     name of the advisor preparing the report
+        client_name:      client name (or blank for generic report)
+        brand_name:       white-label brand override
+
+    Returns:
+        Raw PDF bytes for st.download_button()
+    """
+    pdf = FPDF(orientation="P", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.set_margins(20, 20, 20)
+    pdf.add_page()
+    ts       = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    ts_short = datetime.now(timezone.utc).strftime("%d %b %Y")
+    usable_w = _A4_W - 40   # 170mm usable
+
+    _brand = _ps(brand_name or "DeFi Intelligence Platform")
+
+    # ── Cover ─────────────────────────────────────────────────────────────────
+    pdf.ln(10)
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.set_text_color(*_TEAL)
+    pdf.cell(0, 12, _brand, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_text_color(*_DKBLUE)
+    pdf.cell(0, 8, "DeFi Yield Opportunity Summary",
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(*_GREY)
+    report_line = f"Prepared: {ts_short}"
+    if advisor_name:
+        report_line += f"  |  Advisor: {_ps(advisor_name)}"
+    if client_name:
+        report_line += f"  |  Client: {_ps(client_name)}"
+    pdf.cell(0, 6, report_line, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.set_draw_color(*_TEAL)
+    pdf.set_line_width(0.8)
+    pdf.ln(2)
+    pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+    pdf.ln(6)
+
+    # ── GIPS / Compliance Header ───────────────────────────────────────────────
+    pdf.set_font("Helvetica", "I", 7.5)
+    pdf.set_text_color(100, 100, 130)
+    pdf.multi_cell(0, 4,
+        _ps("GIPS Notice: APY figures represent annualized time-weighted yield rates observed "
+            "from live protocol data. Past yield rates are not indicative of future performance. "
+            "All figures are informational only and do not constitute a recommendation to buy, sell, "
+            "or hold any asset. This report is prepared for qualified investors and RIA clients only."),
+        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_draw_color(200, 200, 220)
+    pdf.set_line_width(0.2)
+    pdf.line(pdf.l_margin, pdf.get_y() + 1, pdf.w - pdf.r_margin, pdf.get_y() + 1)
+    pdf.ln(5)
+    pdf.set_text_color(*_BLACK)
+
+    # ── Market Environment (if composite signal available) ────────────────────
+    if composite_signal and composite_signal.get("signal"):
+        _section(pdf, "Market Environment Summary")
+        _sig   = composite_signal.get("signal", "N/A")
+        _score = composite_signal.get("score", 0)
+        _summ  = composite_signal.get("beginner_summary", "Market conditions are mixed.")
+        _layers = composite_signal.get("layers", {})
+
+        env_cols   = ["Layer", "Score", "Interpretation"]
+        env_widths = [42, 22, 106]
+        _header_row(pdf, env_cols, env_widths)
+        _layer_rows = [
+            ("Technical (BTC RSI/MA)",  _layers.get("technical", {}).get("score", "-"),
+             "Price momentum and trend direction"),
+            ("Macro Environment",        _layers.get("macro",     {}).get("score", "-"),
+             "DXY, VIX, yield curve, inflation"),
+            ("Market Sentiment",         _layers.get("sentiment", {}).get("score", "-"),
+             "Fear & Greed, SOPR, options positioning"),
+            ("On-Chain Activity",        _layers.get("onchain",   {}).get("score", "-"),
+             "MVRV Z-Score, Hash Ribbons, Puell Multiple"),
+            ("Composite Score",          f"{_score:+.3f}" if isinstance(_score, float) else str(_score),
+             f"Overall: {_sig}"),
+        ]
+        for i, (layer, score, interp) in enumerate(_layer_rows):
+            _data_row(pdf, [_ps(layer), str(score), _ps(interp)], env_widths, even=i % 2 == 0)
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(*_GREY)
+        pdf.cell(0, 5, _ps(f"Summary: {_summ}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(4)
+
+    # ── Suggested Allocations by Risk Profile ─────────────────────────────────
+    _PROFILE_LABELS = {
+        "conservative": "Capital Preservation (Conservative)",
+        "medium":       "Balanced Growth (Moderate Risk)",
+        "high":         "Yield Maximization (Aggressive)",
+    }
+    cols   = ["Protocol", "Pool / Asset", "Suggested Alloc. APY", "Risk Grade", "IL Risk", "Confidence"]
+    widths = [32, 42, 36, 22, 20, 18]   # ~170mm
+
+    for profile_key in ("conservative", "medium", "high"):
+        opps = model_results.get(profile_key, [])
+        if not opps:
+            continue
+        _section(pdf, _PROFILE_LABELS.get(profile_key, profile_key.upper()))
+        _header_row(pdf, cols, widths)
+        for i, o in enumerate(opps[:10]):
+            _risk_num = o.get("risk_score", 5.0)
+            _grade, _ = (("A", "#22c55e") if _risk_num < 2 else
+                         ("B", "#10b981") if _risk_num < 3.5 else
+                         ("C", "#f59e0b") if _risk_num < 5.0 else
+                         ("D", "#f97316") if _risk_num < 7.0 else
+                         ("F", "#ef4444"))
+            row = [
+                str(o.get("protocol") or "?")[:18],
+                str(o.get("asset_or_pool") or "?")[:24],
+                _fmt(o.get("estimated_apy"), suffix="% APY (TWR)", decimals=1),
+                f"{_grade} ({_fmt(o.get('risk_score', 5), decimals=1)}/10)",
+                str(o.get("il_risk", "N/A")).capitalize(),
+                _fmt(o.get("confidence"), suffix="%", decimals=0),
+            ]
+            _data_row(pdf, row, widths, even=i % 2 == 0)
+        pdf.ln(3)
+
+    # ── Regulatory Disclaimer ─────────────────────────────────────────────────
+    _section(pdf, "Regulatory Disclaimer & Disclosures")
+    pdf.set_font("Helvetica", "", 7.5)
+    pdf.set_text_color(80, 80, 100)
+    disc = (
+        "This document has been prepared for informational purposes only and does not "
+        "constitute investment advice, a solicitation, or an offer to buy or sell any "
+        "security or financial instrument. The information contained herein is based on "
+        "sources believed to be reliable, but no representation or warranty, express or "
+        "implied, is made as to its accuracy, completeness, or timeliness. "
+        "DeFi protocols involve significant risks including smart contract vulnerabilities, "
+        "impermanent loss, liquidity risk, oracle manipulation risk, and regulatory risk. "
+        "Past yield rates are not a guarantee of future results. All 'suggested allocation' "
+        "figures are model outputs only and must be reviewed by a licensed investment advisor "
+        "before any client action is taken. APY figures labeled (TWR) represent annualized "
+        "time-weighted rates of observed protocol yield. This report does not claim GIPS "
+        "compliance but is formatted to be consistent with GIPS disclosure standards. "
+        "For RIA use only. Not for distribution to retail investors without appropriate suitability review."
+    )
+    pdf.multi_cell(0, 4.5, _ps(disc), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+    _footer_line(pdf, f"{_brand}  |  {ts}  |  For Qualified Investors / RIA Use Only  |  Confidential")
+    return bytes(pdf.output())
