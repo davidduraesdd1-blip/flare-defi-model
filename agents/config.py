@@ -19,8 +19,8 @@ from pathlib import Path
 # To change: set env var AGENT_MODE=LIVE_PHASE2 (never commit live keys to git)
 # The UI also manages this; env var takes precedence.
 OPERATING_MODE: str = os.environ.get("AGENT_MODE", "PAPER").upper()
-assert OPERATING_MODE in ("PAPER", "LIVE_PHASE2", "LIVE_PHASE3"), \
-    f"Invalid AGENT_MODE: {OPERATING_MODE}"
+if OPERATING_MODE not in ("PAPER", "LIVE_PHASE2", "LIVE_PHASE3"):
+    raise ValueError(f"Invalid AGENT_MODE: {OPERATING_MODE!r} — must be PAPER, LIVE_PHASE2, or LIVE_PHASE3")
 
 # ─── Paper Trading Settings ───────────────────────────────────────────────────
 PAPER_STARTING_BALANCE_USD: float = 100_000.0   # virtual paper balance
