@@ -271,16 +271,26 @@ def get_agent_context(
     composite_signal: dict = {}
     if _COMPOSITE_OK and _MACRO_OK:
         try:
-            from macro_feeds import fetch_btc_ta_signals as _fetch_ta
+            from macro_feeds import fetch_btc_ta_signals as _fetch_ta, fetch_deribit_options_chain as _fetch_deribit
             macro_data   = fetch_all_macro_data()
             onchain_data = fetch_coinmetrics_onchain(days=400)
             ta_data      = _fetch_ta()
             fg_val       = fear_greed.get("value")
+
+            # Layer 3: Deribit put/call ratio (35% of sentiment sub-weight)
+            put_call_ratio = None
+            try:
+                _deribit = _fetch_deribit()
+                if not _deribit.get("error"):
+                    put_call_ratio = _deribit.get("put_call_ratio")
+            except Exception:
+                pass
+
             composite_signal = compute_composite_signal(
                 macro_data    = macro_data,
                 onchain_data  = onchain_data,
                 fg_value      = fg_val,
-                put_call_ratio= None,   # populated when Deribit data available
+                put_call_ratio= put_call_ratio,
                 ta_data       = ta_data,
                 fg_30d_avg    = fear_greed.get("avg_30d"),
             )
