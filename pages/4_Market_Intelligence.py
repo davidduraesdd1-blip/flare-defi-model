@@ -4,11 +4,14 @@ Intelligence — Ecosystem monitor (What's New) and AI model health / accuracy.
 
 import sys
 import html as _html
+import logging
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 from ui.common import (
     page_setup, render_sidebar, load_monitor_digest, render_section_header, _ts_fmt,
