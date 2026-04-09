@@ -6,9 +6,12 @@ open positions, emergency stop, and wallet setup wizard.
 """
 
 import sys
+import logging
 from pathlib import Path
 import pandas as pd
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -409,7 +412,8 @@ if gate_pct >= 100 and not live_unlocked:
                 st.success("Live mode unlocked. Set AGENT_MODE=LIVE_PHASE2 env var to activate.")
                 st.rerun()
             except Exception as e:
-                st.error(str(e))
+                logger.warning("[Agent] unlock_live failed: %s", e)
+                st.error("Failed to unlock live mode — please check your configuration and try again.")
         else:
             st.error("Type exactly: UNLOCK LIVE")
 elif live_unlocked:

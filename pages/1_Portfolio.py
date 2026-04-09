@@ -536,7 +536,8 @@ with _tab_wallet:
                         except ImportError:
                             st.warning("Install web3: `pip install web3`")
                         except Exception as e:
-                            st.error(f"Error: {e}")
+                            logger.warning("[Portfolio] wallet balance fetch failed: %s", e)
+                            st.error("Unable to fetch wallet balances — please check your address and try again.")
 
                 if st.button("🔍 Detect Positions", key="detect_pos_btn", width='stretch',
                              help="Auto-detect Kinetic lending, sFLR staking, and stXRP staking from wallet"):
@@ -551,7 +552,8 @@ with _tab_wallet:
                         except ImportError:
                             st.warning("Install web3: `pip install web3`")
                         except Exception as e:
-                            st.error(f"Detection error: {e}")
+                            logger.warning("[Portfolio] position detection failed: %s", e)
+                            st.error("Position detection failed — check your wallet address and try again.")
 
             # ── Detected position suggestions ─────────────────────────────────────
             if st.session_state.get("_pos_suggestions"):
@@ -610,7 +612,8 @@ with _tab_wallet:
                     _zp = _fetch_zerion_cached(_zerion_addr)
                     _zp_err = _zp.get("error")
                     if _zp_err:
-                        st.warning(f"Zerion: {_zp_err}")
+                        logger.warning("[Portfolio] Zerion API error: %s", _zp_err)
+                        st.warning("Zerion data temporarily unavailable — try refreshing in a few minutes.")
                     else:
                         # Summary metric
                         _z_total = _zp.get("total_value_usd", 0.0)
@@ -667,11 +670,13 @@ with _tab_wallet:
                 except ImportError:
                     st.info("Zerion module unavailable.")
                 except Exception as _ze:
-                    st.error(f"Zerion portfolio error: {_ze}")
+                    logger.warning("[Portfolio] Zerion portfolio fetch failed: %s", _ze)
+                    st.error("Zerion portfolio data unavailable — try again in a moment.")
         else:
             st.info("Connect wallet to see your DeFi positions. Enter your EVM address in the sidebar Wallet Import section.")
     except Exception as _outer_e:
-        st.warning(f"Wallet positions section error: {_outer_e}")
+        logger.warning("[Portfolio] wallet positions section failed: %s", _outer_e)
+        st.warning("Wallet positions temporarily unavailable — try refreshing.")
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
