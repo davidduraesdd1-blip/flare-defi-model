@@ -3,12 +3,15 @@ Planning — Income planner, Spectra fixed-rate, FTSO delegation, FAssets tracke
 """
 
 import sys
+import logging
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 from ui.common import page_setup, render_sidebar, render_section_header, render_what_this_means, get_user_level
 from config import FALLBACK_PRICES
