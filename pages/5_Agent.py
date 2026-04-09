@@ -344,7 +344,8 @@ try:
     )
 
 except Exception as _ag_cfg_err:
-    st.warning(f"Agent config unavailable: {_ag_cfg_err}")
+    logger.warning("[Agent] config section failed: %s", _ag_cfg_err)
+    st.warning("Agent configuration temporarily unavailable — try refreshing.")
 
 st.divider()
 

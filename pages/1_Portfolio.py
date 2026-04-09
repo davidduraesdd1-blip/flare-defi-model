@@ -2098,5 +2098,6 @@ with _tab_fassets:
                     unsafe_allow_html=True,
                 )
         except Exception as _fa_e:
-            st.caption(f"Arb detection unavailable: {_fa_e}")
+            logger.warning("[Portfolio] FAsset arb detection failed: %s", _fa_e)
+            st.caption("Arb detection temporarily unavailable — try refreshing.")
 
