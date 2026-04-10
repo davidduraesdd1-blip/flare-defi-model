@@ -483,7 +483,7 @@ if open_pos:
             "Unreal. P&L": f"${p.get('unrealized_pnl', 0):+,.4f}",
             "Opened":   str(p.get("entry_timestamp", ""))[:16],
         })
-    st.dataframe(pd.DataFrame(pos_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(pos_rows), width='stretch', hide_index=True)
 else:
     st.markdown(
         "<div style='color:#475569;font-size:0.88rem;padding:12px 0;'>"
@@ -515,7 +515,7 @@ if trades:
             "P&L":       f"${t.get('realized_pnl', 0):+,.4f}" if t.get("status") == "closed" else "open",
         })
     df = pd.DataFrame(trade_rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width='stretch', hide_index=True)
 
     csv = df.to_csv(index=False)
     st.download_button("⬇ Export Trade Log CSV", data=csv,
@@ -564,7 +564,7 @@ with st.expander("Audit Log (last 200 events)", expanded=True):
             })
 
         _audit_df = pd.DataFrame(audit_df_rows)
-        st.dataframe(_audit_df, use_container_width=True, hide_index=True)
+        st.dataframe(_audit_df, width='stretch', hide_index=True)
 
         # ── Download buttons (Item 42) ──────────────────────────────────────
         _al_c1, _al_c2 = st.columns(2)
