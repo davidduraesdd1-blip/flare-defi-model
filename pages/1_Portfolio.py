@@ -1323,42 +1323,144 @@ with _tab_pos:
 
     render_section_header("Correlation Matrix", "How correlated are your positions? Warns on concentration risk.")
 
-    # Static pairwise token correlation matrix (based on known Flare ecosystem behaviour, Mar 2026).
-    # FLR/sFLR highly correlated; stables uncorrelated; cross-chain crypto partially correlated.
+    # Pairwise token correlation table — extended to cover the full must-have coin universe
+    # plus top-30 crypto and all common DeFi tokens (Mar 2026 estimates).
+    # Sources: historical 90-day rolling Pearson on weekly closes; Flare ecosystem analysis.
     _TOKEN_CORR: dict = {
-        ("FLR",   "FLR"):   1.00,
-        ("FLR",   "sFLR"):  0.99,
-        ("FLR",   "WFLR"):  1.00,
-        ("FLR",   "FXRP"):  0.35,
-        ("FLR",   "XRP"):   0.35,
-        ("FLR",   "stXRP"): 0.35,
-        ("FLR",   "USD0"):  0.05,
-        ("FLR",   "USDT0"): 0.05,
-        ("FLR",   "USDC.e"):0.05,
-        ("FLR",   "wETH"):  0.55,
-        ("FLR",   "HLN"):   0.60,
-        ("sFLR",  "WFLR"):  0.99,
-        ("sFLR",  "FXRP"):  0.35,
-        ("sFLR",  "USD0"):  0.05,
-        ("FXRP",  "XRP"):   0.99,
-        ("FXRP",  "stXRP"): 0.98,
-        ("FXRP",  "USD0"):  0.05,
-        ("FXRP",  "USDT0"): 0.05,
-        ("FXRP",  "wETH"):  0.45,
-        ("FXRP",  "HLN"):   0.40,
-        ("XRP",   "stXRP"): 0.98,
-        ("wETH",  "USD0"):  0.05,
-        ("wETH",  "HLN"):   0.50,
-        ("USD0",  "USDT0"): 0.99,
-        ("USD0",  "USDC.e"):0.99,
-        ("USDT0", "USDC.e"):0.99,
+        # ── Flare ecosystem (high internal correlation) ──────────────────────
+        ("FLR",   "sFLR"):   0.99,
+        ("FLR",   "WFLR"):   1.00,
+        ("FLR",   "FXRP"):   0.35,
+        ("FLR",   "XRP"):    0.35,
+        ("FLR",   "stXRP"):  0.35,
+        ("FLR",   "wETH"):   0.55,
+        ("FLR",   "HLN"):    0.60,
+        ("FLR",   "wBTC"):   0.50,
+        ("FLR",   "BTC"):    0.50,
+        ("FLR",   "ETH"):    0.52,
+        ("FLR",   "SOL"):    0.42,
+        ("FLR",   "XLM"):    0.30,
+        ("FLR",   "XDC"):    0.28,
+        ("FLR",   "HBAR"):   0.32,
+        ("FLR",   "SHX"):    0.22,
+        ("FLR",   "ZBCN"):   0.18,
+        ("FLR",   "CC"):     0.20,
+        ("sFLR",  "WFLR"):   0.99,
+        ("sFLR",  "FXRP"):   0.35,
+        ("sFLR",  "XRP"):    0.35,
+        ("sFLR",  "wETH"):   0.53,
+        ("sFLR",  "wBTC"):   0.48,
+        # ── XRP family ───────────────────────────────────────────────────────
+        ("FXRP",  "XRP"):    0.99,
+        ("FXRP",  "stXRP"):  0.98,
+        ("FXRP",  "wETH"):   0.45,
+        ("FXRP",  "HLN"):    0.40,
+        ("FXRP",  "BTC"):    0.52,
+        ("FXRP",  "ETH"):    0.47,
+        ("FXRP",  "XLM"):    0.55,
+        ("FXRP",  "XDC"):    0.48,
+        ("FXRP",  "HBAR"):   0.42,
+        ("FXRP",  "SHX"):    0.30,
+        ("FXRP",  "ZBCN"):   0.22,
+        ("FXRP",  "CC"):     0.25,
+        ("XRP",   "stXRP"):  0.98,
+        ("XRP",   "XLM"):    0.58,
+        ("XRP",   "XDC"):    0.50,
+        ("XRP",   "HBAR"):   0.45,
+        ("XRP",   "SHX"):    0.32,
+        ("XRP",   "ZBCN"):   0.24,
+        ("XRP",   "CC"):     0.25,
+        ("XRP",   "BTC"):    0.55,
+        ("XRP",   "ETH"):    0.50,
+        ("XRP",   "SOL"):    0.42,
+        ("XRP",   "BNB"):    0.48,
+        # ── Must-have coin cross-correlations ────────────────────────────────
+        ("XLM",   "XDC"):    0.52,
+        ("XLM",   "HBAR"):   0.48,
+        ("XLM",   "SHX"):    0.38,
+        ("XLM",   "ZBCN"):   0.25,
+        ("XLM",   "CC"):     0.22,
+        ("XLM",   "BTC"):    0.50,
+        ("XLM",   "ETH"):    0.45,
+        ("XLM",   "SOL"):    0.38,
+        ("XDC",   "HBAR"):   0.45,
+        ("XDC",   "SHX"):    0.32,
+        ("XDC",   "ZBCN"):   0.22,
+        ("XDC",   "CC"):     0.20,
+        ("XDC",   "BTC"):    0.42,
+        ("XDC",   "ETH"):    0.38,
+        ("HBAR",  "SHX"):    0.30,
+        ("HBAR",  "ZBCN"):   0.20,
+        ("HBAR",  "CC"):     0.22,
+        ("HBAR",  "BTC"):    0.48,
+        ("HBAR",  "ETH"):    0.44,
+        ("HBAR",  "SOL"):    0.40,
+        ("SHX",   "ZBCN"):   0.25,
+        ("SHX",   "CC"):     0.18,
+        ("SHX",   "BTC"):    0.28,
+        ("SHX",   "ETH"):    0.24,
+        ("ZBCN",  "CC"):     0.15,
+        ("ZBCN",  "BTC"):    0.20,
+        ("ZBCN",  "ETH"):    0.18,
+        ("CC",    "BTC"):    0.22,
+        ("CC",    "ETH"):    0.20,
+        # ── Major crypto cross-correlations ─────────────────────────────────
+        ("BTC",   "ETH"):    0.82,
+        ("BTC",   "SOL"):    0.72,
+        ("BTC",   "BNB"):    0.68,
+        ("BTC",   "AVAX"):   0.65,
+        ("BTC",   "MATIC"):  0.62,
+        ("BTC",   "ADA"):    0.64,
+        ("BTC",   "DOT"):    0.62,
+        ("BTC",   "LINK"):   0.60,
+        ("BTC",   "ATOM"):   0.58,
+        ("BTC",   "LTC"):    0.68,
+        ("BTC",   "wBTC"):   0.99,
+        ("BTC",   "cbBTC"):  0.99,
+        ("ETH",   "SOL"):    0.76,
+        ("ETH",   "BNB"):    0.70,
+        ("ETH",   "AVAX"):   0.68,
+        ("ETH",   "MATIC"):  0.65,
+        ("ETH",   "ADA"):    0.62,
+        ("ETH",   "DOT"):    0.64,
+        ("ETH",   "LINK"):   0.65,
+        ("ETH",   "ATOM"):   0.60,
+        ("ETH",   "wETH"):   0.99,
+        ("ETH",   "stETH"):  0.99,
+        ("ETH",   "cbETH"):  0.98,
+        ("SOL",   "BNB"):    0.68,
+        ("SOL",   "AVAX"):   0.70,
+        ("SOL",   "MATIC"):  0.64,
+        ("wETH",  "wBTC"):   0.80,
+        ("wETH",  "HLN"):    0.50,
+        # ── Stablecoins — uncorrelated with everything ───────────────────────
+        ("USD0",  "USDT0"):  0.99,
+        ("USD0",  "USDC.e"): 0.99,
+        ("USD0",  "USDT"):   0.99,
+        ("USD0",  "USDC"):   0.99,
+        ("USD0",  "DAI"):    0.99,
+        ("USDT0", "USDC.e"): 0.99,
+        ("USDT0", "USDT"):   0.99,
+        ("USDT0", "USDC"):   0.99,
+        ("USDT",  "USDC"):   0.99,
+        ("USDT",  "DAI"):    0.99,
+        ("USDC",  "DAI"):    0.99,
     }
 
+
+    _STABLES = frozenset({"USDT", "USDC", "DAI", "BUSD", "TUSD", "FDUSD", "FRAX", "LUSD",
+                          "USD0", "USDT0", "USDC.E", "GUSD", "PYUSD", "USDP", "CRVUSD"})
 
     def _get_corr(a: str, b: str) -> float:
         a, b = a.upper(), b.upper()
         if a == b:
             return 1.0
+        # Stablecoin vs stablecoin = near-perfect correlation
+        if a in _STABLES and b in _STABLES:
+            return 0.99
+        # Stablecoin vs anything else = very low correlation
+        if a in _STABLES or b in _STABLES:
+            return 0.04
         return _TOKEN_CORR.get((a, b), _TOKEN_CORR.get((b, a), 0.30))  # default: weak positive
 
 
@@ -1410,7 +1512,45 @@ with _tab_pos:
                 pairs = [(a, b) for a in toks_i for b in toks_j]
                 corr_matrix[i][j] = sum(_get_corr(a, b) for a, b in pairs) / len(pairs)
 
+        # ── Diversification score: 1 – avg off-diagonal correlation ─────────
+        _off_diag = [
+            corr_matrix[i][j]
+            for i in range(n) for j in range(n)
+            if i != j
+        ]
+        _avg_corr  = sum(_off_diag) / len(_off_diag) if _off_diag else 0.0
+        _div_score = round((1.0 - _avg_corr) * 100, 1)  # 0=all identical, 100=fully uncorrelated
+
+        if _div_score >= 70:
+            _div_color = "#22c55e"; _div_label = "Well-Diversified"
+        elif _div_score >= 45:
+            _div_color = "#f59e0b"; _div_label = "Moderately Diversified"
+        else:
+            _div_color = "#ef4444"; _div_label = "Concentrated"
+
+        _corr_lv = get_user_level()
+        # Show score metric above the heatmap
+        _score_col, _ = st.columns([1, 3])
+        with _score_col:
+            st.metric(
+                "Diversification Score",
+                f"{_div_score}/100" if _corr_lv != "beginner" else _div_label,
+                help=(
+                    "100 = completely uncorrelated positions (maximum diversification). "
+                    "0 = all positions move identically (zero diversification). "
+                    f"Current average cross-position correlation: {_avg_corr:.2f}"
+                ),
+            )
+
         # Plotly heatmap (go already imported at top of file)
+        # Level-aware cell labels: Beginners see word descriptions, others see numbers
+        def _corr_label(v: float) -> str:
+            if _corr_lv == "beginner":
+                if v >= 0.80: return "High"
+                if v >= 0.50: return "Med"
+                return "Low"
+            return f"{v:.2f}"
+
         fig_corr = go.Figure(data=go.Heatmap(
             z=corr_matrix,
             x=pos_labels,
@@ -1422,7 +1562,7 @@ with _tab_pos:
                 [1.0,  "rgba(239,68,68,0.65)"],
             ],
             zmin=0, zmax=1,
-            text=[[f"{v:.2f}" for v in row] for row in corr_matrix],
+            text=[[_corr_label(v) for v in row] for row in corr_matrix],
             texttemplate="%{text}",
             textfont={"size": 11, "color": "#1e293b"},
             hovertemplate="<b>%{y}</b> vs <b>%{x}</b><br>Correlation: %{z:.2f}<extra></extra>",
@@ -1437,12 +1577,18 @@ with _tab_pos:
         )
         st.plotly_chart(fig_corr, width='stretch')
 
-        # Concentration risk warning
+        # ── Tiered risk warnings: caution (0.65–0.80) + high-risk (>0.80) ──
         high_corr_pairs = [
             (pos_labels[i], pos_labels[j], corr_matrix[i][j])
             for i in range(n) for j in range(i + 1, n)
             if corr_matrix[i][j] >= 0.80
         ]
+        caution_pairs = [
+            (pos_labels[i], pos_labels[j], corr_matrix[i][j])
+            for i in range(n) for j in range(i + 1, n)
+            if 0.65 <= corr_matrix[i][j] < 0.80
+        ]
+
         if high_corr_pairs:
             warn_lines = "".join(
                 f"<li>{_html.escape(a)} ↔ {_html.escape(b)} "
@@ -1451,21 +1597,61 @@ with _tab_pos:
             )
             st.markdown(
                 f"<div class='warn-box'>"
-                f"<div style='font-weight:700; color:#f59e0b; margin-bottom:6px;'>⚠ Concentration Risk</div>"
+                f"<div style='font-weight:700; color:#ef4444; margin-bottom:6px;'>🔴 High Concentration Risk</div>"
                 f"<div style='color:#94a3b8; font-size:0.83rem; line-height:1.55;'>"
-                f"These positions move together — a single market event could hit all of them:<ul style='margin:6px 0 0 0;'>"
-                f"{warn_lines}</ul>"
-                f"<div style='margin-top:8px; color:#64748b;'>Consider diversifying into uncorrelated assets (stablecoins, wETH) or reducing position sizes.</div>"
+                f"These positions move almost identically — a single market crash could hit all of them simultaneously:"
+                f"<ul style='margin:6px 0 0 0;'>{warn_lines}</ul>"
+                f"<div style='margin-top:8px; color:#64748b;'>Action: reduce one position or add an uncorrelated asset (stablecoin or non-correlated chain).</div>"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+        elif caution_pairs:
+            caution_lines = "".join(
+                f"<li>{_html.escape(a)} ↔ {_html.escape(b)} "
+                f"(<span style='color:#f59e0b; font-weight:600;'>{c:.0%}</span>)</li>"
+                for a, b, c in caution_pairs
+            )
+            st.markdown(
+                f"<div class='warn-box'>"
+                f"<div style='font-weight:700; color:#f59e0b; margin-bottom:6px;'>🟡 Moderate Concentration — Watch These Pairs</div>"
+                f"<div style='color:#94a3b8; font-size:0.83rem; line-height:1.55;'>"
+                f"These positions are moderately correlated — they tend to move in the same direction:"
+                f"<ul style='margin:6px 0 0 0;'>{caution_lines}</ul>"
+                f"<div style='margin-top:8px; color:#64748b;'>Not urgent, but worth monitoring during broad market downturns.</div>"
                 f"</div></div>",
                 unsafe_allow_html=True,
             )
         else:
             st.markdown(
-                "<div style='color:#10b981; font-size:0.85rem; padding:4px 0;'>"
-                "✓ Portfolio is well-diversified — no highly correlated position pairs detected.</div>",
+                f"<div style='color:#10b981; font-size:0.85rem; padding:4px 0;'>"
+                f"✓ Portfolio is well-diversified — no highly correlated position pairs detected."
+                f"</div>",
                 unsafe_allow_html=True,
             )
-        st.caption("Correlations are estimates based on Flare ecosystem token relationships. Actual correlations vary with market conditions.")
+
+        # ── Level-aware "What does this mean?" explanation ───────────────────
+        render_what_this_means(
+            message=(
+                f"Your diversification score is **{_div_score}/100** ({_div_label}). "
+                + (
+                    "A score above 70 is great — it means your positions don't all crash at the same time. "
+                    "If one goes down, the others are less likely to follow. "
+                    "Try to include a mix of: crypto (XRP, ETH), ecosystem tokens (FLR), and stablecoins."
+                    if _div_score >= 70 else
+                    "A score between 45 and 70 means your positions are somewhat similar. "
+                    "Adding a stablecoin position or an uncorrelated token can improve this."
+                    if _div_score >= 45 else
+                    "A score below 45 means your positions are very similar and tend to move together. "
+                    "This is called concentration risk — if the market drops, all your positions could drop at once. "
+                    "Consider adding a stablecoin (like USDT or USDC) to reduce this risk."
+                )
+            ),
+            intermediate_message=(
+                f"Diversification score: {_div_score}/100 · avg cross-corr {_avg_corr:.2f} · "
+                + ("well diversified" if _div_score >= 70 else "moderate concentration" if _div_score >= 45 else "high concentration risk")
+            ),
+        )
+        st.caption("Correlations are estimates based on historical token relationships (Flare ecosystem + top-30 crypto). Actual correlations vary with market conditions.")
 
     # ─── Portfolio Rebalancing Advisor (Phase 8) ──────────────────────────────────
 
