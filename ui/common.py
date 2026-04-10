@@ -1668,6 +1668,23 @@ def render_opportunity_card(
     pool     = _html.escape(str(pool))
     action   = _html.escape(str(action))
 
+    # ── BUY / HOLD / SELL badge (CLAUDE.md §8: shape + color always combined) ────
+    # Derived from model confidence (already weighted by risk profile multiplier).
+    # ≥70% = strong opportunity → BUY; 45-70% = hold existing; <45% = not recommended.
+    if conf >= 70:
+        _action_shape, _action_label, _action_color = "▲", "BUY", "#22c55e"
+    elif conf >= 45:
+        _action_shape, _action_label, _action_color = "■", "HOLD", "#94a3b8"
+    else:
+        _action_shape, _action_label, _action_color = "▼", "SELL / SKIP", "#ef4444"
+    _action_badge_html = (
+        f"<span style='font-size:0.75rem;font-weight:800;color:{_action_color};"
+        f"background:rgba(0,0,0,0.25);padding:2px 8px;border-radius:5px;"
+        f"border:1px solid {_action_color}55;letter-spacing:0.04em;white-space:nowrap;' "
+        f"title='Model signal: {_action_label} — based on yield quality, risk, and composite market environment'>"
+        f"{_action_shape} {_action_label}</span>"
+    )
+
     # APY glow class based on magnitude
     if apy >= 50:
         glow_cls = "apy-glow-extreme"
@@ -1778,7 +1795,7 @@ def render_opportunity_card(
     st.markdown(f"""<div class="opp-card" style="border-left:3px solid {color};">
 <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
 <div style="flex:1;min-width:0;"><span style="font-size:0.82rem;color:#475569;margin-right:8px;">{medal}</span><span style="font-size:1.05rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 6px;">·</span><span style="font-size:0.95rem;color:#94a3b8;">{pool}</span></div>
-<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;"><span class="grade-badge" style="background:{grade_color};color:#fff;font-weight:800;letter-spacing:0.5px;" title="Safety Grade: A=safest, F=riskiest (Exponential.fi standard)">{grade}</span><span class="{glow_cls}" style="font-size:1.8rem;font-weight:800;color:{color};letter-spacing:-1px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
+<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">{_action_badge_html}<span class="grade-badge" style="background:{grade_color};color:#fff;font-weight:800;letter-spacing:0.5px;" title="Safety Grade: A=safest, F=riskiest (Exponential.fi standard)">{grade}</span><span class="{glow_cls}" style="font-size:1.8rem;font-weight:800;color:{color};letter-spacing:-1px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
 </div>
 <div style="margin-top:10px;margin-bottom:2px;">
 <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#475569;margin-bottom:3px;"><span>Low {lo:.1f}%</span><span style="color:#64748b;">APY Range</span><span>High {hi:.1f}%</span></div>
