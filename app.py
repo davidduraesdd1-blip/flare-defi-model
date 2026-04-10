@@ -181,20 +181,31 @@ try:
         else:                  _d_col, _d_bg = "#ef4444", "rgba(239,68,68,0.07)"
         _d_txt   = _d_csig.get("beginner_summary", _d_signal)
         _d_shape = "▲" if _d_score >= 0.10 else ("▼" if _d_score <= -0.10 else "■")
+        _d_layers = _d_csig.get("layers", {})
+        _d_weights = _d_csig.get("weights_applied", {"technical": 0.20, "macro": 0.20, "sentiment": 0.25, "onchain": 0.35})
+        def _dfmt(v): return f"+{v:.2f}" if v >= 0 else f"{v:.2f}"
+        _d_ta = _d_layers.get("technical", {}).get("score", 0)
+        _d_ma = _d_layers.get("macro", {}).get("score", 0)
+        _d_se = _d_layers.get("sentiment", {}).get("score", 0)
+        _d_oc = _d_layers.get("onchain", {}).get("score", 0)
+        _d_xai = [("Technical", _d_ta, _d_weights.get("technical", 0.20)),
+                  ("Macro",     _d_ma, _d_weights.get("macro",     0.20)),
+                  ("Sentiment", _d_se, _d_weights.get("sentiment", 0.25)),
+                  ("On-Chain",  _d_oc, _d_weights.get("onchain",   0.35))]
+        _d_dir  = 1 if _d_score > 0 else (-1 if _d_score < 0 else 0)
+        _d_agree = sum(1 for _, s, _ in _d_xai if (s > 0.05) == (_d_dir > 0) and _d_dir != 0)
+        _d_conf  = {4: "HIGH", 3: "HIGH", 2: "MEDIUM", 1: "LOW", 0: "LOW"}.get(_d_agree, "MEDIUM")
+        _d_conf_c = {"HIGH": "#22c55e", "MEDIUM": "#f59e0b", "LOW": "#ef4444"}[_d_conf]
+
         if user_level != "beginner":
-            _d_layers = _d_csig.get("layers", {})
-            def _dfmt(v): return f"+{v:.2f}" if v >= 0 else f"{v:.2f}"
-            _d_ta = _d_layers.get("technical", {}).get("score", 0)
-            _d_ma = _d_layers.get("macro", {}).get("score", 0)
-            _d_se = _d_layers.get("sentiment", {}).get("score", 0)
-            _d_oc = _d_layers.get("onchain", {}).get("score", 0)
             st.html(
                 f"<div style='background:{_d_bg};border:1px solid {_d_col}33;"
                 f"border-left:4px solid {_d_col};border-radius:8px;padding:10px 18px;"
-                f"margin-bottom:14px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;'>"
+                f"margin-bottom:4px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;'>"
                 f"<div><span style='color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;'>Market Environment</span>"
                 f"<div style='color:{_d_col};font-weight:800;font-size:1.05rem;'>{_d_shape} {_d_signal}</div>"
-                f"<div style='color:#64748b;font-size:0.76rem;'>Score {_dfmt(_d_score)}</div></div>"
+                f"<div style='color:#64748b;font-size:0.76rem;'>Score {_dfmt(_d_score)} &nbsp;·&nbsp; "
+                f"<span style='color:{_d_conf_c};font-weight:600;'>{_d_conf} CONFIDENCE</span></div></div>"
                 f"<div style='color:#475569;font-size:0.78rem;border-left:1px solid #1e293b;padding-left:20px;'>"
                 f"<div>Technical <span style='color:{'#22c55e' if _d_ta>=0 else '#ef4444'};font-weight:600;'>{_dfmt(_d_ta)}</span></div>"
                 f"<div>Macro <span style='color:{'#22c55e' if _d_ma>=0 else '#ef4444'};font-weight:600;'>{_dfmt(_d_ma)}</span></div>"
@@ -206,11 +217,37 @@ try:
             st.html(
                 f"<div style='background:{_d_bg};border:1px solid {_d_col}33;"
                 f"border-left:4px solid {_d_col};border-radius:8px;padding:12px 18px;"
-                f"margin-bottom:14px;'>"
+                f"margin-bottom:4px;'>"
                 f"<span style='color:{_d_col};font-weight:700;font-size:0.9rem;'>{_d_shape} Market Conditions</span>"
                 f"<span style='color:#94a3b8;font-size:0.84rem;margin-left:12px;'>{_d_txt}</span>"
+                f"<span style='margin-left:16px;background:{_d_conf_c}22;color:{_d_conf_c};"
+                f"font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;"
+                f"border:1px solid {_d_conf_c}44;'>{_d_conf} CONFIDENCE</span>"
                 f"</div>"
             )
+
+        # XAI breakdown expander
+        with st.expander("🔍 Why this signal? — Signal driver breakdown", expanded=False):
+            _xai_rows = ""
+            for _xn, _xs, _xw in _d_xai:
+                _xwc = _xs * _xw
+                _xbar_w = min(abs(_xwc) * 250, 100)
+                _xbar_c = "#22c55e" if _xwc >= 0 else "#ef4444"
+                _xai_rows += (
+                    f"<div style='display:flex;align-items:center;gap:10px;margin:5px 0;'>"
+                    f"<div style='width:90px;font-size:0.78rem;color:#cbd5e1;'>{_xn}</div>"
+                    f"<div style='width:40px;font-size:0.7rem;color:#64748b;text-align:right;'>{_xw*100:.0f}%</div>"
+                    f"<div style='flex:1;background:#1e293b;border-radius:3px;height:14px;overflow:hidden;'>"
+                    f"<div style='width:{_xbar_w:.0f}%;background:{_xbar_c};height:100%;border-radius:3px;'></div></div>"
+                    f"<div style='width:55px;font-size:0.78rem;font-weight:600;color:{_xbar_c};text-align:right;'>{_xwc*100:+.1f}%</div>"
+                    f"</div>"
+                )
+            _xai_note = ("Each bar shows how much that factor pushed the signal bullish (+) or bearish (−)."
+                         if user_level == "beginner"
+                         else f"Weighted contributions · regime: {_d_csig.get('regime', 'N/A')} · weights are regime-adjusted.")
+            st.html(f"<div style='padding:4px 0 8px;'>"
+                    f"<div style='font-size:0.72rem;color:#64748b;margin-bottom:8px;'>{_xai_note}</div>"
+                    f"{_xai_rows}</div>")
 except Exception as _d_cs_err:
     import logging as _dlg; _dlg.getLogger(__name__).debug("[Dashboard] composite signal error: %s", _d_cs_err)
 

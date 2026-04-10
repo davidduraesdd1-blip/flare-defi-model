@@ -1770,6 +1770,19 @@ def render_opportunity_card(
             + f"</div>"
         )
 
+    # ── Treasury spread: DeFi yield premium vs. tokenized T-bill baseline ───────
+    # Baseline: avg of BUIDL/BENJI/OUSG/USDY/TBILL (~4.25% Apr 2026). Updated monthly.
+    _TREASURY_BASELINE_PCT = 4.25
+    _spread = round(apy - _TREASURY_BASELINE_PCT, 2)
+    _spread_color = "#22c55e" if _spread >= 2.0 else ("#f59e0b" if _spread >= 0 else "#ef4444")
+    _spread_html = (
+        f"<span style='font-size:0.70rem;color:{_spread_color};font-weight:600;"
+        f"background:{_spread_color}14;padding:1px 6px;border-radius:4px;"
+        f"border:1px solid {_spread_color}33;white-space:nowrap;' "
+        f"title='vs. tokenized T-bill baseline (BUIDL/BENJI avg ~{_TREASURY_BASELINE_PCT}% · Apr 2026)'>"
+        f"{'▲' if _spread >= 0 else '▼'} {_spread:+.2f}% vs. T-bill baseline</span>"
+    )
+
     # Real Yield Ratio (#73) — fee revenue vs token incentive indicator
     _ry_html = ""
     if fee_apy > 0 or reward_apy > 0:
@@ -1810,6 +1823,7 @@ def render_opportunity_card(
 <span>Suggested: <span style="color:#94a3b8;font-weight:600;">{alloc_str}</span></span>
 {tvl_html}
 {_ry_html}
+{_spread_html}
 </div>
 {f'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">{_audit_html}{_url_html}</div>' if (_audit_html or _url_html) else ""}
 </div>""", unsafe_allow_html=True)
