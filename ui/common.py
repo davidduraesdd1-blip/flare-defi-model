@@ -744,7 +744,7 @@ def render_sidebar() -> dict:
             st.markdown("<div style='padding-top:6px;'></div>", unsafe_allow_html=True)
             if st.button("☀" if _is_light else "🌙", key="_theme_toggle",
                          help="Switch to light mode" if not _is_light else "Switch to dark mode",
-                         use_container_width=True):
+                         width='stretch'):
                 st.session_state["_theme"] = "dark" if _is_light else "light"
                 st.rerun()
 
@@ -832,7 +832,7 @@ def render_sidebar() -> dict:
         col_r, col_s, col_all = st.columns(3)
         with col_r:
             if st.button("↺ Reload", key="sidebar_refresh",
-                         use_container_width=True,
+                         width='stretch',
                          help="Reload the latest saved scan data from disk"):
                 # OPT-44: targeted clear — reload scan data and live prices only
                 _load_history_file.clear()
@@ -841,7 +841,7 @@ def render_sidebar() -> dict:
                 st.rerun()
         with col_all:
             if st.button("🔄 All", key="sidebar_refresh_all",
-                         use_container_width=True,
+                         width='stretch',
                          help="Refresh All Data — clears every cache and fetches fresh data from all sources"):
                 # Nuclear clear: invalidate EVERY st.cache_data in this module
                 try:
@@ -863,7 +863,7 @@ def render_sidebar() -> dict:
                 st.rerun()
         with col_s:
             if st.button("▶ Scan", key="sidebar_scan_now",
-                         use_container_width=True,
+                         width='stretch',
                          help="Run a fresh scan now (~30 seconds). Auto-reloads when done."):
                 try:
                     scheduler_path = str(Path(__file__).parent.parent / "scheduler.py")
@@ -1021,12 +1021,12 @@ def render_sidebar() -> dict:
             with _sa_col:
                 _btn_label = "⏸ Pause" if _agent_running else "▶ Start"
                 if st.button(_btn_label, key="sidebar_agent_toggle",
-                         use_container_width=True):
+                         width='stretch'):
                     _agent_set_running(not _agent_running)
                     st.rerun()
             with _sb_col:
                 if st.button("🛑 E-Stop", key="sidebar_agent_estop",
-                         use_container_width=True):
+                         width='stretch'):
                     _agent_set_estop(True, "Sidebar emergency stop")
                     st.rerun()
             st.page_link("pages/5_Agent.py", label="→ Agent Control Panel", icon="🤖")

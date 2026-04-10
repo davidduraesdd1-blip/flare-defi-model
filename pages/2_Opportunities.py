@@ -362,7 +362,7 @@ with _tab_yield:
                 "TVL":       f"${_gtvl/1e6:.1f}M" if _gtvl >= 1e6 else f"${_gtvl:,.0f}",
                 "Agent":     _agent,
             })
-        st.dataframe(pd.DataFrame(_gyl_rows), use_container_width=True, hide_index=True, height=300)
+        st.dataframe(pd.DataFrame(_gyl_rows), width='stretch', hide_index=True, height=300)
         st.caption("Top 10 by APY · min $10M TVL · Full table in the Global Yield Opportunities section below")
     else:
         st.info("Global yield data loading…")
@@ -487,17 +487,17 @@ with _tab_yield:
                 if _user_level == "beginner":
                     # Beginners: simple columns, no jargon
                     beginner_cols = ["Protocol", "Pool / Asset", "Base APY", "Grade", "Price Risk", "Yield Type", "Suggested $"]
-                    st.dataframe(df_all[[c for c in beginner_cols if c in df_all.columns]], use_container_width=True, hide_index=True)
+                    st.dataframe(df_all[[c for c in beginner_cols if c in df_all.columns]], width='stretch', hide_index=True)
                     st.caption("Grade: A = safest, F = riskiest.  Yield Type: Sustainable = fee income that continues after rewards end.")
                 elif _user_level == "intermediate":
                     inter_cols = ["Protocol", "Pool / Asset", "Base APY", "Reward Bonus", "Total APY", "Grade", "Price Risk", "Yield Type", "Audit", "Suggested $"]
-                    st.dataframe(df_all[[c for c in inter_cols if c in df_all.columns]], use_container_width=True, hide_index=True)
+                    st.dataframe(df_all[[c for c in inter_cols if c in df_all.columns]], width='stretch', hide_index=True)
                     if _days_left <= _reward_warn_days:
                         st.caption("⚠ = Reward bonus expires soon. Base APY continues indefinitely.")
                 else:
                     # Advanced: full table (hide Protocol URL from display — too wide; show in tooltip)
                     adv_cols = ["Protocol", "Pool / Asset", "Base APY", "Reward Bonus", "Total APY", "Grade", "Price Risk", "Yield Type", "Audit", "APY Range", "Suggested $", "Alloc %", "Action"]
-                    st.dataframe(df_all[[c for c in adv_cols if c in df_all.columns]], use_container_width=True, hide_index=True)
+                    st.dataframe(df_all[[c for c in adv_cols if c in df_all.columns]], width='stretch', hide_index=True)
                     if _days_left <= _reward_warn_days:
                         st.caption(f"⚠ Reward Bonus expires in {_days_left} days. Alloc % weighted on Base APY only to survive post-July 2026.")
 
@@ -735,7 +735,7 @@ with _tab_yield:
                 margin=dict(l=50, r=20, t=40, b=60),
                 height=320,
             )
-            st.plotly_chart(_fig_fan, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(_fig_fan, width='stretch', config={"displayModeBar": False})
             st.caption(
                 f"Fan chart: teal band = P15–P85 probability range (70% of simulations fall here). "
                 f"Median (blue line) = base case. Based on {_mc_result['scenarios_run']:,} Monte Carlo scenarios."
@@ -805,7 +805,7 @@ with _tab_yield:
                         height=90,
                         showlegend=False,
                     )
-                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                    st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
                     st.markdown(
                         f"<div style='text-align:center; font-size:0.75rem; color:{trend_color}; margin-top:-8px;'>"
                         f"{'▲' if latest_apy >= prev_apy else '▼'} {latest_apy:.1f}%</div>",
@@ -930,7 +930,7 @@ with _tab_yield:
                 margin=dict(l=40, r=40, t=20, b=20),
                 height=380,
             )
-            st.plotly_chart(fig_radar, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(fig_radar, width='stretch', config={"displayModeBar": False})
     
             # Summary comparison table
             _cmp_rows = []
@@ -951,7 +951,7 @@ with _tab_yield:
                         else "—"
                     ),
                 })
-            st.dataframe(pd.DataFrame(_cmp_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_cmp_rows), width='stretch', hide_index=True)
             st.caption("Radar axes are normalised 0–10 within the selected set. IL Safety: None=10, Low=7, Medium=4, High=1.")
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -988,7 +988,7 @@ with _tab_yield:
                                 "θ/day":      f"${op.get('theta', 0):.6f}",
                                 "Vega":       f"{op.get('vega', 0):.6f}",
                             } for op in strat_data if isinstance(op, dict)]
-                            st.dataframe(pd.DataFrame(chain_rows), use_container_width=True, hide_index=True)
+                            st.dataframe(pd.DataFrame(chain_rows), width='stretch', hide_index=True)
                         continue
                     if isinstance(strat_data, dict):
                         plain    = strat_data.get("plain_english", "")
@@ -1143,9 +1143,9 @@ with _tab_yield:
             )
             _start     = (_page - 1) * _rows_per_page
             _paged_rows = _mc_rows[_start: _start + _rows_per_page]
-            st.dataframe(pd.DataFrame(_paged_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_paged_rows), width='stretch', hide_index=True)
         else:
-            st.dataframe(pd.DataFrame(_mc_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_mc_rows), width='stretch', hide_index=True)
     else:
         st.info("No opportunities matching your filters. Try lowering the minimum TVL filter or switching chains.")
     
@@ -1250,7 +1250,7 @@ with _tab_yield:
             _pendle_rows.append(_row)
     
         if _pendle_rows:
-            st.dataframe(pd.DataFrame(_pendle_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_pendle_rows), width='stretch', hide_index=True)
     
             # PT vs YT explainer
             with st.expander("How PT vs YT works"):
@@ -1378,7 +1378,7 @@ with _tab_yield:
                     height=400, margin=dict(l=40, r=20, t=20, b=40),
                     legend=dict(bgcolor="rgba(0,0,0,0)", font_size=10),
                 )
-                st.plotly_chart(_fig_yc, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(_fig_yc, width='stretch', config={"displayModeBar": False})
                 st.caption(
                     "Efficient frontier (dotted orange) = max APY at each risk level. "
                     "Points above frontier = exceptionally good risk-adjusted yield. "
@@ -1514,7 +1514,7 @@ with _tab_yield:
                                  else f"${float(_kp.get('tvl_usd', 0)):,.0f}"),
                     "Chain":    _kp.get("chain", "Solana"),
                 })
-            st.dataframe(pd.DataFrame(_k_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_k_rows), width='stretch', hide_index=True)
             _k_tvl = float((_kamino or {}).get("total_tvl") or 0)
             st.caption(f"Total Kamino TVL scanned: ${_k_tvl/1e6:.1f}M")
         else:
@@ -1535,7 +1535,7 @@ with _tab_yield:
                                  else f"${float(_mp.get('tvl_usd', 0)):,.0f}"),
                     "Chain":    _mp.get("chain", "Solana"),
                 })
-            st.dataframe(pd.DataFrame(_m_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_m_rows), width='stretch', hide_index=True)
             _m_tvl = float((_meteora or {}).get("total_tvl") or 0)
             st.caption(f"Total Meteora TVL scanned: ${_m_tvl/1e6:.1f}M · APY estimated from 24h volume × fee rate. Source: GeckoTerminal.")
         else:
@@ -1702,7 +1702,7 @@ with _tab_intel:
                 "Cliff?":     "Yes (all-at-once)" if _ul.get("is_cliff") else "No (linear)",
                 "Severity":   _ul["severity"],
             })
-        st.dataframe(pd.DataFrame(_ul_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_ul_rows), width='stretch', hide_index=True)
         st.caption(
             "Large unlocks can create sell pressure. "
             "Cliff unlocks (all-at-once) are higher risk than linear unlocks. "
@@ -1773,7 +1773,7 @@ with _tab_yield:
                     "Fee %":       "{:.3f}%",
                     "APY est %":   "{:.1f}%",
                 }),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
             )
             st.caption(
@@ -1929,7 +1929,7 @@ with _tab_yield:
                 "IL Risk":    ("Yes" if _gp.get("il_risk", "no") not in ("no", "") else "No"),
             }
             _gy_rows.append(_row)
-        st.dataframe(pd.DataFrame(_gy_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_gy_rows), width='stretch', hide_index=True)
         st.caption(
             "Sorted by Sharpe ratio (risk-adjusted). "
             "Quality: Excellent >2.0, Good 1-2, Fair 0.5-1, Poor <0.5. "
@@ -2025,7 +2025,7 @@ with _tab_yield:
                     "Sharpe": f"{_a_sh['sharpe']:.2f}",
                     "TVL":    f"${float(_ap.get('tvl_usd',0))/1e6:.0f}M",
                 })
-            st.dataframe(pd.DataFrame(_aero_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_aero_rows), width='stretch', hide_index=True)
         else:
             st.info("Aerodrome data unavailable.")
     
@@ -2046,7 +2046,7 @@ with _tab_yield:
                     "Real Yield": _real["classification"].replace("_", " ").title(),
                     "TVL":     f"${float(_mp.get('tvl_usd',0))/1e6:.0f}M",
                 })
-            st.dataframe(pd.DataFrame(_morpho_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_morpho_rows), width='stretch', hide_index=True)
         else:
             st.info("Morpho data unavailable.")
     
@@ -2195,7 +2195,7 @@ with _tab_yield:
                     height=60,
                     showlegend=False,
                 )
-                st.plotly_chart(_fig_sp, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(_fig_sp, width='stretch', config={"displayModeBar": False})
                 _dir_sym = "▲" if _trending_up else "▼"
                 st.markdown(
                     f"<div style='text-align:center;font-size:0.73rem;color:{_sp_line_col};margin-top:-10px'>"
@@ -2482,7 +2482,7 @@ with _tab_intel:
                     "Technique":    str(_h.get("technique") or "—")[:30],
                     "Category":     str(_h.get("category") or "—"),
                 })
-            st.dataframe(pd.DataFrame(_d3_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_d3_rows), width='stretch', hide_index=True)
             _total_lost_b = _d3_total_lost / 1e9
             st.caption(
                 f"Top {len(_d3_rows)} hacks shown · Total lost: ${_total_lost_b:.1f}B · "
@@ -2507,7 +2507,7 @@ with _tab_intel:
                     height=240,
                     title=dict(text="By Category ($M)", font=dict(size=11, color="#64748b"), x=0.5),
                 )
-                st.plotly_chart(_fig_cats, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(_fig_cats, width='stretch', config={"displayModeBar": False})
     else:
         st.info("Hack history unavailable — DeFiLlama API may be unreachable.")
     
@@ -2577,7 +2577,7 @@ with _tab_intel:
             height=280, margin=dict(l=40, r=20, t=30, b=60),
             showlegend=False,
         )
-        st.plotly_chart(_fig_d4, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(_fig_d4, width='stretch', config={"displayModeBar": False})
     
         # Summary table
         _d4_rows = []
@@ -2593,7 +2593,7 @@ with _tab_intel:
                 "Trend vs Avg":   f"{v.get('trend', 0):.2f}×",
                 "Health":         f"{_health_icon} {_health}",
             })
-        st.dataframe(pd.DataFrame(_d4_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_d4_rows), width='stretch', hide_index=True)
         st.caption(
             "Trend = 24h fees ÷ (30d fees / 30). >1.0 = above average activity. "
             "Source: DeFiLlama /summary/fees · cached 1 hour."
@@ -2808,7 +2808,7 @@ with _tab_yield:
                 height=100, margin=dict(l=20, r=20, t=30, b=20),
                 showlegend=False,
             )
-            st.plotly_chart(_fig_cl, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(_fig_cl, width='stretch', config={"displayModeBar": False})
 
             # Item 39: add to alert tracker
             if st.button("Track this position (add to alert list)", key="cl_track_btn"):
@@ -2912,7 +2912,7 @@ with _tab_yield:
                 "Quality":  f"{_rk_icon} {_rk.capitalize()}",
                 "TVL":      _tvl_str,
             })
-        st.dataframe(pd.DataFrame(_d8_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_d8_rows), width='stretch', hide_index=True)
         st.caption(
             "Sharpe = (APY − risk_free) / APY_volatility. "
             "Excellent ≥2.0 · Good 1–2 · Fair 0.5–1 · Poor <0.5. "
@@ -2971,7 +2971,7 @@ with _tab_intel:
             _dir2 = "above" if _d2 > 0 else "below"
             st.warning(f"**{_s2}** FTSO  is {abs(_d2):.2f}% {_dir2} CoinGecko  — potential arb window.")
         if _ftso_rows:
-            st.dataframe(pd.DataFrame(_ftso_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_ftso_rows), width='stretch', hide_index=True)
         st.caption("FTSO prices refresh every 2 min. Divergence >2% may indicate arb opportunity. Source: Flare Data Availability Layer.")
 
 with _tab_intel:
@@ -3031,7 +3031,7 @@ with _tab_intel:
                 "Native Token %": f"{_tr['native_pct']:.0f}%",
                 "Health":         _hsym,
             })
-        st.dataframe(pd.DataFrame(_treas_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(_treas_rows), width='stretch', hide_index=True)
 
         # Detail expander for top 5 holding breakdowns
         with st.expander("Top Holdings Breakdown", expanded=False):
@@ -3051,7 +3051,7 @@ with _tab_intel:
                                                 else f"${b['usd']:,.0f}"),
                                   "% of Treasury": f"{b['pct']:.1f}%"}
                                  for b in _bk]
-                    st.dataframe(pd.DataFrame(_bk_rows), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(_bk_rows), width='stretch', hide_index=True)
 
         render_what_this_means(
             "A protocol's treasury is its emergency fund — like a company's cash reserves. "
