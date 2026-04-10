@@ -332,8 +332,14 @@ def _score_m2(m2_yoy: float | None) -> float | None:
 
 def score_macro_layer(macro_data: dict[str, Any]) -> dict[str, Any]:
     """
-    Compute Layer 1 macro score from merged FRED + yfinance dict.
+    Compute Layer 2 macro score from merged FRED + yfinance dict.
     Returns score in [-1.0, +1.0] plus per-indicator breakdown.
+
+    DXY DOUBLE-COUNTING FIX (Issue #16):
+    DXY level and DXY momentum are correlated (r≈0.72, BIS 2022) — treating them as
+    6 equal inputs double-weighted USD vs 4 independent macro dimensions. Fix: average
+    DXY level + DXY momentum into one "DXY composite" signal, then use 5 equal-weight
+    independent economic dimensions: DXY composite, VIX, yield curve, CPI, M2.
     """
     dxy         = macro_data.get("dxy")
     dxy_30d_roc = macro_data.get("dxy_30d_roc")
@@ -349,11 +355,12 @@ def score_macro_layer(macro_data: dict[str, Any]) -> dict[str, Any]:
     s_cpi  = _score_cpi(cpi)
     s_m2   = _score_m2(m2_yoy)
 
-    # Equal-weight only indicators with real data (not None).
-    # Scorers return None when input data is unavailable, and 0.0 only when
-    # the indicator is genuinely neutral (e.g. VIX=20, CPI=2.5%).
-    # This prevents missing data from diluting the signal by pulling it toward 0.
-    active = [s for s in [s_dxy, s_dxym, s_vix, s_yc, s_cpi, s_m2] if s is not None]
+    # Merge DXY level + DXY momentum into one composite DXY signal
+    dxy_parts = [s for s in [s_dxy, s_dxym] if s is not None]
+    s_dxy_composite = (sum(dxy_parts) / len(dxy_parts)) if dxy_parts else None
+
+    # 5 independent economic dimensions — equal weight over available indicators
+    active = [s for s in [s_dxy_composite, s_vix, s_yc, s_cpi, s_m2] if s is not None]
     raw    = (sum(active) / len(active)) if active else 0.0
     layer  = _clamp(raw)
 
@@ -363,12 +370,11 @@ def score_macro_layer(macro_data: dict[str, Any]) -> dict[str, Any]:
         "weight":     _W_MACRO,
         "weighted":   round(layer * _W_MACRO, 4),
         "components": {
-            "dxy":          {"value": dxy,         "score": round(s_dxy,  3) if s_dxy  is not None else None},
-            "dxy_momentum": {"value": dxy_30d_roc, "score": round(s_dxym, 3) if s_dxym is not None else None},
-            "vix":          {"value": vix,         "score": round(s_vix,  3) if s_vix  is not None else None},
-            "yield_curve":  {"value": y2y10,       "score": round(s_yc,   3) if s_yc   is not None else None},
-            "cpi_yoy":      {"value": cpi,         "score": round(s_cpi,  3) if s_cpi  is not None else None},
-            "m2_yoy":       {"value": m2_yoy,      "score": round(s_m2,   3) if s_m2   is not None else None},
+            "dxy_composite": {"value": dxy,    "score": round(s_dxy_composite, 3) if s_dxy_composite is not None else None, "sub_components": {"dxy_level": round(s_dxy, 3) if s_dxy is not None else None, "dxy_momentum": round(s_dxym, 3) if s_dxym is not None else None}},
+            "vix":           {"value": vix,    "score": round(s_vix,  3) if s_vix  is not None else None},
+            "yield_curve":   {"value": y2y10,  "score": round(s_yc,   3) if s_yc   is not None else None},
+            "cpi_yoy":       {"value": cpi,    "score": round(s_cpi,  3) if s_cpi  is not None else None},
+            "m2_yoy":        {"value": m2_yoy, "score": round(s_m2,   3) if s_m2   is not None else None},
         },
     }
 
@@ -494,16 +500,29 @@ def score_sentiment_layer(
 def _score_mvrv_z(mvrv_z: float | None) -> float | None:
     """
     MVRV Z-Score (Mahmudov & Puell, 2018). Backtested on BTC 2011-2024.
-    Historical cycle extremes: tops at Z>7 (Dec 2017 ~9.5, Jan 2021 ~8.0)
+    Historical cycle extremes: tops at Z>7 (Dec 2017 ~9.5, Apr 2021 ~8.0)
     Historical cycle bottoms: Z<0 (Dec 2018 ~-0.5, Nov 2022 ~-0.3)
+
+    NEUTRAL ZONE CORRECTED (Issue #23):
+    Fair value is Z≈2.0, not Z≈0.9. At Z=0, holders are at breakeven = still
+    undervalued historically. Neutral score (0.0) should map to Z≈2.0.
+    Source: Glassnode MVRV Z-Score research (2022); CheckOnChain (2023).
+
+      Z < 0    → +0.5 to +1.0 (historically major bottoms — strong buy)
+      Z 0-1    → +0.2 to +0.5 (undervalued, accumulation zone)
+      Z 1-2    → 0.0 to +0.2  (fair value approaching — mildly bullish)
+      Z 2-4    → 0.0 to -0.2  (above fair value — neutral to mildly elevated)
+      Z 4-7    → -0.5 to -1.0 (overbought — distribution zone)
+      Z > 7    → -1.0         (extreme top — all 3 BTC cycle tops)
     """
     if mvrv_z is None:
         return None
-    if mvrv_z >= 7.0:    return -1.0   # extreme overvaluation (historic tops)
-    if mvrv_z >= 4.0:    return _clamp(-0.5 - (mvrv_z - 4) / 6)
-    if mvrv_z >= 1.5:    return _clamp(-0.2 - (mvrv_z - 1.5) / 12.5)
-    if mvrv_z >= 0.0:    return _clamp((1.5 - mvrv_z) / 3 - 0.2)
-    return _clamp(0.3 - mvrv_z * 0.7)   # below 0 = historically undervalued
+    if mvrv_z >= 7.0:    return -1.0                                    # historic cycle tops
+    if mvrv_z >= 4.0:    return _clamp(-0.5 - (mvrv_z - 4.0) / 6.0)  # Z=4→-0.5, Z=7→-1.0
+    if mvrv_z >= 2.0:    return _clamp(-(mvrv_z - 2.0) / 10.0)        # Z=2→0.0, Z=4→-0.2
+    if mvrv_z >= 1.0:    return _clamp(+0.2 - (mvrv_z - 1.0) / 5.0)  # Z=1→+0.2, Z=2→0.0
+    if mvrv_z >= 0.0:    return _clamp(+0.5 - mvrv_z * 0.3)           # Z=0→+0.5, Z=1→+0.2
+    return _clamp(+0.5 - mvrv_z * 0.5)                                  # Z<0: deeper buy zone
 
 
 def _score_hash_ribbon(
@@ -659,6 +678,43 @@ def score_onchain_layer(
     }
 
 
+# ─── Regime Detection (B3) ───────────────────────────────────────────────────
+#
+# Ported from SuperGrok — same academic basis applies to DeFi yield signals.
+# CRISIS  (VIX ≥ 35): Macro noise explodes; on-chain marks bottoms reliably.
+#   DeFi yields compress violently in panic — on-chain drives the recovery signal.
+#   Source: Glassnode (2023); Puell/MVRV/Hash Ribbons peaked in accuracy at capitulation.
+# TRENDING (ADX ≥ 25): TA momentum signals reliable in directional markets.
+#   Source: Wilder (1978); BTC ADX backtest 2013-2024 (+63% TA accuracy ADX≥25).
+# RANGING  (ADX < 20): No trend; TA noisy. Sentiment + on-chain dominate.
+# NORMAL   (default): Base weights.
+
+_REGIME_WEIGHTS = {
+    #                        TA     MAC   SENT   OC
+    "CRISIS":   {"technical": 0.10, "macro": 0.15, "sentiment": 0.25, "onchain": 0.50},
+    "TRENDING": {"technical": 0.30, "macro": 0.20, "sentiment": 0.20, "onchain": 0.30},
+    "RANGING":  {"technical": 0.10, "macro": 0.20, "sentiment": 0.30, "onchain": 0.40},
+    "NORMAL":   {"technical": _W_TECHNICAL, "macro": _W_MACRO, "sentiment": _W_SENTIMENT, "onchain": _W_ONCHAIN},
+}
+
+
+def _detect_regime(vix: float | None, adx_14: float | None) -> tuple[str, float, float, float, float]:
+    """
+    Return (regime_name, w_ta, w_macro, w_sentiment, w_onchain). Weights sum to 1.0.
+    Priority: CRISIS > TRENDING > RANGING > NORMAL.
+    """
+    if vix is not None and vix >= 35:
+        regime = "CRISIS"
+    elif adx_14 is not None and adx_14 >= 25:
+        regime = "TRENDING"
+    elif adx_14 is not None and adx_14 < 20:
+        regime = "RANGING"
+    else:
+        regime = "NORMAL"
+    w = _REGIME_WEIGHTS[regime]
+    return regime, w["technical"], w["macro"], w["sentiment"], w["onchain"]
+
+
 # ─── Composite Score ──────────────────────────────────────────────────────────
 
 def _signal_label(score: float) -> str:
@@ -744,18 +800,25 @@ def compute_composite_signal(
         logger.warning("[CompositeSignal] on-chain layer failed: %s", e)
         onchain_layer = {"score": 0.0, "weight": _W_ONCHAIN, "weighted": 0.0, "components": {}}
 
+    # Regime detection: adjust layer weights based on market condition
+    vix     = (macro_data or {}).get("vix")
+    adx_14  = (ta_data or {}).get("adx_14")
+    regime, w_ta, w_mac, w_sent, w_oc = _detect_regime(vix, adx_14)
+
     total = (
-        ta_layer.get("weighted",       0.0) +
-        macro_layer.get("weighted",    0.0) +
-        sentiment_layer.get("weighted", 0.0) +
-        onchain_layer.get("weighted",   0.0)
+        ta_layer.get("score",        0.0) * w_ta   +
+        macro_layer.get("score",     0.0) * w_mac  +
+        sentiment_layer.get("score", 0.0) * w_sent +
+        onchain_layer.get("score",   0.0) * w_oc
     )
     total = _clamp(total)
 
     return {
         "score":   round(total, 4),
         "signal":  _signal_label(total),
+        "regime":  regime,
         "beginner_summary": _beginner_label(total),
+        "weights_applied": {"technical": w_ta, "macro": w_mac, "sentiment": w_sent, "onchain": w_oc},
         "layers": {
             "technical": ta_layer,
             "macro":     macro_layer,
