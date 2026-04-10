@@ -511,7 +511,7 @@ with tab5:
     _live_apys = _load_live_apys()
     _apy_source = "live · DeFiLlama" if _live_apys else "estimated · DeFiLlama offline"
 
-    if st.button("Build My Strategy", key="build_strategy_btn", width='stretch', type="primary"):
+    if st.button("Build My Strategy", key="build_strategy_btn", use_container_width=True, type="primary"):
         # Strategy engine: maps intent + all parameters to Flare-native strategies
         _plans = []
         _warnings = []

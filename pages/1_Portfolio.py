@@ -507,7 +507,7 @@ with _tab_wallet:
         with cl:
             new_label = st.text_input("Label",   placeholder="Main Wallet",  label_visibility="collapsed", key="new_wallet_label")
         with cb:
-            if st.button("Add", key="add_wallet_btn", width='stretch'):
+            if st.button("Add", key="add_wallet_btn", use_container_width=True):
                 _clean_addr = _sanitize_address(new_addr.strip()) if new_addr else ""
                 if _clean_addr and len(_clean_addr) == 42 and _clean_addr.startswith("0x"):
                     try:
@@ -527,11 +527,11 @@ with _tab_wallet:
             sel_idx = st.selectbox("Wallet", range(len(wallet_labels)), format_func=lambda i: wallet_labels[i], key="wallet_select")
             col_check, col_remove = st.columns([3, 1])
             with col_check:
-                if st.button("Check Balances", key="check_wallet_btn", width='stretch'):
+                if st.button("Check Balances", key="check_wallet_btn", use_container_width=True):
                     with st.spinner("Fetching on-chain balances…"):
                         try:
                             rows = _fetch_wallet_balances(saved_wallets[sel_idx]["address"])
-                            st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame(), width='stretch', hide_index=True)
+                            st.dataframe(pd.DataFrame(rows) if rows else pd.DataFrame(), use_container_width=True, hide_index=True)
                             if not rows:
                                 st.info("No significant balances found.")
                         except ImportError:
@@ -540,7 +540,7 @@ with _tab_wallet:
                             logger.warning("[Portfolio] wallet balance fetch failed: %s", e)
                             st.error("Unable to fetch wallet balances — please check your address and try again.")
 
-                if st.button("🔍 Detect Positions", key="detect_pos_btn", width='stretch',
+                if st.button("🔍 Detect Positions", key="detect_pos_btn", use_container_width=True,
                              help="Auto-detect Kinetic lending, sFLR staking, and stXRP staking from wallet"):
                     with st.spinner("Scanning on-chain positions…"):
                         try:
@@ -570,7 +570,7 @@ with _tab_wallet:
                             unsafe_allow_html=True,
                         )
                     with cb2:
-                        if st.button("Add", key=f"add_sug_{i}", width='stretch'):
+                        if st.button("Add", key=f"add_sug_{i}", use_container_width=True):
                             new_pos = dict(sug)
                             new_pos["id"] = f"pos_{int(datetime.now(timezone.utc).timestamp())}_{i}"
                             positions.append(new_pos)
@@ -584,7 +584,7 @@ with _tab_wallet:
                     st.session_state["_pos_suggestions"] = []
                     st.rerun()
             with col_remove:
-                if st.button("Remove", key="remove_wallet_btn", width='stretch'):
+                if st.button("Remove", key="remove_wallet_btn", use_container_width=True):
                     if sel_idx < len(saved_wallets):
                         saved_wallets.pop(sel_idx)
                         save_wallets(saved_wallets)
@@ -726,7 +726,7 @@ with _tab_pos:
                 data=_csv_bytes,
                 file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
                 mime="text/csv",
-                width='stretch',
+                use_container_width=True,
             )
         with _exp_pdf:
             _pdf_bytes = _build_pdf_export(positions, pnl_results)
@@ -736,7 +736,7 @@ with _tab_pos:
                     data=_pdf_bytes,
                     file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
-                    width='stretch',
+                    use_container_width=True,
                 )
             else:
                 st.caption("PDF: `pip install fpdf2`")
@@ -848,7 +848,7 @@ with _tab_pos:
 
             notes = st.text_input("Notes (optional)")
 
-            if st.form_submit_button("Add Position", width='stretch'):
+            if st.form_submit_button("Add Position", use_container_width=True):
                 if not pool_name:
                     st.error("Pool / Asset name is required.")
                 elif float(deposit_usd) <= 0:
@@ -1977,7 +1977,7 @@ with _tab_pos:
             data=_build_portfolio_csv(_export_holdings),
             file_name=f"portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
             mime="text/csv",
-            width='stretch',
+            use_container_width=True,
             key="batch9_csv_export",
         )
     with _col_txt:
@@ -1986,7 +1986,7 @@ with _tab_pos:
             data=_build_portfolio_report(_export_holdings, _exp_total),
             file_name=f"portfolio_report_{datetime.now(timezone.utc).strftime('%Y%m%d')}.txt",
             mime="text/plain",
-            width='stretch',
+            use_container_width=True,
             key="batch9_txt_export",
         )
     if not _export_holdings:

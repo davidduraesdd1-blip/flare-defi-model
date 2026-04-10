@@ -126,31 +126,31 @@ col_start, col_stop, col_cycle, col_estop = st.columns([2, 2, 2, 2])
 
 with col_start:
     if not running and not e_stop:
-        if st.button("▶ Start Agent", width='stretch', type="primary"):
+        if st.button("▶ Start Agent", use_container_width=True, type="primary"):
             _runner.start()
             st.success("Agent started.")
             st.rerun()
     elif running:
-        if st.button("⏸ Pause Agent", width='stretch'):
+        if st.button("⏸ Pause Agent", use_container_width=True):
             _runner.stop()
             st.info("Agent paused.")
             st.rerun()
 
 with col_stop:
     if e_stop:
-        if st.button("🔄 Reset Emergency Stop", width='stretch'):
+        if st.button("🔄 Reset Emergency Stop", use_container_width=True):
             _runner.reset_emergency_stop()
             st.success("Emergency stop cleared.")
             st.rerun()
 
 with col_cycle:
-    if st.button("⚡ Run One Cycle Now", width='stretch'):
+    if st.button("⚡ Run One Cycle Now", use_container_width=True):
         _runner.run_cycle_now()
         st.success("Cycle complete.")
         st.rerun()
 
 with col_estop:
-    if st.button("🛑 EMERGENCY STOP", width='stretch', type="secondary"):
+    if st.button("🛑 EMERGENCY STOP", use_container_width=True, type="secondary"):
         _runner.emergency_stop("User triggered emergency stop from UI")
         st.error("Emergency stop activated. All activity halted.")
         st.rerun()
@@ -283,7 +283,7 @@ try:
     st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
     _btn_c1, _btn_c2, _btn_c3 = st.columns([2, 2, 4])
     with _btn_c1:
-        if st.button("💾 Save Agent Config", key="save_agent_cfg", width='stretch', type="primary"):
+        if st.button("💾 Save Agent Config", key="save_agent_cfg", use_container_width=True, type="primary"):
             _new_overrides = {
                 "MAX_TRADE_SIZE_PCT":          _max_trade / 100.0,
                 "MAX_DAILY_LOSS_PCT":          _max_daily / 100.0,
@@ -300,7 +300,7 @@ try:
             save_overrides(_new_overrides)
             st.success("Agent config saved. Changes take effect on the next decision cycle.")
     with _btn_c2:
-        if st.button("↺ Reset to Defaults", key="reset_agent_cfg", width='stretch'):
+        if st.button("↺ Reset to Defaults", key="reset_agent_cfg", use_container_width=True):
             save_overrides({})
             st.success("Agent config reset to code defaults.")
             st.rerun()
