@@ -1609,16 +1609,24 @@ def render_opportunity_card(
     portfolio_size: float = 0, weight: float = 1.0,
 ) -> None:
     _card_user_level = get_user_level()
-    apy    = opp.get("estimated_apy", 0)
+    _raw_apy = opp.get("estimated_apy", 0)
+    try:
+        apy = float(_raw_apy or 0)
+    except (TypeError, ValueError):
+        apy = 0.0
+    import math as _math
+    if not _math.isfinite(apy):
+        apy = 0.0
     lo     = opp.get("apy_low",  apy * 0.8)
     hi     = opp.get("apy_high", apy * 1.2)
-    conf   = min(100, opp.get("confidence", 50) * weight)
+    _w     = float(weight) if isinstance(weight, (int, float)) else 1.0
+    conf   = min(100, opp.get("confidence", 50) * _w)
     il     = opp.get("il_risk") or "low"
     action = opp.get("action", opp.get("plain_english", "—"))
     proto  = opp.get("protocol", "—")
     pool   = opp.get("asset_or_pool", "—")
     src    = opp.get("data_source", "baseline")
-    rs     = opp.get("risk_score", 5.0)
+    rs     = min(10.0, max(0.0, float(opp.get("risk_score") or 5.0)))
     kf     = opp.get("kelly_fraction", 0)
     tvl    = opp.get("tvl_usd", 0)
 
@@ -1627,7 +1635,10 @@ def render_opportunity_card(
     il_icon  = {"none": "✓", "low": "✓", "medium": "~", "high": "!"}.get(il, "~")
 
     # IL estimate % (inline percentage from model, not just category)
-    il_est_pct   = float(opp.get("il_estimate_pct", 0.0))
+    try:
+        il_est_pct = float(opp.get("il_estimate_pct") or 0.0)
+    except (TypeError, ValueError):
+        il_est_pct = 0.0
     il_est_html  = (
         f" <span style='color:{il_color}; font-size:0.70rem;' "
         f"title='Estimated impermanent loss over 1 year based on pair volatility'>"

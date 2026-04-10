@@ -121,7 +121,7 @@ except Exception as _e:
 profile       = ctx.get("profile", "conservative")
 profile_cfg   = ctx.get("profile_cfg", {})
 color         = ctx.get("color", "#00D4FF")
-weight        = ctx.get("weight", {})
+weight        = float(ctx.get("weight") or 1.0)
 portfolio_size = ctx.get("portfolio_size", 10000)
 pro_mode      = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 demo_mode     = ctx.get("demo_mode", False)   # #67 Demo/Sandbox mode
