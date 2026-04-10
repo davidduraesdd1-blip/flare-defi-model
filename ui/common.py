@@ -942,7 +942,7 @@ def render_sidebar() -> dict:
             "User Level",
             options=_LEVEL_OPTIONS,
             format_func=lambda lv: _LEVEL_LABELS[lv],
-            index=_LEVEL_OPTIONS.index(_cur_level),
+            index=_LEVEL_OPTIONS.index(_cur_level) if _cur_level in _LEVEL_OPTIONS else 0,
             key="defi_user_level_radio",
             label_visibility="collapsed",
             help=(
