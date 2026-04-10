@@ -383,7 +383,9 @@ try:
     from ai.feedback_loop import get_feedback_dashboard
     feedback = get_feedback_dashboard()
 except Exception as e:
-    st.warning(f"Could not load feedback data: {e}")
+    import logging as _lg_mi
+    _lg_mi.getLogger(__name__).warning("[MarketIntel] feedback load error: %s", e)
+    st.warning("AI model health data not yet available — run a scan to generate feedback.")
     feedback = None
 
 if feedback:

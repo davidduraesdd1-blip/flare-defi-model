@@ -159,6 +159,60 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── Market Environment Banner (4-layer composite signal) ─────────────────────
+@st.cache_data(ttl=3600, show_spinner=False)
+def _dash_composite_signal() -> dict:
+    try:
+        from models.composite_signal import compute_composite_signal as _ccs
+        from macro_feeds import fetch_all_macro_data as _fmac, fetch_coinmetrics_onchain as _foc, fetch_btc_ta_signals as _fta
+        return _ccs(macro_data=_fmac(), onchain_data=_foc(days=400), ta_data=_fta())
+    except Exception:
+        return {}
+
+try:
+    _d_csig = _dash_composite_signal()
+    if _d_csig and _d_csig.get("score", 0) != 0.0:
+        _d_score  = _d_csig.get("score", 0.0)
+        _d_signal = _d_csig.get("signal", "NEUTRAL").replace("_", " ")
+        if _d_score >= 0.3:   _d_col, _d_bg = "#22c55e", "rgba(34,197,94,0.07)"
+        elif _d_score >= 0.1: _d_col, _d_bg = "#00d4aa", "rgba(0,212,170,0.07)"
+        elif _d_score >= -0.1: _d_col, _d_bg = "#f59e0b", "rgba(245,158,11,0.07)"
+        elif _d_score >= -0.3: _d_col, _d_bg = "#f97316", "rgba(249,115,22,0.07)"
+        else:                  _d_col, _d_bg = "#ef4444", "rgba(239,68,68,0.07)"
+        _d_txt = _d_csig.get("beginner_summary", _d_signal)
+        if user_level != "beginner":
+            _d_layers = _d_csig.get("layers", {})
+            def _dfmt(v): return f"+{v:.2f}" if v >= 0 else f"{v:.2f}"
+            _d_ta = _d_layers.get("technical", {}).get("score", 0)
+            _d_ma = _d_layers.get("macro", {}).get("score", 0)
+            _d_se = _d_layers.get("sentiment", {}).get("score", 0)
+            _d_oc = _d_layers.get("onchain", {}).get("score", 0)
+            st.html(
+                f"<div style='background:{_d_bg};border:1px solid {_d_col}33;"
+                f"border-left:4px solid {_d_col};border-radius:8px;padding:10px 18px;"
+                f"margin-bottom:14px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;'>"
+                f"<div><span style='color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;'>Market Environment</span>"
+                f"<div style='color:{_d_col};font-weight:800;font-size:1.05rem;'>{_d_signal}</div>"
+                f"<div style='color:#64748b;font-size:0.76rem;'>Score {_dfmt(_d_score)}</div></div>"
+                f"<div style='color:#475569;font-size:0.78rem;border-left:1px solid #1e293b;padding-left:20px;'>"
+                f"<div>Technical <span style='color:{'#22c55e' if _d_ta>=0 else '#ef4444'};font-weight:600;'>{_dfmt(_d_ta)}</span></div>"
+                f"<div>Macro <span style='color:{'#22c55e' if _d_ma>=0 else '#ef4444'};font-weight:600;'>{_dfmt(_d_ma)}</span></div>"
+                f"<div>Sentiment <span style='color:{'#22c55e' if _d_se>=0 else '#ef4444'};font-weight:600;'>{_dfmt(_d_se)}</span></div>"
+                f"<div>On-Chain <span style='color:{'#22c55e' if _d_oc>=0 else '#ef4444'};font-weight:600;'>{_dfmt(_d_oc)}</span></div>"
+                f"</div></div>"
+            )
+        else:
+            st.html(
+                f"<div style='background:{_d_bg};border:1px solid {_d_col}33;"
+                f"border-left:4px solid {_d_col};border-radius:8px;padding:12px 18px;"
+                f"margin-bottom:14px;'>"
+                f"<span style='color:{_d_col};font-weight:700;font-size:0.9rem;'>■ Market Conditions</span>"
+                f"<span style='color:#94a3b8;font-size:0.84rem;margin-left:12px;'>{_d_txt}</span>"
+                f"</div>"
+            )
+except Exception as _d_cs_err:
+    import logging as _dlg; _dlg.getLogger(__name__).debug("[Dashboard] composite signal error: %s", _d_cs_err)
+
 # ── Incentive Warning ─────────────────────────────────────────────────────────
 render_incentive_warning()
 

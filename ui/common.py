@@ -1170,7 +1170,8 @@ def _load_history_file(_mtime: float = 0.0) -> dict:
         st.warning("⚠️ history.json is corrupted — re-run the scheduler.")
         return {}
     except Exception as e:
-        st.warning(f"⚠️ Could not load scan data: {e}")
+        logger.warning("[History] load error: %s", e)
+        st.warning("⚠️ Scan data temporarily unavailable — try running the scanner or refreshing.")
         return {}
 
 

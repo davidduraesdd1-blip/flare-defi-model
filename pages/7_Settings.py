@@ -145,7 +145,8 @@ with _ctrl_tab_alerts:
                 else:
                     st.error("Quick test failed — check URL and DEFI_WEBHOOK_URL env var.")
             except Exception as _qe:
-                st.error(f"Quick test error: {_qe}")
+                logger.warning("[Settings] webhook test error: %s", _qe)
+                st.error("Webhook test failed — check the URL is correct and your network is connected.")
 
     with tab_thresh:
         st.markdown(
@@ -495,7 +496,8 @@ with _ctrl_tab_export:
             )
             st.success("Report generated successfully.")
         except ImportError as _ie:
-            st.error(f"PDF generation unavailable - missing dependency: {_ie}")
+            logger.warning("[Settings] PDF dependency missing: %s", _ie)
+            st.error("PDF export unavailable — run `pip install reportlab` to enable this feature.")
         except Exception as _ic_err:
             logger.warning("[Settings] report generation failed: %s", _ic_err)
             st.error("Report generation failed — please try again. If this persists, check your data connection.")
@@ -616,7 +618,8 @@ with _ctrl_tab_wallet:
                         )
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Wallet generation failed: {e}")
+                        logger.error("[Settings] wallet generation failed: %s", e)
+                        st.error("Wallet generation failed — please try again. If this persists, check your Python environment.")
 
 
 with _ctrl_tab_api:

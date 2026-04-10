@@ -788,7 +788,7 @@ def _prewarm_gt_cache() -> None:
     result = {}
     for i, dex_id in enumerate(_ALL_GT_DEX_IDS):
         if i > 0:
-            time.sleep(1.2)
+            time.sleep(2.1)  # 30 req/min limit = 2s min gap; 2.1s provides safe margin
         url  = (f"{_GT_BASE}/networks/flare/dexes/{dex_id}/pools"
                 f"?page=1&order=h24_volume_usd_desc")
         data = _get(url, timeout=15, headers=_GT_HEADERS)

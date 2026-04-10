@@ -440,9 +440,9 @@ INCENTIVE_PROGRAM = {
     "flaredrop_ended": "2026-01-30",   # FlareDrop monthly airdrop ended
     "expires":         "2026-07-01",   # DEX LP incentive (RFLR) program expected end
     "note": (
-        "NOTE: The FlareDrop (monthly FLR airdrop) ended January 30, 2026 — sFLR staking yields have dropped. "
-        "DEX LP incentives (RFLR rewards) continue until ~July 2026. "
-        "Plan to rebalance LP positions before June 2026 as RFLR incentives wind down."
+        "⚠️ RFLR incentive program expires July 1, 2026 (~82 days remaining — currently ~9% of program remaining). "
+        "DEX LP pool APYs now reflect this decay. Base fee yields remain. "
+        "Plan exit or rebalance strategy for LP positions before June 2026."
     ),
     # Reward display thresholds (QC — base/reward separation)
     "reward_hide_below_pct":  2.0,   # hide reward column when current reward APY < 2%
