@@ -1041,9 +1041,12 @@ with _tab_yield:
             # Wrap in a 30s aggregate timeout so slow DeFiLlama responses never
             # block the page indefinitely.
             try:
-                with ThreadPoolExecutor(max_workers=1) as _mc_ex:
+                _mc_ex = ThreadPoolExecutor(max_workers=1)
+                try:
                     _mc_fut = _mc_ex.submit(_cached_yields_pools, min_tvl_usd=5_000_000, max_results=20)
                     _mc_pools = _mc_fut.result(timeout=_MC_LOAD_TIMEOUT) or []
+                finally:
+                    _mc_ex.shutdown(wait=False)
             except Exception:
                 _mc_pools = []
                 st.warning(
