@@ -706,10 +706,10 @@ def fetch_btc_ta_signals() -> dict[str, Any]:
             ma50 = sum(closes[-50:]) / 50
             above_200ma = closes[-1] > ma50   # use 50d as proxy when 200d not available
 
-        # ── 30d Momentum ──────────────────────────────────────────────────────
+        # ── 20d Momentum (Issue #R1: 20d outperforms 30d for BTC — Jegadeesh 1993; crypto 2021) ──
         price_momentum = None
-        if len(closes) >= 31 and closes[-31] > 0:
-            price_momentum = round((closes[-1] - closes[-31]) / closes[-31] * 100, 2)
+        if len(closes) >= 21 and closes[-21] > 0:
+            price_momentum = round((closes[-1] - closes[-21]) / closes[-21] * 100, 2)
 
         # ── E1: 20d SMA for Hash Ribbon price confirmation gate ───────────────
         above_20sma = None

@@ -570,7 +570,7 @@ try:
 
     _rsi_val   = _ta.get("rsi_14")
     _ma_sig    = _ta.get("ma_signal", "NEUTRAL")
-    _mom_30    = _ta.get("price_momentum")
+    _mom_20    = _ta.get("price_momentum")   # 20d lookback (Issue #R1)
     _ab200     = _ta.get("above_200ma")
     _btc_px    = _ta.get("btc_price")
 
@@ -593,14 +593,14 @@ try:
     _ma_c, _ma_icon, _ma_desc = _ma_meta.get(_ma_sig, ("#9ca3af", "■ Neutral", ""))
 
     # Momentum color
-    if _mom_30 is None:
+    if _mom_20 is None:
         _mom_color, _mom_str = "#6b7280", "N/A"
-    elif _mom_30 > 10:
-        _mom_color, _mom_str = "#22c55e", f"+{_mom_30:.1f}%"
-    elif _mom_30 < -10:
-        _mom_color, _mom_str = "#ef4444", f"{_mom_30:.1f}%"
+    elif _mom_20 > 10:
+        _mom_color, _mom_str = "#22c55e", f"+{_mom_20:.1f}%"
+    elif _mom_20 < -10:
+        _mom_color, _mom_str = "#ef4444", f"{_mom_20:.1f}%"
     else:
-        _mom_color, _mom_str = "#f59e0b", f"{_mom_30:+.1f}%"
+        _mom_color, _mom_str = "#f59e0b", f"{_mom_20:+.1f}%"
 
     # 200MA position
     _ab200_str   = "Above 200d MA ▲" if _ab200 else "Below 200d MA ▼"
@@ -609,9 +609,9 @@ try:
     # Pre-compute display strings (avoid complex expressions inside f-strings)
     _rsi_disp  = f"{_rsi_val:.1f}" if _rsi_val is not None else "N/A"
     _btc_disp  = f"${_btc_px:,.0f} BTC/USD" if _btc_px else "Price N/A"
-    if _mom_30 is not None and _mom_30 > 10:
+    if _mom_20 is not None and _mom_20 > 10:
         _mom_trend = "Strong uptrend"
-    elif _mom_30 is not None and _mom_30 < -10:
+    elif _mom_20 is not None and _mom_20 < -10:
         _mom_trend = "Strong downtrend"
     else:
         _mom_trend = "Mild drift"
