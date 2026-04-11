@@ -184,10 +184,25 @@ def _inject_css() -> None:
     _is_light = _native_light or st.session_state.get("_theme") == "light"
     _theme_key = "light" if _is_light else "dark"
 
-    # PERF: CSS strings are 16-23 KB. Guard prevents re-sending on every rerun.
-    # Only re-inject when theme changes or on first run of this session.
-    if (st.session_state.get("_defi_css_injected")
-            and st.session_state.get("_defi_css_theme_last") == _theme_key):
+    # PERF: CSS strings are 16-23 KB. Guard skips re-injection on reruns of the
+    # SAME page with the SAME theme. The guard is keyed by (page_path, theme) so
+    # navigating to a new page always re-injects (Streamlit clears the DOM on
+    # each page navigation — the previous page's CSS is gone).
+    _page_key = None
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx as _get_ctx
+        _ctx = _get_ctx()
+        if _ctx is not None:
+            _page_key = getattr(_ctx, "main_script_path", None)
+    except Exception:
+        pass
+
+    if (
+        _page_key is not None  # only guard when we can identify the page
+        and st.session_state.get("_defi_css_injected")
+        and st.session_state.get("_defi_css_theme_last") == _theme_key
+        and st.session_state.get("_defi_css_page_last") == _page_key
+    ):
         return
 
     if _is_light:
@@ -199,6 +214,7 @@ def _inject_css() -> None:
 
     st.session_state["_defi_css_injected"] = True
     st.session_state["_defi_css_theme_last"] = _theme_key
+    st.session_state["_defi_css_page_last"] = _page_key
 
 
 # ── CSS constant strings (extracted for module-level caching, upgrade #32) ────
@@ -756,7 +772,6 @@ def render_sidebar() -> dict:
                          help="Switch to light mode" if not _is_light else "Switch to dark mode",
                          use_container_width=True):
                 st.session_state["_theme"] = "dark" if _is_light else "light"
-                st.session_state["_defi_css_injected"] = False  # force CSS re-inject on theme change
                 st.rerun()
 
         latest    = load_latest()

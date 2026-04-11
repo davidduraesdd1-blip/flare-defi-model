@@ -35,9 +35,7 @@ _user_level = ctx.get("user_level", get_user_level())
 _runner = AgentRunner()
 
 # ─── CSS ──────────────────────────────────────────────────────────────────────
-# PERF: guard prevents re-sending CSS on every Streamlit rerun
-if not st.session_state.get("_agent_css_injected"):
-    st.markdown("""
+st.markdown("""
 <style>
 .agent-status-card {
     background: rgba(0,212,170,0.07);
@@ -55,7 +53,6 @@ if not st.session_state.get("_agent_css_injected"):
              border-radius:8px !important; width:100% !important; }
 </style>
 """, unsafe_allow_html=True)
-    st.session_state["_agent_css_injected"] = True
 
 # ─── Page header ──────────────────────────────────────────────────────────────
 render_section_header(
