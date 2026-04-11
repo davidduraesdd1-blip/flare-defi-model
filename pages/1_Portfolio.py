@@ -562,10 +562,15 @@ with _tab_wallet:
                 for i, sug in enumerate(st.session_state["_pos_suggestions"]):
                     ca2, cb2 = st.columns([5, 1])
                     with ca2:
+                        import html as _html_p
+                        _sug_pool     = _html_p.escape(str(sug.get("pool", "")))
+                        _sug_protocol = _html_p.escape(str(sug.get("protocol") or "").capitalize())
+                        _sug_ptype    = _html_p.escape(str(sug.get("position_type", "")))
+                        _sug_token_a  = _html_p.escape(str(sug.get("token_a", "")))
                         st.markdown(
                             f"<div style='font-size:0.85rem; color:#94a3b8; padding:4px 0;'>"
-                            f"<b>{sug['pool']}</b> · {str(sug.get('protocol') or '').capitalize()} · "
-                            f"{sug['position_type']} · {sug.get('token_a_amount', 0):,.4f} {sug.get('token_a', '')}"
+                            f"<b>{_sug_pool}</b> · {_sug_protocol} · "
+                            f"{_sug_ptype} · {sug.get('token_a_amount', 0):,.4f} {_sug_token_a}"
                             f"</div>",
                             unsafe_allow_html=True,
                         )

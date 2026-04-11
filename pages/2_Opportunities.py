@@ -2734,7 +2734,9 @@ with _tab_yield:
                     )
                 with _tc2:
                     if st.button("Remove", key=f"cl_remove_{_i}"):
-                        st.session_state["cl_tracked_positions"].pop(_i)
+                        st.session_state["cl_tracked_positions"] = [
+                            s for j, s in enumerate(st.session_state["cl_tracked_positions"]) if j != _i
+                        ]
                         st.rerun()
     
     render_what_this_means(

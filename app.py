@@ -110,7 +110,10 @@ DEFI_CSS = """
 .protocol-badge { background: #0d47a1; color: #bbdefb; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; }
 </style>
 """
-st.markdown(DEFI_CSS, unsafe_allow_html=True)
+# PERF: guard prevents re-sending 500B CSS string on every Streamlit rerun
+if not st.session_state.get("_defi_app_css_injected"):
+    st.markdown(DEFI_CSS, unsafe_allow_html=True)
+    st.session_state["_defi_app_css_injected"] = True
 
 try:
     ctx = render_sidebar()

@@ -683,8 +683,8 @@ with _ctrl_tab_cache:
                          use_container_width=True,
                      help="Forces fresh fetch of DXY, VIX, CPI, yield curve data"):
             try:
-                from macro_feeds import _macro_cache as _mc
-                _mc.clear() if hasattr(_mc, "clear") else None
+                from macro_feeds import clear_macro_caches
+                clear_macro_caches()
             except Exception:
                 pass
             st.cache_data.clear()

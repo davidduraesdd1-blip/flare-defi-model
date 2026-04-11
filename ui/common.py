@@ -182,6 +182,13 @@ def _inject_css() -> None:
     except Exception:
         pass
     _is_light = _native_light or st.session_state.get("_theme") == "light"
+    _theme_key = "light" if _is_light else "dark"
+
+    # PERF: CSS strings are 16-23 KB. Guard prevents re-sending on every rerun.
+    # Only re-inject when theme changes or on first run of this session.
+    if (st.session_state.get("_defi_css_injected")
+            and st.session_state.get("_defi_css_theme_last") == _theme_key):
+        return
 
     if _is_light:
         # ── LIGHT MODE: complete standalone CSS (no dark CSS injected at all) ──
@@ -189,6 +196,9 @@ def _inject_css() -> None:
     else:
         # ── DARK MODE: complete standalone CSS ────────────────────────────────
         st.markdown(_build_css("dark"), unsafe_allow_html=True)
+
+    st.session_state["_defi_css_injected"] = True
+    st.session_state["_defi_css_theme_last"] = _theme_key
 
 
 # ── CSS constant strings (extracted for module-level caching, upgrade #32) ────
@@ -746,6 +756,7 @@ def render_sidebar() -> dict:
                          help="Switch to light mode" if not _is_light else "Switch to dark mode",
                          use_container_width=True):
                 st.session_state["_theme"] = "dark" if _is_light else "light"
+                st.session_state["_defi_css_injected"] = False  # force CSS re-inject on theme change
                 st.rerun()
 
         latest    = load_latest()

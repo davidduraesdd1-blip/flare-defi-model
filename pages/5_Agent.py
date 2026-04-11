@@ -35,7 +35,9 @@ _user_level = ctx.get("user_level", get_user_level())
 _runner = AgentRunner()
 
 # ─── CSS ──────────────────────────────────────────────────────────────────────
-st.markdown("""
+# PERF: guard prevents re-sending CSS on every Streamlit rerun
+if not st.session_state.get("_agent_css_injected"):
+    st.markdown("""
 <style>
 .agent-status-card {
     background: rgba(0,212,170,0.07);
@@ -53,6 +55,7 @@ st.markdown("""
              border-radius:8px !important; width:100% !important; }
 </style>
 """, unsafe_allow_html=True)
+    st.session_state["_agent_css_injected"] = True
 
 # ─── Page header ──────────────────────────────────────────────────────────────
 render_section_header(
@@ -98,8 +101,11 @@ else:
     status_icon  = "⏸️"
     status_text  = f"PAUSED · {mode}"
 
+import html as _html_mod
+_dec_action   = _html_mod.escape(str(last_dec.get("action", "—")))
+_dec_protocol = _html_mod.escape(str(last_dec.get("protocol", "—")))
 _dec_suffix = (
-    f"&nbsp;·&nbsp;{last_dec.get('action','—')} → {last_dec.get('protocol','—')}"
+    f"&nbsp;·&nbsp;{_dec_action} → {_dec_protocol}"
     if last_dec.get("action") else ""
 )
 st.html(
@@ -107,18 +113,20 @@ st.html(
     f"border:1px solid rgba(0,212,170,0.25);border-radius:10px;padding:16px 20px;margin-bottom:12px;'>"
     f"<div style='font-size:1.1rem;font-weight:800;color:#f1f5f9;'>{status_icon} {status_text}</div>"
     f"<div style='color:#94a3b8;font-size:0.82rem;margin-top:6px;'>"
-    f"Last decision: {last_ts or '—'}{_dec_suffix}</div></div>"
+    f"Last decision: {_html_mod.escape(str(last_ts or '—'))}{_dec_suffix}</div></div>"
 )
 
 # Last decision reasoning
 if last_dec.get("reasoning"):
     verdict_color = "#22c55e" if last_dec.get("approved") else "#f59e0b"
     verdict_icon  = "▲" if last_dec.get("approved") else "■"
+    _dec_reason   = _html_mod.escape(str(last_dec.get("reason", "")))
+    _dec_reasoning = _html_mod.escape(str(last_dec.get("reasoning", "")))
     st.html(
         f"<div style='font-size:0.82rem;color:{verdict_color};margin-bottom:12px;'>"
-        f"{verdict_icon} {last_dec.get('reason','')}</div>"
+        f"{verdict_icon} {_dec_reason}</div>"
         f"<div style='font-size:0.80rem;color:#64748b;margin-bottom:16px;'>"
-        f"Reasoning: {last_dec.get('reasoning','')}</div>"
+        f"Reasoning: {_dec_reasoning}</div>"
     )
 
 # ─── Control buttons ──────────────────────────────────────────────────────────
