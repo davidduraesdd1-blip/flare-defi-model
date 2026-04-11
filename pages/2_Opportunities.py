@@ -1559,22 +1559,29 @@ with _tab_intel:
     _tvl_alerts  = []
     
     # OPT-38: Fetch all 5 TVL alerts in parallel
+    # Manual instantiation + shutdown(wait=False) prevents context manager from
+    # blocking the Streamlit main thread if any underlying HTTP call stalls.
     def _fetch_tvl_alert(slug: str) -> "dict | None":
         try:
             alert = fetch_tvl_change_alert(slug, threshold_pct=5.0)
             return alert if alert.get("current_tvl", 0) > 0 else None
         except Exception:
             return None
-    
-    with ThreadPoolExecutor(max_workers=min(5, len(_alert_slugs))) as _tvl_ex:
+
+    _tvl_ex = ThreadPoolExecutor(max_workers=min(5, len(_alert_slugs)))
+    try:
         _tvl_futures = {_tvl_ex.submit(_fetch_tvl_alert, s): s for s in _alert_slugs}
-        for _tvl_fut in as_completed(_tvl_futures):
+        for _tvl_fut in as_completed(_tvl_futures, timeout=14):
             try:
-                _result = _tvl_fut.result(timeout=15)
+                _result = _tvl_fut.result(timeout=14)
                 if _result is not None:
                     _tvl_alerts.append(_result)
             except Exception:
                 pass
+    except Exception:
+        pass
+    finally:
+        _tvl_ex.shutdown(wait=False)
     
     if _tvl_alerts:
         for _al in _tvl_alerts:
