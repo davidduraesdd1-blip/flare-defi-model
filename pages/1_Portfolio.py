@@ -812,10 +812,8 @@ with _tab_pos:
                 </div>""", unsafe_allow_html=True)
             with col_del:
                 if st.button("✕", key=f"del_pos_{idx}", help="Remove position"):
-                    if idx < len(positions):
-                        positions.pop(idx)
-                        save_positions(positions)
-                        st.rerun()
+                    save_positions([p for i, p in enumerate(positions) if i != idx])
+                    st.rerun()
 
     else:
         st.markdown(

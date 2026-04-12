@@ -1593,7 +1593,7 @@ with _tab_intel:
             st.markdown(
                 f"<div style='background:rgba(0,0,0,0.2);border-left:3px solid {_col};"
                 f"border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:0.85rem'>"
-                f"{_icon} <b>{_al['slug']}</b> · TVL ${_tvl_m}M · "
+                f"{_icon} <b>{_html.escape(str(_al['slug']))}</b> · TVL ${_tvl_m}M · "
                 f"<span style='color:{_col}'>{_chg:+.1f}% 24h</span></div>",
                 unsafe_allow_html=True,
             )
@@ -1798,9 +1798,9 @@ with _tab_yield:
                 st.markdown(
                     f"<div class='opp-card' style='border-left:3px solid #f59e0b;'>"
                     f"<div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;'>"
-                    f"<div><span style='font-weight:700; color:#f1f5f9;'>🆕 {_p['dex_name']}</span>"
+                    f"<div><span style='font-weight:700; color:#f1f5f9;'>🆕 {_html.escape(str(_p['dex_name']))}</span>"
                     f"<span style='color:#475569; margin:0 6px;'>·</span>"
-                    f"<span style='color:#94a3b8; font-size:0.9rem;'>{_p['symbol']}</span></div>"
+                    f"<span style='color:#94a3b8; font-size:0.9rem;'>{_html.escape(str(_p['symbol']))}</span></div>"
                     f"<div style='display:flex; gap:12px; font-size:0.82rem;'>"
                     f"<span style='color:#a78bfa; font-weight:700;'>{_p['apy_est']:.0f}% est. APY</span>"
                     f"<span style='color:#f1f5f9; font-weight:700;'>TVL ${_p['tvl_usd']/1e6:.2f}M</span>"

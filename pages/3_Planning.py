@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import html as _html
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone
@@ -370,7 +371,7 @@ with tab3:
             f"<div style='color:#94a3b8; font-size:0.83rem; margin-top:4px;'>"
             f"{len(over_cap)} provider(s) exceed the 2.5% vote power cap. "
             f"Flare reduces reward eligibility for over-cap providers — avoid delegating to these: "
-            f"<b>{', '.join(p['name'] for p in over_cap)}</b></div></div>",
+            f"<b>{', '.join(_html.escape(str(p['name'])) for p in over_cap)}</b></div></div>",
             unsafe_allow_html=True,
         )
 
@@ -400,9 +401,9 @@ with tab3:
                 f"border-radius:10px; padding:12px 16px; font-size:0.84rem; color:#94a3b8; margin-top:10px;'>"
                 f"🤖 <span style='color:#a78bfa; font-weight:600;'>Recommendation:</span> "
                 f"Split {flr_amount:,.0f} FLR between "
-                f"<b style='color:#f1f5f9;'>{top2[0]['name']}</b> ({flr_amount*0.6:,.0f} FLR, "
+                f"<b style='color:#f1f5f9;'>{_html.escape(str(top2[0]['name']))}</b> ({flr_amount*0.6:,.0f} FLR, "
                 f"risk-adj {top2[0]['risk_adj_rate']:.2f}%) and "
-                f"<b style='color:#f1f5f9;'>{top2[1]['name']}</b> ({flr_amount*0.4:,.0f} FLR, "
+                f"<b style='color:#f1f5f9;'>{_html.escape(str(top2[1]['name']))}</b> ({flr_amount*0.4:,.0f} FLR, "
                 f"risk-adj {top2[1]['risk_adj_rate']:.2f}%) for coverage.</div>",
                 unsafe_allow_html=True,
             )
@@ -1424,7 +1425,7 @@ with tab7:
         st.markdown(f"""
 <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_pu_col};
             border-radius:10px;padding:18px;text-align:center">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Break-Even: {_be_token_a} Rises</div>
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Break-Even: {_html.escape(str(_be_token_a))} Rises</div>
   <div style="font-size:28px;font-weight:700;color:{_pu_col}">{_pu_str}</div>
   <div style="font-size:11px;color:#9ca3af;margin-top:6px">Price must rise MORE than this before IL > yield</div>
   <div style="font-size:10px;color:#6b7280;margin-top:4px">{"Wide buffer — safer zone" if _pct_up and _pct_up > 50 else "Narrow buffer — watch closely"}</div>
@@ -1437,7 +1438,7 @@ with tab7:
         st.markdown(f"""
 <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_pd_col};
             border-radius:10px;padding:18px;text-align:center">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Break-Even: {_be_token_a} Falls</div>
+  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Break-Even: {_html.escape(str(_be_token_a))} Falls</div>
   <div style="font-size:28px;font-weight:700;color:{_pd_col}">{_pd_str}</div>
   <div style="font-size:11px;color:#9ca3af;margin-top:6px">Price must fall MORE than this before IL > yield</div>
   <div style="font-size:10px;color:#6b7280;margin-top:4px">{"Wide buffer — safer zone" if _pct_dn and abs(_pct_dn) > 30 else "Narrow buffer — watch closely"}</div>

@@ -756,7 +756,7 @@ def render_sidebar() -> dict:
             if BRAND_LOGO_PATH and Path(BRAND_LOGO_PATH).exists():
                 st.image(BRAND_LOGO_PATH, width=120)
             else:
-                _header_text = BRAND_NAME if BRAND_NAME else "⚡ Flare DeFi"
+                _header_text = _html.escape(str(BRAND_NAME)) if BRAND_NAME else "⚡ Flare DeFi"
                 st.markdown(
                     f"<div style='font-size:1.25rem; font-weight:800; "
                     f"background: linear-gradient(90deg, #00d4aa, #60a5fa); "
@@ -1040,7 +1040,8 @@ def render_sidebar() -> dict:
                 _action_color = "#22c55e" if _last_dec.get("approved") else "#f59e0b"
                 st.markdown(
                     f"<div style='font-size:0.65rem;color:{_action_color};margin-bottom:6px;'>"
-                    f"Last: {_last_dec.get('action','—')} → {_last_dec.get('protocol','—')}</div>",
+                    f"Last: {_html.escape(str(_last_dec.get('action','—')))} → "
+                    f"{_html.escape(str(_last_dec.get('protocol','—')))}</div>",
                     unsafe_allow_html=True,
                 )
             _sa_col, _sb_col = st.columns(2)
