@@ -42,6 +42,108 @@ def _sanitize_address(addr: str) -> str:
     hex_cleaned = re.sub(r"[^0-9a-fA-F]", "", hex_part)
     # Re-attach prefix and truncate to 42 chars (0x + 40 hex = 42)
     return ("0x" + hex_cleaned)[:42]
+
+
+@st.cache_data(ttl=14400, show_spinner=False)
+def _fetch_live_token_corr(tokens_key: str) -> dict:
+    """Fetch 90-day Pearson correlations for known tokens via yfinance (4-hour cache).
+
+    tokens_key — sorted comma-joined uppercase symbol list (hashable cache key).
+    Returns {(SYM_A, SYM_B): float} for all pairs found, or {} on failure.
+    Stablecoins are excluded from the live fetch (correlations are hardcoded to ~0.99/0.04).
+    Falls back to hardcoded table per _get_corr_l() — callers never see an exception.
+    """
+    _TICKER_MAP = {
+        "BTC": "BTC-USD", "WBTC": "BTC-USD", "CBBTC": "BTC-USD",
+        "ETH": "ETH-USD", "WETH": "ETH-USD", "STETH": "ETH-USD", "CBETH": "ETH-USD",
+        "XRP": "XRP-USD", "FXRP": "XRP-USD", "STXRP": "XRP-USD",
+        "SOL": "SOL-USD", "BNB": "BNB-USD", "AVAX": "AVAX-USD",
+        "ADA": "ADA-USD", "DOT": "DOT-USD", "LINK": "LINK-USD",
+        "ATOM": "ATOM-USD", "LTC": "LTC-USD", "XLM": "XLM-USD",
+        "HBAR": "HBAR-USD", "MATIC": "MATIC-USD", "POL": "MATIC-USD",
+        "FLR": "FLR-USD", "XDC": "XDC-USD", "HLN": "HLN-USD",
+        "DOGE": "DOGE-USD", "SHIB": "SHIB-USD", "UNI": "UNI-USD",
+        "AAVE": "AAVE-USD", "CRV": "CRV-USD", "MKR": "MKR-USD",
+    }
+    _STABLES_LIVE = frozenset({
+        "USDT", "USDC", "DAI", "BUSD", "TUSD", "FDUSD", "FRAX", "LUSD",
+        "USD0", "USDT0", "USDC.E", "GUSD", "PYUSD", "CRVUSD", "USDP",
+    })
+    try:
+        import yfinance as _yf
+        tokens_list = [
+            t.strip() for t in tokens_key.split(",")
+            if t.strip() and t.strip().upper() not in _STABLES_LIVE
+            and t.strip().upper() in _TICKER_MAP
+        ]
+        if len(tokens_list) < 2:
+            return {}
+
+        # Deduplicate tickers: FXRP + XRP both map to XRP-USD → treat as one
+        tick_to_syms: dict = {}
+        sym_to_tick: dict = {}
+        for sym in tokens_list:
+            tick = _TICKER_MAP[sym.upper()]
+            sym_to_tick[sym.upper()] = tick
+            tick_to_syms.setdefault(tick, []).append(sym.upper())
+
+        unique_tickers = list(tick_to_syms.keys())
+        if len(unique_tickers) < 2:
+            return {}
+
+        raw = _yf.download(unique_tickers, period="120d", auto_adjust=True, progress=False)
+
+        # Extract Close prices — handle both MultiIndex (multi-ticker) and flat (single-ticker)
+        if hasattr(raw.columns, "levels"):
+            lvl0 = list(raw.columns.get_level_values(0))
+            lvl1 = list(raw.columns.get_level_values(1))
+            if "Close" in lvl0:
+                close_df = raw["Close"]
+            elif "Close" in lvl1:
+                close_df = raw.xs("Close", level=1, axis=1)
+            else:
+                return {}
+        elif "Close" in raw.columns:
+            close_df = raw[["Close"]].rename(columns={"Close": unique_tickers[0]})
+        else:
+            return {}
+
+        close_df = close_df.dropna(axis=1, thresh=60)
+        if close_df.shape[1] < 2:
+            return {}
+
+        corr_df = close_df.pct_change().dropna().corr()
+
+        result: dict = {}
+        for tick_a, syms_a in tick_to_syms.items():
+            if tick_a not in corr_df.columns:
+                continue
+            for tick_b, syms_b in tick_to_syms.items():
+                if tick_a == tick_b:
+                    continue
+                if tick_b not in corr_df.columns:
+                    continue
+                val = float(corr_df.loc[tick_a, tick_b])
+                if not (-1.0 <= val <= 1.0):
+                    continue
+                # Map the correlation to all alias pairs for each ticker
+                for sa in syms_a:
+                    for sb in syms_b:
+                        result[(sa, sb)] = val
+                        result[(sb, sa)] = val
+
+        # Aliases that share a ticker move identically (FXRP ↔ XRP = 0.99)
+        for _syms in tick_to_syms.values():
+            for i in range(len(_syms)):
+                for j in range(i + 1, len(_syms)):
+                    result[(_syms[i], _syms[j])] = 0.99
+                    result[(_syms[j], _syms[i])] = 0.99
+
+        return result
+    except Exception:
+        return {}
+
+
 from config import PROTOCOLS, TOKENS, INCENTIVE_PROGRAM, RISK_PROFILES, FALLBACK_PRICES
 
 page_setup("Portfolio · Flare DeFi")
@@ -1322,13 +1424,15 @@ with _tab_pos:
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
-    # ─── Portfolio Correlation Matrix (Upgrade #5) ────────────────────────────────
+    # ─── Portfolio Correlation Matrix (Item 13 — improved) ───────────────────────
 
-    render_section_header("Correlation Matrix", "How correlated are your positions? Warns on concentration risk.")
+    render_section_header(
+        "Correlation Matrix",
+        "Live inter-position correlations · Protocol concentration risk · Bear market stress test",
+    )
 
-    # Pairwise token correlation table — extended to cover the full must-have coin universe
-    # plus top-30 crypto and all common DeFi tokens (Mar 2026 estimates).
-    # Sources: historical 90-day rolling Pearson on weekly closes; Flare ecosystem analysis.
+    # ── Fallback correlation table (historical estimates where live data unavailable) ─
+    # Sources: 90-day rolling Pearson on daily closes; Flare ecosystem analysis; CoinGecko.
     _TOKEN_CORR: dict = {
         # ── Flare ecosystem (high internal correlation) ──────────────────────
         ("FLR",   "sFLR"):   0.99,
@@ -1454,18 +1558,19 @@ with _tab_pos:
     _STABLES = frozenset({"USDT", "USDC", "DAI", "BUSD", "TUSD", "FDUSD", "FRAX", "LUSD",
                           "USD0", "USDT0", "USDC.E", "GUSD", "PYUSD", "USDP", "CRVUSD"})
 
-    def _get_corr(a: str, b: str) -> float:
+    def _get_corr_l(a: str, b: str, _live: dict) -> float:
+        """Correlation between tokens a and b. Live data first, then fallback table."""
         a, b = a.upper(), b.upper()
         if a == b:
             return 1.0
-        # Stablecoin vs stablecoin = near-perfect correlation
         if a in _STABLES and b in _STABLES:
             return 0.99
-        # Stablecoin vs anything else = very low correlation
         if a in _STABLES or b in _STABLES:
             return 0.04
-        return _TOKEN_CORR.get((a, b), _TOKEN_CORR.get((b, a), 0.30))  # default: weak positive
-
+        v = _live.get((a, b)) if _live else None
+        if v is not None:
+            return max(-1.0, min(1.0, float(v)))
+        return _TOKEN_CORR.get((a, b), _TOKEN_CORR.get((b, a), 0.30))
 
     def _position_tokens(pos: dict) -> list:
         """Extract the token symbols a position is exposed to."""
@@ -1477,14 +1582,12 @@ with _tab_pos:
         if tok_b and tok_b != tok_a:
             tokens.append(tok_b)
         if not tokens:
-            # Guess from pool name
             pool = (pos.get("pool") or "").replace("-", "/").replace("_", "/")
             for part in pool.split("/"):
                 t = part.strip().upper()
                 if t and t not in tokens:
                     tokens.append(t)
-        return tokens[:2]  # at most 2 tokens per LP
-
+        return tokens[:2]
 
     if not positions or len(positions) < 2:
         st.markdown(
@@ -1493,7 +1596,15 @@ with _tab_pos:
             unsafe_allow_html=True,
         )
     else:
-        # Build position labels and compute pairwise correlation
+        # ── Fetch live correlations (yfinance, 4h cache) ──────────────────────
+        _all_toks: set = set()
+        for _p in positions:
+            _all_toks.update(_position_tokens(_p))
+        _tok_key = ",".join(sorted(_all_toks))
+        _live_corr = _fetch_live_token_corr(_tok_key)
+        _has_live  = bool(_live_corr)
+
+        # ── Build position labels and pairwise correlation matrix ─────────────
         pos_labels = [
             f"{pos.get('pool', '?')} ({str(pos.get('protocol') or '?').capitalize()})"
             for pos in positions
@@ -1509,20 +1620,29 @@ with _tab_pos:
                 toks_i = _position_tokens(positions[i])
                 toks_j = _position_tokens(positions[j])
                 if not toks_i or not toks_j:
-                    corr_matrix[i][j] = 0.30   # unknown
+                    corr_matrix[i][j] = 0.30
                     continue
-                # Average pairwise correlation across all token combinations
                 pairs = [(a, b) for a in toks_i for b in toks_j]
-                corr_matrix[i][j] = sum(_get_corr(a, b) for a, b in pairs) / len(pairs)
+                corr_matrix[i][j] = sum(_get_corr_l(a, b, _live_corr) for a, b in pairs) / len(pairs)
 
-        # ── Diversification score: 1 – avg off-diagonal correlation ─────────
-        _off_diag = [
-            corr_matrix[i][j]
-            for i in range(n) for j in range(n)
-            if i != j
+        # ── Size-weighted diversification score ───────────────────────────────
+        # Weight each pair's correlation by deposit-USD so a $100 stablecoin doesn't
+        # dominate a $10,000 LP. Falls back to equal weight when deposit_usd is missing.
+        _total_dep = sum(float(p.get("deposit_usd") or 0) for p in positions) or float(n)
+        _pos_weights = [
+            max(1.0 / n, float(p.get("deposit_usd") or _total_dep / n) / _total_dep)
+            for p in positions
         ]
-        _avg_corr  = sum(_off_diag) / len(_off_diag) if _off_diag else 0.0
-        _div_score = round((1.0 - _avg_corr) * 100, 1)  # 0=all identical, 100=fully uncorrelated
+        _w_corr_sum = 0.0
+        _w_total    = 0.0
+        for _wi in range(n):
+            for _wj in range(n):
+                if _wi != _wj:
+                    _w = _pos_weights[_wi] * _pos_weights[_wj]
+                    _w_corr_sum += corr_matrix[_wi][_wj] * _w
+                    _w_total    += _w
+        _avg_corr  = _w_corr_sum / _w_total if _w_total > 0 else 0.0
+        _div_score = round((1.0 - _avg_corr) * 100, 1)
 
         if _div_score >= 70:
             _div_color = "#22c55e"; _div_label = "Well-Diversified"
@@ -1532,21 +1652,39 @@ with _tab_pos:
             _div_color = "#ef4444"; _div_label = "Concentrated"
 
         _corr_lv = get_user_level()
-        # Show score metric above the heatmap
-        _score_col, _ = st.columns([1, 3])
-        with _score_col:
+
+        # ── Score row: metric + data-source badge ─────────────────────────────
+        _src_badge = (
+            "<span style='background:rgba(34,197,94,0.10);border:1px solid rgba(34,197,94,0.30);"
+            "border-radius:4px;padding:1px 7px;font-size:0.68rem;color:#22c55e;font-weight:600;'>"
+            "● Live</span>"
+            if _has_live else
+            "<span style='background:rgba(100,116,139,0.10);border:1px solid rgba(100,116,139,0.30);"
+            "border-radius:4px;padding:1px 7px;font-size:0.68rem;color:#64748b;font-weight:600;'>"
+            "○ Estimated</span>"
+        )
+        _sc1, _sc2, _ = st.columns([2, 2, 4])
+        with _sc1:
             st.metric(
                 "Diversification Score",
                 f"{_div_score}/100" if _corr_lv != "beginner" else _div_label,
                 help=(
-                    "100 = completely uncorrelated positions (maximum diversification). "
-                    "0 = all positions move identically (zero diversification). "
-                    f"Current average cross-position correlation: {_avg_corr:.2f}"
+                    "Size-weighted: large positions count more than small ones. "
+                    "100 = completely uncorrelated (maximum diversification). "
+                    "0 = all positions move identically (no diversification). "
+                    f"Weighted avg cross-position correlation: {_avg_corr:.2f}"
                 ),
             )
+        with _sc2:
+            st.markdown(f"<div style='margin-top:28px;'>{_src_badge}</div>", unsafe_allow_html=True)
 
-        # Plotly heatmap (go already imported at top of file)
-        # Level-aware cell labels: Beginners see word descriptions, others see numbers
+        if _corr_lv == "beginner":
+            from ui.common import render_gauge as _rg
+            _rg(_div_score, "Diversification", min_v=0, max_v=100,
+                low_threshold=0.45, high_threshold=0.70,
+                user_level="beginner", unit="/100")
+
+        # ── Heatmap ───────────────────────────────────────────────────────────
         def _corr_label(v: float) -> str:
             if _corr_lv == "beginner":
                 if v >= 0.80: return "High"
@@ -1559,10 +1697,10 @@ with _tab_pos:
             x=pos_labels,
             y=pos_labels,
             colorscale=[
-                [0.0,  "rgba(16,185,129,0.15)"],
-                [0.3,  "rgba(59,130,246,0.25)"],
-                [0.7,  "rgba(245,158,11,0.40)"],
-                [1.0,  "rgba(239,68,68,0.65)"],
+                [0.0, "rgba(16,185,129,0.15)"],
+                [0.3, "rgba(59,130,246,0.25)"],
+                [0.7, "rgba(245,158,11,0.40)"],
+                [1.0, "rgba(239,68,68,0.65)"],
             ],
             zmin=0, zmax=1,
             text=[[_corr_label(v) for v in row] for row in corr_matrix],
@@ -1580,7 +1718,7 @@ with _tab_pos:
         )
         st.plotly_chart(fig_corr, width='stretch')
 
-        # ── Tiered risk warnings: caution (0.65–0.80) + high-risk (>0.80) ──
+        # ── Tiered risk warnings ──────────────────────────────────────────────
         high_corr_pairs = [
             (pos_labels[i], pos_labels[j], corr_matrix[i][j])
             for i in range(n) for j in range(i + 1, n)
@@ -1602,7 +1740,7 @@ with _tab_pos:
                 f"<div class='warn-box'>"
                 f"<div style='font-weight:700; color:#ef4444; margin-bottom:6px;'>🔴 High Concentration Risk</div>"
                 f"<div style='color:#94a3b8; font-size:0.83rem; line-height:1.55;'>"
-                f"These positions move almost identically — a single market crash could hit all of them simultaneously:"
+                f"These positions move almost identically — a single market crash could hit all simultaneously:"
                 f"<ul style='margin:6px 0 0 0;'>{warn_lines}</ul>"
                 f"<div style='margin-top:8px; color:#64748b;'>Action: reduce one position or add an uncorrelated asset (stablecoin or non-correlated chain).</div>"
                 f"</div></div>",
@@ -1626,13 +1764,115 @@ with _tab_pos:
             )
         else:
             st.markdown(
-                f"<div style='color:#10b981; font-size:0.85rem; padding:4px 0;'>"
-                f"✓ Portfolio is well-diversified — no highly correlated position pairs detected."
+                "<div style='color:#10b981; font-size:0.85rem; padding:4px 0;'>"
+                "✓ Portfolio is well-diversified — no highly correlated position pairs detected."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+        # ── Protocol Concentration Risk ───────────────────────────────────────
+        _proto_dep: dict = {}
+        for _pp in positions:
+            _pr = str(_pp.get("protocol") or "Unknown").capitalize()
+            _proto_dep[_pr] = _proto_dep.get(_pr, 0.0) + float(_pp.get("deposit_usd") or 0)
+        _total_dep_proto = sum(_proto_dep.values()) or 1.0
+        _proto_rows = sorted(_proto_dep.items(), key=lambda x: x[1], reverse=True)
+        _max_proto_name, _max_proto_dep = _proto_rows[0] if _proto_rows else ("", 0)
+        _max_proto_pct = _max_proto_dep / _total_dep_proto * 100
+
+        if len(_proto_dep) >= 1:
+            with st.expander("🏛 Protocol Concentration Risk", expanded=(_max_proto_pct > 50)):
+                st.caption(
+                    "Token correlation ≠ smart contract risk. Even uncorrelated tokens in the same "
+                    "protocol share the same exploit surface — a single hack could drain all of them."
+                )
+                for _pr_name, _pr_dep in _proto_rows:
+                    _pr_pct = _pr_dep / _total_dep_proto * 100
+                    _pr_col = "#ef4444" if _pr_pct > 50 else ("#f59e0b" if _pr_pct > 30 else "#22c55e")
+                    st.markdown(
+                        f"<div style='display:flex;justify-content:space-between;align-items:center;"
+                        f"padding:5px 0;border-bottom:1px solid rgba(148,163,184,0.07);font-size:0.82rem;'>"
+                        f"<span style='color:#e2e8f0;font-weight:600;'>{_html.escape(_pr_name)}</span>"
+                        f"<div style='display:flex;align-items:center;gap:10px;'>"
+                        f"<div style='background:rgba(255,255,255,0.05);border-radius:3px;width:80px;height:5px;'>"
+                        f"<div style='width:{min(100, _pr_pct):.0f}%;height:5px;background:{_pr_col};"
+                        f"border-radius:3px;'></div></div>"
+                        f"<span style='color:{_pr_col};font-weight:700;min-width:44px;text-align:right;'>"
+                        f"{_pr_pct:.0f}%</span>"
+                        f"<span style='color:#64748b;'>${_pr_dep:,.0f}</span>"
+                        f"</div></div>",
+                        unsafe_allow_html=True,
+                    )
+                if _max_proto_pct > 50:
+                    st.warning(
+                        f"⚠️ **{_max_proto_pct:.0f}%** of your portfolio is in **{_max_proto_name}**. "
+                        f"A single smart contract exploit here could impact "
+                        f"**${_max_proto_dep:,.0f}** of your deposits."
+                    )
+
+        # ── Bear Market Stress Test — BTC −40% ────────────────────────────────
+        if _total_dep > 10:
+            _btc_corr_per_pos = []
+            for _bp in positions:
+                _bt = _position_tokens(_bp)
+                if not _bt:
+                    _btc_corr_per_pos.append(0.30)
+                    continue
+                _btc_corr_per_pos.append(
+                    sum(_get_corr_l(t, "BTC", _live_corr) for t in _bt) / len(_bt)
+                )
+            _drop_factor = 0.40
+            _est_loss = sum(
+                max(0.0, _btc_corr_per_pos[i]) * _drop_factor * float(positions[i].get("deposit_usd") or 0)
+                for i in range(n)
+            )
+            _port_val = sum(float(p.get("current_value") or p.get("deposit_usd") or 0) for p in positions)
+            _stress_val = max(0.0, _port_val - _est_loss)
+            _loss_pct   = _est_loss / _port_val * 100 if _port_val > 0 else 0.0
+            _stress_col = "#ef4444" if _loss_pct > 25 else ("#f59e0b" if _loss_pct > 10 else "#22c55e")
+            _stress_lbl = (
+                "High impact — consider rebalancing" if _loss_pct > 25 else
+                "Moderate impact" if _loss_pct > 10 else
+                "Low impact — well hedged"
+            )
+            with st.expander("🧪 Bear Market Stress Test — BTC −40%", expanded=False):
+                st.caption(
+                    "Estimates portfolio loss if Bitcoin drops 40% (2022-bear-market scale). "
+                    "Formula: Σ (BTC_correlation × 40% × deposit_USD). Linear approximation — not a guarantee."
+                )
+                _bt1, _bt2, _bt3 = st.columns(3)
+                with _bt1:
+                    st.metric("Estimated Loss", f"−${_est_loss:,.0f}",
+                              delta=f"−{_loss_pct:.1f}%", delta_color="inverse")
+                with _bt2:
+                    st.metric("Portfolio After", f"${_stress_val:,.0f}")
+                with _bt3:
+                    st.metric("Stress Level", _stress_lbl)
+                st.markdown(
+                    f"<div style='font-size:0.72rem;color:{_stress_col};"
+                    f"margin-top:4px;font-weight:600;'>"
+                    f"{'▼ ' if _loss_pct > 10 else '■ '}"
+                    f"Estimated {_loss_pct:.1f}% portfolio loss in a BTC −40% scenario</div>",
+                    unsafe_allow_html=True,
+                )
+
+        # ── Actionable Rebalancing Recommendation ─────────────────────────────
+        if _div_score < 70 and _total_dep > 0:
+            _add_usd   = round(_total_dep * 0.20)
+            _target    = min(100, _div_score + 18)
+            st.markdown(
+                f"<div style='background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.15);"
+                f"border-radius:10px;padding:12px 16px;font-size:0.83rem;color:#94a3b8;margin-top:10px;'>"
+                f"💡 <span style='color:#a78bfa;font-weight:700;'>Rebalancing Tip</span> — "
+                f"Adding ~${_add_usd:,.0f} to a stablecoin (USDC, USD0) or a low-correlation asset "
+                f"(XDC, HBAR, SHX) could raise your diversification score from "
+                f"<span style='color:{_div_color};font-weight:700;'>{_div_score:.0f}</span> toward "
+                f"<span style='color:#22c55e;font-weight:700;'>{_target:.0f}+</span>."
                 f"</div>",
                 unsafe_allow_html=True,
             )
 
-        # ── Level-aware "What does this mean?" explanation ───────────────────
+        # ── Level-aware explanation ───────────────────────────────────────────
         render_what_this_means(
             message=(
                 f"Your diversification score is **{_div_score}/100** ({_div_label}). "
@@ -1650,11 +1890,17 @@ with _tab_pos:
                 )
             ),
             intermediate_message=(
-                f"Diversification score: {_div_score}/100 · avg cross-corr {_avg_corr:.2f} · "
+                f"Diversification score: {_div_score}/100 (size-weighted) · avg cross-corr {_avg_corr:.2f} · "
                 + ("well diversified" if _div_score >= 70 else "moderate concentration" if _div_score >= 45 else "high concentration risk")
+                + (" · Live data" if _has_live else " · estimated")
             ),
         )
-        st.caption("Correlations are estimates based on historical token relationships (Flare ecosystem + top-30 crypto). Actual correlations vary with market conditions.")
+        _data_note = (
+            "Live 90-day Pearson correlations from yfinance (4h cache) where available"
+            if _has_live else
+            "Estimated correlations (yfinance unavailable — using historical Flare/crypto estimates)"
+        )
+        st.caption(f"Data: {_data_note}. Actual correlations vary with market conditions.")
 
     # ─── Portfolio Rebalancing Advisor (Phase 8) ──────────────────────────────────
 
