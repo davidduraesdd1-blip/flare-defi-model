@@ -429,7 +429,11 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
                 "page_size":  6000,  # All-time BTC data (~5400 days 2010–present)
                 **params_extra,
             },
-            timeout=15,
+            # FIX-503: (connect_timeout, read_timeout) tuple.
+            # With Retry(total=3): worst case = 4 × 10s + 7s backoff = 47s max.
+            # Previously timeout=15 → 4 × 15s = 60s → exactly triggered Streamlit
+            # /script-health-check 60073ms 503 when cloud IP was silently dropped.
+            timeout=(5, 10),
         )
         if resp.status_code == 403 and not api_key:
             return {"error": "HTTP 403 — CoinMetrics community endpoint blocked from this IP. Data temporarily unavailable.", "source": "coinmetrics"}
