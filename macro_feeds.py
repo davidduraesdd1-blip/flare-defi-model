@@ -788,7 +788,9 @@ def fetch_deribit_options_chain(currency: str = "BTC") -> dict:
             resp = _SESSION.get(
                 "https://www.deribit.com/api/v2/public/get_book_summary_by_currency",
                 params={"currency": currency, "kind": "option"},
-                timeout=15,
+                # FIX-503: same pattern as CoinMetrics — (5, 10) caps worst-case
+                # retry chain at 47s, preventing back-to-back 60s health check failures.
+                timeout=(5, 10),
             )
             if resp.status_code != 200:
                 return {"error": f"HTTP {resp.status_code}", "source": "deribit"}
