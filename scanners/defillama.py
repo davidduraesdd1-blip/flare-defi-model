@@ -92,14 +92,20 @@ def fetch_flare_chain_tvl() -> dict:
     data = _get(f"{_DEFILLAMA_API}/v2/chains")
     if data and isinstance(data, list):
         # Sort by TVL to compute rank
-        sorted_chains = sorted(data, key=lambda c: c.get("tvl", 0) or 0, reverse=True)
+        def _safe_tvl(c: dict) -> float:
+            try: return float(c.get("tvl") or 0)
+            except (TypeError, ValueError): return 0.0
+        sorted_chains = sorted(data, key=_safe_tvl, reverse=True)
         for rank, chain in enumerate(sorted_chains, start=1):
             name = (chain.get("name") or chain.get("gecko_id") or "").lower()
             if name in ("flare", "flare-network"):
+                def _sf(v):
+                    try: return float(v or 0)
+                    except (TypeError, ValueError): return 0.0
                 result.update({
-                    "tvl_usd":       float(chain.get("tvl") or 0),
-                    "tvl_1d_change": float(chain.get("change_1d") or 0),
-                    "tvl_7d_change": float(chain.get("change_7d") or 0),
+                    "tvl_usd":       _sf(chain.get("tvl")),
+                    "tvl_1d_change": _sf(chain.get("change_1d")),
+                    "tvl_7d_change": _sf(chain.get("change_7d")),
                     "rank":          rank,
                     "source":        "live",
                 })

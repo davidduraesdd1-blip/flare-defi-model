@@ -198,8 +198,9 @@ class DecisionEngine:
         if ANTHROPIC_ENABLED and _ANTHROPIC_OK and self._api_key:
             try:
                 self._client = anthropic.Anthropic(api_key=self._api_key)
-            except Exception:
-                pass
+            except Exception as _e:
+                import logging as _log
+                _log.getLogger(__name__).warning("[DecisionEngine] Anthropic client init failed: %s", _e)
 
     def is_available(self) -> bool:
         return ANTHROPIC_ENABLED and self._client is not None

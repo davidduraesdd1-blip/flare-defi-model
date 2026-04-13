@@ -1201,7 +1201,10 @@ def compute_protocol_risk_score(
                 break
 
     # ── 1. TVL score (0–25) ───────────────────────────────────────────────────
-    tvl = max(0.0, float(tvl_usd or 0))
+    try:
+        tvl = max(0.0, float(tvl_usd or 0))
+    except (TypeError, ValueError):
+        tvl = 0.0
     if tvl >= 1_000_000_000:
         tvl_score = 0
     elif tvl >= 100_000_000:
