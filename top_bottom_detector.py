@@ -120,13 +120,21 @@ def _atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
 
 
 def _pivot_lows(series: pd.Series, n: int = 3) -> pd.Series:
-    """Return boolean mask of pivot lows (lowest in ±n bars)."""
-    return series == series.rolling(window=2 * n + 1, center=True).min()
+    """Return boolean mask of pivot lows (lowest in ±n bars).
+
+    center=True rolling produces NaN at edges (insufficient data). The comparison
+    `series == NaN` yields NaN (not False), creating a mixed True/False/NaN boolean
+    Series. In pandas 2.0+, using such a Series for fancy index selection
+    (e.g. close.index[mask]) raises "Cannot index by location index with a
+    non-integer key". fillna(False) makes all edge elements False so callers
+    receive a clean boolean mask guaranteed to contain no NaN values.
+    """
+    return (series == series.rolling(window=2 * n + 1, center=True).min()).fillna(False)
 
 
 def _pivot_highs(series: pd.Series, n: int = 3) -> pd.Series:
-    """Return boolean mask of pivot highs (highest in ±n bars)."""
-    return series == series.rolling(window=2 * n + 1, center=True).max()
+    """Return boolean mask of pivot highs (highest in ±n bars). See _pivot_lows."""
+    return (series == series.rolling(window=2 * n + 1, center=True).max()).fillna(False)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
