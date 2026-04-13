@@ -171,7 +171,16 @@ def _dash_composite_signal() -> dict:
 
 try:
     _d_csig = _dash_composite_signal()
-    if _d_csig and _d_csig.get("score", 0) != 0.0:
+    if not _d_csig:
+        # Composite signal failed — show a soft, non-alarming notice
+        st.markdown(
+            "<div style='background:rgba(100,116,139,0.08);border:1px solid rgba(100,116,139,0.2);"
+            "border-left:3px solid #64748b;border-radius:8px;padding:9px 16px;margin-bottom:8px;"
+            "font-size:0.82rem;color:#64748b;'>■ Market signal loading — macro feeds are initialising. "
+            "This banner clears automatically once data is ready.</div>",
+            unsafe_allow_html=True,
+        )
+    if _d_csig:
         _d_score  = _d_csig.get("score", 0.0)
         _d_signal = _d_csig.get("signal", "NEUTRAL").replace("_", " ")
         if _d_score >= 0.3:   _d_col, _d_bg = "#22c55e", "rgba(34,197,94,0.07)"
@@ -323,12 +332,29 @@ if not opps:
     else:
         st.info("No opportunities found for this risk profile in the latest scan.")
 else:
-    for i, opp in enumerate(opps[:3]):
+    # Separate live protocols (tradeable) from preview-only (live=False in config)
+    try:
+        from config import PROTOCOLS as _PROTOS
+    except ImportError:
+        _PROTOS = {}
+    _opps_live    = [o for o in opps if (_PROTOS.get(str(o.get("protocol","")).lower().split()[0]) or {}).get("live", True)]
+    _opps_preview = [o for o in opps if not (_PROTOS.get(str(o.get("protocol","")).lower().split()[0]) or {}).get("live", True)]
+
+    # Top-3 hero cards — live protocols only
+    _display_top = _opps_live[:3] if _opps_live else opps[:3]
+    for i, opp in enumerate(_display_top):
         render_opportunity_card(opp, i, color, portfolio_size, weight)
 
-    if len(opps) > 3:
-        with st.expander(f"Show all {len(opps)} opportunities"):
-            for i, opp in enumerate(opps[3:], start=3):
+    # Remaining live + all preview opportunities in expander
+    _remaining = _opps_live[3:] + _opps_preview
+    if _remaining:
+        _prev_count = len(_opps_preview)
+        _exp_label  = (
+            f"Show all {len(opps)} opportunities"
+            + (f" ({_prev_count} preview — not yet tradeable)" if _prev_count else "")
+        )
+        with st.expander(_exp_label):
+            for i, opp in enumerate(_remaining, start=len(_display_top)):
                 render_opportunity_card(opp, i, color, portfolio_size, weight)
 
 render_what_this_means(

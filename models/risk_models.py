@@ -23,20 +23,43 @@ logger = logging.getLogger(__name__)
 
 # ─── Incentive Decay ──────────────────────────────────────────────────────────
 
-def _incentive_decay_factor() -> float:
+# Token-specific decay schedules (start → expiry).
+# Using separate schedules prevents SPRK (SparkDEX native) from being incorrectly
+# penalised by the RFLR (Flare delegator rewards) July 2026 cutoff.
+#
+#  RFLR  — Flare 2.2B dRewards program: Jan 2024 → Jul 2026
+#           FAssets RFLR program ends July 2026; base yield continues after.
+#  SPRK  — SparkDEX native token: Dec 2023 → Jan 2028 (multi-year LP incentive schedule)
+#           SPRK distribution continues post-RFLR on SparkDEX V3.
+#  Other — assume no scheduled decay (return 1.0); individual expiry must be added above.
+
+_DECAY_SCHEDULES: dict = {
+    "RFLR": (datetime(2024, 1, 1), datetime(2026, 7, 1)),
+    "SPRK": (datetime(2023, 12, 1), datetime(2028, 1, 1)),
+}
+
+
+def _incentive_decay_factor(reward_token: str = "RFLR") -> float:
     """
-    Linear decay multiplier (0→1) representing how much of Flare's 2.2B FLR
-    incentive program remains, from program start (Jan 2024) to expiry (Jul 2026).
-    Returns 1.0 well before expiry, 0.0 at/after expiry.
+    Linear decay multiplier (0.0 → 1.0) for a given reward token, using each
+    token's own incentive programme schedule.
+
+    RFLR ends Jul 2026; SPRK has a longer multi-year schedule to Jan 2028.
+    Unknown tokens return 1.0 (no decay applied — conservative/safe default).
+    Returns 0.0 once the programme has expired.
     """
-    expiry        = datetime(2026, 7, 1)
-    program_start = datetime(2024, 1, 1)
-    now           = datetime.now(timezone.utc).replace(tzinfo=None)
+    schedule = _DECAY_SCHEDULES.get((reward_token or "").upper())
+    if schedule is None:
+        return 1.0                   # unknown token — no decay
+    program_start, expiry = schedule
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     if now >= expiry:
         return 0.0
+    if now <= program_start:
+        return 1.0
     total_days     = max(1, (expiry - program_start).days)
-    remaining_days = (expiry - now).days
-    return round(min(1.0, remaining_days / total_days), 4)
+    remaining_days = max(0, (expiry - now).days)
+    return round(remaining_days / total_days, 4)
 
 
 # ─── Output Structure ─────────────────────────────────────────────────────────
@@ -190,7 +213,7 @@ def compute_pool_sharpe(
         # Single-point proxy: daily change magnitude from 7d average
         apy_7d_dec   = apy_7d_avg / 100.0
         daily_change = abs(apy_dec - apy_7d_dec) / (7.0 ** 0.5)  # sqrt(7) for sample period
-        volatility   = max(daily_change * (365 ** 0.5), 0.005)   # annualise, floor at 0.5%
+        volatility   = max(daily_change * (365 ** 0.5), 0.01)    # annualise, floor at 1.0% (avoid inflated Sharpe on stable assets)
 
     sharpe = round((apy_dec - risk_free_rate) / volatility, 3)
 
@@ -224,10 +247,11 @@ def compute_real_yield_ratio(total_apy: float, emission_apy: float) -> dict:
         total_apy    : total pool APY (percent)
         emission_apy : portion of APY coming from token rewards / emissions (percent)
 
-    Classification thresholds:
-        real_yield / total_apy > 0.50  → "SUSTAINABLE"   (majority from fees)
-        0.20 – 0.50                    → "MIXED"
-        < 0.20                         → "EMISSION_DEPENDENT"
+    Classification thresholds (tightened vs. legacy to avoid marking high-emission
+    pools as "MIXED" when they are structurally emission-dependent):
+        real_yield / total_apy > 0.35  → "SUSTAINABLE"   (majority from fees)
+        0.10 – 0.35                    → "MIXED"
+        < 0.10                         → "EMISSION_DEPENDENT"
 
     Returns:
         dict with keys:
@@ -243,9 +267,9 @@ def compute_real_yield_ratio(total_apy: float, emission_apy: float) -> dict:
     real_yield = total_apy - emission_apy
     ratio = real_yield / total_apy if total_apy > 0 else 0.0
 
-    if ratio > 0.5:
+    if ratio > 0.35:
         classification = "SUSTAINABLE"
-    elif ratio >= 0.2:
+    elif ratio >= 0.10:
         classification = "MIXED"
     else:
         classification = "EMISSION_DEPENDENT"
@@ -270,12 +294,18 @@ def kelly_fraction(win_prob: float, win_pct: float, loss_pct: float) -> float:
     before applying the hard cap.
     Returns suggested fraction of capital as a decimal (capped at MAX_KELLY_FRACTION).
     """
+    # Lending/staking Kelly cap: even with zero stated IL, smart contract risk,
+    # default risk, and de-peg events exist. A 30% hard cap prevents over-allocation
+    # to any single pool regardless of theoretical Kelly output.
+    _LENDING_KELLY_CAP = 0.30
+
     loss_prob = 1 - win_prob
     if win_pct <= 0:
         return 0.0
     if loss_pct <= 0:
-        # Zero-loss scenario (lending / staking with no IL): f* → ∞, use win_prob
-        k = win_prob
+        # Zero-loss scenario (lending / staking with no IL): f* → ∞
+        # Use win_prob as a conservative proxy then cap at 30% for lending safety.
+        k = min(win_prob, _LENDING_KELLY_CAP)
     else:
         k = (win_prob * win_pct - loss_prob * loss_pct) / win_pct
     k = max(0.0, min(k, MAX_KELLY_FRACTION))   # cap Kelly fraction for safety
@@ -371,7 +401,7 @@ def build_opportunity(
     # reward_apr comes from DeFiLlama apyReward field or config when live data is present.
     # APY Decomposition (Upgrade #2): track fee vs reward components separately.
     if reward_token in ("RFLR", "SPRK"):
-        decay          = _incentive_decay_factor()
+        decay          = _incentive_decay_factor(reward_token)   # token-specific schedule
         if reward_apr > 0 and reward_apr <= apr:
             # DeFiLlama apyReward or config reward_apr — most accurate split
             fee_part       = apr - reward_apr

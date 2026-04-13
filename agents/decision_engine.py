@@ -38,8 +38,10 @@ except ImportError:
 # Once credit exhaustion is detected (HTTP 400 with "credit" body), all
 # subsequent decide() calls return HOLD immediately without touching the API.
 # Cleared on next app restart. Re-enable by funding credits + restarting.
+# NOTE: initialised False — only set True when exhaustion is actually detected,
+# regardless of ANTHROPIC_ENABLED (enabling AI at runtime must not stay frozen).
 import threading as _threading
-_credits_exhausted: bool = not ANTHROPIC_ENABLED
+_credits_exhausted: bool = False
 _credits_lock = _threading.Lock()
 
 _SYSTEM_PROMPT = """You are a conservative autonomous DeFi yield optimizer.
@@ -166,8 +168,17 @@ def _parse_response(text: str) -> TradeDecision:
 
     data = json.loads(text)
 
+    confidence = float(data.get("confidence", 0))
+    action     = str(data.get("action", "HOLD")).upper().strip()
+
+    # Enforce confidence gate: any action other than HOLD requires confidence >= 0.65
+    # The system prompt instructs the model to self-enforce this, but we verify here
+    # so a miscalibrated model response cannot trigger a trade below threshold.
+    if confidence < 0.65 and action not in ("HOLD",):
+        action = "HOLD"
+
     return TradeDecision(
-        action                 = str(data.get("action", "HOLD")).upper().strip(),
+        action                 = action,
         chain                  = str(data.get("chain", "none")).lower().strip(),
         protocol               = str(data.get("protocol", "none")).lower().strip(),
         pool                   = str(data.get("pool", "")),
@@ -175,7 +186,7 @@ def _parse_response(text: str) -> TradeDecision:
         token_out              = str(data.get("token_out", "")),
         size_usd               = float(data.get("size_usd", 0)),
         expected_apy           = float(data.get("expected_apy", 0)),
-        confidence             = float(data.get("confidence", 0)),
+        confidence             = confidence,
         reasoning              = str(data.get("reasoning", "")),
         risk_factors           = list(data.get("risk_factors", [])),
         position_type          = str(data.get("position_type", "")),

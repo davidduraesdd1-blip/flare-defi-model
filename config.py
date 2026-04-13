@@ -325,6 +325,48 @@ FALLBACK_PRICES = {
     "HYPE":  36.18,   # Hyperliquid native token — updated 2026-04-04 (live: $36.18)
 }
 
+# ─── Live Fallback Price Refresher ───────────────────────────────────────────
+def refresh_fallback_prices(timeout: float = 4.0) -> bool:
+    """
+    Fetch live prices from CoinGecko and update FALLBACK_PRICES in-place.
+    Operates silently: if CoinGecko is unreachable the dict is left unchanged.
+    Updates the dict in-place so all modules that imported FALLBACK_PRICES
+    by reference (not value) see the new prices immediately.
+    Returns True if at least one price was refreshed.
+    """
+    import requests as _rq
+    _CG_IDS = {
+        "flare-networks": "FLR",
+        "ripple":         "XRP",
+        "sparkdex-ai":    "SPRK",
+        "hyperliquid":    "HYPE",
+    }
+    try:
+        _url     = APIS.get("coingecko", "https://api.coingecko.com/api/v3") + "/simple/price"
+        _headers = {}
+        if COINGECKO_API_KEY:
+            _key = "x-cg-demo-api-key" if COINGECKO_API_KEY.startswith("CG-") else "x-cg-pro-api-key"
+            _headers[_key] = COINGECKO_API_KEY
+        _resp = _rq.get(_url, params={"ids": ",".join(_CG_IDS), "vs_currencies": "usd"},
+                        headers=_headers, timeout=timeout)
+        if _resp.status_code != 200:
+            return False
+        _data = _resp.json()
+        _updated = 0
+        for _cg_id, _symbol in _CG_IDS.items():
+            if _cg_id in _data and isinstance(_data[_cg_id], dict):
+                _px = _data[_cg_id].get("usd", 0)
+                if _px and _px > 0:
+                    FALLBACK_PRICES[_symbol] = round(_px, 6)
+                    _updated += 1
+        # Derived: FXRP tracks XRP with a small bridge discount
+        if "XRP" in FALLBACK_PRICES:
+            FALLBACK_PRICES["FXRP"] = round(FALLBACK_PRICES["XRP"] * 0.998, 6)
+        return _updated > 0
+    except Exception:
+        return False
+
+
 # ─── Model Parameters ─────────────────────────────────────────────────────────
 RISK_FREE_RATE    = 0.045   # 4.5% risk-free (US 10-year T-bill proxy); update periodically
 HISTORY_MAX_RUNS  = 14      # keep ~7 days of history at 2 scans/day; older runs archived
@@ -616,10 +658,9 @@ SENTRY_DSN: str | None = os.environ.get("DEFI_SENTRY_DSN")
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")
 
 # ─── Anthropic / AI master switch ────────────────────────────────────────────
-# Set to True when Anthropic credits are funded and AI features should be active.
-# False = all Claude API calls are skipped; apps show graceful fallback text.
-# To enable: change False → True here (one line, all AI features restore instantly).
-ANTHROPIC_ENABLED: bool = False
+# Reads from ANTHROPIC_ENABLED env var if set; defaults to True so AI features
+# are live when an API key is present. Set env var to "false" to disable.
+ANTHROPIC_ENABLED: bool = os.environ.get("ANTHROPIC_ENABLED", "true").lower() not in ("false", "0", "no")
 # Claude model IDs — single source of truth for all AI files in this app
 CLAUDE_MODEL:       str = "claude-sonnet-4-6"
 CLAUDE_HAIKU_MODEL: str = "claude-haiku-4-5-20251001"

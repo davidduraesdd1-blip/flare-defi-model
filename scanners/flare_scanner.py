@@ -197,32 +197,57 @@ _KTOKEN_ABI = [
 
 _w3_cache: Optional[Web3] = None
 _w3_cache_lock: threading.Lock = threading.Lock()
+_w3_last_fail_ts: float = 0.0          # timestamp of last failed RPC attempt
+_W3_RETRY_INTERVAL: float = 60.0       # only retry all RPCs after this many seconds
+
 
 def _get_web3() -> Optional[Web3]:
     """Return a connected Web3 instance, trying each RPC URL in order. Result is cached.
 
     Thread-safe: uses double-checked locking so only one thread attempts RPC connection
     at a time, preventing duplicate connections when the scheduler runs parallel tasks.
+
+    Health-check reconnect: if the cached connection drops, it is discarded and the
+    fallback chain is retried. If all RPCs are down, the failure is rate-limited
+    to one retry attempt per _W3_RETRY_INTERVAL seconds to avoid hammering RPCs.
     """
     if not _WEB3_AVAILABLE:
         return None
-    global _w3_cache
-    # Fast path — already initialised (no lock needed for read-only check)
-    if _w3_cache is not None and _w3_cache.is_connected():
-        return _w3_cache
-    with _w3_cache_lock:
-        # Re-check inside lock in case another thread initialised while we waited
+    global _w3_cache, _w3_last_fail_ts
+    # Fast path — healthy cached connection
+    try:
         if _w3_cache is not None and _w3_cache.is_connected():
             return _w3_cache
+    except Exception:
+        pass  # stale connection — fall through to reconnect
+
+    with _w3_cache_lock:
+        # Re-check inside lock (another thread may have reconnected)
+        try:
+            if _w3_cache is not None and _w3_cache.is_connected():
+                return _w3_cache
+        except Exception:
+            pass
+        _w3_cache = None  # drop stale connection
+
+        # Rate-limit reconnection attempts when all RPCs are down
+        _now = time.time()
+        if _now - _w3_last_fail_ts < _W3_RETRY_INTERVAL:
+            return None
+
         for url in FLARE_RPC_URLS:
             try:
                 w3 = Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": 8}))
                 if w3.is_connected():
                     _w3_cache = w3
+                    _w3_last_fail_ts = 0.0  # reset on success
+                    logger.debug("[Flare RPC] connected via %s", url)
                     return w3
             except Exception:
                 continue
-        _w3_cache = None
+        _w3_last_fail_ts = _now
+        logger.warning("[Flare RPC] all %d RPC endpoints unreachable — will retry in %ds",
+                       len(FLARE_RPC_URLS), int(_W3_RETRY_INTERVAL))
         return None
 
 def _rate_to_apy(rate_per_block: int) -> float:

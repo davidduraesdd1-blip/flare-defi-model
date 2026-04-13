@@ -72,6 +72,7 @@ from config import (
     POSITIONS_FILE, WALLETS_FILE, PROTOCOLS, TOKENS, FLARE_RPC_URLS,
     MONITOR_DIGEST_FILE, SCHEDULER, BRAND_NAME, BRAND_LOGO_PATH,
     PROTOCOL_AUDITS, risk_letter_grade, EMBED_MODE, GIPS_MODE,
+    ANTHROPIC_ENABLED, ANTHROPIC_API_KEY, refresh_fallback_prices,
 )
 from utils.file_io import atomic_json_write
 from utils.http import _SESSION as _http_session, coingecko_limiter
@@ -729,6 +730,16 @@ def render_sidebar() -> dict:
     Persistent sidebar: scan status, portfolio size, risk profile, refresh.
     Returns dict with keys: profile, profile_cfg, color, weight, feedback, portfolio_size.
     """
+    # ─── Refresh FALLBACK_PRICES once per session from CoinGecko ─────────────
+    # Runs silently in the background on first sidebar render; updates the
+    # in-memory FALLBACK_PRICES dict so all downstream callers see live prices.
+    if not st.session_state.get("_fallback_prices_refreshed"):
+        st.session_state["_fallback_prices_refreshed"] = True
+        try:
+            refresh_fallback_prices()
+        except Exception:
+            pass  # non-critical — static fallback values remain valid
+
     # ─── 5-minute auto-refresh to keep data live ─────────────────────────────
     _now = time.time()
     if "last_auto_refresh" not in st.session_state:
@@ -1059,6 +1070,33 @@ def render_sidebar() -> dict:
             st.page_link("pages/5_Agent.py", label="→ Agent Control Panel", icon="🤖")
         except Exception:
             pass  # never crash sidebar on agent import failure
+
+        # ── AI / API Health Banner ─────────────────────────────────────────────
+        # Shows prominently in sidebar on every page load so issues are never hidden.
+        try:
+            _ai_key_present = bool(ANTHROPIC_API_KEY)
+            if ANTHROPIC_ENABLED and _ai_key_present:
+                _ai_banner_color, _ai_banner_icon, _ai_banner_text = (
+                    "#22c55e", "✅", "Claude AI active"
+                )
+            elif ANTHROPIC_ENABLED and not _ai_key_present:
+                _ai_banner_color, _ai_banner_icon, _ai_banner_text = (
+                    "#ef4444", "🔴", "Claude AI: key missing"
+                )
+            else:
+                _ai_banner_color, _ai_banner_icon, _ai_banner_text = (
+                    "#64748b", "⚫", "Claude AI disabled"
+                )
+            st.markdown(
+                f"<div style='background:rgba(0,0,0,0.15);border:1px solid {_ai_banner_color}44;"
+                f"border-left:3px solid {_ai_banner_color};border-radius:6px;"
+                f"padding:4px 10px;margin:4px 0;font-size:0.71rem;"
+                f"color:{_ai_banner_color};font-weight:600;'>"
+                f"{_ai_banner_icon} {_ai_banner_text}</div>",
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -1700,6 +1738,17 @@ def render_opportunity_card(
         if _proto_url else ""
     )
 
+    # Preview badge: protocol has live=False in config — not yet tradeable
+    _proto_is_live = (PROTOCOLS.get(proto_key) or {}).get("live", True)
+    _preview_badge_html = (
+        "<span style='font-size:0.68rem;font-weight:700;color:#f59e0b;"
+        "background:rgba(245,158,11,0.12);padding:1px 7px;border-radius:4px;"
+        "border:1px solid rgba(245,158,11,0.35);' "
+        "title='This protocol is in preview mode — no public API available yet. "
+        "Data shown is estimated. Monitor only; do not trade.'>⚠ PREVIEW</span>"
+        if not _proto_is_live else ""
+    )
+
     est_tag  = " <span class='badge-est'>EST</span>" if src in ("baseline", "estimate") else " <span class='badge-live'>LIVE</span>"
     medals   = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣"]
     medal    = medals[min(idx, 5)]
@@ -1846,7 +1895,7 @@ def render_opportunity_card(
 
     st.markdown(f"""<div class="opp-card" style="border-left:3px solid {color};">
 <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
-<div style="flex:1;min-width:0;"><span style="font-size:0.82rem;color:#475569;margin-right:8px;">{medal}</span><span style="font-size:1.05rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 6px;">·</span><span style="font-size:0.95rem;color:#94a3b8;">{pool}</span></div>
+<div style="flex:1;min-width:0;"><span style="font-size:0.82rem;color:#475569;margin-right:8px;">{medal}</span><span style="font-size:1.05rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 6px;">·</span><span style="font-size:0.95rem;color:#94a3b8;">{pool}</span>{' ' + _preview_badge_html if _preview_badge_html else ''}</div>
 <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">{_action_badge_html}<span class="grade-badge" style="background:{grade_color};color:#fff;font-weight:800;letter-spacing:0.5px;" title="Safety Grade: A=safest, F=riskiest (Exponential.fi standard)">{grade}</span><span class="{glow_cls}" style="font-size:1.8rem;font-weight:800;color:{color};letter-spacing:-1px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
 </div>
 <div style="margin-top:10px;margin-bottom:2px;">
