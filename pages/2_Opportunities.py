@@ -306,6 +306,61 @@ if _csig:
             f"</div></div>"
         )
 
+# ── Cycle Top/Bottom Timing — Entry Timing Signal ────────────────────────────
+try:
+    import yfinance as _opp_yf
+    from top_bottom_detector import compute_composite_top_bottom_score as _opp_ctb
+
+    @st.cache_data(ttl=7200, show_spinner=False)
+    def _opp_btc_ohlcv():
+        try:
+            _t = _opp_yf.Ticker("BTC-USD")
+            _d = _t.history(period="6mo", interval="1d", auto_adjust=True)
+            if _d is None or _d.empty:
+                return None
+            _d.columns = [c.lower() for c in _d.columns]
+            return _d[["open", "high", "low", "close", "volume"]].dropna()
+        except Exception:
+            return None
+
+    _opp_df = _opp_btc_ohlcv()
+    if _opp_df is not None:
+        # Sentiment from existing composite signal
+        _opp_sent = {}
+        if _csig:
+            _opp_sent_raw = (_csig.get("layers", {}).get("sentiment", {}).get("score", 0) + 1) / 2 * 100
+            _opp_sent["fear_greed_value"] = float(max(0, min(100, _opp_sent_raw * 100)))
+
+        _opp_tb = _opp_ctb(df=_opp_df, sentiment_data=_opp_sent or None, symbol="BTC")
+        _opp_score = _opp_tb.get("score", 50)
+        _opp_sig   = _opp_tb.get("signal", "NEUTRAL")
+        _opp_conf  = _opp_tb.get("confidence", 0)
+
+        if _opp_score >= 80:
+            _tc, _tb_col = "✅ EXCELLENT TIME TO ENTER — Market at historical bottom zone", "#22c55e"
+        elif _opp_score >= 65:
+            _tc, _tb_col = "👍 GOOD TIME TO ENTER — Market in buy accumulation zone", "#86efac"
+        elif _opp_score >= 35:
+            _tc, _tb_col = "⏳ NEUTRAL — No strong timing signal. Stagger entries.", "#f59e0b"
+        elif _opp_score >= 20:
+            _tc, _tb_col = "⚠️ CAUTION — Market near historical top. Reduce new entries.", "#f97316"
+        else:
+            _tc, _tb_col = "🛑 AVOID NEW ENTRIES — Market at extreme top zone. Hold cash.", "#ef4444"
+
+        st.html(
+            f"<div style='background:rgba(0,0,0,0.2);border:1px solid {_tb_col}44;"
+            f"border-left:4px solid {_tb_col};border-radius:8px;padding:10px 18px;"
+            f"margin-bottom:12px;display:flex;align-items:center;gap:20px;flex-wrap:wrap'>"
+            f"<div><span style='color:{_tb_col};font-weight:800;font-size:0.9rem'>📈 ENTRY TIMING</span>"
+            f"<div style='color:{_tb_col};font-size:0.85rem;font-weight:600;margin-top:2px'>{_tc}</div>"
+            f"<div style='color:#64748b;font-size:0.75rem;margin-top:2px'>"
+            f"BTC Cycle Score: <span style='color:{_tb_col};font-weight:700'>{_opp_score}/100</span> · "
+            f"Signal: {_opp_sig} · Confidence: {_opp_conf}%</div></div>"
+            f"</div>"
+        )
+except Exception as _opp_tb_e:
+    pass  # Silently skip if timing unavailable
+
 # Agent scope banner — always visible so users understand what the agent can act on
 st.html(
     "<div style='background:rgba(0,212,170,0.06);border:1px solid rgba(0,212,170,0.2);"
