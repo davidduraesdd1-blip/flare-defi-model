@@ -31,8 +31,9 @@ user_level = ctx.get("user_level", get_user_level())
 st.title("🧠 Market Intelligence")
 st.caption("Sentiment · Macro · On-Chain · Ecosystem — all signals in one place")
 
-_t_sent, _t_macro, _t_onchain, _t_eco = st.tabs([
+_t_sent, _t_timing, _t_macro, _t_onchain, _t_eco = st.tabs([
     "📊 Sentiment",
+    "📈 Market Timing",
     "🌍 Macro",
     "⛓️ On-Chain",
     "🌱 Ecosystem",
@@ -52,6 +53,126 @@ with _t_sent:
         intermediate_message="F&G: 0–25 Extreme Fear (capitulation), 75–100 Extreme Greed (overheated). Contrarian signal — not a direct trade trigger.",
     )
     st.divider()
+
+
+# ─── Market Timing Tab ────────────────────────────────────────────────────────
+
+with _t_timing:
+    render_section_header(
+        "Market Timing — Top/Bottom Score",
+        "5-layer composite signal: On-Chain Macro + Sentiment + Divergence + Structure + Volatility",
+    )
+
+    try:
+        import yfinance as _yf
+        from top_bottom_detector import compute_composite_top_bottom_score, render_top_bottom_widget
+
+        _timing_assets = {
+            "BTC-USD": "Bitcoin (BTC)",
+            "ETH-USD": "Ethereum (ETH)",
+        }
+
+        _timing_sel = st.selectbox(
+            "Asset",
+            options=list(_timing_assets.keys()),
+            format_func=lambda x: _timing_assets[x],
+            key="timing_asset_select",
+        )
+
+        @st.cache_data(ttl=3600, show_spinner=False)
+        def _fetch_timing_ohlcv(ticker: str, period: str = "6mo", interval: str = "1d"):
+            try:
+                _t = _yf.Ticker(ticker)
+                _df = _t.history(period=period, interval=interval, auto_adjust=True)
+                if _df is None or _df.empty:
+                    return None
+                _df.columns = [c.lower() for c in _df.columns]
+                _df = _df[["open", "high", "low", "close", "volume"]].dropna()
+                return _df
+            except Exception as _e:
+                logger.warning("yfinance timing fetch failed %s: %s", ticker, _e)
+                return None
+
+        with st.spinner(f"Analyzing {_timing_assets[_timing_sel]}..."):
+            _df_daily  = _fetch_timing_ohlcv(_timing_sel, period="6mo",  interval="1d")
+            _df_4h     = _fetch_timing_ohlcv(_timing_sel, period="60d",  interval="1h")
+            _df_1h     = _fetch_timing_ohlcv(_timing_sel, period="30d",  interval="1h")
+
+            # Gather macro data if available from existing composite signal data
+            _macro_inp = {}
+            _sent_inp  = {}
+            try:
+                from macro_feeds import fetch_all_macro_data, fetch_coinmetrics_onchain
+                from ui.common import fetch_fear_greed_history as _fgh
+                _md = fetch_all_macro_data()
+                if _md:
+                    _macro_inp["pi_cycle_ratio"] = _md.get("pi_cycle_ratio")
+                _oc = fetch_coinmetrics_onchain()
+                if _oc:
+                    _macro_inp["mvrv_z_score"]        = _oc.get("mvrv_z")
+                    _macro_inp["nupl"]                = _oc.get("nupl")
+                    _macro_inp["sopr"]                = _oc.get("sopr")
+                    _macro_inp["hash_ribbons_signal"]  = _oc.get("hash_ribbon_signal")
+                _fg_hist = _fgh()
+                if _fg_hist:
+                    _fg_latest = (_fg_hist[-1].get("value") if isinstance(_fg_hist, list)
+                                  else _fg_hist.get("value"))
+                    if _fg_latest:
+                        _sent_inp["fear_greed_value"] = float(_fg_latest)
+            except Exception as _mex:
+                logger.debug("Market timing macro fetch: %s", _mex)
+
+            _timing_result = None
+            if _df_daily is not None:
+                _timing_result = compute_composite_top_bottom_score(
+                    df=_df_daily,
+                    macro_data=_macro_inp or None,
+                    sentiment_data=_sent_inp or None,
+                    df_1h=_df_1h,
+                    df_4h=_df_4h,
+                    symbol=_timing_sel.replace("-USD", ""),
+                )
+
+        if _timing_result:
+            render_top_bottom_widget(_timing_result, user_level=user_level)
+
+            # Plain-English explanation (Beginner/Intermediate only — Advanced sees full table)
+            if user_level != "advanced":
+                with st.expander("ⓘ How is this score calculated?"):
+                    st.markdown(
+                        "The score combines **5 independent signal layers** — the same approach "
+                        "used by professional quant funds and on-chain analysts:\n\n"
+                        "| Layer | What it measures | Weight |\n"
+                        "|-------|-----------------|--------|\n"
+                        "| On-Chain Macro | MVRV Z-Score, NUPL, SOPR, Hash Ribbons, Pi Cycle Top | 30% |\n"
+                        "| Sentiment | Fear & Greed Index, Funding Rates | 20% |\n"
+                        "| Divergence | RSI, MACD, CVD divergence across timeframes | 25% |\n"
+                        "| Structure | BOS/CHoCH, Order Blocks, Fair Value Gaps, Volume Profile | 15% |\n"
+                        "| Volatility | Chandelier Exit, Squeeze, Wyckoff Spring/Upthrust | 10% |\n\n"
+                        "**Score 80–100** → Extreme bottom zone. Every major BTC bottom "
+                        "(Dec 2018, Mar 2020, Nov 2022) scored 80+.\n\n"
+                        "**Score 0–20** → Extreme top zone. All major cycle tops "
+                        "(Dec 2017, Apr 2021, Nov 2021) scored below 20."
+                    )
+        else:
+            st.warning(
+                "Market data unavailable right now — price history could not be loaded. "
+                "Try again in 30 seconds.",
+                icon="⚠️",
+            )
+
+    except ImportError as _imp_e:
+        st.info(
+            "Market Timing requires yfinance. "
+            f"Install with: `pip install yfinance` · Error: {_imp_e}",
+        )
+    except Exception as _timing_exc:
+        logger.error("Market Timing tab error: %s", _timing_exc)
+        st.warning(
+            "Market timing analysis temporarily unavailable — this is usually a temporary "
+            "data issue. Try refreshing in 30 seconds.",
+            icon="⚠️",
+        )
 
 
 # ─── DeFi Assistant (#87) ─────────────────────────────────────────────────────
