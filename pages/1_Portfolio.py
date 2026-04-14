@@ -926,7 +926,7 @@ with _tab_pos:
 
     # ── Add Position ──────────────────────────────────────────────────────────────
     with st.expander("➕ Track a New Position"):
-        with st.form("add_position_form", clear_on_submit=True):
+        with st.form("add_position_form", clear_on_submit=True, enter_to_submit=False):
             c1, c2 = st.columns(2)
             with c1:
                 proto_key  = st.selectbox("Protocol", options=list(PROTOCOLS.keys()),
