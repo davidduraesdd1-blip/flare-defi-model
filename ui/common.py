@@ -245,7 +245,7 @@ _CSS_LIGHT = """
     /* ── Metric Cards ─────────────────────────────────────────────────── */
     .metric-card {
         background: rgba(255,255,255,0.97);
-        border-radius: 10px; padding: 11px 14px; margin-bottom: 8px;
+        border-radius: 10px; padding: 14px 18px; margin-bottom: 10px;
         border: 1px solid rgba(0,0,0,0.08); border-left: 3px solid #1e3a5f;
         box-shadow: 0 2px 12px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8);
         transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
@@ -256,7 +256,7 @@ _CSS_LIGHT = """
     .card-orange { border-left-color: #f59e0b; }
     .card-red    { border-left-color: #ef4444; }
     .card-violet { border-left-color: #8b5cf6; }
-    .big-number { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; color: #0f172a; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
+    .big-number { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; color: #0f172a; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
     .label { font-size: clamp(0.58rem, 0.65vw, 0.65rem); color: #475569; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
 
     /* ── Opportunity Cards ────────────────────────────────────────────── */
@@ -387,8 +387,8 @@ _CSS_LIGHT = """
 
     /* ── Mobile ───────────────────────────────────────────────────────── */
     @media (max-width: 768px) {
-        .big-number { font-size: 0.95rem !important; } h1 { font-size: 1.4rem !important; }
-        .metric-card, .opp-card { padding: 8px 10px; }
+        .big-number { font-size: 1.1rem !important; } h1 { font-size: 1.4rem !important; }
+        .metric-card, .opp-card { padding: 10px 12px; }
         .block-container { padding-left: 0.5rem; padding-right: 0.5rem; }
         .price-chip { padding: 10px 8px; }
         [data-testid="stTabs"] [role="tab"] { font-size: 0.75rem; }
@@ -529,7 +529,7 @@ _CSS_DARK = """
         background: rgba(17,24,39,0.95);
         backdrop-filter: blur(16px) saturate(180%);
         -webkit-backdrop-filter: blur(16px) saturate(180%);
-        border-radius: 10px; padding: 11px 14px; margin-bottom: 8px;
+        border-radius: 10px; padding: 14px 18px; margin-bottom: 10px;
         border: 1px solid rgba(255,255,255,0.08); border-left: 3px solid #1e3a5f;
         box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
         transition: border-color 0.22s cubic-bezier(0.4,0,0.2,1),
@@ -657,8 +657,8 @@ _CSS_DARK = """
 
     /* ── Mobile ───────────────────────────────────────────────────────── */
     @media (max-width: 768px) {
-        .big-number { font-size: 0.95rem !important; } h1 { font-size: 1.4rem !important; }
-        .metric-card, .opp-card { padding: 8px 10px; }
+        .big-number { font-size: 1.1rem !important; } h1 { font-size: 1.4rem !important; }
+        .metric-card, .opp-card { padding: 10px 12px; }
         .block-container { padding-left: 0.5rem; padding-right: 0.5rem; }
         .price-chip { padding: 10px 8px; }
         [data-testid="stTabs"] [role="tab"] { font-size: 0.75rem; }
@@ -1626,7 +1626,7 @@ def render_yield_hero_cards(positions: list, opps: list, portfolio_size: float) 
             <div id="{uid}" class="metric-card {cls}">
                 <div class="label">{label}</div>
                 <div class="big-number" style="color:{accent};">{value}</div>
-                <div style="color:#64748b; font-size:0.68rem; margin-top:3px;">{sub}</div>
+                <div style="color:#64748b; font-size:0.75rem; margin-top:4px;">{sub}</div>
             </div>""", unsafe_allow_html=True)
 
     # Count-up animation — targets specific hero-card IDs so it never bleeds into other metric cards
