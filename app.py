@@ -483,7 +483,7 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 warnings = latest.get("warnings", [])
 if warnings:
-    st.markdown("<style>[data-testid='stExpander'] summary p{font-size:0.65rem !important;color:#475569 !important;}</style>", unsafe_allow_html=True)
+    st.markdown("<style>[data-testid='stExpander'] summary p{font-size:0.72rem !important;color:#475569 !important;}</style>", unsafe_allow_html=True)
     with st.expander("⚠️ Data Quality Notes"):
         for w in warnings:
             st.markdown(f"<div style='font-size:0.78rem;color:#94a3b8;line-height:1.5;'>⚠ {w}</div>", unsafe_allow_html=True)
