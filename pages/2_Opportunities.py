@@ -469,10 +469,18 @@ with _tab_yield:
         if not opps:
             continue
 
-        # Compute the actual portfolio weighted APY for the expander header (dynamic target)
-        _total_kf     = sum(float(o.get("kelly_fraction", 0)) for o in opps)
-        _wtd_fee_apy  = sum(float(o.get("fee_apy", 0))    * float(o.get("kelly_fraction", 0)) for o in opps)
-        _wtd_rwd_apy  = sum(float(o.get("reward_apy", 0)) * float(o.get("kelly_fraction", 0)) for o in opps)
+        # Compute the actual portfolio weighted APY for the expander header (dynamic target).
+        # Use estimated_apy as fallback when fee_apy=0 (Flare ecosystem pools don't
+        # report fee breakdown separately).
+        _total_kf = sum(float(o.get("kelly_fraction", 0)) for o in opps)
+        def _eff_fee(o):
+            fa = float(o.get("fee_apy", 0) or 0)
+            ra = float(o.get("reward_apy", 0) or 0)
+            if fa + ra > 0:
+                return fa, ra
+            return float(o.get("estimated_apy", 0) or 0), 0.0
+        _wtd_fee_apy = sum(_eff_fee(o)[0] * float(o.get("kelly_fraction", 0)) for o in opps)
+        _wtd_rwd_apy = sum(_eff_fee(o)[1] * float(o.get("kelly_fraction", 0)) for o in opps)
         _wtd_fee_apy  = round(_wtd_fee_apy  / _total_kf, 1) if _total_kf > 0 else 0.0
         _wtd_rwd_apy  = round(_wtd_rwd_apy  / _total_kf, 1) if _total_kf > 0 else 0.0
         _wtd_total    = round(_wtd_fee_apy + _wtd_rwd_apy, 1)
@@ -493,8 +501,15 @@ with _tab_yield:
                 for opp in opps[:8]:
                     kf         = float(opp.get("kelly_fraction", 0))
                     grade, _   = risk_score_to_grade(opp.get("risk_score", 5))
-                    fee_apy    = float(opp.get("fee_apy", 0))
-                    reward_apy = float(opp.get("reward_apy", 0))
+                    # Use estimated_apy as fee_apy fallback for pools without
+                    # separate fee breakdown (Flare ecosystem pools).
+                    _raw_fee   = float(opp.get("fee_apy", 0) or 0)
+                    _raw_rwd   = float(opp.get("reward_apy", 0) or 0)
+                    if _raw_fee + _raw_rwd > 0:
+                        fee_apy, reward_apy = _raw_fee, _raw_rwd
+                    else:
+                        fee_apy    = float(opp.get("estimated_apy", 0) or 0)
+                        reward_apy = 0.0
 
                     # Reward badge: hide when tiny or expired; warn when expiring
                     if reward_apy < _reward_hide_pct or _days_left <= _reward_gray_days:
@@ -504,10 +519,8 @@ with _tab_yield:
                     else:
                         reward_label = f"{reward_apy:.1f}%"
 
-                        # Sustainability classification
-                    _fee_a   = float(opp.get("fee_apy", 0))
-                    _rwd_a   = float(opp.get("reward_apy", 0))
-                    _sust    = compute_real_yield_ratio(_fee_a + _rwd_a, _rwd_a)
+                    # Sustainability classification
+                    _sust    = compute_real_yield_ratio(fee_apy + reward_apy, reward_apy)
                     _sust_lbl = {"SUSTAINABLE": "✅ Sustainable", "MIXED": "⚡ Mixed", "EMISSION_DEPENDENT": "🔴 Incentive"}.get(_sust["classification"], "—")
 
                     # IL estimate %

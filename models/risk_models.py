@@ -1470,8 +1470,19 @@ def run_portfolio_monte_carlo(
     weights     = weights / weights.sum()   # normalise to 1.0
 
     # Pool-level APY inputs (annualised %)
-    fee_apys    = np.array([float(o.get("fee_apy", 0))    for o in opps], dtype=np.float64)
-    reward_apys = np.array([float(o.get("reward_apy", 0)) for o in opps], dtype=np.float64)
+    # Use estimated_apy as fallback when fee_apy=0 (Flare ecosystem pools don't
+    # report fee breakdown separately — estimated_apy is the total observable yield).
+    def _pool_apy(o: dict) -> float:
+        fa = float(o.get("fee_apy", 0) or 0)
+        ra = float(o.get("reward_apy", 0) or 0)
+        if fa + ra > 0:
+            return fa, ra
+        est = float(o.get("estimated_apy", 0) or 0)
+        return est, 0.0
+
+    _apy_pairs  = [_pool_apy(o) for o in opps]
+    fee_apys    = np.array([p[0] for p in _apy_pairs], dtype=np.float64)
+    reward_apys = np.array([p[1] for p in _apy_pairs], dtype=np.float64)
     il_ests     = np.array([float(o.get("il_estimate_pct", 0)) for o in opps], dtype=np.float64)
     risk_scores = np.array([float(o.get("risk_score", 5)) for o in opps], dtype=np.float64)
 
