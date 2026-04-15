@@ -79,7 +79,10 @@ def _section(pdf: FPDF, title: str):
 
 
 def _footer_line(pdf: FPDF, text: str):
-    pdf.set_y(-15)
+    # Only add footer on the last page — avoid creating a blank extra page
+    # by checking we're not already near the bottom (which would push to a new page)
+    if pdf.get_y() < pdf.h - 25:
+        pdf.set_y(-15)
     pdf.set_font("Helvetica", "I", 7)
     pdf.set_text_color(*_GREY)
     pdf.cell(0, 5, _ps(text), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)

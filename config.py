@@ -9,8 +9,18 @@ from pathlib import Path
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
+_DATA_DIR_PREFERRED = BASE_DIR / "data"
+try:
+    _DATA_DIR_PREFERRED.mkdir(exist_ok=True)
+    # Verify the directory is actually writable (Streamlit Cloud mounts are read-only)
+    _write_test = _DATA_DIR_PREFERRED / ".write_test"
+    _write_test.touch()
+    _write_test.unlink()
+    DATA_DIR = _DATA_DIR_PREFERRED
+except (PermissionError, OSError):
+    # Streamlit Cloud: /mount/src is a read-only git mount — use /tmp instead
+    DATA_DIR = Path("/tmp/defi_data")
+    DATA_DIR.mkdir(exist_ok=True, parents=True)
 
 HISTORY_FILE        = DATA_DIR / "history.json"
 POSITIONS_FILE      = DATA_DIR / "positions.json"
