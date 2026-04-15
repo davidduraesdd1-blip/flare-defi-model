@@ -391,8 +391,10 @@ with _tab_yield:
     def _cached_top_global_yields_compact() -> list:
         try:
             pools = fetch_llama_yield_pools(min_tvl_usd=10_000_000, top_n=100) or []
+            # fetch_llama_yield_pools returns "protocol"/"tvl_usd" (processed keys).
+            # Filter out APY outliers > 500% (DeFiLlama data errors / emission spikes).
             return sorted(
-                [p for p in pools if float(p.get("apy") or 0) > 0],
+                [p for p in pools if 0 < float(p.get("apy") or 0) <= 500],
                 key=lambda x: float(x.get("apy") or 0),
                 reverse=True,
             )[:10]
@@ -404,11 +406,11 @@ with _tab_yield:
         _gyl_rows = []
         for _gp in _top_global:
             _gapy = float(_gp.get("apy") or 0)
-            _gtvl = float(_gp.get("tvlUsd") or 0)
+            _gtvl = float(_gp.get("tvl_usd") or 0)          # fixed: was "tvlUsd"
             _gchain = str(_gp.get("chain") or "—")
-            _gproto = str(_gp.get("project") or "—").replace("-", " ").title()
+            _gproto = str(_gp.get("protocol") or "—").replace("-", " ").title()  # fixed: was "project"
             _gsym   = str(_gp.get("symbol") or "—")
-            _agent  = _agent_executable(_gp.get("project", ""), _gchain)
+            _agent  = _agent_executable(_gp.get("protocol", ""), _gchain)
             _gyl_rows.append({
                 "Protocol":  _gproto,
                 "Chain":     _gchain,
