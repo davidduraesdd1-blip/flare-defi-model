@@ -2081,8 +2081,8 @@ def render_welcome_banner() -> None:
         st.markdown(
             "<div style='background:rgba(30,58,138,0.25);border:1px solid rgba(59,130,246,0.35);"
             "border-radius:6px;padding:8px 14px;margin-bottom:4px;line-height:1.5;'>"
-            "<span style='font-size:12px;font-weight:700;color:#93c5fd;'>👋 Welcome to Flare DeFi Analytics!</span>"
-            "<span style='font-size:12px;color:#94a3b8;'> &nbsp;·&nbsp; Find top yields on Flare — plain English, no jargon. "
+            "<span style='font-size:13px;font-weight:700;color:#93c5fd;'>👋 Welcome to Flare DeFi Analytics!</span>"
+            "<span style='font-size:13px;color:#94a3b8;'> &nbsp;·&nbsp; Find top yields on Flare — plain English, no jargon. "
             "Start at <b style='color:#cbd5e1;'>Opportunities</b> or <b style='color:#cbd5e1;'>Intelligence</b>. "
             "💡 Change experience level in the sidebar anytime.</span>"
             "</div>",
@@ -2148,8 +2148,8 @@ def render_what_this_means(
         st.markdown(
             f"<div style='background:rgba(30,58,138,0.20);border:1px solid rgba(59,130,246,0.30);"
             f"border-radius:5px;padding:6px 12px;margin:4px 0;line-height:1.4;'>"
-            f"<span style='font-size:12px;font-weight:700;color:#93c5fd;'>💡 {title}</span>"
-            f"<span style='font-size:12px;color:#94a3b8;'> — {message}</span>"
+            f"<span style='font-size:13px;font-weight:700;color:#93c5fd;'>💡 {title}</span>"
+            f"<span style='font-size:13px;color:#94a3b8;'> — {message}</span>"
             f"</div>",
             unsafe_allow_html=True,
         )
