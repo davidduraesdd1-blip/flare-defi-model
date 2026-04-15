@@ -475,10 +475,10 @@ for col, (label, value, tip) in zip(_fxrp_cols, _fxrp_stats):
     with col:
         st.markdown(
             f"<div style='background:rgba(30,41,59,0.7); border:1px solid rgba(99,102,241,0.25); "
-            f"border-radius:10px; padding:14px 16px; text-align:center;' title='{tip}'>"
-            f"<div style='font-size:0.68rem; font-weight:600; color:#64748b; text-transform:uppercase; "
-            f"letter-spacing:0.06em; margin-bottom:4px;'>{label}</div>"
-            f"<div style='font-size:1.3rem; font-weight:700; color:#e2e8f0;'>{value}</div>"
+            f"border-radius:8px; padding:7px 10px; text-align:center;' title='{tip}'>"
+            f"<div style='font-size:0.58rem; font-weight:600; color:#64748b; text-transform:uppercase; "
+            f"letter-spacing:0.06em; margin-bottom:2px;'>{label}</div>"
+            f"<div style='font-size:0.85rem; font-weight:700; color:#e2e8f0;'>{value}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
