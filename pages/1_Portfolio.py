@@ -927,7 +927,7 @@ with _tab_pos:
     # ── Add Position ──────────────────────────────────────────────────────────────
     st.markdown(
         "<style>div.stMarkdown:has(#_add_pos_anchor)"
-        " + div[data-testid='stExpander'] summary p{font-size:0.82rem;}</style>"
+        " + div[data-testid='stExpander'] summary p{font-size:0.72rem;}</style>"
         '<span id="_add_pos_anchor"></span>',
         unsafe_allow_html=True,
     )
