@@ -170,8 +170,8 @@ def fetch_fred_macro() -> dict[str, Any]:
                         break
                 if len(m2_vals) >= 13 and m2_vals[12] > 0:
                     result["m2_yoy"] = round((m2_vals[0] / m2_vals[12] - 1) * 100, 2)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("[MacroFeeds] M2 YoY parse failed: %s", e)
 
         # Compute 2Y10Y spread from individual yields if T10Y2Y direct series failed
         if "yield_spread_2y10y" not in result:

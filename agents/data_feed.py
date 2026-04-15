@@ -7,11 +7,14 @@ Cached for DECISION_LOOP_INTERVAL_SECONDS to avoid hammering APIs.
 """
 
 import json
+import logging
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Ensure project root is importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -107,8 +110,8 @@ def _get_live_prices() -> dict:
                 "XRP":  xrp,
                 "FXRP": xrp * 0.998,
             }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("[DataFeed] Live price fetch failed, using fallback: %s", e)
     return fallback
 
 
@@ -222,8 +225,8 @@ def _get_fear_greed() -> dict:
             "avg_30d": round(avg30, 1),
             "trend":   trend,
         })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("[DataFeed] Fear & Greed fetch failed, using defaults: %s", e)
     return result
 
 
@@ -283,8 +286,8 @@ def get_agent_context(
                 _deribit = _fetch_deribit()
                 if not _deribit.get("error"):
                     put_call_ratio = _deribit.get("put_call_ratio")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("[DataFeed] Deribit put/call fetch failed: %s", e)
 
             composite_signal = compute_composite_signal(
                 macro_data    = macro_data,
@@ -294,7 +297,8 @@ def get_agent_context(
                 ta_data       = ta_data,
                 fg_30d_avg    = fear_greed.get("avg_30d"),
             )
-        except Exception:
+        except Exception as e:
+            logger.debug("[DataFeed] Composite signal computation failed: %s", e)
             composite_signal = {}
 
     ctx = {

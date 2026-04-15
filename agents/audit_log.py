@@ -7,6 +7,7 @@ This is the complete verifiable record of everything the agent has done.
 """
 
 import json
+import logging
 import sqlite3
 import threading
 import time
@@ -96,20 +97,22 @@ def init_db() -> None:
                 status          TEXT    DEFAULT 'open'
             );
 
-            CREATE INDEX IF NOT EXISTS idx_audit_ts    ON agent_audit(timestamp);
-            CREATE INDEX IF NOT EXISTS idx_audit_type  ON agent_audit(event_type);
-            CREATE INDEX IF NOT EXISTS idx_trades_ts   ON agent_trades(timestamp);
-            CREATE INDEX IF NOT EXISTS idx_positions_s ON agent_positions(status);
+            CREATE INDEX IF NOT EXISTS idx_audit_ts      ON agent_audit(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_audit_type    ON agent_audit(event_type);
+            CREATE INDEX IF NOT EXISTS idx_audit_type_ts ON agent_audit(event_type, timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_trades_ts     ON agent_trades(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_positions_s   ON agent_positions(status);
         """)
         conn.commit()
         conn.close()
 
 
 # Initialise on import
+_module_logger = logging.getLogger(__name__)
 try:
     init_db()
-except Exception:
-    pass  # never crash on import; UI will show "DB unavailable"
+except Exception as _e:
+    _module_logger.warning("[AuditLog] DB init failed — agent audit trail unavailable: %s", _e)
 
 
 class AuditLog:

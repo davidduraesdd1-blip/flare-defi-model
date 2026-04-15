@@ -6,9 +6,12 @@ Receives an approved TradeDecision, simulates realistic execution
 Zero real transactions. Zero real wallets needed.
 """
 
+import logging
 import random
 import time
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 from agents.config import MAX_SLIPPAGE_PCT, OPERATING_MODE
 from agents.decision_engine import TradeDecision
