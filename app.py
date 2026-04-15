@@ -317,11 +317,6 @@ if all_pts:
         f"</div>",
         unsafe_allow_html=True,
     )
-    for warn in flare_scan.get("warnings", []):
-        st.markdown(
-            f"<div class='warn-box' style='font-size:0.82rem; padding:10px 14px;'>⚠️ {_html.escape(str(warn))}</div>",
-            unsafe_allow_html=True,
-        )
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -490,7 +485,7 @@ warnings = latest.get("warnings", [])
 if warnings:
     with st.expander("⚠️ Data Quality Notes"):
         for w in warnings:
-            st.markdown(f"- {w}")
+            st.markdown(f"<div style='font-size:0.72rem;color:#94a3b8;line-height:1.5;'>⚠ {w}</div>", unsafe_allow_html=True)
 
 st.markdown(
     "<div style='color:#1e293b; font-size:0.70rem; text-align:center; padding-top:4px; line-height:1.7;'>"
