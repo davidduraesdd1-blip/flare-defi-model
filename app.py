@@ -10,6 +10,26 @@ import html as _html
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
+# ── Python 3.14 sys.modules race-condition pre-seeding ───────────────────────
+# Python 3.14 changed per-module import lock behaviour. When Streamlit's
+# background ThreadPoolExecutors try to import a package at the same moment
+# the page runner is loading it, _find_and_load raises KeyError instead of
+# returning the partially-loaded module.  Pre-importing every subpackage here
+# — in the main thread, before any ThreadPoolExecutor is created — ensures
+# they're fully resident in sys.modules and the race never occurs.
+try:
+    import ui                       # noqa: F401  ui/__init__.py
+    import ui.common                # noqa: F401
+    import ui.glossary              # noqa: F401
+    import scanners                 # noqa: F401  scanners/__init__.py
+    import scanners.defi_protocols  # noqa: F401
+    import scanners.defillama       # noqa: F401
+    import scanners.flare_scanner   # noqa: F401
+    import scanners.multi_scanner   # noqa: F401
+    import scanners.web_monitor     # noqa: F401
+except Exception:
+    pass  # any import failure here will surface naturally when the page runs
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
