@@ -419,11 +419,11 @@ else:
         st.markdown(f"""
         <div class="arb-tag">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:700; color:#f1f5f9;">⚡ {label} · {token}</span>
+                <span style="font-size:0.85rem; font-weight:700; color:#f1f5f9;">⚡ {label} · {token}</span>
                 {render_urgency_badge(urgency)}
             </div>
-            <div style="color:#94a3b8; font-size:0.88rem; margin-top:8px;">{desc}</div>
-            <div style="color:#475569; font-size:0.8rem; margin-top:8px;">
+            <div style="color:#94a3b8; font-size:0.78rem; margin-top:5px;">{desc}</div>
+            <div style="color:#475569; font-size:0.72rem; margin-top:5px;">
                 Estimated profit: <span style="color:#10b981; font-weight:700;">+{profit:.2f}%</span>
             </div>
         </div>
