@@ -823,8 +823,9 @@ def detect_chart_patterns(df: pd.DataFrame, swing_n: int = 3,
     sh_mask = _pivot_highs(high, swing_n)
     sl_mask = _pivot_lows(low, swing_n)
 
-    sh_idx = [i for i in high.index if sh_mask.iloc[i]]
-    sl_idx = [i for i in low.index if sl_mask.iloc[i]]
+    # Use integer positions — pandas 3.0 requires int keys for .iloc[]
+    sh_idx = [i for i in range(len(high)) if sh_mask.iloc[i]]
+    sl_idx = [i for i in range(len(low))  if sl_mask.iloc[i]]
 
     sh_vals = [float(high.iloc[i]) for i in sh_idx]
     sl_vals = [float(low.iloc[i])  for i in sl_idx]
@@ -931,8 +932,9 @@ def detect_wyckoff_spring_upthrust(df: pd.DataFrame, lookback: int = 60,
     sh_mask = _pivot_highs(high, swing_n)
     sl_mask = _pivot_lows(low,  swing_n)
 
-    sh_vals = [float(high.iloc[i]) for i in high.index if sh_mask.iloc[i]]
-    sl_vals = [float(low.iloc[i])  for i in low.index  if sl_mask.iloc[i]]
+    # Use integer positions — pandas 3.0 requires int keys for .iloc[]
+    sh_vals = [float(high.iloc[i]) for i in range(len(high)) if sh_mask.iloc[i]]
+    sl_vals = [float(low.iloc[i])  for i in range(len(low))  if sl_mask.iloc[i]]
 
     if len(sh_vals) < 2 or len(sl_vals) < 2:
         return result
