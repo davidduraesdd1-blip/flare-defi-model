@@ -598,21 +598,29 @@ def optimise_portfolio(candidates: list, risk_profile: str) -> list:
     top_n = min(6, len(ranked))
     top   = ranked[:top_n]
 
-    # ─── Base-net-APY Weighted Allocation ─────────────────────────────────────
-    # weight_i = max(0, fee_apy_i - il_estimate_pct_i × il_multiplier)
-    # This is the industry-standard approach for continuous yield stream allocation:
-    # capital flows proportionally to sustainable yield after expected IL cost.
+    # ─── Risk-Adjusted APY Weighted Allocation ────────────────────────────────
+    # weight_i = net_apy_i / (1 + risk_score_i / 10)
+    # net_apy  = fee_apy if available (live fee data), else estimated_apy (baseline)
+    # IL cost  = il_estimate_pct × il_multiplier (varies by profile)
+    # Dividing by (1 + risk_score/10) penalises higher-risk pools:
+    #   risk 0 → divisor 1.0 (no penalty)
+    #   risk 5 → divisor 1.5 (33% haircut)
+    #   risk 9 → divisor 1.9 (47% haircut)
     # The per-profile il_multiplier creates genuine differentiation between profiles:
     #   Conservative (3.0×): penalises IL heavily → much more weight on zero-IL lending
     #   Medium       (2.0×): moderate IL penalty → balanced between lending and DEX
     #   High         (1.5×): minimal IL penalty  → more weight on high-APY DEX pools
     for o in top:
-        raw_weight = max(0.0, o.fee_apy - o.il_estimate_pct * il_mult)
-        o.kelly_fraction = raw_weight  # store raw weight, normalize below
+        # Use fee_apy when available; fall back to estimated_apy so pools without
+        # live fee breakdown (e.g. Flare ecosystem) still get meaningful differentiation.
+        _base_apy = o.fee_apy if o.fee_apy and o.fee_apy > 0 else o.estimated_apy
+        _net      = max(0.0, _base_apy - o.il_estimate_pct * il_mult)
+        _risk_div = 1.0 + (o.risk_score or 0) / 10.0
+        o.kelly_fraction = _net / _risk_div  # raw weight — normalized below
 
     total_weight = sum(o.kelly_fraction for o in top)
     if total_weight <= 0:
-        # Fallback: all weights are zero (fee APY below IL cost) → equal weight
+        # Last resort fallback: all net APYs zero (e.g. extreme IL penalty) → equal weight
         for o in top:
             o.kelly_fraction = round(1.0 / len(top), 4)
         for i, o in enumerate(top):
