@@ -310,10 +310,22 @@ _CSS_LIGHT = """
     .divider { border: none; border-top: 1px solid rgba(0,0,0,0.09); margin: 28px 0; }
 
     /* ── Section Header ───────────────────────────────────────────────── */
-    .section-header { font-size: 0.8rem; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 1.4px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,212,170,0.3); margin-bottom: 16px; margin-top: 8px; }
+    .section-header { font-size: 0.85rem; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 1.4px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,212,170,0.3); margin-bottom: 16px; margin-top: 8px; }
 
     /* ── Expander label — same size as section-header ─────────────────── */
-    [data-testid="stExpander"] summary p { font-size: 0.8rem !important; }
+    [data-testid="stExpander"] summary p { font-size: 0.85rem !important; }
+
+    /* ── Global base font: 0.85rem for all interactive + body elements ── */
+    [data-testid="stMain"] label, [data-testid="stMain"] label p, [data-testid="stMain"] label span { font-size: 0.85rem !important; }
+    [data-testid="stMain"] input, [data-testid="stMain"] textarea { font-size: 0.85rem !important; }
+    [data-testid="stMain"] [data-baseweb="select"] span, [data-testid="stMain"] [data-baseweb="select"] div, [data-testid="stMain"] [data-baseweb="select"] input { font-size: 0.85rem !important; }
+    [data-testid="stMain"] [role="listbox"] li, [data-testid="stMain"] [role="option"], [data-testid="stMain"] [role="option"] * { font-size: 0.85rem !important; }
+    [data-testid="stMain"] button p, [data-testid="stMain"] button span, [data-testid="stFormSubmitButton"] button p { font-size: 0.85rem !important; }
+    [data-testid="stMain"] [data-testid="stTab"] p, [data-testid="stMain"] [data-testid="stTab"] span { font-size: 0.85rem !important; }
+    [data-testid="stMain"] p { font-size: 0.85rem !important; }
+    [data-testid="stSidebar"] label, [data-testid="stSidebar"] label p, [data-testid="stSidebar"] label span { font-size: 0.85rem !important; }
+    [data-testid="stSidebar"] p { font-size: 0.85rem !important; }
+    [data-testid="stCaptionContainer"] p, [data-testid="stMain"] small { font-size: 0.75rem !important; }
 
     /* ── Section Label ────────────────────────────────────────────────── */
     .section-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 1.6px; margin-bottom: 10px; margin-top: 6px; }
@@ -592,10 +604,22 @@ _CSS_DARK = """
     .divider { border: none; border-top: 1px solid rgba(255,255,255,0.05); margin: 28px 0; }
 
     /* ── Section Header ───────────────────────────────────────────────── */
-    .section-header { font-size: 0.8rem; font-weight: 700; color: #e2e8f0; text-transform: uppercase; letter-spacing: 1.4px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,212,170,0.35); margin-bottom: 16px; margin-top: 8px; }
+    .section-header { font-size: 0.85rem; font-weight: 700; color: #e2e8f0; text-transform: uppercase; letter-spacing: 1.4px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,212,170,0.35); margin-bottom: 16px; margin-top: 8px; }
 
     /* ── Expander label — same size as section-header ─────────────────── */
-    [data-testid="stExpander"] summary p { font-size: 0.8rem !important; }
+    [data-testid="stExpander"] summary p { font-size: 0.85rem !important; }
+
+    /* ── Global base font: 0.85rem for all interactive + body elements ── */
+    [data-testid="stMain"] label, [data-testid="stMain"] label p, [data-testid="stMain"] label span { font-size: 0.85rem !important; }
+    [data-testid="stMain"] input, [data-testid="stMain"] textarea { font-size: 0.85rem !important; }
+    [data-testid="stMain"] [data-baseweb="select"] span, [data-testid="stMain"] [data-baseweb="select"] div, [data-testid="stMain"] [data-baseweb="select"] input { font-size: 0.85rem !important; }
+    [data-testid="stMain"] [role="listbox"] li, [data-testid="stMain"] [role="option"], [data-testid="stMain"] [role="option"] * { font-size: 0.85rem !important; }
+    [data-testid="stMain"] button p, [data-testid="stMain"] button span, [data-testid="stFormSubmitButton"] button p { font-size: 0.85rem !important; }
+    [data-testid="stMain"] [data-testid="stTab"] p, [data-testid="stMain"] [data-testid="stTab"] span { font-size: 0.85rem !important; }
+    [data-testid="stMain"] p { font-size: 0.85rem !important; }
+    [data-testid="stSidebar"] label, [data-testid="stSidebar"] label p, [data-testid="stSidebar"] label span { font-size: 0.85rem !important; }
+    [data-testid="stSidebar"] p { font-size: 0.85rem !important; }
+    [data-testid="stCaptionContainer"] p, [data-testid="stMain"] small { font-size: 0.75rem !important; }
 
     /* ── Section Label ────────────────────────────────────────────────── */
     .section-label { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.6px; margin-bottom: 10px; margin-top: 6px; }
