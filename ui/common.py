@@ -731,14 +731,13 @@ def render_sidebar() -> dict:
     Returns dict with keys: profile, profile_cfg, color, weight, feedback, portfolio_size.
     """
     # ─── Refresh FALLBACK_PRICES once per session from CoinGecko ─────────────
-    # Runs silently in the background on first sidebar render; updates the
-    # in-memory FALLBACK_PRICES dict so all downstream callers see live prices.
+    # Fires in a daemon thread so it never blocks the initial render.
+    # The in-memory FALLBACK_PRICES dict is updated in-place by the thread,
+    # so downstream callers see live prices on the next interaction.
     if not st.session_state.get("_fallback_prices_refreshed"):
         st.session_state["_fallback_prices_refreshed"] = True
-        try:
-            refresh_fallback_prices()
-        except Exception:
-            pass  # non-critical — static fallback values remain valid
+        import threading as _threading
+        _threading.Thread(target=refresh_fallback_prices, daemon=True).start()
 
     # ─── 5-minute auto-refresh to keep data live ─────────────────────────────
     _now = time.time()

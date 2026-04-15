@@ -163,9 +163,19 @@ st.markdown(
 @st.cache_data(ttl=3600, show_spinner=False)
 def _dash_composite_signal() -> dict:
     try:
+        from concurrent.futures import ThreadPoolExecutor
         from models.composite_signal import compute_composite_signal as _ccs
         from macro_feeds import fetch_all_macro_data as _fmac, fetch_coinmetrics_onchain as _foc, fetch_btc_ta_signals as _fta
-        return _ccs(macro_data=_fmac(), onchain_data=_foc(days=400), ta_data=_fta())
+        # Run all three data sources in parallel instead of sequentially.
+        # Before: ~30s (3 blocking calls in series). After: ~10s (parallel, limited by slowest).
+        with ThreadPoolExecutor(max_workers=3) as _ex:
+            _f1 = _ex.submit(_fmac)
+            _f2 = _ex.submit(_foc, 90)   # 90 days sufficient for signal; was 400
+            _f3 = _ex.submit(_fta)
+            _macro   = _f1.result(timeout=20)
+            _onchain = _f2.result(timeout=20)
+            _ta      = _f3.result(timeout=20)
+        return _ccs(macro_data=_macro, onchain_data=_onchain, ta_data=_ta)
     except Exception:
         return {}
 
