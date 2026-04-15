@@ -203,7 +203,7 @@ try:
         st.markdown(
             "<div style='background:rgba(100,116,139,0.08);border:1px solid rgba(100,116,139,0.2);"
             "border-left:3px solid #64748b;border-radius:8px;padding:9px 16px;margin-bottom:8px;"
-            "font-size:0.82rem;color:#64748b;'>■ Market signal loading — macro feeds are initialising. "
+            "font-size:0.85rem;color:#64748b;'>■ Market signal loading — macro feeds are initialising. "
             "This banner clears automatically once data is ready.</div>",
             unsafe_allow_html=True,
         )
@@ -238,11 +238,11 @@ try:
                 f"<div style='background:{_d_bg};border:1px solid {_d_col}33;"
                 f"border-left:4px solid {_d_col};border-radius:8px;padding:10px 18px;"
                 f"margin-bottom:4px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;'>"
-                f"<div><span style='color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;'>Market Environment</span>"
+                f"<div><span style='color:#64748b;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.06em;'>Market Environment</span>"
                 f"<div style='color:{_d_col};font-weight:800;font-size:1.05rem;'>{_d_shape} {_d_signal}</div>"
-                f"<div style='color:#64748b;font-size:0.76rem;'>Score {_dfmt(_d_score)} &nbsp;·&nbsp; "
+                f"<div style='color:#64748b;font-size:0.85rem;'>Score {_dfmt(_d_score)} &nbsp;·&nbsp; "
                 f"<span style='color:{_d_conf_c};font-weight:600;'>{_d_conf} CONFIDENCE</span></div></div>"
-                f"<div style='color:#475569;font-size:0.78rem;border-left:1px solid #1e293b;padding-left:20px;'>"
+                f"<div style='color:#475569;font-size:0.85rem;border-left:1px solid #1e293b;padding-left:20px;'>"
                 f"<div>Technical <span style='color:{'#22c55e' if _d_ta>=0 else '#ef4444'};font-weight:600;'>{_dfmt(_d_ta)}</span></div>"
                 f"<div>Macro <span style='color:{'#22c55e' if _d_ma>=0 else '#ef4444'};font-weight:600;'>{_dfmt(_d_ma)}</span></div>"
                 f"<div>Sentiment <span style='color:{'#22c55e' if _d_se>=0 else '#ef4444'};font-weight:600;'>{_dfmt(_d_se)}</span></div>"
@@ -255,9 +255,9 @@ try:
                 f"border-left:4px solid {_d_col};border-radius:8px;padding:12px 18px;"
                 f"margin-bottom:4px;'>"
                 f"<span style='color:{_d_col};font-weight:700;font-size:0.9rem;'>{_d_shape} Market Conditions</span>"
-                f"<span style='color:#94a3b8;font-size:0.84rem;margin-left:12px;'>{_d_txt}</span>"
+                f"<span style='color:#94a3b8;font-size:0.85rem;margin-left:12px;'>{_d_txt}</span>"
                 f"<span style='margin-left:16px;background:{_d_conf_c}22;color:{_d_conf_c};"
-                f"font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;"
+                f"font-size:0.85rem;font-weight:700;padding:2px 8px;border-radius:10px;"
                 f"border:1px solid {_d_conf_c}44;'>{_d_conf} CONFIDENCE</span>"
                 f"</div>"
             )
@@ -271,18 +271,18 @@ try:
                 _xbar_c = "#22c55e" if _xwc >= 0 else "#ef4444"
                 _xai_rows += (
                     f"<div style='display:flex;align-items:center;gap:10px;margin:5px 0;'>"
-                    f"<div style='width:90px;font-size:0.78rem;color:#cbd5e1;'>{_xn}</div>"
-                    f"<div style='width:40px;font-size:0.7rem;color:#64748b;text-align:right;'>{_xw*100:.0f}%</div>"
+                    f"<div style='width:90px;font-size:0.85rem;color:#cbd5e1;'>{_xn}</div>"
+                    f"<div style='width:40px;font-size:0.85rem;color:#64748b;text-align:right;'>{_xw*100:.0f}%</div>"
                     f"<div style='flex:1;background:#1e293b;border-radius:3px;height:14px;overflow:hidden;'>"
                     f"<div style='width:{_xbar_w:.0f}%;background:{_xbar_c};height:100%;border-radius:3px;'></div></div>"
-                    f"<div style='width:55px;font-size:0.78rem;font-weight:600;color:{_xbar_c};text-align:right;'>{_xwc*100:+.1f}%</div>"
+                    f"<div style='width:55px;font-size:0.85rem;font-weight:600;color:{_xbar_c};text-align:right;'>{_xwc*100:+.1f}%</div>"
                     f"</div>"
                 )
             _xai_note = ("Each bar shows how much that factor pushed the signal bullish (+) or bearish (−)."
                          if user_level == "beginner"
                          else f"Weighted contributions · regime: {_d_csig.get('regime', 'N/A')} · weights are regime-adjusted.")
             st.html(f"<div style='padding:4px 0 8px;'>"
-                    f"<div style='font-size:0.72rem;color:#64748b;margin-bottom:8px;'>{_xai_note}</div>"
+                    f"<div style='font-size:0.85rem;color:#64748b;margin-bottom:8px;'>{_xai_note}</div>"
                     f"{_xai_rows}</div>")
 except Exception as _d_cs_err:
     import logging as _dlg; _dlg.getLogger(__name__).debug("[Dashboard] composite signal error: %s", _d_cs_err)
@@ -310,7 +310,7 @@ if all_pts:
     st.markdown(
         f"<div style='display:inline-flex; align-items:center; gap:6px; "
         f"background:{pill_bg}; border:1px solid {pill_border}; "
-        f"border-radius:20px; padding:3px 12px; margin:6px 0 16px; font-size:0.74rem;'>"
+        f"border-radius:20px; padding:3px 12px; margin:6px 0 16px; font-size:0.85rem;'>"
         f"<span class='{dot_cls}'></span>"
         f"<span style='color:{pill_color}; font-weight:600;'>{fresh_label}</span>"
         f"<span style='color:#334155;'>data points</span>"
@@ -417,8 +417,8 @@ else:
                 <span style="font-size:0.85rem; font-weight:700; color:#f1f5f9;">⚡ {label} · {token}</span>
                 {render_urgency_badge(urgency)}
             </div>
-            <div style="color:#94a3b8; font-size:0.78rem; margin-top:5px;">{desc}</div>
-            <div style="color:#475569; font-size:0.72rem; margin-top:5px;">
+            <div style="color:#94a3b8; font-size:0.85rem; margin-top:5px;">{desc}</div>
+            <div style="color:#475569; font-size:0.85rem; margin-top:5px;">
                 Estimated profit: <span style="color:#10b981; font-weight:700;">+{profit:.2f}%</span>
             </div>
         </div>
@@ -483,13 +483,13 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 warnings = latest.get("warnings", [])
 if warnings:
-    st.markdown("<style>[data-testid='stExpander'] summary p{font-size:0.80rem !important;color:#475569 !important;}</style>", unsafe_allow_html=True)
+    st.markdown("<style>[data-testid='stExpander'] summary p{font-size:0.85rem !important;color:#475569 !important;}</style>", unsafe_allow_html=True)
     with st.expander("⚠️ Data Quality Notes"):
         for w in warnings:
-            st.markdown(f"<div style='font-size:0.78rem;color:#94a3b8;line-height:1.5;'>⚠ {_html.escape(str(w))}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:0.85rem;color:#94a3b8;line-height:1.5;'>⚠ {_html.escape(str(w))}</div>", unsafe_allow_html=True)
 
 st.markdown(
-    "<div style='color:#1e293b; font-size:0.70rem; text-align:center; padding-top:4px; line-height:1.7;'>"
+    "<div style='color:#1e293b; font-size:0.85rem; text-align:center; padding-top:4px; line-height:1.7;'>"
     "Flare DeFi Model · Blazeswap · SparkDEX · Ēnosys · Kinetic · Clearpool · Spectra · Upshift · Mystic · Hyperliquid · Flamix · Firelight · Cyclo · Sceptre · Kinza · OrbitalX<br>"
     "<span style='color:#64748b;'>Not financial advice · Always DYOR</span>"
     "</div>",

@@ -297,8 +297,8 @@ if _csig:
             f"margin-bottom:16px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;'>"
             f"<div><span style='color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;'>Market Environment</span>"
             f"<div style='color:{_sig_color};font-weight:800;font-size:1.1rem;'>{_signal_label}</div>"
-            f"<div style='color:#64748b;font-size:0.78rem;'>Score {_s(_score)}</div></div>"
-            f"<div style='color:#475569;font-size:0.8rem;border-left:1px solid #1e293b;padding-left:20px;'>"
+            f"<div style='color:#64748b;font-size:0.85rem;'>Score {_s(_score)}</div></div>"
+            f"<div style='color:#475569;font-size:0.85rem;border-left:1px solid #1e293b;padding-left:20px;'>"
             f"<div>Technical <span style='color:{'#22c55e' if _ta_s>=0 else '#ef4444'};font-weight:600;'>{_s(_ta_s)}</span></div>"
             f"<div>Macro <span style='color:{'#22c55e' if _macro_s>=0 else '#ef4444'};font-weight:600;'>{_s(_macro_s)}</span></div>"
             f"<div>Sentiment <span style='color:{'#22c55e' if _sent_s>=0 else '#ef4444'};font-weight:600;'>{_s(_sent_s)}</span></div>"
@@ -365,7 +365,7 @@ except Exception as _opp_tb_e:
 st.html(
     "<div style='background:rgba(0,212,170,0.06);border:1px solid rgba(0,212,170,0.2);"
     "border-left:3px solid #00d4aa;border-radius:8px;padding:10px 16px;margin-bottom:20px;"
-    "font-size:0.83rem;color:#94a3b8;'>"
+    "font-size:0.85rem;color:#94a3b8;'>"
     "<span style='color:#00d4aa;font-weight:700;'>▲ Agent-Executable</span>"
     " protocols on this page: <span style='color:#f1f5f9;font-weight:600;'>"
     "Kinetic · BlazeSwap · SparkDEX</span> (Flare) · "
@@ -565,7 +565,7 @@ with _tab_yield:
                 _footer_parts.append(f"Monthly income: **${portfolio_size * _wtd_total / 100 / 12:,.0f}**")
             st.markdown(
                 "<div style='margin-top:8px; padding:8px 12px; background:rgba(0,212,170,0.07); "
-                "border-radius:6px; border-left:3px solid #00d4aa; font-size:0.82rem;'>"
+                "border-radius:6px; border-left:3px solid #00d4aa; font-size:0.85rem;'>"
                 + "  ·  ".join(_footer_parts) + "</div>",
                 unsafe_allow_html=True,
             )
@@ -670,9 +670,9 @@ with _tab_yield:
                 st.markdown(
                     f"<div style='text-align:center; padding:12px; background:rgba(239,68,68,0.07); "
                     f"border-radius:8px; border:1px solid rgba(239,68,68,0.2);'>"
-                    f"<div style='font-size:0.72rem; color:#64748b; margin-bottom:4px;'>🐻 BEAR CASE</div>"
+                    f"<div style='font-size:0.85rem; color:#64748b; margin-bottom:4px;'>🐻 BEAR CASE</div>"
                     f"<div style='font-size:1.6rem; font-weight:800; color:{_bear_color};'>{_bear:+.1f}%</div>"
-                    f"<div style='font-size:0.68rem; color:#475569; margin-top:2px;'>Worst 10% of scenarios</div>"
+                    f"<div style='font-size:0.85rem; color:#475569; margin-top:2px;'>Worst 10% of scenarios</div>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -681,9 +681,9 @@ with _tab_yield:
                 st.markdown(
                     f"<div style='text-align:center; padding:12px; background:rgba(34,197,94,0.07); "
                     f"border-radius:8px; border:1px solid rgba(34,197,94,0.2);'>"
-                    f"<div style='font-size:0.72rem; color:#64748b; margin-bottom:4px;'>📊 BASE CASE</div>"
+                    f"<div style='font-size:0.85rem; color:#64748b; margin-bottom:4px;'>📊 BASE CASE</div>"
                     f"<div style='font-size:1.6rem; font-weight:800; color:{_base_color};'>{_base:+.1f}%</div>"
-                    f"<div style='font-size:0.68rem; color:#475569; margin-top:2px;'>Median (50th percentile)</div>"
+                    f"<div style='font-size:0.85rem; color:#475569; margin-top:2px;'>Median (50th percentile)</div>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -691,9 +691,9 @@ with _tab_yield:
                 st.markdown(
                     f"<div style='text-align:center; padding:12px; background:rgba(0,212,170,0.07); "
                     f"border-radius:8px; border:1px solid rgba(0,212,170,0.2);'>"
-                    f"<div style='font-size:0.72rem; color:#64748b; margin-bottom:4px;'>🐂 BULL CASE</div>"
+                    f"<div style='font-size:0.85rem; color:#64748b; margin-bottom:4px;'>🐂 BULL CASE</div>"
                     f"<div style='font-size:1.6rem; font-weight:800; color:#00d4aa;'>{_bull:+.1f}%</div>"
-                    f"<div style='font-size:0.68rem; color:#475569; margin-top:2px;'>Best 10% of scenarios</div>"
+                    f"<div style='font-size:0.85rem; color:#475569; margin-top:2px;'>Best 10% of scenarios</div>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -702,9 +702,9 @@ with _tab_yield:
                 st.markdown(
                     f"<div style='text-align:center; padding:12px; background:rgba(239,68,68,0.05); "
                     f"border-radius:8px; border:1px solid rgba(239,68,68,0.15);'>"
-                    f"<div style='font-size:0.72rem; color:#64748b; margin-bottom:4px;'>🛡 95% VALUE AT RISK</div>"
+                    f"<div style='font-size:0.85rem; color:#64748b; margin-bottom:4px;'>🛡 95% VALUE AT RISK</div>"
                     f"<div style='font-size:1.6rem; font-weight:800; color:{_var_color};'>{_var:+.1f}%</div>"
-                    f"<div style='font-size:0.68rem; color:#475569; margin-top:2px;'>CVaR (Exp. Shortfall): {_cvar:+.1f}%</div>"
+                    f"<div style='font-size:0.85rem; color:#475569; margin-top:2px;'>CVaR (Exp. Shortfall): {_cvar:+.1f}%</div>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -833,7 +833,7 @@ with _tab_yield:
     
             with col:
                 st.markdown(
-                    f"<div style='font-size:0.78rem; color:#64748b; text-align:center; margin-bottom:6px;'>"
+                    f"<div style='font-size:0.85rem; color:#64748b; text-align:center; margin-bottom:6px;'>"
                     f"{_html.escape(str(proto))}<br><span style='color:#94a3b8; font-weight:600;'>{_html.escape(str(pool))}</span></div>",
                     unsafe_allow_html=True,
                 )
@@ -869,7 +869,7 @@ with _tab_yield:
                 else:
                     st.markdown(
                         "<div class='skeleton' style='height:90px; margin:4px 0;'></div>"
-                        "<div style='color:#334155; font-size:0.72rem; text-align:center; margin-top:6px;'>Building history…</div>",
+                        "<div style='color:#334155; font-size:0.85rem; text-align:center; margin-top:6px;'>Building history…</div>",
                         unsafe_allow_html=True,
                     )
     
@@ -1057,7 +1057,7 @@ with _tab_yield:
                         st.markdown(plain)
                         if exec_note:
                             st.markdown(
-                                f"<span style='color:#475569; font-size:0.83rem;'>How: {exec_note}</span>",
+                                f"<span style='color:#475569; font-size:0.85rem;'>How: {exec_note}</span>",
                                 unsafe_allow_html=True,
                             )
                         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -1505,10 +1505,10 @@ with _tab_yield:
                     f"border-left:3px solid {_lc['color']};border-radius:8px;padding:12px 14px;margin-bottom:8px'>"
                     f"<div style='font-weight:700;font-size:0.92rem;color:#e2e8f0;margin-bottom:4px'>{_lc['label']}</div>"
                     f"<div style='font-size:1.25rem;font-weight:700;color:#22c55e'>{_lc['apy']:.2f}% APY</div>"
-                    f"<div style='font-size:0.78rem;color:#64748b;margin-top:3px'>TVL: {_tvl_str}</div>"
-                    f"<div style='font-size:0.72rem;color:#f59e0b;margin-top:6px;border-top:1px solid rgba(255,255,255,0.05);padding-top:5px'>"
+                    f"<div style='font-size:0.85rem;color:#64748b;margin-top:3px'>TVL: {_tvl_str}</div>"
+                    f"<div style='font-size:0.85rem;color:#f59e0b;margin-top:6px;border-top:1px solid rgba(255,255,255,0.05);padding-top:5px'>"
                     f"⚠ Smart contract risk + slashing risk</div>"
-                    f"<div style='font-size:0.67rem;color:#334155;margin-top:2px'>Source: {_lc['source']}</div>"
+                    f"<div style='font-size:0.75rem;color:#334155;margin-top:2px'>Source: {_lc['source']}</div>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -1688,12 +1688,12 @@ with _tab_intel:
         _sorted_props = _apy_props + _other_props
     
         for _prop in _sorted_props:
-            _imp_badge = (" <span style='background:#1c1200;color:#FBBF24;font-size:0.68rem;"
+            _imp_badge = (" <span style='background:#1c1200;color:#FBBF24;font-size:0.85rem;"
                          "padding:1px 6px;border-radius:4px;border:1px solid #fbbf2444'>⚡ APY Impact</span>"
                          if _prop.get("apy_impact") else "")
             _vote_url  = _html.escape(str(_prop.get("url") or ""))
             _vote_link = (f" · <a href='{_vote_url}' target='_blank' "
-                          f"style='color:#a78bfa;font-size:0.72rem;text-decoration:none;'>Vote ↗</a>"
+                          f"style='color:#a78bfa;font-size:0.85rem;text-decoration:none;'>Vote ↗</a>"
                           if _vote_url else "")
             st.markdown(
                 f"<div style='background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);"
@@ -1856,7 +1856,7 @@ with _tab_yield:
                     f"<div><span style='font-weight:700; color:#f1f5f9;'>🆕 {_html.escape(str(_p['dex_name']))}</span>"
                     f"<span style='color:#475569; margin:0 6px;'>·</span>"
                     f"<span style='color:#94a3b8; font-size:0.9rem;'>{_html.escape(str(_p['symbol']))}</span></div>"
-                    f"<div style='display:flex; gap:12px; font-size:0.82rem;'>"
+                    f"<div style='display:flex; gap:12px; font-size:0.85rem;'>"
                     f"<span style='color:#a78bfa; font-weight:700;'>{_p['apy_est']:.0f}% est. APY</span>"
                     f"<span style='color:#f1f5f9; font-weight:700;'>TVL ${_p['tvl_usd']/1e6:.2f}M</span>"
                     f"</div></div>"
@@ -1902,10 +1902,10 @@ with _tab_yield:
                     st.markdown(
                         f"<div style='background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.06);"
                         f"border-top:2px solid {_fcol};border-radius:8px;padding:10px 12px;text-align:center'>"
-                        f"<div style='font-size:0.72rem;color:#64748b;text-transform:uppercase'>{_fl['chain']}</div>"
+                        f"<div style='font-size:0.85rem;color:#64748b;text-transform:uppercase'>{_fl['chain']}</div>"
                         f"<div style='font-size:1.4rem;font-weight:700;color:{_fcol}'>{_ficon} {_fl['change_7d_pct']:+.1f}%</div>"
-                        f"<div style='font-size:0.72rem;color:#475569'>TVL ${_ftvl_m:.1f}{_funit}</div>"
-                        f"<div style='font-size:0.70rem;color:{_fcol};margin-top:2px'>{_fsig}</div>"
+                        f"<div style='font-size:0.85rem;color:#475569'>TVL ${_ftvl_m:.1f}{_funit}</div>"
+                        f"<div style='font-size:0.85rem;color:{_fcol};margin-top:2px'>{_fsig}</div>"
                         f"</div>",
                         unsafe_allow_html=True,
                     )
@@ -2057,14 +2057,14 @@ with _tab_yield:
             f"</div>"
             f"<div style='margin-top:8px;display:flex;gap:8px;flex-wrap:wrap'>"
             f"<span style='background:rgba(0,0,0,0.2);border:1px solid {_eth_sh_col};color:{_eth_sh_col};"
-            f"font-size:0.70rem;padding:2px 7px;border-radius:10px'>"
+            f"font-size:0.85rem;padding:2px 7px;border-radius:10px'>"
             f"Sharpe {_eth_sharpe['sharpe']:.2f} · {_eth_sharpe['risk_adjusted_rank'].capitalize()}</span>"
             f"<span style='background:rgba(0,0,0,0.2);border:1px solid {_eth_cls_col};color:{_eth_cls_col};"
-            f"font-size:0.70rem;padding:2px 7px;border-radius:10px'>{_eth_cls}</span>"
+            f"font-size:0.85rem;padding:2px 7px;border-radius:10px'>{_eth_cls}</span>"
             f"<span style='background:rgba(0,0,0,0.2);border:1px solid #475569;color:#94a3b8;"
-            f"font-size:0.70rem;padding:2px 7px;border-radius:10px'>delta-neutral hedge</span>"
+            f"font-size:0.85rem;padding:2px 7px;border-radius:10px'>delta-neutral hedge</span>"
             f"</div>"
-            f"<div style='color:#64748b;font-size:0.74rem;margin-top:6px'>"
+            f"<div style='color:#64748b;font-size:0.85rem;margin-top:6px'>"
             f"Mechanism: Short perpetual futures hedge offsets ETH price risk. Yield from funding rates + staking."
             f"</div>"
             f"</div>",
@@ -2163,7 +2163,7 @@ with _tab_yield:
                         f"<div style='font-weight:700;font-size:0.85rem;color:#e2e8f0;margin-bottom:4px'>{_html.escape(_vname)}{_badge}</div>"
                         f"<div style='font-size:1.1rem;font-weight:700;color:#22c55e'>pps: {_pps:.6f}</div>"
                         f"<div style='font-size:0.75rem;color:#64748b;margin-top:3px'>Total Assets: {_tvl_str}</div>"
-                        f"<div style='font-size:0.67rem;color:#334155;margin-top:4px'>Source: {_html.escape(_yld_src)}</div>"
+                        f"<div style='font-size:0.75rem;color:#334155;margin-top:4px'>Source: {_html.escape(_yld_src)}</div>"
                         f"</div>",
                         unsafe_allow_html=True,
                     )
@@ -2231,7 +2231,7 @@ with _tab_yield:
 
             with _sp_cols[_col_idx]:
                 st.markdown(
-                    f"<div style='font-size:0.72rem;color:#64748b;text-align:center;margin-bottom:4px'>"
+                    f"<div style='font-size:0.85rem;color:#64748b;text-align:center;margin-bottom:4px'>"
                     f"{_html.escape(_sp_proto)}<br>"
                     f"<span style='color:#94a3b8;font-weight:600'>{_html.escape(_sp_sym)}</span> "
                     f"<span style='color:#475569'>· {_html.escape(_sp_chain)}</span>"
@@ -2263,7 +2263,7 @@ with _tab_yield:
                 st.plotly_chart(_fig_sp, width='stretch', config={"displayModeBar": False})
                 _dir_sym = "▲" if _trending_up else "▼"
                 st.markdown(
-                    f"<div style='text-align:center;font-size:0.73rem;color:{_sp_line_col};margin-top:-10px'>"
+                    f"<div style='text-align:center;font-size:0.85rem;color:{_sp_line_col};margin-top:-10px'>"
                     f"{_dir_sym} {_sp_apy:.2f}% APY "
                     f"<span style='color:#475569;font-size:0.65rem'>({_data_label})</span></div>",
                     unsafe_allow_html=True,
@@ -2369,7 +2369,7 @@ with _tab_intel:
                         f"padding:10px 12px;margin-bottom:8px;text-align:center'>"
                         f"<div style='font-size:2rem;font-weight:800;color:{_item['color']};line-height:1'>"
                         f"{_item['grade']}</div>"
-                        f"<div style='font-size:0.78rem;font-weight:600;color:#e2e8f0;margin-top:4px'>"
+                        f"<div style='font-size:0.85rem;font-weight:600;color:#e2e8f0;margin-top:4px'>"
                         f"{_html.escape(_item['name'])}</div>"
                         f"<div style='font-size:0.65rem;color:#64748b;margin-top:2px'>"
                         f"{_html.escape(_item['category'])}</div>"
@@ -3107,7 +3107,7 @@ with _tab_intel:
                 st.markdown(
                     f"<div style='font-weight:600;color:{_hcol};margin:8px 0 2px'>"
                     f"{_html.escape(_tr['name'])} "
-                    f"<span style='font-weight:400;font-size:0.8rem;color:#94a3b8'>"
+                    f"<span style='font-weight:400;font-size:0.85rem;color:#94a3b8'>"
                     f"(${_tr['tvl']/1e6:.0f}M treasury)</span></div>",
                     unsafe_allow_html=True,
                 )

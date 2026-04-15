@@ -289,21 +289,21 @@ with tab2:
             <div class="metric-card card-green">
                 <div class="label">Fixed Rate (PT-sFLR)</div>
                 <div class="big-number" style="color:#10b981;">+{fixed_yield:.2f} sFLR</div>
-                <div style="color:#475569; font-size:0.82rem; margin-top:6px;">~18.6% · Zero IL risk</div>
+                <div style="color:#475569; font-size:0.85rem; margin-top:6px;">~18.6% · Zero IL risk</div>
             </div>""", unsafe_allow_html=True)
         with c2:
             st.markdown(f"""
             <div class="metric-card card-orange">
                 <div class="label">Variable Staking</div>
                 <div class="big-number" style="color:#f59e0b;">+{var_low:.2f}–{var_high:.2f}</div>
-                <div style="color:#475569; font-size:0.82rem; margin-top:6px;">4–5% variable (post-FlareDrop)</div>
+                <div style="color:#475569; font-size:0.85rem; margin-top:6px;">4–5% variable (post-FlareDrop)</div>
             </div>""", unsafe_allow_html=True)
         with c3:
             st.markdown(f"""
             <div class="metric-card card-red">
                 <div class="label">LP Route (Spectra)</div>
                 <div class="big-number" style="color:#ef4444;">+{lp_yield:.2f}</div>
-                <div style="color:#475569; font-size:0.82rem; margin-top:6px;">~36.74% · IL risk</div>
+                <div style="color:#475569; font-size:0.85rem; margin-top:6px;">~36.74% · IL risk</div>
             </div>""", unsafe_allow_html=True)
 
         st.caption(
@@ -368,7 +368,7 @@ with tab3:
         st.markdown(
             f"<div class='warn-box'>"
             f"<span style='font-weight:700; color:#f59e0b;'>⚠ Vote Power Cap Warning</span>"
-            f"<div style='color:#94a3b8; font-size:0.83rem; margin-top:4px;'>"
+            f"<div style='color:#94a3b8; font-size:0.85rem; margin-top:4px;'>"
             f"{len(over_cap)} provider(s) exceed the 2.5% vote power cap. "
             f"Flare reduces reward eligibility for over-cap providers — avoid delegating to these: "
             f"<b>{', '.join(_html.escape(str(p['name'])) for p in over_cap)}</b></div></div>",
@@ -398,7 +398,7 @@ with tab3:
         if len(top2) >= 2:
             st.markdown(
                 f"<div style='background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.14); "
-                f"border-radius:10px; padding:12px 16px; font-size:0.84rem; color:#94a3b8; margin-top:10px;'>"
+                f"border-radius:10px; padding:12px 16px; font-size:0.85rem; color:#94a3b8; margin-top:10px;'>"
                 f"🤖 <span style='color:#a78bfa; font-weight:600;'>Recommendation:</span> "
                 f"Split {flr_amount:,.0f} FLR between "
                 f"<b style='color:#f1f5f9;'>{_html.escape(str(top2[0]['name']))}</b> ({flr_amount*0.6:,.0f} FLR, "
@@ -441,7 +441,7 @@ with tab4:
         <div class="metric-card card-blue">
             <div class="label">FXRP — Live Now</div>
             <div style="font-size:1.3rem; font-weight:700; color:#3b82f6;">4–10% APY</div>
-            <div style="color:#475569; font-size:0.83rem; margin-top:8px;">
+            <div style="color:#475569; font-size:0.85rem; margin-top:8px;">
                 Bridge XRP → FXRP via Flare · Deploy in Upshift EarnXRP vault<br>
                 Status: <span style="color:#10b981; font-weight:600;">LIVE</span>
             </div>
@@ -451,7 +451,7 @@ with tab4:
         <div class="metric-card card-orange">
             <div class="label">FBTC — Coming Soon</div>
             <div style="font-size:1.3rem; font-weight:700; color:#f59e0b;">Est. 3–8% APY</div>
-            <div style="color:#475569; font-size:0.83rem; margin-top:8px;">
+            <div style="color:#475569; font-size:0.85rem; margin-top:8px;">
                 Bring Bitcoin on-chain · Earn yield without selling BTC<br>
                 Status: <span style="color:#f59e0b; font-weight:600;">IN DEVELOPMENT</span>
             </div>
@@ -462,7 +462,7 @@ with tab4:
     <div class="metric-card" style="border-left:3px solid #a78bfa;">
         <div class="label">FDOGE — Beta</div>
         <div style="font-size:1.3rem; font-weight:700; color:#a78bfa;">Est. 2–5% APY</div>
-        <div style="color:#475569; font-size:0.83rem; margin-top:8px;">
+        <div style="color:#475569; font-size:0.85rem; margin-top:8px;">
             Bring Dogecoin on-chain to Flare · Earn DeFi yield on DOGE without selling<br>
             Status: <span style="color:#a78bfa; font-weight:600;">BETA — Limited minting</span>
         </div>
@@ -754,7 +754,7 @@ with tab5:
 
                 # IL estimate
                 _il_est   = _IL_EST_BY_RISK.get(_risk_cat, 0.0)
-                _il_html  = (f" <span style='color:{risk_color}; font-size:0.70rem;' "
+                _il_html  = (f" <span style='color:{risk_color}; font-size:0.85rem;' "
                              f"title='Estimated impermanent loss % per year for this pair type'>"
                              f"~{_il_est:.0f}% IL</span>") if _il_est > 0 else ""
 
@@ -766,7 +766,7 @@ with tab5:
                     _aud_note = _aud_data.get("note", "")
                     _aud_yr   = _aud_data.get("year", "")
                     _aud_html = (
-                        f"<span style='font-size:0.70rem; color:#34d399; font-weight:600; "
+                        f"<span style='font-size:0.85rem; color:#34d399; font-weight:600; "
                         f"background:rgba(52,211,153,0.08); padding:1px 6px; border-radius:4px; "
                         f"border:1px solid rgba(52,211,153,0.25);' "
                         f"title='{_aud_note}'>"
@@ -778,7 +778,7 @@ with tab5:
                 _plan_proto_name = plan["protocol"]
                 _url_html  = (
                     f"<a href='{_proto_url}' target='_blank' rel='noopener noreferrer' "
-                    f"style='font-size:0.70rem; color:#00d4aa; font-weight:600; "
+                    f"style='font-size:0.85rem; color:#00d4aa; font-weight:600; "
                     f"text-decoration:none; padding:1px 8px; border-radius:4px; "
                     f"border:1px solid rgba(0,212,170,0.3); background:rgba(0,212,170,0.06);' "
                     f"title='Open {_plan_proto_name} in new tab'>Open &#x2197;</a>"
@@ -792,11 +792,11 @@ with tab5:
                     f"<div><span style='font-weight:700; color:#f1f5f9;'>{plan['protocol']}</span>"
                     f"<span style='color:#475569; margin:0 6px;'>·</span>"
                     f"<span style='color:#94a3b8; font-size:0.9rem;'>{plan['strategy']}</span></div>"
-                    f"<div style='display:flex; gap:10px; font-size:0.82rem; align-items:center;'>"
+                    f"<div style='display:flex; gap:10px; font-size:0.85rem; align-items:center;'>"
                     f"<span style='background:{_grade_color}; color:#fff; font-weight:800; font-size:0.75rem; "
                     f"padding:1px 7px; border-radius:4px;' title='Safety Grade: A=safest, F=riskiest'>{_grade}</span>"
                     f"<span style='color:#a78bfa; font-weight:700;'>{plan['apy_est']:.1f}% APY</span>"
-                    f"<span style='color:{risk_color}; font-weight:600; font-size:0.78rem;'>{_risk_cat} risk{_il_html}</span>"
+                    f"<span style='color:{risk_color}; font-weight:600; font-size:0.85rem;'>{_risk_cat} risk{_il_html}</span>"
                     f"<span style='color:#f1f5f9; font-weight:700;'>{plan['alloc_pct']}% = ${alloc_usd:,.0f}</span>"
                     f"</div></div>"
                     f"<div style='color:#94a3b8; font-size:0.88rem; margin-top:8px;'>{plan['action']}</div>"
@@ -838,7 +838,7 @@ with tab5:
                 "vertical-align:middle;'>📊 EST</span>"
             )
             st.markdown(
-                f"<div style='font-size:0.78rem;color:#64748b;margin-top:4px;'>"
+                f"<div style='font-size:0.85rem;color:#64748b;margin-top:4px;'>"
                 f"{_live_badge} APY source: {_apy_source} · refreshed every 15 min{_decay_note}. "
                 f"Allocations are suggestions only. Not financial advice.</div>",
                 unsafe_allow_html=True,
@@ -1215,7 +1215,7 @@ with _opt_c2:
 
 # ── Range preset buttons ───────────────────────────────────────────────────
 st.markdown(
-    "<div style='color:#64748b;font-size:0.80rem;margin:8px 0 4px'>Quick range presets</div>",
+    "<div style='color:#64748b;font-size:0.85rem;margin:8px 0 4px'>Quick range presets</div>",
     unsafe_allow_html=True,
 )
 _preset_cols = st.columns(5)
@@ -1302,7 +1302,7 @@ if _opt_input_ok:
                 )
                 st.progress(int(_cp_pct) / 100)
                 st.markdown(
-                    f"<div style='display:flex;justify-content:space-between;font-size:0.71rem;color:#475569;margin-top:-6px'>"
+                    f"<div style='display:flex;justify-content:space-between;font-size:0.85rem;color:#475569;margin-top:-6px'>"
                     f"<span>${_opt_lower:.4f}</span>"
                     f"<span style='color:{_bar_color};font-weight:600'>${_opt_price:.4f} — {_status_text}</span>"
                     f"<span>${_opt_upper:.4f}</span>"

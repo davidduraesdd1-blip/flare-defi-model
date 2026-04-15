@@ -67,7 +67,7 @@ with _ctrl_tab_alerts:
     ])
 
     with tab_email:
-        st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Gmail users: use an App Password (Settings → Security → App Passwords).</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#475569; font-size:0.85rem; margin-bottom:12px;'>Gmail users: use an App Password (Settings → Security → App Passwords).</div>", unsafe_allow_html=True)
         enabled    = st.toggle("Enable email alerts", value=config["email"].get("enabled", False), key="email_enabled")
         email_addr = st.text_input("Email address",  value=config["email"].get("address", ""),          key="email_addr")
         c1, c2     = st.columns(2)
@@ -84,31 +84,31 @@ with _ctrl_tab_alerts:
             smtp_pass = st.text_input("SMTP password", value=config["email"].get("password", ""),
                                        key="smtp_pass", type="password")
         st.markdown(
-            "<div class='warn-box' style='font-size:0.82rem;'>"
+            "<div class='warn-box' style='font-size:0.85rem;'>"
             "Credentials stored in <code>data/alerts_config.json</code> — never commit this file to git.</div>",
             unsafe_allow_html=True,
         )
 
     with tab_tg:
-        st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Create a bot via @BotFather · Get your Chat ID via @userinfobot.</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#475569; font-size:0.85rem; margin-bottom:12px;'>Create a bot via @BotFather · Get your Chat ID via @userinfobot.</div>", unsafe_allow_html=True)
         tg_enabled = st.toggle("Enable Telegram alerts", value=config["telegram"].get("enabled", False), key="tg_enabled")
         bot_token  = st.text_input("Bot token", value=config["telegram"].get("bot_token", ""),
                                     key="bot_token", type="password")
         chat_id    = st.text_input("Chat ID",   value=config["telegram"].get("chat_id", ""), key="chat_id")
 
     with tab_discord:
-        st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Create a Discord webhook: Server Settings → Integrations → Webhooks → New Webhook → Copy URL.</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#475569; font-size:0.85rem; margin-bottom:12px;'>Create a Discord webhook: Server Settings → Integrations → Webhooks → New Webhook → Copy URL.</div>", unsafe_allow_html=True)
         discord_enabled = st.toggle("Enable Discord alerts", value=config.get("discord", {}).get("enabled", False), key="discord_enabled")
         discord_url     = st.text_input("Discord Webhook URL", value=config.get("discord", {}).get("webhook_url", ""),
                                          key="discord_url", placeholder="https://discord.com/api/webhooks/…")
         st.markdown(
-            "<div class='warn-box' style='font-size:0.82rem;'>"
+            "<div class='warn-box' style='font-size:0.85rem;'>"
             "Webhook URL is stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
             unsafe_allow_html=True,
         )
 
     with tab_webhook:
-        st.markdown("<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>Send JSON payloads to any HTTPS endpoint (Zapier, Make, n8n, Slack, custom API). Optionally sign with HMAC-SHA256.</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#475569; font-size:0.85rem; margin-bottom:12px;'>Send JSON payloads to any HTTPS endpoint (Zapier, Make, n8n, Slack, custom API). Optionally sign with HMAC-SHA256.</div>", unsafe_allow_html=True)
         webhook_enabled = st.toggle("Enable webhook alerts", value=config.get("webhook", {}).get("enabled", False), key="webhook_enabled")
         webhook_url     = st.text_input("Webhook URL (HTTPS)", value=config.get("webhook", {}).get("url", ""),
                                          key="webhook_url", placeholder="https://hooks.zapier.com/…")
@@ -116,14 +116,14 @@ with _ctrl_tab_alerts:
                                          key="webhook_secret", type="password",
                                          help="If set, adds X-Flare-Signature HMAC-SHA256 header to each request")
         st.markdown(
-            "<div class='warn-box' style='font-size:0.82rem;'>"
+            "<div class='warn-box' style='font-size:0.85rem;'>"
             "Secret stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
             unsafe_allow_html=True,
         )
         # Batch 9: Quick direct-URL webhook test (Discord / Telegram / generic)
         st.markdown("---")
         st.markdown(
-            "<div style='color:#475569; font-size:0.82rem; margin-bottom:6px;'>"
+            "<div style='color:#475569; font-size:0.85rem; margin-bottom:6px;'>"
             "<b>Quick URL Test</b> — paste a Discord/Telegram/generic webhook URL below to send a test message directly. "
             "Uses the DEFI_WEBHOOK_URL env var if left blank.</div>",
             unsafe_allow_html=True,
@@ -150,7 +150,7 @@ with _ctrl_tab_alerts:
 
     with tab_thresh:
         st.markdown(
-            "<div style='color:#475569; font-size:0.82rem; margin-bottom:12px;'>"
+            "<div style='color:#475569; font-size:0.85rem; margin-bottom:12px;'>"
             "Alerts are only sent when these thresholds are crossed. "
             "Smart tuning auto-adjusts the APY threshold after each scan based on prediction accuracy.</div>",
             unsafe_allow_html=True,
@@ -185,7 +185,7 @@ with _ctrl_tab_alerts:
                 cal_html = "<span style='color:#475569;'>Waiting for prediction history (need 6+ evaluated predictions)</span>"
             st.markdown(
                 f"<div style='background:rgba(139,92,246,0.04); border:1px solid rgba(139,92,246,0.14); "
-                f"border-radius:10px; padding:10px 14px; margin-top:10px; font-size:0.81rem; color:#94a3b8;'>"
+                f"border-radius:10px; padding:10px 14px; margin-top:10px; font-size:0.85rem; color:#94a3b8;'>"
                 f"🤖 <span style='font-weight:600; color:#a78bfa;'>Smart Alert Tuning</span> — "
                 f"{cal_html}</div>",
                 unsafe_allow_html=True,
@@ -316,13 +316,13 @@ with _ctrl_tab_export:
       h1    {{ color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; font-size: 1.6rem; }}
       h2    {{ color: #0f172a; margin-top: 32px; font-size: 1.1rem; }}
       table {{ border-collapse: collapse; width: 100%; margin-top: 12px; }}
-      th    {{ background: #1e293b; color: #f8fafc; padding: 10px 12px; text-align: left; font-size: 0.82rem; }}
+      th    {{ background: #1e293b; color: #f8fafc; padding: 10px 12px; text-align: left; font-size:0.85rem; }}
       td    {{ padding: 9px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-size: 0.88rem; }}
       tr:nth-child(even) {{ background: #f8fafc; }}
       .warn {{ background: #fefce8; padding: 14px 16px; border-radius: 8px; margin: 16px 0;
                border-left: 4px solid #f59e0b; font-size: 0.9rem; }}
       .meta {{ color: #64748b; font-size: 0.88rem; margin-bottom: 24px; }}
-      .footer {{ margin-top: 40px; color: #94a3b8; font-size: 0.78rem;
+      .footer {{ margin-top: 40px; color: #94a3b8; font-size:0.85rem;
                  border-top: 1px solid #e2e8f0; padding-top: 16px; }}
       @media print {{ body {{ padding: 20px; }} }}
     </style>
@@ -659,7 +659,7 @@ with _ctrl_tab_api:
             st.session_state[f"api_{_key}"] = _new_val
             os.environ[_key] = _new_val
     st.markdown(
-        "<div class='warn-box' style='font-size:0.82rem;'>"
+        "<div class='warn-box' style='font-size:0.85rem;'>"
         "API keys entered here are stored in session memory only — they are cleared when you restart the app. "
         "For permanent storage, set them as system environment variables or in a <code>.env</code> file.</div>",
         unsafe_allow_html=True,
@@ -713,7 +713,7 @@ with _ctrl_tab_cache:
     for _cn, _ttl, _desc in _cache_info:
         st.markdown(
             f"<div style='display:flex; justify-content:space-between; "
-            f"border-bottom:1px solid rgba(148,163,184,0.1); padding:6px 0; font-size:0.82rem;'>"
+            f"border-bottom:1px solid rgba(148,163,184,0.1); padding:6px 0; font-size:0.85rem;'>"
             f"<span style='color:#e2e8f0;'>{_cn}</span>"
             f"<span style='color:#3b82f6;'>{_ttl}</span>"
             f"<span style='color:#475569;'>{_desc}</span>"

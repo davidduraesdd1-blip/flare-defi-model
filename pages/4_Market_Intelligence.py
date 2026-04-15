@@ -223,7 +223,7 @@ try:
             f"<div style='margin-bottom:6px'>"
             f"Intent detected: <span style='font-weight:700;color:{_intent_col};font-size:1.05rem'>"
             f"{_primary}</span> ({_conf_pct}% confidence){_sec_str}"
-            f"<span style='float:right;font-size:0.68rem;color:#334155'>via {_src_label}</span>"
+            f"<span style='float:right;font-size:0.85rem;color:#334155'>via {_src_label}</span>"
             f"</div>"
             f"<div style='color:#c4cbdb;font-size:0.87rem'>{_html.escape(_action)}</div>"
             f"</div>",
@@ -242,7 +242,7 @@ try:
         # Context-relevant data based on intent
         if _primary in ("STAKE", "YIELD_HUNT", "LEND"):
             st.markdown(
-                "<div style='color:#475569;font-size:0.80rem;margin:10px 0 4px'>"
+                "<div style='color:#475569;font-size:0.85rem;margin:10px 0 4px'>"
                 "Relevant: top yield opportunities — check the Opportunities tab for live APY data.</div>",
                 unsafe_allow_html=True,
             )
@@ -302,7 +302,7 @@ try:
                 _flows = _fetch_bf(["Flare", "Ethereum", "Base", "Arbitrum", "Polygon"])
                 if _flows:
                     st.markdown(
-                        "<div style='font-size:0.8rem;color:#64748b;margin:10px 0 4px'>Live chain TVL flows (7-day):</div>",
+                        "<div style='font-size:0.85rem;color:#64748b;margin:10px 0 4px'>Live chain TVL flows (7-day):</div>",
                         unsafe_allow_html=True,
                     )
                     _flow_rows = []
@@ -376,7 +376,7 @@ else:
         parts.append(f"{news_n} news item(s)")
     if parts:
         st.markdown(
-            f"<div style='color:#475569; font-size:0.78rem; margin-bottom:14px;'>"
+            f"<div style='color:#475569; font-size:0.85rem; margin-bottom:14px;'>"
             f"{'  ·  '.join(parts)}</div>",
             unsafe_allow_html=True,
         )
@@ -390,7 +390,7 @@ else:
             f"<div style='display:flex; align-items:center; gap:8px; margin-bottom:10px;'>"
             f"<span style='font-size:1rem;'>🤖</span>"
             f"<span class='badge-new'>AI Summary</span>"
-            f"<span style='font-size:0.72rem; color:#334155; margin-left:auto;'>Claude AI · Not financial advice</span>"
+            f"<span style='font-size:0.85rem; color:#334155; margin-left:auto;'>Claude AI · Not financial advice</span>"
             f"</div>"
             f"<div style='color:#c4cbdb; font-size:0.90rem; line-height:1.65;'>{_html.escape(ai_text)}</div>"
             f"</div>",
@@ -399,7 +399,7 @@ else:
     else:
         st.markdown(
             "<div style='background:rgba(139,92,246,0.04); border:1px solid rgba(139,92,246,0.12); "
-            "border-radius:10px; padding:12px 16px; font-size:0.83rem; color:#475569;'>"
+            "border-radius:10px; padding:12px 16px; font-size:0.85rem; color:#475569;'>"
             "🤖 Set <code style='background:rgba(255,255,255,0.06); padding:1px 6px; border-radius:4px;'>"
             "ANTHROPIC_API_KEY</code> to enable AI-generated ecosystem summaries.</div>",
             unsafe_allow_html=True,
@@ -419,7 +419,7 @@ else:
                 f"<div class='arb-tag'>"
                 f"<span style='font-weight:700; color:#f1f5f9;'>{_html.escape(str(proto.get('name', '?')))}</span>"
                 f"<span style='color:#475569;'> · {_html.escape(str(proto.get('category','?')))} · {tvl_str}{url_md}</span>"
-                f"{'<div style=\"color:#64748b;font-size:0.82rem;margin-top:6px\">' + desc + '</div>' if desc else ''}"
+                f"{'<div style=\"color:#64748b;font-size:0.85rem;margin-top:6px\">' + desc + '</div>' if desc else ''}"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -447,7 +447,7 @@ else:
     news_items = digest.get("news_items") or []
     if news_items:
         st.markdown(
-            f"<div style='font-size:0.78rem; font-weight:700; color:#94a3b8; "
+            f"<div style='font-size:0.85rem; font-weight:700; color:#94a3b8; "
             f"text-transform:uppercase; letter-spacing:1.2px; margin:16px 0 10px;'>"
             f"Recent News <span style='color:#334155; font-weight:400;'>({len(news_items)} articles)</span></div>",
             unsafe_allow_html=True,
@@ -461,13 +461,13 @@ else:
             summary  = _html.escape(str(item.get("summary", "")))
             src      = _html.escape(str(item.get("source", "")))
             pub      = _html.escape(str(item.get("published", "")))
-            sum_html = f"<div style='color:#64748b; font-size:0.81rem; margin-top:5px; line-height:1.5;'>{summary}</div>" if summary else ""
+            sum_html = f"<div style='color:#64748b; font-size:0.85rem; margin-top:5px; line-height:1.5;'>{summary}</div>" if summary else ""
             st.markdown(
                 f"<div style='background:rgba(13,14,20,0.8); border-radius:12px; padding:13px 16px; "
                 f"margin-bottom:8px; border:1px solid rgba(255,255,255,0.06); "
                 f"transition: border-color 0.2s;'>"
                 f"<div>{title_md}</div>"
-                f"<div style='color:#334155; font-size:0.72rem; margin-top:4px; display:flex; gap:8px;'>"
+                f"<div style='color:#334155; font-size:0.85rem; margin-top:4px; display:flex; gap:8px;'>"
                 f"<span style='color:#475569;'>{src}</span>"
                 f"{'<span style=\"color:#1e293b\">·</span>' if src and pub else ''}"
                 f"<span>{pub}</span>"
@@ -527,7 +527,7 @@ if feedback:
         <div class="metric-card card-blue">
             <div class="label">Trend</div>
             <div class="big-number">{trend_icon}</div>
-            <div style="color:#475569; font-size:0.82rem; margin-top:4px;">{trend.capitalize()}</div>
+            <div style="color:#475569; font-size:0.85rem; margin-top:4px;">{trend.capitalize()}</div>
         </div>""", unsafe_allow_html=True)
     with c3:
         scans     = feedback.get("total_scans", 0)
@@ -536,7 +536,7 @@ if feedback:
         <div class="metric-card card-blue">
             <div class="label">Predictions</div>
             <div class="big-number">{evaluated}</div>
-            <div style="color:#475569; font-size:0.82rem; margin-top:4px;">of {scans} evaluated</div>
+            <div style="color:#475569; font-size:0.85rem; margin-top:4px;">of {scans} evaluated</div>
         </div>""", unsafe_allow_html=True)
 
     st.divider()
@@ -584,7 +584,7 @@ if feedback:
             f"{'<span>Directional: <span style=\"color:#94a3b8\">' + str(dir_pct) + '%</span></span>' if dir_pct is not None else ''}"
             f"<span style='color:#334155;'>{sc} samples</span>"
             f"</div></div>"
-            f"<div style='color:#475569; font-size:0.82rem; margin-top:8px;'>{msg}</div>"
+            f"<div style='color:#475569; font-size:0.85rem; margin-top:8px;'>{msg}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -595,7 +595,7 @@ if feedback:
         st.divider()
         st.markdown("#### Model Confidence Weights")
         st.markdown(
-            "<div style='color:#475569; font-size:0.82rem; margin-bottom:10px;'>"
+            "<div style='color:#475569; font-size:0.85rem; margin-bottom:10px;'>"
             "Higher accuracy = higher weight. Adjusted automatically after each scan.</div>",
             unsafe_allow_html=True,
         )
@@ -1421,7 +1421,7 @@ if _intent_input:
                 f"padding:10px 12px;text-align:center'>"
                 f"<div style='font-size:1.4rem'>{_idef.get('icon','?')}</div>"
                 f"<div style='font-size:0.85rem;font-weight:700;color:#F1F5F9;margin-top:4px'>{_idef.get('label','—')}</div>"
-                f"<div style='font-size:0.72rem;color:#64748b;margin-top:4px'>{_idef.get('desc','')}</div>"
+                f"<div style='font-size:0.85rem;color:#64748b;margin-top:4px'>{_idef.get('desc','')}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -1529,13 +1529,13 @@ if pro_mode:
             for _rr in _rev_rows:
                 _hbadge = (
                     f"<span style='background:rgba(34,197,94,0.12);color:#22c55e;"
-                    f"padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600'>{_rr['_health']}</span>"
+                    f"padding:2px 8px;border-radius:4px;font-size:0.85rem;font-weight:600'>{_rr['_health']}</span>"
                     if _rr["_health"] == "GREEN" else
                     f"<span style='background:rgba(245,158,11,0.12);color:#f59e0b;"
-                    f"padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600'>{_rr['_health']}</span>"
+                    f"padding:2px 8px;border-radius:4px;font-size:0.85rem;font-weight:600'>{_rr['_health']}</span>"
                     if _rr["_health"] == "YELLOW" else
                     f"<span style='background:rgba(239,68,68,0.12);color:#ef4444;"
-                    f"padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600'>{_rr['_health']}</span>"
+                    f"padding:2px 8px;border-radius:4px;font-size:0.85rem;font-weight:600'>{_rr['_health']}</span>"
                 )
                 st.markdown(
                     f"<div style='background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);"
@@ -1544,7 +1544,7 @@ if pro_mode:
                     f"display:flex;justify-content:space-between;align-items:center'>"
                     f"<div>"
                     f"<b style='color:#f1f5f9'>{_html.escape(_rr['Protocol'])}</b>"
-                    f"<span style='color:#64748b;font-size:0.78rem;margin-left:10px'>"
+                    f"<span style='color:#64748b;font-size:0.85rem;margin-left:10px'>"
                     f"24h: {_html.escape(_rr['24h Fees'])} · 30d: {_html.escape(_rr['30d Fees'])} · "
                     f"Trend: {_html.escape(_rr['Trend'])}</span>"
                     f"</div>"
@@ -1640,11 +1640,11 @@ if pro_mode:
                     f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'>"
                     f"<span style='font-weight:700;font-size:0.95rem;color:#f1f5f9'>"
                     f"{_html.escape(_rwa_name.replace('_', ' ').title())}</span>"
-                    f"<span style='font-size:0.78rem;font-weight:600;padding:2px 8px;"
+                    f"<span style='font-size:0.85rem;font-weight:600;padding:2px 8px;"
                     f"border-radius:4px;{_hbg}'>{_health}</span>"
                     f"</div>"
                     f"<div style='font-size:1.25rem;font-weight:700;color:#e2e8f0;margin-bottom:6px'>{_tvl_str}</div>"
-                    f"<div style='display:flex;gap:16px;font-size:0.80rem;color:#64748b'>"
+                    f"<div style='display:flex;gap:16px;font-size:0.85rem;color:#64748b'>"
                     f"<span>7d: <span style='color:{_c7_color}'>{_c7_str}</span></span>"
                     f"<span>30d: <span style='color:{_c30_color}'>{_c30_str}</span></span>"
                     f"<span>Chains: {_html.escape(_chains_str)}</span>"

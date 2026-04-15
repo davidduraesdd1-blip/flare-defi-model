@@ -48,7 +48,7 @@ st.markdown("""
 .agent-running { border-color: rgba(34,197,94,0.4); background: rgba(34,197,94,0.07); }
 .phase-gate-locked { border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.07); }
 .limit-row { display:flex; justify-content:space-between; padding:4px 0;
-             border-bottom:1px solid rgba(255,255,255,0.04); font-size:0.82rem; }
+             border-bottom:1px solid rgba(255,255,255,0.04); font-size:0.85rem; }
 .estop-btn { background:#ef4444 !important; color:#fff !important; font-weight:800;
              border-radius:8px !important; width:100% !important; }
 </style>
@@ -109,7 +109,7 @@ st.html(
     f"<div class='agent-status-card {status_class}' style='background:rgba(0,212,170,0.07);"
     f"border:1px solid rgba(0,212,170,0.25);border-radius:10px;padding:10px 14px;margin-bottom:8px;'>"
     f"<div style='font-size:1.1rem;font-weight:800;color:#f1f5f9;'>{status_icon} {status_text}</div>"
-    f"<div style='color:#94a3b8;font-size:0.82rem;margin-top:6px;'>"
+    f"<div style='color:#94a3b8;font-size:0.85rem;margin-top:6px;'>"
     f"Last decision: {_html_mod.escape(str(last_ts or '—'))}{_dec_suffix}</div></div>"
 )
 
@@ -120,9 +120,9 @@ if last_dec.get("reasoning"):
     _dec_reason   = _html_mod.escape(str(last_dec.get("reason", "")))
     _dec_reasoning = _html_mod.escape(str(last_dec.get("reasoning", "")))
     st.html(
-        f"<div style='font-size:0.82rem;color:{verdict_color};margin-bottom:12px;'>"
+        f"<div style='font-size:0.85rem;color:{verdict_color};margin-bottom:12px;'>"
         f"{verdict_icon} {_dec_reason}</div>"
-        f"<div style='font-size:0.80rem;color:#64748b;margin-bottom:16px;'>"
+        f"<div style='font-size:0.85rem;color:#64748b;margin-bottom:16px;'>"
         f"Reasoning: {_dec_reasoning}</div>"
     )
 
@@ -284,7 +284,7 @@ try:
         )
         _pb_from_slider = _pb_milestones[_pb_slider_idx]
         st.markdown(
-            f"<div style='font-size:0.8rem;color:#00d4aa;font-weight:700;margin-top:-8px;margin-bottom:2px;'>"
+            f"<div style='font-size:0.85rem;color:#00d4aa;font-weight:700;margin-top:-8px;margin-bottom:2px;'>"
             f"{_fmt_pb(_pb_from_slider)}</div>",
             unsafe_allow_html=True,
         )

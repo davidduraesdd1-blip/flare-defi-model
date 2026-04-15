@@ -158,7 +158,7 @@ header[data-testid="stHeader"],
     if GIPS_MODE:
         st.markdown("""
 <div style='background:#1e293b;border:1px solid #334155;border-left:3px solid #00d4aa;
-border-radius:6px;padding:8px 16px;margin-bottom:12px;font-size:0.78rem;color:#94a3b8;'>
+border-radius:6px;padding:8px 16px;margin-bottom:12px;font-size:0.85rem;color:#94a3b8;'>
 <strong style='color:#00d4aa;'>GIPS Disclosure</strong> — Performance figures shown are
 time-weighted suggested allocations (TWR). Past DeFi yield rates are not a guarantee of
 future performance. All APY data is sourced from live protocol feeds and is provided for
@@ -316,6 +316,8 @@ _CSS_LIGHT = """
     [data-testid="stExpander"] summary p { font-size: 0.85rem !important; }
 
     /* ── Global base font: 0.85rem for all interactive + body elements ── */
+    [data-testid="stMarkdownContainer"] div,
+    [data-testid="stMarkdownContainer"] span { font-size: 0.85rem; }
     [data-testid="stMain"] label, [data-testid="stMain"] label p, [data-testid="stMain"] label span { font-size: 0.85rem !important; }
     [data-testid="stMain"] input, [data-testid="stMain"] textarea { font-size: 0.85rem !important; }
     [data-testid="stMain"] [data-baseweb="select"] span, [data-testid="stMain"] [data-baseweb="select"] div, [data-testid="stMain"] [data-baseweb="select"] input { font-size: 0.85rem !important; }
@@ -341,7 +343,7 @@ _CSS_LIGHT = """
     button[kind="secondary"], button[kind="primary"] {
         border-radius: 10px !important;
         border: 1px solid rgba(0,0,0,0.12) !important;
-        font-weight: 700 !important; font-size: 0.82rem !important; letter-spacing: 0.3px !important;
+        font-weight: 700 !important; font-size:0.85rem !important; letter-spacing: 0.3px !important;
         background: #ffffff !important;
         color: #1e293b !important;
         transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s !important;
@@ -356,7 +358,7 @@ _CSS_LIGHT = """
     /* ── Dataframes ───────────────────────────────────────────────────── */
     [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
     [data-testid="stDataFrame"] table { background: rgba(255,255,255,0.97) !important; }
-    [data-testid="stDataFrame"] thead tr th { background: rgba(241,245,249,0.98) !important; color: #64748b !important; font-size: 0.72rem !important; letter-spacing: 0.9px !important; text-transform: uppercase !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; }
+    [data-testid="stDataFrame"] thead tr th { background: rgba(241,245,249,0.98) !important; color: #64748b !important; font-size:0.85rem !important; letter-spacing: 0.9px !important; text-transform: uppercase !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; }
     [data-testid="stDataFrame"] tbody tr:hover td { background: rgba(0,212,170,0.04) !important; }
 
     /* ── Price Chip ───────────────────────────────────────────────────── */
@@ -364,7 +366,7 @@ _CSS_LIGHT = """
     .price-chip:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.10); transform: translateY(-1px); }
 
     /* ── Tabs ─────────────────────────────────────────────────────────── */
-    [data-testid="stTabs"] [role="tab"] { font-size: 0.82rem; font-weight: 600; color: #64748b; transition: color 0.15s; }
+    [data-testid="stTabs"] [role="tab"] { font-size:0.85rem; font-weight: 600; color: #64748b; transition: color 0.15s; }
     [data-testid="stTabs"] [role="tab"]:hover { color: #475569; }
     [data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: #00d4aa !important; }
     [data-testid="stTabs"] [role="tabpanel"] { padding-top: 16px; }
@@ -610,6 +612,8 @@ _CSS_DARK = """
     [data-testid="stExpander"] summary p { font-size: 0.85rem !important; }
 
     /* ── Global base font: 0.85rem for all interactive + body elements ── */
+    [data-testid="stMarkdownContainer"] div,
+    [data-testid="stMarkdownContainer"] span { font-size: 0.85rem; }
     [data-testid="stMain"] label, [data-testid="stMain"] label p, [data-testid="stMain"] label span { font-size: 0.85rem !important; }
     [data-testid="stMain"] input, [data-testid="stMain"] textarea { font-size: 0.85rem !important; }
     [data-testid="stMain"] [data-baseweb="select"] span, [data-testid="stMain"] [data-baseweb="select"] div, [data-testid="stMain"] [data-baseweb="select"] input { font-size: 0.85rem !important; }
@@ -633,7 +637,7 @@ _CSS_DARK = """
     /* ── Buttons ──────────────────────────────────────────────────────── */
     div[data-testid="stButton"] > button {
         border-radius: 10px; border: 1px solid rgba(255,255,255,0.10);
-        font-weight: 700; font-size: 0.82rem; letter-spacing: 0.3px;
+        font-weight: 700; font-size:0.85rem; letter-spacing: 0.3px;
         background: rgba(17,24,39,0.85); color: #cbd5e1;
         transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
     }
@@ -643,7 +647,7 @@ _CSS_DARK = """
     /* ── Dataframes ───────────────────────────────────────────────────── */
     [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
     [data-testid="stDataFrame"] table { background: rgba(13,14,20,0.96) !important; }
-    [data-testid="stDataFrame"] thead tr th { background: rgba(17,24,39,0.98) !important; color: #94a3b8 !important; font-size: 0.72rem !important; letter-spacing: 0.9px !important; text-transform: uppercase !important; border-bottom: 1px solid rgba(255,255,255,0.06) !important; }
+    [data-testid="stDataFrame"] thead tr th { background: rgba(17,24,39,0.98) !important; color: #94a3b8 !important; font-size:0.85rem !important; letter-spacing: 0.9px !important; text-transform: uppercase !important; border-bottom: 1px solid rgba(255,255,255,0.06) !important; }
     [data-testid="stDataFrame"] tbody tr:hover td { background: rgba(0,212,170,0.06) !important; }
 
     /* ── Price Chip ───────────────────────────────────────────────────── */
@@ -651,7 +655,7 @@ _CSS_DARK = """
     .price-chip:hover { border-color: rgba(255,255,255,0.13); box-shadow: 0 6px 24px rgba(0,0,0,0.45); transform: translateY(-1px); }
 
     /* ── Tabs ─────────────────────────────────────────────────────────── */
-    [data-testid="stTabs"] [role="tab"] { font-size: 0.82rem; font-weight: 600; color: #64748b; transition: color 0.15s; }
+    [data-testid="stTabs"] [role="tab"] { font-size:0.85rem; font-weight: 600; color: #64748b; transition: color 0.15s; }
     [data-testid="stTabs"] [role="tab"]:hover { color: #94a3b8; }
     [data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: #00d4aa; }
     [data-testid="stTabs"] [role="tabpanel"] { padding-top: 16px; }
@@ -802,7 +806,7 @@ def render_sidebar() -> dict:
                     f"background: linear-gradient(90deg, #00d4aa, #60a5fa); "
                     f"-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
                     f"background-clip: text; letter-spacing:-0.3px; margin-bottom:0px;'>{_header_text}</div>"
-                    "<div style='font-size:0.68rem; letter-spacing:1.2px; "
+                    "<div style='font-size:0.85rem; letter-spacing:1.2px; "
                     "text-transform:uppercase; margin-bottom:4px;'>Analytics Dashboard</div>",
                     unsafe_allow_html=True,
                 )
@@ -845,7 +849,7 @@ def render_sidebar() -> dict:
                 pass
         dot_html = "<span class='live-dot'></span>" if is_fresh else "<span class='stale-dot'></span>"
         st.markdown(
-            f"<div style='font-size:0.73rem; color:#475569; line-height:1.5; margin-bottom:4px;'>"
+            f"<div style='font-size:0.85rem; color:#475569; line-height:1.5; margin-bottom:4px;'>"
             f"{dot_html}"
             f"<span style='color:#94a3b8'>{_ts_fmt(last_scan) if last_scan else 'No scan yet'}</span>"
             f" · Next <span style='color:#64748b'>{_next_scan()}</span></div>",
@@ -864,7 +868,7 @@ def render_sidebar() -> dict:
                 st.markdown(
                     f"<div style='background:rgba(0,0,0,0.15); border:1px solid {_cnt_color}44; "
                     f"border-left:3px solid {_cnt_color}; border-radius:6px; "
-                    f"padding:4px 10px; margin:4px 0; font-size:0.71rem; color:{_cnt_color}; font-weight:600;' "
+                    f"padding:4px 10px; margin:4px 0; font-size:0.85rem; color:{_cnt_color}; font-weight:600;' "
                     f"title='RFLR/SPRK incentive program expires {_exp_str}. Base fee yield continues after this date.'>"
                     f"{_cnt_icon} {_cnt_msg} \u2014 only base yield after</div>",
                     unsafe_allow_html=True,
@@ -888,7 +892,7 @@ def render_sidebar() -> dict:
             st.markdown(
                 f"<div style='background:rgba(0,0,0,0.2);border:1px solid {_ag_badge_color}44;"
                 f"border-left:3px solid {_ag_badge_color};border-radius:6px;"
-                f"padding:5px 10px;margin:6px 0;font-size:0.72rem;"
+                f"padding:5px 10px;margin:6px 0;font-size:0.85rem;"
                 f"color:{_ag_badge_color};font-weight:600;'>{_ag_badge_text}</div>",
                 unsafe_allow_html=True,
             )
@@ -1070,7 +1074,7 @@ def render_sidebar() -> dict:
                 f"<div style='font-size:0.60rem;text-transform:uppercase;letter-spacing:0.8px;"
                 f"color:#475569;margin-bottom:4px;'>Agent</div>"
                 f"<div style='display:flex;align-items:center;gap:8px;margin-bottom:6px;'>"
-                f"<span style='color:{_a_color};font-size:0.72rem;font-weight:700;'>"
+                f"<span style='color:{_a_color};font-size:0.85rem;font-weight:700;'>"
                 f"{_a_icon} {_a_label} · {_agent_mode}</span>"
                 f"<span style='color:#64748b;font-size:0.65rem;'>"
                 f"Paper: {_paper_days}/{_GATE_DAYS}d</span></div>",
@@ -1119,7 +1123,7 @@ def render_sidebar() -> dict:
             st.markdown(
                 f"<div style='background:rgba(0,0,0,0.15);border:1px solid {_ai_banner_color}44;"
                 f"border-left:3px solid {_ai_banner_color};border-radius:6px;"
-                f"padding:4px 10px;margin:4px 0;font-size:0.71rem;"
+                f"padding:4px 10px;margin:4px 0;font-size:0.85rem;"
                 f"color:{_ai_banner_color};font-weight:600;'>"
                 f"{_ai_banner_icon} {_ai_banner_text}</div>",
                 unsafe_allow_html=True,
@@ -1195,7 +1199,7 @@ def render_sidebar() -> dict:
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
         st.markdown(
-            "<div style='font-size:0.67rem; color:#334155; line-height:1.4; padding:4px 0;'>"
+            "<div style='font-size:0.75rem; color:#334155; line-height:1.4; padding:4px 0;'>"
             "⚠ Not financial advice · DYOR before investing.</div>",
             unsafe_allow_html=True,
         )
@@ -1364,7 +1368,7 @@ def render_urgency_badge(urgency: str) -> str:
     color = _URGENCY_COLOR.get(urgency, "#3b82f6")
     label = _URGENCY_LABEL.get(urgency, _html.escape((urgency or "").upper()))
     return (
-        f"<span style=\"color:{color}; font-weight:700; font-size:0.78rem; "
+        f"<span style=\"color:{color}; font-weight:700; font-size:0.85rem; "
         f"background:rgba(255,255,255,0.04); padding:3px 10px; border-radius:6px;\">"
         f"{label}</span>"
     )
@@ -1548,13 +1552,13 @@ def render_ftso_il_calculator(prices: list = None) -> None:
             st.markdown(f"""<div class="metric-card card-red">
             <div class="label">Impermanent Loss</div>
             <div class="big-number" style="color:{il_color};">{il_pct:.2f}%</div>
-            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">≈ ${il_usd:,.2f} on ${deposit:,.0f}</div>
+            <div style="color:#475569; font-size:0.85rem; margin-top:4px;">≈ ${il_usd:,.2f} on ${deposit:,.0f}</div>
             </div>""", unsafe_allow_html=True)
         with c2:
             st.markdown(f"""<div class="metric-card card-blue">
             <div class="label">LP Value Now</div>
             <div class="big-number">${lp_val:,.0f}</div>
-            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">After IL vs ${deposit:,.0f} in</div>
+            <div style="color:#475569; font-size:0.85rem; margin-top:4px;">After IL vs ${deposit:,.0f} in</div>
             </div>""", unsafe_allow_html=True)
         with c3:
             hodl_diff = hodl_val - lp_val
@@ -1562,7 +1566,7 @@ def render_ftso_il_calculator(prices: list = None) -> None:
             st.markdown(f"""<div class="metric-card card-orange">
             <div class="label">HODL vs LP</div>
             <div class="big-number" style="color:{h_color};">${hodl_diff:+,.0f}</div>
-            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">HODL would be ${hodl_val:,.0f}</div>
+            <div style="color:#475569; font-size:0.85rem; margin-top:4px;">HODL would be ${hodl_val:,.0f}</div>
             </div>""", unsafe_allow_html=True)
 
         st.markdown(
@@ -1593,7 +1597,7 @@ def render_price_strip(prices: list) -> None:
         with cols[i]:
             st.markdown(f"""
             <div class="price-chip">
-                <div style="font-size:0.68rem; color:#64748b; margin-bottom:5px; display:flex; align-items:center; justify-content:center; gap:4px;">
+                <div style="font-size:0.85rem; color:#64748b; margin-bottom:5px; display:flex; align-items:center; justify-content:center; gap:4px;">
                     {dot_html}<span style="letter-spacing:0.6px; text-transform:uppercase;">{sym}</span>
                 </div>
                 <div style="font-size:1.12rem; font-weight:700; letter-spacing:-0.3px; font-variant-numeric:tabular-nums; color:#f1f5f9;">{price_str}</div>
@@ -1604,7 +1608,7 @@ def render_price_strip(prices: list) -> None:
 def render_section_header(title: str, subtitle: str = "") -> None:
     """Renders a section title with violet gradient underline and optional subtitle."""
     sub_html = (
-        f"<div style='color:#475569; font-size:0.84rem; margin-top:4px; margin-bottom:16px;'>"
+        f"<div style='color:#475569; font-size:0.85rem; margin-top:4px; margin-bottom:16px;'>"
         f"{_html.escape(subtitle)}</div>"
         if subtitle else ""
     )
@@ -1621,7 +1625,7 @@ def render_incentive_warning() -> None:
         <span style="font-size:1.1rem; flex-shrink:0; margin-top:1px;">⚠️</span>
         <div>
             <div style="font-weight:700; color:#f59e0b; font-size:0.87rem; margin-bottom:4px;">Incentive Program Notice</div>
-            <div style="color:#94a3b8; font-size:0.83rem; line-height:1.55;">{INCENTIVE_PROGRAM['note']}</div>
+            <div style="color:#94a3b8; font-size:0.85rem; line-height:1.55;">{INCENTIVE_PROGRAM['note']}</div>
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -1734,7 +1738,7 @@ def render_opportunity_card(
     except (TypeError, ValueError):
         il_est_pct = 0.0
     il_est_html  = (
-        f" <span style='color:{il_color}; font-size:0.70rem;' "
+        f" <span style='color:{il_color}; font-size:0.85rem;' "
         f"title='Estimated impermanent loss over 1 year based on pair volatility'>"
         f"~{il_est_pct:.1f}% IL</span>"
         if il_est_pct > 0 else ""
@@ -1747,7 +1751,7 @@ def render_opportunity_card(
     _audit_year  = _audit_data.get("year", "")
     _audit_note  = _audit_data.get("note", "")
     _audit_html  = (
-        f"<span style='font-size:0.70rem; color:#34d399; font-weight:600; "
+        f"<span style='font-size:0.85rem; color:#34d399; font-weight:600; "
         f"background:rgba(52,211,153,0.08); padding:1px 6px; border-radius:4px; "
         f"border:1px solid rgba(52,211,153,0.25);' "
         f"title='{_html.escape(_audit_note)}'>"
@@ -1759,7 +1763,7 @@ def render_opportunity_card(
     _proto_url  = (PROTOCOLS.get(proto_key) or {}).get("url", "")
     _url_html   = (
         f"<a href='{_proto_url}' target='_blank' rel='noopener noreferrer' "
-        f"style='font-size:0.70rem; color:#00d4aa; font-weight:600; "
+        f"style='font-size:0.85rem; color:#00d4aa; font-weight:600; "
         f"text-decoration:none; padding:1px 8px; border-radius:4px; "
         f"border:1px solid rgba(0,212,170,0.3); background:rgba(0,212,170,0.06);' "
         f"title='Open {_html.escape(str(proto))} in new tab'>"
@@ -1770,7 +1774,7 @@ def render_opportunity_card(
     # Preview badge: protocol has live=False in config — not yet tradeable
     _proto_is_live = (PROTOCOLS.get(proto_key) or {}).get("live", True)
     _preview_badge_html = (
-        "<span style='font-size:0.68rem;font-weight:700;color:#f59e0b;"
+        "<span style='font-size:0.85rem;font-weight:700;color:#f59e0b;"
         "background:rgba(245,158,11,0.12);padding:1px 7px;border-radius:4px;"
         "border:1px solid rgba(245,158,11,0.35);' "
         "title='This protocol is in preview mode — no public API available yet. "
@@ -1855,7 +1859,7 @@ def render_opportunity_card(
                 _days_left   = max(0, (_expiry_dt - datetime.now(timezone.utc)).days)
                 _exp_color   = "#10b981" if _days_left > 90 else ("#f59e0b" if _days_left > 30 else "#ef4444")
                 _expiry_html = (
-                    f"<span style='color:{_exp_color}; font-size:0.70rem; font-weight:600; "
+                    f"<span style='color:{_exp_color}; font-size:0.85rem; font-weight:600; "
                     f"background:rgba(255,255,255,0.04); padding:1px 6px; border-radius:4px; "
                     f"border:1px solid {_exp_color}44;' title='Incentive program expires Jul 2026'>"
                     f"⏳ {_days_left}d left</span>"
@@ -1869,13 +1873,13 @@ def render_opportunity_card(
             _tf_color = "#22c55e" if apy_trend_flag == "rising" else "#ef4444"
             _tf_icon  = "▲" if apy_trend_flag == "rising" else "▼"
             _trend_flag_html = (
-                f"<span style='color:{_tf_color}; font-size:0.70rem; font-weight:600;' "
+                f"<span style='color:{_tf_color}; font-size:0.85rem; font-weight:600;' "
                 f"title='APY trending {apy_trend_flag} over last 7 scans'>"
                 f"{_tf_icon} {abs(apy_trend_pct):.0f}% {apy_trend_flag}</span>"
             )
 
         _apy_decomp_html = (
-            f"<div style='display:flex; gap:6px; font-size:0.68rem; margin-top:3px; flex-wrap:wrap; align-items:center;'>"
+            f"<div style='display:flex; gap:6px; font-size:0.85rem; margin-top:3px; flex-wrap:wrap; align-items:center;'>"
             + (f"<span style='color:#64748b;'>Base fees: <span style='color:#94a3b8; font-weight:600;'>{fee_apy:.1f}%</span></span>"
                f"<span style='color:#334155;'>·</span>" if fee_apy > 0 else "")
             + (f"<span style='color:#64748b;'>Rewards: <span style='color:#a78bfa; font-weight:600;'>{reward_apy:.1f}%</span></span>"
@@ -1892,7 +1896,7 @@ def render_opportunity_card(
     _spread = round(apy - _TREASURY_BASELINE_PCT, 2)
     _spread_color = "#22c55e" if _spread >= 2.0 else ("#f59e0b" if _spread >= 0 else "#ef4444")
     _spread_html = (
-        f"<span style='font-size:0.70rem;color:{_spread_color};font-weight:600;"
+        f"<span style='font-size:0.85rem;color:{_spread_color};font-weight:600;"
         f"background:{_spread_color}14;padding:1px 6px;border-radius:4px;"
         f"border:1px solid {_spread_color}33;white-space:nowrap;' "
         f"title='vs. tokenized T-bill baseline (BUIDL/BENJI avg ~{_TREASURY_BASELINE_PCT}% · Apr 2026)'>"
@@ -1912,7 +1916,7 @@ def render_opportunity_card(
         else:
             _ry_label, _ry_color = "Incentive-Driven", "#EF4444"
         _ry_html = (
-            f"<span style='font-size:0.70rem;color:{_ry_color};font-weight:600;"
+            f"<span style='font-size:0.85rem;color:{_ry_color};font-weight:600;"
             f"background:rgba(0,0,0,0.2);padding:1px 6px;border-radius:4px;"
             f"border:1px solid {_ry_color}44;' title='Real Yield: {_ry_pct}% of APY is from protocol fees (not emissions)'>"
             f"⚡ Real Yield {_ry_pct}% · {_ry_label}</span>"
@@ -1924,12 +1928,12 @@ def render_opportunity_card(
 
     st.markdown(f"""<div class="opp-card" style="border-left:3px solid {color};">
 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
-<div style="flex:1;min-width:0;display:flex;align-items:center;gap:5px;flex-wrap:wrap;"><span style="font-size:0.78rem;color:#475569;">{medal}</span><span style="font-size:0.95rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 4px;">·</span><span style="font-size:0.85rem;color:#94a3b8;">{pool}</span>{(' ' + _preview_badge_html) if _preview_badge_html else ''}</div>
+<div style="flex:1;min-width:0;display:flex;align-items:center;gap:5px;flex-wrap:wrap;"><span style="font-size:0.85rem;color:#475569;">{medal}</span><span style="font-size:0.95rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 4px;">·</span><span style="font-size:0.85rem;color:#94a3b8;">{pool}</span>{(' ' + _preview_badge_html) if _preview_badge_html else ''}</div>
 <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">{_action_badge_html}<span class="grade-badge" style="background:{grade_color};color:#fff;font-weight:800;letter-spacing:0.5px;" title="Safety Grade: A=safest, F=riskiest">{grade}</span><span class="{glow_cls}" style="font-size:0.95rem;font-weight:800;color:{color};letter-spacing:-0.5px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
 </div>
 {_apy_decomp_html}
-<div style="color:#94a3b8;font-size:0.80rem;margin-top:4px;line-height:1.35;">{action}</div>
-<div style="display:flex;gap:10px;font-size:0.72rem;color:#475569;margin-top:5px;flex-wrap:wrap;align-items:center;">
+<div style="color:#94a3b8;font-size:0.85rem;margin-top:4px;line-height:1.35;">{action}</div>
+<div style="display:flex;gap:10px;font-size:0.85rem;color:#475569;margin-top:5px;flex-wrap:wrap;align-items:center;">
 <span><span style="color:{il_color};font-weight:700;">{il_icon}</span><span style="margin-left:2px;">Risk: <span style="color:{il_color};font-weight:600;">{il.upper()}</span>{il_est_html}</span></span>
 <span style="display:flex;align-items:center;gap:4px;">Conf:<span style="display:inline-block;width:36px;height:4px;background:rgba(255,255,255,0.07);border-radius:3px;vertical-align:middle;overflow:hidden;"><span style="display:block;width:{conf_bar_pct};height:100%;background:{conf_color};border-radius:3px;"></span></span><span style="color:{conf_color};font-weight:600;">{conf:.0f}%</span></span>
 <span>Alloc: <span style="color:#94a3b8;font-weight:600;">{alloc_str}</span></span>
@@ -2074,7 +2078,7 @@ def render_fear_greed_trend(user_level: str = "beginner") -> None:
                 f"letter-spacing:0.8px;margin-bottom:4px'>{_period}</div>"
                 f"<div style='font-size:1.9rem;font-weight:800;color:{_col_hex};"
                 f"font-family:JetBrains Mono,monospace'>{_val:.0f}</div>"
-                f"<div style='font-size:0.70rem;color:{_col_hex};margin-top:2px'>{_lbl}</div>"
+                f"<div style='font-size:0.85rem;color:{_col_hex};margin-top:2px'>{_lbl}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -2151,7 +2155,7 @@ def signal_badge_html(direction: str, label: str = "") -> str:
     return (
         f"<span style='display:inline-flex;align-items:center;gap:4px;"
         f"background:{_bg};border:1px solid {_border};border-radius:6px;"
-        f"padding:2px 8px;font-size:0.72rem;font-weight:700;color:{_txt};'>"
+        f"padding:2px 8px;font-size:0.85rem;font-weight:700;color:{_txt};'>"
         f"{_shape} {_display}</span>"
     )
 
@@ -2215,7 +2219,7 @@ def render_gauge(
     st.markdown(
         f"<div style='margin-bottom:8px;'>"
         f"<div style='display:flex;justify-content:space-between;"
-        f"font-size:0.72rem;color:#6b7280;margin-bottom:4px;'>"
+        f"font-size:0.85rem;color:#6b7280;margin-bottom:4px;'>"
         f"<span>{label}</span>"
         f"<span style='color:{_color};font-weight:700;'>{_display}</span>"
         f"</div>"
@@ -2275,12 +2279,12 @@ def render_yield_sustainability(
     st.markdown(
         f"<div style='padding:10px 14px;background:rgba(17,24,39,0.6);"
         f"border-radius:8px;border-left:3px solid {_color};margin-top:8px;'>"
-        f"<div style='font-size:0.70rem;color:#6b7280;text-transform:uppercase;"
+        f"<div style='font-size:0.85rem;color:#6b7280;text-transform:uppercase;"
         f"letter-spacing:0.7px;margin-bottom:4px;'>Yield Sustainability</div>"
         f"<div style='display:flex;align-items:center;gap:8px;'>"
         f"<span style='font-size:1.1rem;'>{_icon}</span>"
         f"<span style='font-weight:700;color:{_color};font-size:0.88rem;'>{_label}</span>"
-        f"<span style='color:#6b7280;font-size:0.78rem;'>({_pct}% real fees)</span>"
+        f"<span style='color:#6b7280;font-size:0.85rem;'>({_pct}% real fees)</span>"
         f"</div>"
         f"<div style='margin-top:6px;background:rgba(255,255,255,0.05);"
         f"border-radius:3px;height:5px;'>"

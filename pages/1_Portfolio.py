@@ -861,7 +861,7 @@ with _tab_pos:
                 <div class="metric-card {cls}">
                     <div class="label">{label}</div>
                     <div class="big-number">{val}</div>
-                    <div style="color:#475569; font-size:0.8rem; margin-top:4px;">{sub}</div>
+                    <div style="color:#475569; font-size:0.85rem; margin-top:4px;">{sub}</div>
                 </div>""", unsafe_allow_html=True)
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
@@ -948,12 +948,12 @@ with _tab_pos:
                         </div>
                         <span style="color:{vc_color}; font-weight:700;">{vc:+,.0f} ({vc_pct:+.1f}%)</span>
                     </div>
-                    <div style="color:#475569; font-size:0.82rem; margin-top:10px;">
+                    <div style="color:#475569; font-size:0.85rem; margin-top:10px;">
                         <span style="color:#94a3b8">${pnl['current_value']:,.0f}</span> current ·
                         <span style="color:#64748b">${pnl['deposit_usd']:,.0f}</span> deposited ·
                         {days_str} active{fees_html}{il_html}{hodl_html}
                     </div>
-                    <div style="color:#334155; font-size:0.78rem; margin-top:6px;">
+                    <div style="color:#334155; font-size:0.85rem; margin-top:6px;">
                         Unclaimed fees: <span style="color:#10b981">${pnl['unclaimed_fees']:,.2f}</span>{"  ·  " + bal_str if bal_str else ""}
                     </div>
                 </div>""", unsafe_allow_html=True)
@@ -985,7 +985,7 @@ with _tab_pos:
                 current_value  = st.number_input("Current value ($, 0 = same)", min_value=0.0, value=0.0, step=100.0)
                 unclaimed_fees = st.number_input("Unclaimed fees ($)", min_value=0.0, value=0.0, step=1.0)
 
-            st.markdown("<div style='color:#475569; font-size:0.8rem; margin-top:8px;'>Token details (LP / IL tracking)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='color:#475569; font-size:0.85rem; margin-top:8px;'>Token details (LP / IL tracking)</div>", unsafe_allow_html=True)
             tc1, tc2 = st.columns(2)
             with tc1:
                 token_a        = st.text_input("Token A", placeholder="WFLR")
@@ -1215,13 +1215,13 @@ with _tab_pos:
                 _bench_c1, _bench_c2 = st.columns(2)
                 with _bench_c1:
                     st.markdown(
-                        f"<div style='font-size:0.84rem; color:{net_color}; font-weight:600; margin-top:6px;'>"
+                        f"<div style='font-size:0.85rem; color:{net_color}; font-weight:600; margin-top:6px;'>"
                         f"vs HODL: {verdict} (net {net_diff:+,.0f})</div>",
                         unsafe_allow_html=True,
                     )
                 with _bench_c2:
                     st.markdown(
-                        f"<div style='font-size:0.84rem; color:{usd_col}; font-weight:600; margin-top:6px;'>"
+                        f"<div style='font-size:0.85rem; color:{usd_col}; font-weight:600; margin-top:6px;'>"
                         f"vs USD baseline: {usd_net:+,.0f} total profit</div>",
                         unsafe_allow_html=True,
                     )
@@ -1273,19 +1273,19 @@ with _tab_rewards:
             st.markdown(f"""<div class="metric-card card-green">
             <div class="label">Unclaimed LP Fees</div>
             <div class="big-number" style="color:#10b981;">${total_fees:,.2f}</div>
-            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">Across {len(positions)} position(s)</div>
+            <div style="color:#475569; font-size:0.85rem; margin-top:4px;">Across {len(positions)} position(s)</div>
             </div>""", unsafe_allow_html=True)
         with c2:
             st.markdown(f"""<div class="metric-card card-blue">
             <div class="label">FTSO Delegation Est.</div>
             <div class="big-number">${ftso_est_usd:,.2f}</div>
-            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">~30-day estimate @ 4.3% APY</div>
+            <div style="color:#475569; font-size:0.85rem; margin-top:4px;">~30-day estimate @ 4.3% APY</div>
             </div>""", unsafe_allow_html=True)
         with c3:
             st.markdown(f"""<div class="metric-card card-orange">
             <div class="label">Incentives Expire In</div>
             <div class="big-number" style="color:#f59e0b;">{days_to_expiry}d</div>
-            <div style="color:#475569; font-size:0.8rem; margin-top:4px;">rFLR program ends Jul 2026</div>
+            <div style="color:#475569; font-size:0.85rem; margin-top:4px;">rFLR program ends Jul 2026</div>
             </div>""", unsafe_allow_html=True)
 
         st.caption("Unclaimed fees pulled from tracked positions. FTSO estimate based on FLR in LP positions at 4.3% APY. Claim via app.flare.network.")
@@ -1701,11 +1701,11 @@ with _tab_pos:
         # ── Score row: metric + data-source badge ─────────────────────────────
         _src_badge = (
             "<span style='background:rgba(34,197,94,0.10);border:1px solid rgba(34,197,94,0.30);"
-            "border-radius:4px;padding:1px 7px;font-size:0.68rem;color:#22c55e;font-weight:600;'>"
+            "border-radius:4px;padding:1px 7px;font-size:0.85rem;color:#22c55e;font-weight:600;'>"
             "● Live</span>"
             if _has_live else
             "<span style='background:rgba(100,116,139,0.10);border:1px solid rgba(100,116,139,0.30);"
-            "border-radius:4px;padding:1px 7px;font-size:0.68rem;color:#64748b;font-weight:600;'>"
+            "border-radius:4px;padding:1px 7px;font-size:0.85rem;color:#64748b;font-weight:600;'>"
             "○ Estimated</span>"
         )
         _sc1, _sc2, _ = st.columns([2, 2, 4])
@@ -1784,7 +1784,7 @@ with _tab_pos:
             st.markdown(
                 f"<div class='warn-box'>"
                 f"<div style='font-weight:700; color:#ef4444; margin-bottom:6px;'>🔴 High Concentration Risk</div>"
-                f"<div style='color:#94a3b8; font-size:0.83rem; line-height:1.55;'>"
+                f"<div style='color:#94a3b8; font-size:0.85rem; line-height:1.55;'>"
                 f"These positions move almost identically — a single market crash could hit all simultaneously:"
                 f"<ul style='margin:6px 0 0 0;'>{warn_lines}</ul>"
                 f"<div style='margin-top:8px; color:#64748b;'>Action: reduce one position or add an uncorrelated asset (stablecoin or non-correlated chain).</div>"
@@ -1800,7 +1800,7 @@ with _tab_pos:
             st.markdown(
                 f"<div class='warn-box'>"
                 f"<div style='font-weight:700; color:#f59e0b; margin-bottom:6px;'>🟡 Moderate Concentration — Watch These Pairs</div>"
-                f"<div style='color:#94a3b8; font-size:0.83rem; line-height:1.55;'>"
+                f"<div style='color:#94a3b8; font-size:0.85rem; line-height:1.55;'>"
                 f"These positions are moderately correlated — they tend to move in the same direction:"
                 f"<ul style='margin:6px 0 0 0;'>{caution_lines}</ul>"
                 f"<div style='margin-top:8px; color:#64748b;'>Not urgent, but worth monitoring during broad market downturns.</div>"
@@ -1836,7 +1836,7 @@ with _tab_pos:
                     _pr_col = "#ef4444" if _pr_pct > 50 else ("#f59e0b" if _pr_pct > 30 else "#22c55e")
                     st.markdown(
                         f"<div style='display:flex;justify-content:space-between;align-items:center;"
-                        f"padding:5px 0;border-bottom:1px solid rgba(148,163,184,0.07);font-size:0.82rem;'>"
+                        f"padding:5px 0;border-bottom:1px solid rgba(148,163,184,0.07);font-size:0.85rem;'>"
                         f"<span style='color:#e2e8f0;font-weight:600;'>{_html.escape(_pr_name)}</span>"
                         f"<div style='display:flex;align-items:center;gap:10px;'>"
                         f"<div style='background:rgba(255,255,255,0.05);border-radius:3px;width:80px;height:5px;'>"
@@ -1894,7 +1894,7 @@ with _tab_pos:
                 with _bt3:
                     st.metric("Stress Level", _stress_lbl)
                 st.markdown(
-                    f"<div style='font-size:0.72rem;color:{_stress_col};"
+                    f"<div style='font-size:0.85rem;color:{_stress_col};"
                     f"margin-top:4px;font-weight:600;'>"
                     f"{'▼ ' if _loss_pct > 10 else '■ '}"
                     f"Estimated {_loss_pct:.1f}% portfolio loss in a BTC −40% scenario</div>",
@@ -1907,7 +1907,7 @@ with _tab_pos:
             _target    = min(100, _div_score + 18)
             st.markdown(
                 f"<div style='background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.15);"
-                f"border-radius:10px;padding:12px 16px;font-size:0.83rem;color:#94a3b8;margin-top:10px;'>"
+                f"border-radius:10px;padding:12px 16px;font-size:0.85rem;color:#94a3b8;margin-top:10px;'>"
                 f"💡 <span style='color:#a78bfa;font-weight:700;'>Rebalancing Tip</span> — "
                 f"Adding ~${_add_usd:,.0f} to a stablecoin (USDC, USD0) or a low-correlation asset "
                 f"(XDC, HBAR, SHX) could raise your diversification score from "
@@ -2097,10 +2097,10 @@ with _tab_wallet:
                 f"<span style='display:inline-block; width:8px; height:8px; border-radius:50%; "
                 f"background:#10b981;'></span>"
                 f"<span style='color:#10b981; font-weight:600; font-size:0.85rem;'>Connected</span>"
-                f"<span style='color:#64748b; font-size:0.82rem;'>·</span>"
-                f"<span style='color:#475569; font-size:0.82rem; font-family:monospace;'>{addr}</span>"
-                f"<span style='color:#64748b; font-size:0.82rem;'>·</span>"
-                f"<span style='color:#64748b; font-size:0.82rem;'>{net}</span>"
+                f"<span style='color:#64748b; font-size:0.85rem;'>·</span>"
+                f"<span style='color:#475569; font-size:0.85rem; font-family:monospace;'>{addr}</span>"
+                f"<span style='color:#64748b; font-size:0.85rem;'>·</span>"
+                f"<span style='color:#64748b; font-size:0.85rem;'>{net}</span>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -2113,7 +2113,7 @@ with _tab_wallet:
                         st.markdown(
                             f"<div style='background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.20); "
                             f"border-radius:10px; padding:12px 16px;'>"
-                            f"<div style='font-size:0.72rem; font-weight:600; color:#64748b; "
+                            f"<div style='font-size:0.85rem; font-weight:600; color:#64748b; "
                             f"text-transform:uppercase; letter-spacing:0.06em;'>{_html.escape(str(token))}</div>"
                             f"<div style='font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-top:4px;'>"
                             f"{_html.escape(str(amount))}</div>"
@@ -2135,7 +2135,7 @@ with _tab_wallet:
             err = ws.get("error", "")
             if err:
                 st.markdown(
-                    f"<div class='warn-box' style='font-size:0.83rem;'>⚠️ {_html.escape(str(err))}</div>",
+                    f"<div class='warn-box' style='font-size:0.85rem;'>⚠️ {_html.escape(str(err))}</div>",
                     unsafe_allow_html=True,
                 )
             with st.expander("Setup Instructions", expanded=not ws["available"]):
@@ -2143,7 +2143,7 @@ with _tab_wallet:
 
     except Exception as _aw_err:
         st.markdown(
-            f"<div class='warn-box' style='font-size:0.83rem;'>⚠️ AgentKit wallet unavailable: "
+            f"<div class='warn-box' style='font-size:0.85rem;'>⚠️ AgentKit wallet unavailable: "
             f"{_html.escape(str(_aw_err))}</div>",
             unsafe_allow_html=True,
         )
@@ -2368,7 +2368,7 @@ with _tab_fassets:
             <div class="metric-card card-green">
                 <div class="label">System Health</div>
                 <div class="big-number" style="color:{_h_color};">{_h_icon}</div>
-                <div style="color:#475569; font-size:0.82rem; margin-top:4px;">{_fa_health.capitalize()}</div>
+                <div style="color:#475569; font-size:0.85rem; margin-top:4px;">{_fa_health.capitalize()}</div>
             </div>""", unsafe_allow_html=True)
         with _fc2:
             _fw_html = f"&nbsp;<span style='color:#f59e0b;'>⚠ {_ag_warn}</span>" if _ag_warn else ""
@@ -2380,7 +2380,7 @@ with _tab_fassets:
                 f"<div class='metric-card card-blue'>"
                 f"<div class='label'>Active Agents{_ag_est_note}</div>"
                 f"<div class='big-number'>{_fa_agents if _fa_agents else '—'}</div>"
-                f"<div style='color:#475569; font-size:0.82rem; margin-top:4px;'>"
+                f"<div style='color:#475569; font-size:0.85rem; margin-top:4px;'>"
                 f"<span style='color:#10b981;'>✓ {_ag_ok}</span>{_fw_html}{_fl_html}"
                 f"</div></div>",
                 unsafe_allow_html=True,
@@ -2390,7 +2390,7 @@ with _tab_fassets:
             <div class="metric-card card-orange">
                 <div class="label">FXRP Circulating</div>
                 <div class="big-number" style="color:#f59e0b;">{_fxrp_circ:,.0f}</div>
-                <div style="color:#475569; font-size:0.82rem; margin-top:4px;">≈ ${_fxrp_tvl:,.0f} USD</div>
+                <div style="color:#475569; font-size:0.85rem; margin-top:4px;">≈ ${_fxrp_tvl:,.0f} USD</div>
             </div>""", unsafe_allow_html=True)
         with _fc4:
             _cap_color = "#10b981" if _mint_pct < 60 else ("#f59e0b" if _mint_pct < 85 else "#ef4444")
@@ -2398,7 +2398,7 @@ with _tab_fassets:
             <div class="metric-card card-violet">
                 <div class="label">Mint Capacity Used</div>
                 <div class="big-number" style="color:{_cap_color};">{_mint_pct:.0f}%</div>
-                <div style="color:#475569; font-size:0.82rem; margin-top:4px;">
+                <div style="color:#475569; font-size:0.85rem; margin-top:4px;">
                     ~{_mint_rem:,.0f} FXRP remaining
                 </div>
             </div>""", unsafe_allow_html=True)
@@ -2505,12 +2505,12 @@ with _tab_fassets:
   <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
     <div>
       <span style="font-size:1.1rem; font-weight:800; color:#f1f5f9;">{_fa_sym}</span>
-      <span style="color:#475569; font-size:0.82rem; margin-left:8px;">Bridged {_fa_icon} on Flare</span>
+      <span style="color:#475569; font-size:0.85rem; margin-left:8px;">Bridged {_fa_icon} on Flare</span>
     </div>
-    <span style="color:{_fa_cr_col}; font-size:0.82rem; font-weight:700; background:rgba(255,255,255,0.04);
+    <span style="color:{_fa_cr_col}; font-size:0.85rem; font-weight:700; background:rgba(255,255,255,0.04);
                  padding:3px 10px; border-radius:6px;">{_fa_cr_lbl}</span>
   </div>
-  <div style="display:flex; gap:24px; flex-wrap:wrap; margin-top:14px; font-size:0.82rem; color:#475569;">
+  <div style="display:flex; gap:24px; flex-wrap:wrap; margin-top:14px; font-size:0.85rem; color:#475569;">
     <div><div style="font-size:0.65rem; color:#334155; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:4px;">Mint Fee</div>
          <div style="font-size:1.3rem; font-weight:700; color:#f1f5f9;">{_fa_mf:.2f}%</div></div>
     <div><div style="font-size:0.65rem; color:#334155; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:4px;">Redeem Fee</div>
@@ -2521,8 +2521,8 @@ with _tab_fassets:
          <div style="font-size:1.3rem; font-weight:700; color:#a78bfa;">{_fa_ct}</div></div>
     {_circ_html}
   </div>
-  <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; font-size:0.78rem; color:#475569;">{_prem_html}</div>
-  {f'<div style="color:#475569; font-size:0.80rem; margin-top:10px; line-height:1.5;">{_fa_note_str}</div>' if _fa_note_str else ""}
+  <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; font-size:0.85rem; color:#475569;">{_prem_html}</div>
+  {f'<div style="color:#475569; font-size:0.85rem; margin-top:10px; line-height:1.5;">{_fa_note_str}</div>' if _fa_note_str else ""}
 </div>""", unsafe_allow_html=True)
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -2567,7 +2567,7 @@ with _tab_fassets:
                         f"<div class='arb-tag'>"
                         f"<span style='font-weight:700; color:#f1f5f9;'>{_fa_arb.get('strategy_label', 'FAssets Arb')}</span>"
                         f"<span style='color:#475569; margin-left:8px;'>{_fa_arb.get('urgency', '').upper()}</span>"
-                        f"<div style='color:#94a3b8; font-size:0.82rem; margin-top:6px;'>"
+                        f"<div style='color:#94a3b8; font-size:0.85rem; margin-top:6px;'>"
                         f"Net profit: <span style='color:{_fa_nc}; font-weight:700;'>{_fa_net:.2f}%</span>"
                         f" · {_html.escape(str(_fa_arb.get('plain_english', '')))}</div></div>",
                         unsafe_allow_html=True,
