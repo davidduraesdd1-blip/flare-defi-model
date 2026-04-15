@@ -58,7 +58,8 @@ def _kv_get(key: str, default: float = 0.0) -> float:
                 "SELECT value FROM kv_store WHERE key=?", (key,)
             ).fetchone()
         return float(row[0]) if row else default
-    except Exception:
+    except Exception as _e:
+        logging.debug("[FlareScan] kv_get(%s) failed: %s", key, _e)
         return default
 
 
@@ -73,8 +74,8 @@ def _kv_set(key: str, value: float) -> None:
                 (key, value),
             )
             conn.commit()
-    except Exception:
-        pass
+    except Exception as _e:
+        logging.debug("[FlareScan] kv_set(%s) failed: %s", key, _e)
 
 logger = logging.getLogger(__name__)
 
