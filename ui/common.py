@@ -312,6 +312,9 @@ _CSS_LIGHT = """
     /* ── Section Header ───────────────────────────────────────────────── */
     .section-header { font-size: 0.72rem; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 1.4px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,212,170,0.3); margin-bottom: 16px; margin-top: 8px; }
 
+    /* ── Expander label — match section-header size ───────────────────── */
+    [data-testid="stExpander"] summary p { font-size: 0.72rem !important; }
+
     /* ── Section Label ────────────────────────────────────────────────── */
     .section-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 1.6px; margin-bottom: 10px; margin-top: 6px; }
 
@@ -590,6 +593,9 @@ _CSS_DARK = """
 
     /* ── Section Header ───────────────────────────────────────────────── */
     .section-header { font-size: 0.72rem; font-weight: 700; color: #e2e8f0; text-transform: uppercase; letter-spacing: 1.4px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,212,170,0.35); margin-bottom: 16px; margin-top: 8px; }
+
+    /* ── Expander label — match section-header size ───────────────────── */
+    [data-testid="stExpander"] summary p { font-size: 0.72rem !important; }
 
     /* ── Section Label ────────────────────────────────────────────────── */
     .section-label { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.6px; margin-bottom: 10px; margin-top: 6px; }

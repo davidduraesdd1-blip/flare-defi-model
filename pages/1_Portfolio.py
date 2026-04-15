@@ -925,12 +925,6 @@ with _tab_pos:
         )
 
     # ── Add Position ──────────────────────────────────────────────────────────────
-    st.markdown(
-        "<style>div.stMarkdown:has(#_add_pos_anchor)"
-        " + div[data-testid='stExpander'] summary p{font-size:0.72rem;}</style>"
-        '<span id="_add_pos_anchor"></span>',
-        unsafe_allow_html=True,
-    )
     with st.expander("➕ Track a New Position"):
         with st.form("add_position_form", clear_on_submit=True, enter_to_submit=False):
             c1, c2 = st.columns(2)
