@@ -15,12 +15,14 @@ Loop:
 """
 
 import json
+import logging
 import sys
 import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -46,8 +48,8 @@ def _load_state() -> dict:
     try:
         if C.AGENT_STATE_FILE.exists():
             return json.loads(C.AGENT_STATE_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to load agent state from %s: %s — using defaults", C.AGENT_STATE_FILE, exc)
     return {
         C.PHASE_GATE_KEY:     0,
         C.LIVE_UNLOCK_KEY:    False,
@@ -67,8 +69,8 @@ def _save_state(state: dict) -> None:
         C.AGENT_STATE_FILE.write_text(
             json.dumps(state, indent=2, default=str), encoding="utf-8"
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.error("Failed to persist agent state to %s: %s", C.AGENT_STATE_FILE, exc)
 
 
 def get_state() -> dict:

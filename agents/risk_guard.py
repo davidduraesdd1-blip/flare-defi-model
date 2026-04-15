@@ -9,7 +9,7 @@ No trade ever bypasses this. No exceptions. No overrides from AI.
 """
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from agents import config as C

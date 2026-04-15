@@ -15,9 +15,8 @@ import json
 import logging
 import logging.handlers
 import sys
-import time
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,7 +29,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import (
-    HISTORY_FILE, POSITIONS_FILE, QUICK_CACHE_FILE, SCHEDULER,
+    POSITIONS_FILE, QUICK_CACHE_FILE, SCHEDULER,
     RISK_PROFILES, RISK_PROFILE_NAMES, INITIAL_POSITIONS, HISTORY_MAX_RUNS, INCENTIVE_PROGRAM
 )
 from scanners.web_monitor import run_web_monitor
@@ -38,7 +37,7 @@ from scanners.flare_scanner   import run_flare_scan, fetch_fasset_data
 from scanners.multi_scanner   import run_multi_scan
 from scanners.options_scanner import fetch_volatility_data
 from models.risk_models       import run_all_models
-from models.arbitrage         import detect_all_arbitrage, detect_all_arbitrage_all_profiles
+from models.arbitrage         import detect_all_arbitrage_all_profiles
 from models.options_model     import run_options_analysis
 try:
     from ai.feedback_loop import (
@@ -48,7 +47,6 @@ try:
     _FEEDBACK_AVAILABLE = True
 except ImportError:
     _FEEDBACK_AVAILABLE = False
-    logger = logging.getLogger(__name__)  # may not exist yet; safe re-assign below
 from ai.alerts                import check_and_send_alerts
 from utils.file_io            import atomic_json_write
 

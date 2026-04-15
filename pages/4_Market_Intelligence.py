@@ -1457,7 +1457,7 @@ if _intent_input:
         st.info("No matching opportunities found in current scan. Try running a scan first.")
 
     # Optional: Claude AI classification for ambiguous intents
-    from config import FEATURES as _FEATURES
+    from config import FEATURES as _FEATURES, CLAUDE_HAIKU_MODEL as _HAIKU_MODEL
     if _FEATURES.get("anthropic_ai") and _used_default:
         _ai_key = __import__("os").environ.get("ANTHROPIC_API_KEY", "")
         with st.spinner("Asking Claude to classify intent…"):
@@ -1465,7 +1465,7 @@ if _intent_input:
                 import anthropic as _anth
                 _cl = _anth.Anthropic(api_key=_ai_key, timeout=8.0)
                 _resp = _cl.messages.create(
-                    model="claude-haiku-4-5",
+                    model=_HAIKU_MODEL,
                     max_tokens=80,
                     messages=[{"role": "user", "content":
                         f"Classify this DeFi intent into ONE of: swap, provide, stake, lend, borrow, claim, bridge, hedge.\n"

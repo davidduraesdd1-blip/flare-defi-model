@@ -15,7 +15,6 @@ Optional: pip install anthropic  (set ANTHROPIC_API_KEY in environment)
 Called by the scheduler once daily at 8am.
 """
 
-import json
 import logging
 import re
 import time
@@ -26,6 +25,10 @@ from pathlib import Path
 
 from utils.file_io import atomic_json_write
 from utils.http import _SESSION, coingecko_limiter as _cg_limiter
+try:
+    from config import CLAUDE_HAIKU_MODEL as _HAIKU_MODEL
+except Exception:
+    _HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +330,7 @@ def claude_digest(
     try:
         client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
-            model="claude-haiku-4-5",
+            model=_HAIKU_MODEL,
             max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
         )

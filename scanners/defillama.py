@@ -19,7 +19,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -1215,13 +1215,15 @@ def fetch_protocol_treasuries(protocols: list = None) -> list[dict]:
             return None
 
     with ThreadPoolExecutor(max_workers=min(6, len(slugs))) as ex:
-        for item in as_completed({ex.submit(_fetch_one, s): s for s in slugs}):
+        fut_to_slug = {ex.submit(_fetch_one, s): s for s in slugs}
+        for item in as_completed(fut_to_slug):
+            slug = fut_to_slug[item]
             try:
                 res = item.result()
                 if res:
                     results.append(res)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("[fetch_protocol_treasuries] failed for slug '%s': %s", slug, exc)
 
     results.sort(key=lambda x: x["tvl"], reverse=True)
 

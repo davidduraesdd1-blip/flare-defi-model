@@ -16,7 +16,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Use the shared retry-aware session and rate limiters from utils.http (#11 / #12)
-from utils.http import _SESSION, fred_limiter as _FRED_LIMITER, coinmetrics_limiter as _COINMETRICS_LIMITER, defillama_limiter as _DEFILLAMA_LIMITER, coingecko_limiter as _COINGECKO_LIMITER
+from utils.http import _SESSION, fred_limiter as _FRED_LIMITER, coinmetrics_limiter as _COINMETRICS_LIMITER
 
 _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()

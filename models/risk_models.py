@@ -11,11 +11,10 @@ import numpy as np
 import logging
 from dataclasses import dataclass, field, asdict, replace
 from datetime import datetime, timezone
-from typing import Optional
 
 from config import (
     RISK_PROFILES, RISK_PROFILE_NAMES, PROTOCOLS, INCENTIVE_PROGRAM,
-    RISK_FREE_RATE, MAX_KELLY_FRACTION, risk_letter_grade,
+    RISK_FREE_RATE, MAX_KELLY_FRACTION,
 )
 
 logger = logging.getLogger(__name__)

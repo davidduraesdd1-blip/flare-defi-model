@@ -17,8 +17,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 try:
     from config import ANTHROPIC_ENABLED as _ANTHROPIC_ENABLED
+    from config import CLAUDE_HAIKU_MODEL as _HAIKU_MODEL
 except Exception:
     _ANTHROPIC_ENABLED = False
+    _HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +105,7 @@ def _call_haiku(query: str) -> dict | None:
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model="claude-haiku-4-5",
+            model=_HAIKU_MODEL,
             max_tokens=256,
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": query}],

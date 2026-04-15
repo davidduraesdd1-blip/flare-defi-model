@@ -15,6 +15,7 @@ import json
 import os
 import secrets
 import struct
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -104,8 +105,20 @@ def _load_wallet_file() -> dict:
 
 
 def _save_wallet_file(data: dict) -> None:
+    """Atomically write wallet data to disk using tempfile + os.replace to prevent corruption."""
     WALLET_FILE.parent.mkdir(parents=True, exist_ok=True)
-    WALLET_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    payload = json.dumps(data, indent=2)
+    fd, tmp_path = tempfile.mkstemp(dir=WALLET_FILE.parent, prefix=".wallet_tmp_")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(payload)
+        os.replace(tmp_path, WALLET_FILE)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+        raise
     # Restrict file permissions on non-Windows
     try:
         os.chmod(str(WALLET_FILE), 0o600)

@@ -60,8 +60,8 @@ from ui.common import (
     page_setup, render_sidebar, load_latest, load_positions,
     render_price_strip, render_incentive_warning,
     render_yield_hero_cards, render_opportunity_card,
-    render_urgency_badge, render_section_header, _ts_fmt, load_live_prices,
-    render_welcome_banner, signal_badge_html, render_what_this_means,
+    render_urgency_badge, render_section_header, load_live_prices,
+    render_welcome_banner, render_what_this_means,
 )
 import streamlit as st
 
@@ -486,7 +486,7 @@ if warnings:
     st.markdown("<style>[data-testid='stExpander'] summary p{font-size:0.80rem !important;color:#475569 !important;}</style>", unsafe_allow_html=True)
     with st.expander("⚠️ Data Quality Notes"):
         for w in warnings:
-            st.markdown(f"<div style='font-size:0.78rem;color:#94a3b8;line-height:1.5;'>⚠ {w}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:0.78rem;color:#94a3b8;line-height:1.5;'>⚠ {_html.escape(str(w))}</div>", unsafe_allow_html=True)
 
 st.markdown(
     "<div style='color:#1e293b; font-size:0.70rem; text-align:center; padding-top:4px; line-height:1.7;'>"

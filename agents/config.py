@@ -8,8 +8,11 @@ Changing a value here changes it everywhere instantly.
 """
 
 import json
+import logging
 import os
 from pathlib import Path
+
+_logger = logging.getLogger(__name__)
 
 # ─── Operating Mode ───────────────────────────────────────────────────────────
 # PAPER        → simulate trades only, zero real transactions (default, always safe)
@@ -205,8 +208,8 @@ def _apply_overrides() -> None:
         for key, val in data.items():
             if key in _OVERRIDABLE_KEYS and key in g:
                 g[key] = type(g[key])(val)   # cast to original type (float/int/bool)
-    except Exception:
-        pass  # Never let override loading crash the agent cycle
+    except Exception as exc:
+        _logger.warning("Failed to apply agent overrides from %s: %s", AGENT_OVERRIDES_FILE, exc)
 
 
 def save_overrides(overrides: dict) -> None:
@@ -216,8 +219,8 @@ def save_overrides(overrides: dict) -> None:
         AGENT_OVERRIDES_FILE.write_text(
             json.dumps(overrides, indent=2), encoding="utf-8"
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        _logger.error("Failed to save agent overrides to %s: %s", AGENT_OVERRIDES_FILE, exc)
 
 
 def load_overrides() -> dict:
@@ -225,6 +228,6 @@ def load_overrides() -> dict:
     try:
         if AGENT_OVERRIDES_FILE.exists():
             return json.loads(AGENT_OVERRIDES_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        pass
+    except Exception as exc:
+        _logger.warning("Failed to load agent overrides from %s: %s", AGENT_OVERRIDES_FILE, exc)
     return {}
