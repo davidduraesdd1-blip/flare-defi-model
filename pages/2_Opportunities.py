@@ -213,7 +213,7 @@ def _cached_composite_signal() -> dict:
         return {}
 
 
-page_setup("Opportunities · Flare DeFi")
+page_setup("Opportunities · Family Office · DeFi Intelligence")
 
 ctx            = render_sidebar()
 profile        = ctx["profile"]

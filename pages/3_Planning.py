@@ -27,7 +27,7 @@ from models.risk_models import (
 )
 from config import PROTOCOLS as _PROTOS_CFG, PROTOCOL_AUDITS, risk_letter_grade
 
-page_setup("Planning · Flare DeFi")
+page_setup("Planning · Family Office · DeFi Intelligence")
 
 _ctx        = render_sidebar()
 _pro_mode   = _ctx.get("pro_mode", False)   # #82 Beginner/Pro mode

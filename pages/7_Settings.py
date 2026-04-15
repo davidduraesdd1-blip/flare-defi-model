@@ -26,7 +26,7 @@ except Exception:
     _wallets = None
     _WALLETS_OK = False
 
-page_setup("Settings · Flare DeFi")
+page_setup("Settings · Family Office · DeFi Intelligence")
 
 render_sidebar()
 

@@ -87,7 +87,7 @@ def _startup_db_check() -> bool:
         return False  # DB module exists but check raised — treat as integrity failure
 
 
-page_setup("Dashboard · Flare DeFi")
+page_setup("Dashboard · Family Office · DeFi Intelligence")
 
 _db_ok = _startup_db_check()
 if not _db_ok:

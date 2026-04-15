@@ -743,7 +743,7 @@ EXCHANGE_FALLBACK: list[str] = ["binance", "okx", "gate", "bybit", "kucoin", "co
 # Set env vars to activate: DEFI_BRAND_NAME="My App"  DEFI_BRAND_LOGO_PATH="logo.png"
 # When unset (default), the app shows a clean placeholder header.
 # 2-line rebrand when ready — no restructuring required.
-BRAND_NAME: str = os.environ.get("DEFI_BRAND_NAME", "")
+BRAND_NAME: str = os.environ.get("DEFI_BRAND_NAME", "Family Office · DeFi Intelligence")
 BRAND_LOGO_PATH: str = os.environ.get("DEFI_BRAND_LOGO_PATH", "")
 
 # ─── RIA / Advisor Integration ────────────────────────────────────────────────

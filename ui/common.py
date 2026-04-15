@@ -766,7 +766,7 @@ def render_sidebar() -> dict:
             if BRAND_LOGO_PATH and Path(BRAND_LOGO_PATH).exists():
                 st.image(BRAND_LOGO_PATH, width=120)
             else:
-                _header_text = _html.escape(str(BRAND_NAME)) if BRAND_NAME else "⚡ Flare DeFi"
+                _header_text = _html.escape(str(BRAND_NAME)) if BRAND_NAME else "⚡ Family Office · DeFi Intelligence"
                 st.markdown(
                     f"<div style='font-size:1.25rem; font-weight:800; "
                     f"background: linear-gradient(90deg, #00d4aa, #60a5fa); "

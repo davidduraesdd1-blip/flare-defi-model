@@ -28,7 +28,7 @@ from agents.config import (
     MIN_TRADE_SIZE_USD, MAX_REASONABLE_APY,
     load_overrides, save_overrides,
 )
-page_setup("Agent · Flare DeFi")
+page_setup("Agent · Family Office · DeFi Intelligence")
 ctx = render_sidebar()
 _user_level = ctx.get("user_level", get_user_level())
 
@@ -258,12 +258,44 @@ try:
     st.markdown("#### Paper Trading Settings")
     _ag_f1, _ag_f2, _ag_f3 = st.columns(3)
     with _ag_f1:
+        # Logarithmic slider $1 → $1B, with manual entry for exact amounts
+        _pb_milestones = [
+            1, 5, 10, 25, 50, 100, 250, 500,
+            1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000,
+            250_000, 500_000, 750_000,
+            1_000_000, 2_500_000, 5_000_000, 10_000_000, 25_000_000,
+            50_000_000, 100_000_000, 250_000_000, 500_000_000, 1_000_000_000,
+        ]
+        def _fmt_pb(v: float) -> str:
+            v = int(v)
+            if v >= 1_000_000_000: return "$1B"
+            if v >= 1_000_000: return f"${v//1_000_000}M"
+            if v >= 1_000: return f"${v//1_000}K"
+            return f"${v}"
+        _cur_pb = float(_overrides.get("PAPER_STARTING_BALANCE_USD", PAPER_STARTING_BALANCE_USD))
+        _pb_idx = min(range(len(_pb_milestones)), key=lambda i: abs(_pb_milestones[i] - _cur_pb))
+        _pb_slider_idx = st.slider(
+            "Paper trading balance",
+            min_value=0, max_value=len(_pb_milestones) - 1,
+            value=_pb_idx,
+            format="%d",
+            key="ag_paper_balance_slider",
+            help="Slide to set starting balance ($1 – $1B). Use entry below for exact amount.",
+        )
+        _pb_from_slider = _pb_milestones[_pb_slider_idx]
+        st.markdown(
+            f"<div style='font-size:0.8rem;color:#00d4aa;font-weight:700;margin-top:-8px;margin-bottom:2px;'>"
+            f"{_fmt_pb(_pb_from_slider)}</div>",
+            unsafe_allow_html=True,
+        )
         _paper_bal = st.number_input(
-            "Paper trading start balance ($)",
-            min_value=1000.0, max_value=1_000_000.0,
-            value=float(_overrides.get("PAPER_STARTING_BALANCE_USD", PAPER_STARTING_BALANCE_USD)),
-            step=1000.0,
+            "Exact balance ($)",
+            min_value=1.0, max_value=1_000_000_000.0,
+            value=float(_pb_from_slider),
+            step=max(1.0, float(_pb_from_slider) / 10),
+            format="%.0f",
             key="ag_paper_balance",
+            label_visibility="collapsed",
             help=f"Default: ${PAPER_STARTING_BALANCE_USD:,.0f}. Virtual wallet for paper trading mode.",
         )
     with _ag_f2:

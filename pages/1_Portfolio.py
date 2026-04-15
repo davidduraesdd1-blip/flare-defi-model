@@ -146,7 +146,7 @@ def _fetch_live_token_corr(tokens_key: str) -> dict:
 
 from config import PROTOCOLS, TOKENS, INCENTIVE_PROGRAM, RISK_PROFILES, FALLBACK_PRICES
 
-page_setup("Portfolio · Flare DeFi")
+page_setup("Portfolio · Family Office · DeFi Intelligence")
 
 ctx            = render_sidebar()
 portfolio_size = ctx["portfolio_size"]

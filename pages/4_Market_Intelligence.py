@@ -20,7 +20,7 @@ from ui.common import (
 from ai.intent_classifier import classify_defi_intent   # #87
 
 
-page_setup("Market Intelligence · Flare DeFi")
+page_setup("Market Intelligence · Family Office · DeFi Intelligence")
 
 ctx        = render_sidebar()
 profile    = ctx["profile"]
