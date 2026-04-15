@@ -521,8 +521,18 @@ with _ctrl_tab_export:
             from ui.common import fetch_fear_greed_history as _fgh, load_latest as _load_lat
             from config import BRAND_NAME as _BN
 
-            # load_latest() returns {conservative:[...], medium:[...], high:[...]} — the RIA PDF format
-            _results_ria = _load_lat()
+            # load_latest() returns the full result dict; models are nested under "models" key.
+            # e.g. latest = {run_id:..., models:{conservative:[...], medium:[...], high:[...]}, ...}
+            _latest_ria  = _load_lat()
+            _results_ria = (_latest_ria.get("models") or {})
+
+            if not _results_ria:
+                st.warning(
+                    "No scan data found. Run a full scan from the Dashboard or Opportunities page first, "
+                    "then return here to generate the PDF.",
+                    icon="⚠️",
+                )
+                st.stop()
 
             # Try to get composite signal for market context section
             _csig_ria = {}
