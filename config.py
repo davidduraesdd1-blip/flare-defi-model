@@ -323,58 +323,158 @@ PROTOCOLS = {
     },
 }
 
-# ─── Fallback Prices (used when CoinGecko is unavailable) ────────────────────
-# Update these conservatively whenever prices move significantly (>20%).
+# ─── Fallback Prices (last-resort hardcoded values) ─────────────────────────
+# Updated conservatively whenever prices move >20%. These are used only when
+# the full cascade (CMC → CoinGecko → OKX) fails.
 FALLBACK_PRICES = {
-    "FLR":   0.0076,  # updated 2026-04-04 (live: $0.0076)
-    "XRP":   1.32,    # updated 2026-04-04 (live: $1.32)
-    "FXRP":  1.317,   # XRP * 0.998 bridge discount; updated 2026-04-04
+    # Flare ecosystem
+    "FLR":   0.0076,  # updated 2026-04-15 (live: ~$0.008)
+    "FXRP":  1.317,   # XRP * 0.998 bridge discount — kept in sync with XRP below
     "USD0":  1.00,
-    "RLUSD": 1.00,    # Ripple USD — regulated stablecoin, maintains $1 peg
-    "SPRK":  0.05,    # SparkDEX token — placeholder; updated live from CoinGecko
-    "HYPE":  36.18,   # Hyperliquid native token — updated 2026-04-04 (live: $36.18)
+    "RLUSD": 1.00,    # Ripple USD — regulated stablecoin
+    "SPRK":  0.05,    # SparkDEX token
+    "HYPE":  15.00,   # Hyperliquid native token
+    # 7 must-have coins (CLAUDE.md §13) — updated 2026-04-15
+    "XRP":   2.07,
+    "XLM":   0.28,
+    "XDC":   0.075,
+    "CC":    0.18,    # Canton Network (Bybit: CC/USDT)
+    "HBAR":  0.18,    # Hedera
+    "SHX":   0.012,   # Stronghold
+    "ZBCN":  0.018,   # Zebec Network
 }
 
-# ─── Live Fallback Price Refresher ───────────────────────────────────────────
+# ─── Live Price Refresher: CMC → CoinGecko → OKX cascade ────────────────────
 def refresh_fallback_prices(timeout: float = 4.0) -> bool:
     """
-    Fetch live prices from CoinGecko and update FALLBACK_PRICES in-place.
-    Operates silently: if CoinGecko is unreachable the dict is left unchanged.
+    Fetch live prices via a 3-tier cascade and update FALLBACK_PRICES in-place.
+
+    Tier 1 — CoinMarketCap (primary, broadest coverage for must-have coins)
+    Tier 2 — CoinGecko     (secondary, fills any gaps CMC missed or if no CMC key)
+    Tier 3 — OKX REST      (tertiary, no auth required, catches remaining gaps)
+
     Updates the dict in-place so all modules that imported FALLBACK_PRICES
-    by reference (not value) see the new prices immediately.
+    by reference see new prices immediately.
     Returns True if at least one price was refreshed.
     """
     import requests as _rq
-    _CG_IDS = {
-        "flare-networks": "FLR",
-        "ripple":         "XRP",
-        "sparkdex-ai":    "SPRK",
-        "hyperliquid":    "HYPE",
+    _updated = 0
+
+    # ── Tier 1: CoinMarketCap ────────────────────────────────────────────────
+    # Uses symbol-based lookup. Note: CMC returns a dict keyed by symbol when
+    # symbol is unique; when ambiguous it returns a list — we take the first item.
+    _CMC_SYMBOLS = {
+        "FLR": "FLR", "XRP": "XRP", "XLM": "XLM", "XDC": "XDC",
+        "CC": "CC", "HBAR": "HBAR", "SHX": "SHX", "ZBCN": "ZBCN",
+        "HYPE": "HYPE", "SPRK": "SPRK",
     }
-    try:
-        _url     = APIS.get("coingecko", "https://api.coingecko.com/api/v3") + "/simple/price"
-        _headers = {}
-        if COINGECKO_API_KEY:
-            _key = "x-cg-demo-api-key" if COINGECKO_API_KEY.startswith("CG-") else "x-cg-pro-api-key"
-            _headers[_key] = COINGECKO_API_KEY
-        _resp = _rq.get(_url, params={"ids": ",".join(_CG_IDS), "vs_currencies": "usd"},
-                        headers=_headers, timeout=timeout)
-        if _resp.status_code != 200:
-            return False
-        _data = _resp.json()
-        _updated = 0
-        for _cg_id, _symbol in _CG_IDS.items():
-            if _cg_id in _data and isinstance(_data[_cg_id], dict):
-                _px = _data[_cg_id].get("usd", 0)
-                if _px and _px > 0:
-                    FALLBACK_PRICES[_symbol] = round(_px, 6)
-                    _updated += 1
-        # Derived: FXRP tracks XRP with a small bridge discount
-        if "XRP" in FALLBACK_PRICES:
-            FALLBACK_PRICES["FXRP"] = round(FALLBACK_PRICES["XRP"] * 0.998, 6)
-        return _updated > 0
-    except Exception:
-        return False
+    _fetched_from_cmc: set = set()
+    if COINMARKETCAP_API_KEY:
+        try:
+            _sym_str = ",".join(_CMC_SYMBOLS.keys())
+            _resp = _rq.get(
+                "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest",
+                params={"symbol": _sym_str, "convert": "USD"},
+                headers={"X-CMC_PRO_API_KEY": COINMARKETCAP_API_KEY,
+                         "Accept": "application/json"},
+                timeout=timeout,
+            )
+            if _resp.status_code == 200:
+                _raw = _resp.json().get("data", {})
+                for _sym, _map_sym in _CMC_SYMBOLS.items():
+                    _entry = _raw.get(_sym)
+                    if _entry is None:
+                        continue
+                    # CMC returns either a dict or a list; take first if list
+                    if isinstance(_entry, list):
+                        _entry = _entry[0] if _entry else {}
+                    _px = (_entry.get("quote", {}).get("USD", {}).get("price") or 0)
+                    if _px and float(_px) > 0:
+                        FALLBACK_PRICES[_map_sym] = round(float(_px), 6)
+                        _fetched_from_cmc.add(_map_sym)
+                        _updated += 1
+        except Exception:
+            pass
+
+    # ── Tier 2: CoinGecko ────────────────────────────────────────────────────
+    # Fetch everything; CMC-sourced coins get overwritten only if CG succeeds,
+    # so we always try CG even when CMC had results (CG is good cross-check).
+    _CG_IDS = {
+        "flare-networks":   "FLR",
+        "ripple":           "XRP",
+        "stellar":          "XLM",
+        "xdce-crowd-sale":  "XDC",
+        "canton":           "CC",
+        "hedera-hashgraph": "HBAR",
+        "stronghold-token": "SHX",
+        "zebec-protocol":   "ZBCN",
+        "sparkdex-ai":      "SPRK",
+        "hyperliquid":      "HYPE",
+    }
+    # Only call CG if CMC missed at least some coins or no CMC key
+    _cg_needed = [_cg for _cg, _sym in _CG_IDS.items()
+                  if _sym not in _fetched_from_cmc]
+    if _cg_needed:
+        try:
+            _url = APIS.get("coingecko", "https://api.coingecko.com/api/v3") + "/simple/price"
+            _headers: dict = {}
+            if COINGECKO_API_KEY:
+                _hdr_key = ("x-cg-demo-api-key" if COINGECKO_API_KEY.startswith("CG-")
+                            else "x-cg-pro-api-key")
+                _headers[_hdr_key] = COINGECKO_API_KEY
+            _resp = _rq.get(
+                _url,
+                params={"ids": ",".join(_cg_needed), "vs_currencies": "usd"},
+                headers=_headers,
+                timeout=timeout,
+            )
+            if _resp.status_code == 200:
+                _data = _resp.json()
+                for _cg_id, _sym in _CG_IDS.items():
+                    if _cg_id in _data:
+                        _px = _data[_cg_id].get("usd", 0)
+                        if _px and float(_px) > 0:
+                            FALLBACK_PRICES[_sym] = round(float(_px), 6)
+                            _updated += 1
+        except Exception:
+            pass
+
+    # ── Tier 3: OKX REST (no auth, spot last-price) ──────────────────────────
+    # Only for coins still missing or at hardcoded zero after Tiers 1+2.
+    _OKX_PAIRS = {
+        "CC-USDT":   "CC",
+        "XDC-USDT":  "XDC",
+        "HBAR-USDT": "HBAR",
+        "XLM-USDT":  "XLM",
+        "XRP-USDT":  "XRP",
+        "SHX-USDT":  "SHX",
+    }
+    _still_zero = [_pair for _pair, _sym in _OKX_PAIRS.items()
+                   if FALLBACK_PRICES.get(_sym, 0) == 0]
+    if _still_zero:
+        try:
+            for _pair in _still_zero:
+                _sym = _OKX_PAIRS[_pair]
+                _resp = _rq.get(
+                    "https://www.okx.com/api/v5/market/ticker",
+                    params={"instId": _pair},
+                    timeout=timeout,
+                )
+                if _resp.status_code == 200:
+                    _tickers = _resp.json().get("data", [])
+                    if _tickers:
+                        _px = float(_tickers[0].get("last", 0) or 0)
+                        if _px > 0:
+                            FALLBACK_PRICES[_sym] = round(_px, 6)
+                            _updated += 1
+        except Exception:
+            pass
+
+    # ── Derived price: FXRP tracks XRP with bridge discount ──────────────────
+    if "XRP" in FALLBACK_PRICES and FALLBACK_PRICES["XRP"] > 0:
+        FALLBACK_PRICES["FXRP"] = round(FALLBACK_PRICES["XRP"] * 0.998, 6)
+
+    return _updated > 0
 
 
 # ─── Model Parameters ─────────────────────────────────────────────────────────
@@ -676,6 +776,7 @@ CLAUDE_MODEL:       str = "claude-sonnet-4-6"
 CLAUDE_HAIKU_MODEL: str = "claude-haiku-4-5-20251001"
 COINGECKO_API_KEY: str | None = os.environ.get("DEFI_COINGECKO_API_KEY")
 COINMETRICS_API_KEY: str | None = os.environ.get("DEFI_COINMETRICS_API_KEY")  # coinmetrics.io free community key
+COINMARKETCAP_API_KEY: str | None = os.environ.get("DEFI_COINMARKETCAP_API_KEY")  # coinmarketcap.com — primary price source
 DEFI_WEBHOOK_URL: str = os.environ.get("DEFI_WEBHOOK_URL", "")       # Discord / Telegram / generic webhook
 DEFI_TELEGRAM_CHAT_ID: str = os.environ.get("DEFI_TELEGRAM_CHAT_ID", "")  # Telegram chat ID for webhook delivery
 
@@ -684,6 +785,7 @@ FEATURES: dict = {
     "ai_analysis":      ANTHROPIC_ENABLED and bool(ANTHROPIC_API_KEY),
     "coingecko_pro":    bool(COINGECKO_API_KEY),
     "coinmetrics":      bool(COINMETRICS_API_KEY),
+    "coinmarketcap":    bool(COINMARKETCAP_API_KEY),
     "cdp_agentkit":     bool(CDP_API_KEY_NAME and CDP_API_KEY_PRIVATE),
     "sentry":           bool(SENTRY_DSN),
     "flare_rpc":        True,        # always available (public RPC)
@@ -739,6 +841,8 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "api.zerion.io",                # Zerion wallet portfolio API (#111)
     "api.telegram.org",             # Telegram bot API — webhook alert delivery (#18)
     "discord.com",                  # Discord webhook alerts (#18)
+    "pro-api.coinmarketcap.com",    # CoinMarketCap — primary price source (triple-backup chain)
+    "www.okx.com",                  # OKX REST — tertiary price fallback (no auth required)
 })
 
 # ─── Coin Universe (Phase 2, item 16) ────────────────────────────────────────

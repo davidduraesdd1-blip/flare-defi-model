@@ -82,37 +82,21 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
 
 
 def _get_live_prices() -> dict:
-    """Fetch live FLR and XRP prices from CoinGecko, respecting the shared rate limiter."""
-    fallback = {k: FALLBACK_PRICES.get(k, 0) for k in ("FLR", "XRP", "FXRP")}
+    """
+    Fetch live prices for FLR, XRP, FXRP and all 7 must-have coins via the
+    CMC → CoinGecko → OKX cascade (delegated to config.refresh_fallback_prices).
+    Returns a snapshot dict of all prices after the refresh attempt.
+    """
+    _coins = ("FLR", "XRP", "FXRP", "XLM", "XDC", "CC", "HBAR", "SHX", "ZBCN")
     try:
-        if _HTTP_OK and _cg_limiter is not None and _http_session is not None:
-            _cg_limiter.acquire()
-            r = _http_session.get(
-                "https://api.coingecko.com/api/v3/simple/price",
-                params={"ids": "flare-networks,ripple", "vs_currencies": "usd"},
-                timeout=6,
-            )
-        else:
-            # Fallback: _http_session unavailable, use basic requests — still throttle
-            if _cg_limiter is not None:
-                _cg_limiter.acquire()
-            import requests as _requests
-            r = _requests.get(
-                "https://api.coingecko.com/api/v3/simple/price",
-                params={"ids": "flare-networks,ripple", "vs_currencies": "usd"},
-                timeout=6,
-            )
-        if r.status_code == 200:
-            data = r.json()
-            xrp = _safe_float(data.get("ripple", {}).get("usd"), FALLBACK_PRICES.get("XRP", 2.30))
-            return {
-                "FLR":  _safe_float(data.get("flare-networks", {}).get("usd"), FALLBACK_PRICES.get("FLR", 0.018)),
-                "XRP":  xrp,
-                "FXRP": xrp * 0.998,
-            }
+        if _CONFIG_OK:
+            from config import refresh_fallback_prices as _refresh
+            _refresh(timeout=6)
+        # After refresh, FALLBACK_PRICES is updated in-place
+        return {k: FALLBACK_PRICES.get(k, 0) for k in _coins}
     except Exception as e:
-        logger.debug("[DataFeed] Live price fetch failed, using fallback: %s", e)
-    return fallback
+        logger.debug("[DataFeed] Live price refresh failed, using hardcoded fallback: %s", e)
+    return {k: FALLBACK_PRICES.get(k, 0) for k in _coins}
 
 
 def _get_top_opportunities(n: int = 5) -> list[dict]:
