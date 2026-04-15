@@ -2077,17 +2077,19 @@ def render_welcome_banner() -> None:
     if st.session_state.get("_defi_welcome_dismissed"):
         return
 
-    _c1, _c2 = st.columns([11, 1])
-    with _c1:
-        st.info(
-            "👋 **Welcome to Flare DeFi Analytics!**  \n"
-            "This app helps you find the best yield opportunities on the Flare Network. "
-            "Every section includes plain-English explanations — no finance jargon required.  \n"
-            "**Not sure where to start?** Visit **Opportunities** for top-ranked yields, "
-            "or **Intelligence** to see what the market is signalling right now.  \n"
-            "💡 *Change your experience level in the sidebar at any time to see more detail.*"
+    _wc1, _wc2 = st.columns([20, 1])
+    with _wc1:
+        st.markdown(
+            "<div style='background:rgba(30,58,138,0.25);border:1px solid rgba(59,130,246,0.35);"
+            "border-radius:6px;padding:8px 14px;margin-bottom:4px;line-height:1.5;'>"
+            "<span style='font-size:11px;font-weight:700;color:#93c5fd;'>👋 Welcome to Flare DeFi Analytics!</span>"
+            "<span style='font-size:11px;color:#94a3b8;'> &nbsp;·&nbsp; Find top yields on Flare — plain English, no jargon. "
+            "Start at <b style='color:#cbd5e1;'>Opportunities</b> or <b style='color:#cbd5e1;'>Intelligence</b>. "
+            "💡 Change experience level in the sidebar anytime.</span>"
+            "</div>",
+            unsafe_allow_html=True,
         )
-    with _c2:
+    with _wc2:
         if st.button("✕", key="_defi_dismiss_welcome", help="Dismiss welcome message"):
             st.session_state["_defi_welcome_dismissed"] = True
             st.rerun()
