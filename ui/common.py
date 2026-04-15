@@ -1896,7 +1896,7 @@ def render_opportunity_card(
     st.markdown(f"""<div class="opp-card" style="border-left:3px solid {color};">
 <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
 <div style="flex:1;min-width:0;"><span style="font-size:0.82rem;color:#475569;margin-right:8px;">{medal}</span><span style="font-size:1.05rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 6px;">·</span><span style="font-size:0.95rem;color:#94a3b8;">{pool}</span>{' ' + _preview_badge_html if _preview_badge_html else ''}</div>
-<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">{_action_badge_html}<span class="grade-badge" style="background:{grade_color};color:#fff;font-weight:800;letter-spacing:0.5px;" title="Safety Grade: A=safest, F=riskiest (Exponential.fi standard)">{grade}</span><span class="{glow_cls}" style="font-size:1.8rem;font-weight:800;color:{color};letter-spacing:-1px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
+<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">{_action_badge_html}<span class="grade-badge" style="background:{grade_color};color:#fff;font-weight:800;letter-spacing:0.5px;" title="Safety Grade: A=safest, F=riskiest (Exponential.fi standard)">{grade}</span><span class="{glow_cls}" style="font-size:1.0rem;font-weight:800;color:{color};letter-spacing:-0.5px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
 </div>
 <div style="margin-top:10px;margin-bottom:2px;">
 <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#475569;margin-bottom:3px;"><span>Low {lo:.1f}%</span><span style="color:#64748b;">APY Range</span><span>High {hi:.1f}%</span></div>
@@ -2146,7 +2146,14 @@ def render_what_this_means(
     """
     level = get_user_level()
     if level == "beginner":
-        st.info(f"💡 **{title}**  \n{message}")
+        st.markdown(
+            f"<div style='background:rgba(30,58,138,0.20);border:1px solid rgba(59,130,246,0.30);"
+            f"border-radius:5px;padding:6px 12px;margin:4px 0;line-height:1.4;'>"
+            f"<span style='font-size:10px;font-weight:700;color:#93c5fd;'>💡 {title}</span>"
+            f"<span style='font-size:10px;color:#94a3b8;'> — {message}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
     elif level == "intermediate" and intermediate_message:
         st.caption(f"ℹ️ {intermediate_message}")
 
