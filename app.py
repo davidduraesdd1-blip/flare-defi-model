@@ -364,8 +364,8 @@ else:
         from config import PROTOCOLS as _PROTOS
     except ImportError:
         _PROTOS = {}
-    _opps_live    = [o for o in opps if (_PROTOS.get(str(o.get("protocol","")).lower().split()[0]) or {}).get("live", True)]
-    _opps_preview = [o for o in opps if not (_PROTOS.get(str(o.get("protocol","")).lower().split()[0]) or {}).get("live", True)]
+    _opps_live    = [o for o in opps if (_PROTOS.get((str(o.get("protocol","")).lower().split() or [""])[0]) or {}).get("live", True)]
+    _opps_preview = [o for o in opps if not (_PROTOS.get((str(o.get("protocol","")).lower().split() or [""])[0]) or {}).get("live", True)]
 
     # Top-3 hero cards — live protocols only
     _display_top = _opps_live[:3] if _opps_live else opps[:3]

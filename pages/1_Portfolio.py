@@ -180,7 +180,7 @@ def _build_hero_metrics(positions: list, runs: list, latest: dict) -> dict:
                 sum(float(p.get("current_value") or 0) for p in (r.get("positions") or []))
                 for r in runs[-2:]
             ]
-            if vals[0] > 0:
+            if len(vals) == 2 and vals[0] > 0:
                 change_24h = ((vals[1] - vals[0]) / vals[0]) * 100
         except Exception:
             pass
