@@ -41,8 +41,8 @@ st.markdown("""
     background: rgba(0,212,170,0.07);
     border: 1px solid rgba(0,212,170,0.25);
     border-radius: 10px;
-    padding: 16px 20px;
-    margin-bottom: 12px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
 }
 .agent-stopped { border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.07); }
 .agent-running { border-color: rgba(34,197,94,0.4); background: rgba(34,197,94,0.07); }
@@ -107,7 +107,7 @@ _dec_suffix = (
 )
 st.html(
     f"<div class='agent-status-card {status_class}' style='background:rgba(0,212,170,0.07);"
-    f"border:1px solid rgba(0,212,170,0.25);border-radius:10px;padding:16px 20px;margin-bottom:12px;'>"
+    f"border:1px solid rgba(0,212,170,0.25);border-radius:10px;padding:10px 14px;margin-bottom:8px;'>"
     f"<div style='font-size:1.1rem;font-weight:800;color:#f1f5f9;'>{status_icon} {status_text}</div>"
     f"<div style='color:#94a3b8;font-size:0.82rem;margin-top:6px;'>"
     f"Last decision: {_html_mod.escape(str(last_ts or '—'))}{_dec_suffix}</div></div>"
@@ -392,7 +392,7 @@ gate_pct = min(100, paper_days / PAPER_TRADING_GATE_DAYS * 100)
 gate_color = "#22c55e" if gate_pct >= 100 else "#f59e0b"
 
 st.markdown(
-    f"<div class='phase-gate-locked' style='border-radius:10px;padding:14px 18px;margin-bottom:12px;'>"
+    f"<div class='phase-gate-locked' style='border-radius:10px;padding:9px 13px;margin-bottom:8px;'>"
     f"<div style='display:flex;justify-content:space-between;margin-bottom:8px;'>"
     f"<span style='color:#e2e8f0;font-weight:700'>Paper Days Completed</span>"
     f"<span style='color:{gate_color};font-weight:800'>{paper_days} / {PAPER_TRADING_GATE_DAYS}</span>"

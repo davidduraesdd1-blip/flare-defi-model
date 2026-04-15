@@ -262,7 +262,7 @@ _CSS_LIGHT = """
     /* ── Opportunity Cards ────────────────────────────────────────────── */
     .opp-card {
         background: rgba(255,255,255,0.95);
-        border-radius: 16px; padding: 20px 24px; margin-bottom: 12px;
+        border-radius: 10px; padding: 10px 14px; margin-bottom: 7px;
         border: 1px solid rgba(0,0,0,0.07);
         box-shadow: 0 2px 10px rgba(0,0,0,0.06);
         transition: box-shadow 0.22s ease, transform 0.22s ease;
@@ -274,15 +274,15 @@ _CSS_LIGHT = """
 
     /* ── Arbitrage Tag ────────────────────────────────────────────────── */
     .arb-tag {
-        background: rgba(16,185,129,0.07); border-radius: 14px;
-        padding: 16px 20px; margin-bottom: 10px;
+        background: rgba(16,185,129,0.07); border-radius: 10px;
+        padding: 10px 14px; margin-bottom: 7px;
         border: 1px solid rgba(16,185,129,0.22);
         transition: border-color 0.2s, box-shadow 0.2s;
     }
     .arb-tag:hover { border-color: rgba(16,185,129,0.35); box-shadow: 0 4px 20px rgba(16,185,129,0.07); }
 
     /* ── Warning Box ──────────────────────────────────────────────────── */
-    .warn-box { background: rgba(245,158,11,0.08); border-radius: 12px; padding: 14px 18px; border: 1px solid rgba(245,158,11,0.20); margin-bottom: 14px; }
+    .warn-box { background: rgba(245,158,11,0.08); border-radius: 10px; padding: 9px 13px; border: 1px solid rgba(245,158,11,0.20); margin-bottom: 9px; }
 
     /* ── Grade Badge ──────────────────────────────────────────────────── */
     .grade-badge { font-weight: 800; font-size: 0.75rem; padding: 3px 10px; border-radius: 7px; color: #000; letter-spacing: 0.5px; }
@@ -345,7 +345,7 @@ _CSS_LIGHT = """
     [data-testid="stDataFrame"] tbody tr:hover td { background: rgba(0,212,170,0.04) !important; }
 
     /* ── Price Chip ───────────────────────────────────────────────────── */
-    .price-chip { text-align: center; padding: 14px 12px; background: rgba(255,255,255,0.97); border-radius: 14px; border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s; }
+    .price-chip { text-align: center; padding: 9px 8px; background: rgba(255,255,255,0.97); border-radius: 10px; border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s; }
     .price-chip:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.10); transform: translateY(-1px); }
 
     /* ── Tabs ─────────────────────────────────────────────────────────── */
@@ -549,7 +549,7 @@ _CSS_DARK = """
     .opp-card {
         background: rgba(17,24,39,0.92);
         backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-        border-radius: 16px; padding: 20px 24px; margin-bottom: 12px;
+        border-radius: 10px; padding: 10px 14px; margin-bottom: 7px;
         border: 1px solid rgba(255,255,255,0.07);
         box-shadow: 0 2px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
         transition: border-color 0.22s cubic-bezier(0.4,0,0.2,1), transform 0.22s cubic-bezier(0.4,0,0.2,1), box-shadow 0.22s cubic-bezier(0.4,0,0.2,1);
@@ -557,11 +557,11 @@ _CSS_DARK = """
     .opp-card:hover { border-color: rgba(255,255,255,0.13); transform: translateY(-2px); box-shadow: 0 10px 36px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07); }
 
     /* ── Arbitrage Tag ────────────────────────────────────────────────── */
-    .arb-tag { background: rgba(16,185,129,0.04); border-radius: 14px; padding: 16px 20px; margin-bottom: 10px; border: 1px solid rgba(16,185,129,0.13); transition: border-color 0.2s, box-shadow 0.2s; }
+    .arb-tag { background: rgba(16,185,129,0.04); border-radius: 10px; padding: 10px 14px; margin-bottom: 7px; border: 1px solid rgba(16,185,129,0.13); transition: border-color 0.2s, box-shadow 0.2s; }
     .arb-tag:hover { border-color: rgba(16,185,129,0.26); box-shadow: 0 4px 20px rgba(16,185,129,0.07); }
 
     /* ── Warning Box ──────────────────────────────────────────────────── */
-    .warn-box { background: rgba(245,158,11,0.05); border-radius: 12px; padding: 14px 18px; border: 1px solid rgba(245,158,11,0.15); margin-bottom: 14px; box-shadow: 0 2px 12px rgba(245,158,11,0.05); }
+    .warn-box { background: rgba(245,158,11,0.05); border-radius: 10px; padding: 9px 13px; border: 1px solid rgba(245,158,11,0.15); margin-bottom: 9px; box-shadow: 0 2px 12px rgba(245,158,11,0.05); }
 
     /* ── Grade Badge ──────────────────────────────────────────────────── */
     .grade-badge { font-weight: 800; font-size: 0.75rem; padding: 3px 10px; border-radius: 7px; color: #000; letter-spacing: 0.5px; }
@@ -617,7 +617,7 @@ _CSS_DARK = """
     [data-testid="stDataFrame"] tbody tr:hover td { background: rgba(0,212,170,0.06) !important; }
 
     /* ── Price Chip ───────────────────────────────────────────────────── */
-    .price-chip { text-align: center; padding: 14px 12px; background: rgba(17,24,39,0.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 14px; border: 1px solid rgba(255,255,255,0.07); box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04); transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s; }
+    .price-chip { text-align: center; padding: 9px 8px; background: rgba(17,24,39,0.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 10px; border: 1px solid rgba(255,255,255,0.07); box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04); transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s; }
     .price-chip:hover { border-color: rgba(255,255,255,0.13); box-shadow: 0 6px 24px rgba(0,0,0,0.45); transform: translateY(-1px); }
 
     /* ── Tabs ─────────────────────────────────────────────────────────── */
@@ -1845,7 +1845,7 @@ def render_opportunity_card(
             )
 
         _apy_decomp_html = (
-            f"<div style='display:flex; gap:8px; font-size:0.72rem; margin-top:6px; flex-wrap:wrap; align-items:center;'>"
+            f"<div style='display:flex; gap:6px; font-size:0.68rem; margin-top:3px; flex-wrap:wrap; align-items:center;'>"
             + (f"<span style='color:#64748b;'>Base fees: <span style='color:#94a3b8; font-weight:600;'>{fee_apy:.1f}%</span></span>"
                f"<span style='color:#334155;'>·</span>" if fee_apy > 0 else "")
             + (f"<span style='color:#64748b;'>Rewards: <span style='color:#a78bfa; font-weight:600;'>{reward_apy:.1f}%</span></span>"
@@ -1893,25 +1893,21 @@ def render_opportunity_card(
     conf_color   = "#22c55e" if conf >= 70 else ("#f59e0b" if conf >= 45 else "#ef4444")
 
     st.markdown(f"""<div class="opp-card" style="border-left:3px solid {color};">
-<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
-<div style="flex:1;min-width:0;"><span style="font-size:0.82rem;color:#475569;margin-right:8px;">{medal}</span><span style="font-size:1.05rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 6px;">·</span><span style="font-size:0.95rem;color:#94a3b8;">{pool}</span>{' ' + _preview_badge_html if _preview_badge_html else ''}</div>
-<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">{_action_badge_html}<span class="grade-badge" style="background:{grade_color};color:#fff;font-weight:800;letter-spacing:0.5px;" title="Safety Grade: A=safest, F=riskiest (Exponential.fi standard)">{grade}</span><span class="{glow_cls}" style="font-size:1.0rem;font-weight:800;color:{color};letter-spacing:-0.5px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
-</div>
-<div style="margin-top:10px;margin-bottom:2px;">
-<div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#475569;margin-bottom:3px;"><span>Low {lo:.1f}%</span><span style="color:#64748b;">APY Range</span><span>High {hi:.1f}%</span></div>
-<div style="background:rgba(255,255,255,0.05);border-radius:4px;height:4px;position:relative;"><div style="position:absolute;left:0;top:0;height:4px;width:100%;border-radius:4px;background:linear-gradient(90deg,rgba(59,130,246,0.3),{color},rgba(245,158,11,0.4));"></div></div>
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+<div style="flex:1;min-width:0;display:flex;align-items:center;gap:5px;flex-wrap:wrap;"><span style="font-size:0.78rem;color:#475569;">{medal}</span><span style="font-size:0.95rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 4px;">·</span><span style="font-size:0.85rem;color:#94a3b8;">{pool}</span>{(' ' + _preview_badge_html) if _preview_badge_html else ''}</div>
+<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">{_action_badge_html}<span class="grade-badge" style="background:{grade_color};color:#fff;font-weight:800;letter-spacing:0.5px;" title="Safety Grade: A=safest, F=riskiest">{grade}</span><span class="{glow_cls}" style="font-size:0.95rem;font-weight:800;color:{color};letter-spacing:-0.5px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
 </div>
 {_apy_decomp_html}
-<div style="color:#94a3b8;font-size:0.91rem;margin-top:10px;line-height:1.55;">{action}</div>
-<div style="display:flex;gap:14px;font-size:0.78rem;color:#475569;margin-top:10px;flex-wrap:wrap;align-items:center;">
-<span><span style="color:{il_color};font-weight:700;">{il_icon}</span><span style="margin-left:3px;">Price risk: <span style="color:{il_color};font-weight:600;">{il.upper()}</span>{il_est_html}</span></span>
-<span style="display:flex;align-items:center;gap:5px;">Confidence:<span style="display:inline-block;width:48px;height:5px;background:rgba(255,255,255,0.07);border-radius:3px;vertical-align:middle;margin:0 2px;overflow:hidden;"><span style="display:block;width:{conf_bar_pct};height:100%;background:{conf_color};border-radius:3px;"></span></span><span style="color:{conf_color};font-weight:600;">{conf:.0f}%</span></span>
-<span>Suggested: <span style="color:#94a3b8;font-weight:600;">{alloc_str}</span></span>
+<div style="color:#94a3b8;font-size:0.80rem;margin-top:4px;line-height:1.35;">{action}</div>
+<div style="display:flex;gap:10px;font-size:0.72rem;color:#475569;margin-top:5px;flex-wrap:wrap;align-items:center;">
+<span><span style="color:{il_color};font-weight:700;">{il_icon}</span><span style="margin-left:2px;">Risk: <span style="color:{il_color};font-weight:600;">{il.upper()}</span>{il_est_html}</span></span>
+<span style="display:flex;align-items:center;gap:4px;">Conf:<span style="display:inline-block;width:36px;height:4px;background:rgba(255,255,255,0.07);border-radius:3px;vertical-align:middle;overflow:hidden;"><span style="display:block;width:{conf_bar_pct};height:100%;background:{conf_color};border-radius:3px;"></span></span><span style="color:{conf_color};font-weight:600;">{conf:.0f}%</span></span>
+<span>Alloc: <span style="color:#94a3b8;font-weight:600;">{alloc_str}</span></span>
 {tvl_html}
 {_ry_html}
 {_spread_html}
 </div>
-{f'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">{_audit_html}{_url_html}</div>' if (_audit_html or _url_html) else ""}
+{f'<div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap;align-items:center;">{_audit_html}{_url_html}</div>' if (_audit_html or _url_html) else ""}
 </div>""", unsafe_allow_html=True)
 
     # Beginner: plain-English gauges. Intermediate: numeric gauges. Advanced: no gauges.

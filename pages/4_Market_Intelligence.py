@@ -744,9 +744,9 @@ try:
     with _tac1:
         st.markdown(f"""
 <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_rsi_color};
-            border-radius:10px;padding:16px;text-align:center">
+            border-radius:10px;padding:10px;text-align:center">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">RSI-14</div>
-  <div style="font-size:26px;font-weight:700;color:{_rsi_color}">{_rsi_disp}</div>
+  <div style="font-size:20px;font-weight:700;color:{_rsi_color}">{_rsi_disp}</div>
   <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_rsi_label}</div>
   <div style="font-size:10px;color:#6b7280;margin-top:6px">Wilder 1978 · 14-day</div>
 </div>
@@ -755,7 +755,7 @@ try:
     with _tac2:
         st.markdown(f"""
 <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_ma_c};
-            border-radius:10px;padding:16px;text-align:center">
+            border-radius:10px;padding:10px;text-align:center">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MA Cross</div>
   <div style="font-size:18px;font-weight:700;color:{_ma_c}">{_ma_icon}</div>
   <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_ma_desc}</div>
@@ -766,9 +766,9 @@ try:
     with _tac3:
         st.markdown(f"""
 <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mom_color};
-            border-radius:10px;padding:16px;text-align:center">
+            border-radius:10px;padding:10px;text-align:center">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">30d Momentum</div>
-  <div style="font-size:26px;font-weight:700;color:{_mom_color}">{_mom_str}</div>
+  <div style="font-size:20px;font-weight:700;color:{_mom_color}">{_mom_str}</div>
   <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_mom_trend}</div>
   <div style="font-size:10px;color:#6b7280;margin-top:6px">Price change: 30 days</div>
 </div>
@@ -777,7 +777,7 @@ try:
     with _tac4:
         st.markdown(f"""
 <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_ab200_color};
-            border-radius:10px;padding:16px;text-align:center">
+            border-radius:10px;padding:10px;text-align:center">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">200d MA Position</div>
   <div style="font-size:16px;font-weight:700;color:{_ab200_color}">{_ab200_str}</div>
   <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_btc_disp}</div>
@@ -833,7 +833,7 @@ try:
     with _col1:
         st.markdown(f"""
 <div style="background:{_bg3};border:1px solid {_bc3};border-top:3px solid {_bc3};
-            border-radius:10px;padding:16px">
+            border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Blood in Streets Signal</div>
   <div style="font-size:20px;font-weight:700;color:{_bc3}">{_bits3["signal"].replace("_", " ")}</div>
   <div style="font-size:12px;color:#9ca3af;margin-top:4px">{_bits3["strength"]} · {_bits3["criteria_met"]}/3 criteria met</div>
@@ -848,9 +848,9 @@ try:
     with _col2:
         st.markdown(f"""
 <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_dc3};
-            border-radius:10px;padding:16px">
+            border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">DCA Multiplier</div>
-  <div style="font-size:36px;font-weight:700;color:{_dc3}">{_dca3}×</div>
+  <div style="font-size:24px;font-weight:700;color:{_dc3}">{_dca3}×</div>
   <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_dl3}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:8px">
     F&amp;G: {_fg_v3}/100<br/>
@@ -895,25 +895,25 @@ try:
         _c1, _c2, _c3, _c4 = st.columns(4)
         with _c1:
             st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mvrv_color};border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mvrv_color};border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MVRV Z-Score</div>
-  <div style="font-size:30px;font-weight:700;color:{_mvrv_color}">{f"{_mz4:+.2f}" if _mz4 is not None else "—"}</div>
+  <div style="font-size:21px;font-weight:700;color:{_mvrv_color}">{f"{_mz4:+.2f}" if _mz4 is not None else "—"}</div>
   <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ms4.replace("_", " ")}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:6px">MVRV ratio: {f"{_mv4:.3f}" if _mv4 else "—"}</div>
 </div>
 """, unsafe_allow_html=True)
         with _c2:
             st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc4};border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc4};border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">SOPR</div>
-  <div style="font-size:30px;font-weight:700;color:{_sc4}">{f"{_sp4:.4f}" if _sp4 is not None else "—"}</div>
+  <div style="font-size:21px;font-weight:700;color:{_sc4}">{f"{_sp4:.4f}" if _sp4 is not None else "—"}</div>
   <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ss4.replace("_", " ")}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:6px">&gt;1 profit-taking · &lt;1 capitulation</div>
 </div>
 """, unsafe_allow_html=True)
         with _c3:
             st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Realized Cap</div>
   <div style="font-size:22px;font-weight:700;color:#6366f1">{_fmtb(_rc4)}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:8px">BTC at last-moved price</div>
@@ -921,7 +921,7 @@ try:
 """, unsafe_allow_html=True)
         with _c4:
             st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #8b5cf6;border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #8b5cf6;border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Active Addresses</div>
   <div style="font-size:22px;font-weight:700;color:#8b5cf6">{f"{_aa4:,}" if _aa4 else "—"}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:8px">Unique BTC addresses today</div>
@@ -968,7 +968,7 @@ try:
             _h1, _h2 = st.columns(2)
             with _h1:
                 st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_hr_color};border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_hr_color};border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Hash Ribbons</div>
   <div style="font-size:22px;font-weight:700;color:{_hr_color}">{_hr_sig.replace("_", " ") if _hr_sig != "N/A" else "—"}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:8px">30d vs 60d hash rate MA · C. Edwards 2019</div>
@@ -976,9 +976,9 @@ try:
 """, unsafe_allow_html=True)
             with _h2:
                 st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_p_color};border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_p_color};border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Puell Multiple</div>
-  <div style="font-size:30px;font-weight:700;color:{_p_color}">{f"{_puell:.3f}" if _puell is not None else "—"}</div>
+  <div style="font-size:21px;font-weight:700;color:{_p_color}">{f"{_puell:.3f}" if _puell is not None else "—"}</div>
   <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_p_sig.replace("_", " ")}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:6px">Daily miner USD / 365d MA · D. Puell 2019</div>
 </div>
@@ -1016,7 +1016,7 @@ try:
         _d5a, _d5b, _d5c, _d5d = st.columns(4)
         with _d5a:
             st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc5};border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc5};border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Put/Call Ratio</div>
   <div style="font-size:28px;font-weight:700;color:{_sc5}">{f"{_pc5:.3f}" if _pc5 is not None else "—"}</div>
   <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_osig5.replace("_", " ")}</div>
@@ -1025,7 +1025,7 @@ try:
         with _d5b:
             _mp5_d = f"{abs(_mp5 - _spot5) / _spot5 * 100:.1f}% {'below' if _mp5 < _spot5 else 'above'} spot" if _mp5 and _spot5 else ""
             st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Max Pain</div>
   <div style="font-size:24px;font-weight:700;color:#6366f1">{f"${_mp5:,.0f}" if _mp5 else "—"}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:6px">{_mp5_d}</div>
@@ -1033,7 +1033,7 @@ try:
 """, unsafe_allow_html=True)
         with _d5c:
             st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #ef4444;border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #ef4444;border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Put OI</div>
   <div style="font-size:24px;font-weight:700;color:#ef4444">{f"{_tput5:,.0f}" if _tput5 else "—"}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:6px">contracts</div>
@@ -1041,7 +1041,7 @@ try:
 """, unsafe_allow_html=True)
         with _d5d:
             st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #10b981;border-radius:10px;padding:16px">
+<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #10b981;border-radius:10px;padding:10px">
   <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Call OI</div>
   <div style="font-size:24px;font-weight:700;color:#10b981">{f"{_tcal5:,.0f}" if _tcal5 else "—"}</div>
   <div style="font-size:11px;color:#6b7280;margin-top:6px">contracts</div>
