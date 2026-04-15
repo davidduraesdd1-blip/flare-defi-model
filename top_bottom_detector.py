@@ -94,7 +94,8 @@ def _rsi(series: pd.Series, period: int = 14) -> pd.Series:
     gain  = delta.clip(lower=0).ewm(com=period - 1, adjust=False).mean()
     loss  = (-delta.clip(upper=0)).ewm(com=period - 1, adjust=False).mean()
     rs    = gain / loss.replace(0, np.nan)
-    return 100.0 - (100.0 / (1.0 + rs))
+    # When loss EWM is 0 (all upward moves), RS → ∞ → RSI → 100.  fillna(100) handles NaN.
+    return (100.0 - (100.0 / (1.0 + rs))).fillna(100.0)
 
 
 def _macd(series: pd.Series, fast: int = 12, slow: int = 26, sig: int = 9):

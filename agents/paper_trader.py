@@ -123,7 +123,8 @@ def execute_paper_trade(
                 tzinfo=timezone.utc
             ).timestamp()
             hours_held = (time.time() - entry_ts) / 3600
-        except Exception:
+        except Exception as e:
+            logger.debug("[PaperTrader] entry_timestamp parse failed (%s): %s", entry_ts_str, e)
             hours_held = 1.0
 
         # Use current APY if provided (from live data feed), otherwise fall back to entry APY.

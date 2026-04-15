@@ -547,8 +547,8 @@ def startup_catchup_evaluation() -> bool:
                     ts = ts.replace(tzinfo=None)
                 if (now - ts).total_seconds() > EVAL_WINDOW_24H:
                     overdue.append(p)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("[Feedback] Skipping prediction with invalid timestamp: %s", e)
 
         if overdue:
             logger.info("[Feedback] Startup catch-up: %d overdue prediction(s) — "

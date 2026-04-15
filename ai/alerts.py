@@ -328,7 +328,7 @@ def check_cl_range_alerts(prices: list) -> list:
     from config import POSITIONS_FILE
 
     price_lkp = {
-        p.get("symbol", ""): float(p.get("price_usd", 0))
+        p.get("symbol", ""): float(p.get("price_usd") or 0)
         for p in prices if isinstance(p, dict) and p.get("symbol")
     }
     if not price_lkp:
