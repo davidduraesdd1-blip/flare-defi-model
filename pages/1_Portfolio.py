@@ -148,6 +148,51 @@ from config import PROTOCOLS, TOKENS, INCENTIVE_PROGRAM, RISK_PROFILES, FALLBACK
 
 page_setup("Portfolio · Family Office · DeFi Intelligence")
 
+# ── Portfolio page: unified 0.78rem across all form elements ──────────────────
+st.markdown("""
+<style>
+/* Labels on every input / select / date */
+[data-testid="stMain"] label,
+[data-testid="stMain"] label p,
+[data-testid="stMain"] label span { font-size: 0.78rem !important; }
+
+/* Text inputs and number inputs */
+[data-testid="stMain"] input[type="text"],
+[data-testid="stMain"] input[type="number"],
+[data-testid="stMain"] input[type="date"],
+[data-testid="stMain"] textarea { font-size: 0.78rem !important; }
+
+/* Selectbox / dropdown — displayed value */
+[data-testid="stMain"] [data-baseweb="select"] span,
+[data-testid="stMain"] [data-baseweb="select"] div,
+[data-testid="stMain"] [data-baseweb="select"] input { font-size: 0.78rem !important; }
+
+/* Dropdown option list items */
+[data-testid="stMain"] [role="listbox"] li,
+[data-testid="stMain"] [role="option"],
+[data-testid="stMain"] [role="option"] * { font-size: 0.78rem !important; }
+
+/* Buttons (Add Position, form submit) */
+[data-testid="stMain"] button p,
+[data-testid="stMain"] button span,
+[data-testid="stFormSubmitButton"] button p { font-size: 0.78rem !important; }
+
+/* Tabs (Price Targets / Exit Timeline) */
+[data-testid="stMain"] [data-testid="stTab"] p,
+[data-testid="stMain"] [data-testid="stTab"] span { font-size: 0.78rem !important; }
+
+/* Table / dataframe cells and headers */
+[data-testid="stMain"] [data-testid="stDataFrameResizable"] th,
+[data-testid="stMain"] [data-testid="stDataFrameResizable"] td,
+[data-testid="stMain"] [data-testid="stDataFrameResizable"] * { font-size: 0.78rem !important; }
+
+/* General markdown text, subtitles, help text */
+[data-testid="stMain"] p { font-size: 0.78rem !important; }
+[data-testid="stMain"] small,
+[data-testid="stMain"] [data-testid="stCaptionContainer"] p { font-size: 0.78rem !important; }
+</style>
+""", unsafe_allow_html=True)
+
 ctx            = render_sidebar()
 portfolio_size = ctx["portfolio_size"]
 pro_mode       = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
