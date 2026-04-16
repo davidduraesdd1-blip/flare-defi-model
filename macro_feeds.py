@@ -633,7 +633,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         _CM_CACHE_D[cache_key] = result
         return result
     except Exception as e:
-        logger.debug("[CoinMetrics] onchain fetch failed: %s", e)
+        logger.warning("[CoinMetrics] onchain fetch failed: %s", e)
         return {"error": str(e), "source": "coinmetrics"}
 
 

@@ -228,16 +228,16 @@ def run_quick_check() -> None:
         xrp_p  = next((p for p in prices_list if getattr(p, "symbol", None) == "XRP"),  None)
         _fxrp_price = getattr(fxrp_p, "price_usd", None)
         _xrp_price  = getattr(xrp_p,  "price_usd", None)
-        if (fxrp_p and xrp_p
-                and _xrp_price is not None and _fxrp_price is not None
-                and float(_xrp_price) > 0):
-            gap_pct = (float(_fxrp_price) - float(_xrp_price)) / float(_xrp_price) * 100
+        _xrp_val  = float(_xrp_price)  if _xrp_price  is not None else 0.0
+        _fxrp_val = float(_fxrp_price) if _fxrp_price is not None else 0.0
+        if fxrp_p and xrp_p and _xrp_val > 0:
+            gap_pct = (_fxrp_val - _xrp_val) / _xrp_val * 100
             if abs(gap_pct) >= fassets_limit:
                 direction = "premium" if gap_pct > 0 else "discount"
                 alerts.append(
                     f"FASSETS {direction.upper()}: FXRP is {abs(gap_pct):.2f}% "
                     f"{'above' if gap_pct > 0 else 'below'} XRP spot "
-                    f"(FXRP ${float(_fxrp_price):.4f} vs XRP ${float(_xrp_price):.4f}) — "
+                    f"(FXRP ${_fxrp_val:.4f} vs XRP ${_xrp_val:.4f}) — "
                     f"{'mint FXRP and sell' if gap_pct > 0 else 'buy FXRP and redeem'}"
                 )
 
