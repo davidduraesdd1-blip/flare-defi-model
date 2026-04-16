@@ -821,8 +821,25 @@ def render_sidebar() -> dict:
         latest    = load_latest()
         last_scan = latest.get("completed_at") or latest.get("run_id")
 
-        # ── Auto-scan on first open (no data file exists yet) ─────────────────
-        if not last_scan and not st.session_state.get("_auto_scan_triggered"):
+        # Determine data freshness (used both for auto-scan trigger and dot indicator)
+        is_fresh = False
+        _scan_age_secs = None
+        if last_scan:
+            try:
+                scan_dt = datetime.fromisoformat(last_scan.replace("Z", "+00:00"))
+                if scan_dt.tzinfo is None:
+                    scan_dt = scan_dt.replace(tzinfo=timezone.utc)
+                _scan_age_secs = (datetime.now(timezone.utc) - scan_dt).total_seconds()
+                is_fresh = _scan_age_secs < 3600
+            except Exception:
+                pass
+
+        # ── Auto-scan: no data OR data is stale (> 4 hours old) ──────────────
+        # Streamlit Cloud's free tier puts apps to sleep, so the background
+        # scheduler stops running. This ensures data is refreshed on every
+        # page open when the cached data is more than 4 hours old.
+        _data_stale = (not last_scan) or (_scan_age_secs is not None and _scan_age_secs > 14400)
+        if _data_stale and not st.session_state.get("_auto_scan_triggered"):
             st.session_state["_auto_scan_triggered"] = True
             if not st.session_state.get("_scanning"):
                 try:
@@ -836,17 +853,6 @@ def render_sidebar() -> dict:
                     st.session_state._scan_baseline = ""
                 except Exception:
                     pass  # user can click ▶ Scan manually
-
-        # Determine data freshness
-        is_fresh = False
-        if last_scan:
-            try:
-                scan_dt = datetime.fromisoformat(last_scan.replace("Z", "+00:00"))
-                if scan_dt.tzinfo is None:
-                    scan_dt = scan_dt.replace(tzinfo=timezone.utc)
-                is_fresh = (datetime.now(timezone.utc) - scan_dt).total_seconds() < 3600
-            except Exception:
-                pass
         dot_html = "<span class='live-dot'></span>" if is_fresh else "<span class='stale-dot'></span>"
         st.markdown(
             f"<div style='font-size:0.85rem; color:#475569; line-height:1.5; margin-bottom:4px;'>"
