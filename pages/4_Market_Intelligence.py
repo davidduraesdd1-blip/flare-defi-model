@@ -1447,7 +1447,7 @@ if _intent_input:
                         f"Classify this DeFi intent into ONE of: swap, provide, stake, lend, borrow, claim, bridge, hedge.\n"
                         f"Input: '{_intent_input}'\nReturn only the single word."}],
                 )
-                _ai_intent = (_resp.content[0].text.strip().lower() if _resp.content else "lend")
+                _ai_intent = (_resp.content[0].text.strip().lower() if (_resp.content and hasattr(_resp.content[0], "text")) else "lend")
                 if _ai_intent in _intent_map:
                     st.markdown(f"Claude classified as: **{_intent_map[_ai_intent]['label']}**")
             except Exception:
