@@ -234,9 +234,96 @@ def _load_opp_data_cached() -> dict:
     Cached for 10 minutes to avoid duplicate queries for radar chart and table.
     No profile argument — returns ALL profiles so the same cache entry is
     reused regardless of which profile is currently selected.
+
+    NOTE: kelly_fraction is recomputed here at load time using the current
+    weighting formula so the display is always correct even when history.json
+    was written by an older code version that produced equal / stale weights.
     """
     _latest = load_latest()
-    return _latest.get("models") or {}
+    _models = _latest.get("models") or {}
+
+    # ── Re-weight allocations from stored APY/risk data ──────────────────────
+    # Same formula as optimise_portfolio(): net_apy / (1 + risk_score/10),
+    # normalized to 1.0, with per-profile single-position cap.
+    _IL_MULT = {"conservative": 3.0, "medium": 2.0, "high": 1.5}
+    _MAX_POS  = {"conservative": 0.30, "medium": 0.25, "high": 0.20}
+
+    for _prof in ("conservative", "medium", "high"):
+        _opps = _models.get(_prof) or []
+        if not _opps:
+            continue
+
+        _il_mult = _IL_MULT.get(_prof, 2.0)
+        _max_pos = _MAX_POS.get(_prof, 0.25)
+
+        # Compute raw weight for each pool
+        _raw = []
+        for _o in _opps:
+            _fa   = float(_o.get("fee_apy", 0) or 0)
+            _ea   = float(_o.get("estimated_apy", 0) or 0)
+            _base = _fa if _fa > 0 else _ea
+            _il   = float(_o.get("il_estimate_pct", 0) or 0)
+            _rs   = float(_o.get("risk_score", 5) or 5)
+            _net  = max(0.0, _base - _il * _il_mult)
+            _div  = 1.0 + _rs / 10.0
+            _raw.append(_net / _div if _div > 0 else 0.0)
+
+        _total = sum(_raw)
+        if _total <= 0:
+            _n = len(_opps)
+            for _o in _opps:
+                _o["kelly_fraction"] = round(1.0 / _n, 4)
+            continue
+
+        # Normalize to 1.0, then immediately apply initial cap (same order as
+        # optimise_portfolio: cap first, then iterative redistribution).
+        _weights = [round(r / _total, 4) for r in _raw]
+        _weights = [min(w, _max_pos) for w in _weights]   # initial cap
+
+        # Iterative redistribution: uncapped pools absorb capital freed by capping
+        for _ in range(5):
+            _uncapped_idx = [i for i, w in enumerate(_weights) if w < _max_pos]
+            if not _uncapped_idx:
+                break
+            _capped_sum   = sum(w for i, w in enumerate(_weights) if w >= _max_pos)
+            _remainder    = 1.0 - _capped_sum
+            if _remainder <= 0:
+                break
+            _uncap_total  = sum(_weights[i] for i in _uncapped_idx)
+            if _uncap_total <= 0:
+                break
+            _new_hit = False
+            for i in _uncapped_idx:
+                _nw = round(_weights[i] / _uncap_total * _remainder, 4)
+                if _nw >= _max_pos:
+                    _weights[i] = _max_pos
+                    _new_hit = True
+                else:
+                    _weights[i] = _nw
+            if not _new_hit:
+                break
+
+        _weights = [min(w, _max_pos) for w in _weights]
+
+        # Residual reconciliation — ensure exactly 100% allocated
+        _ftotal = sum(_weights)
+        if abs(_ftotal - 1.0) > 0.0001:
+            _uncap = sorted(
+                [(i, w) for i, w in enumerate(_weights) if w < _max_pos],
+                key=lambda x: x[1],
+            )
+            if _uncap:
+                _li = _uncap[-1][0]
+                _weights[_li] = round(_weights[_li] + (1.0 - _ftotal), 4)
+            elif _opps:
+                _res = (1.0 - _ftotal) / len(_weights)
+                _weights = [round(w + _res, 4) for w in _weights]
+
+        # Write updated allocations back into the dicts
+        for _o, _w in zip(_opps, _weights):
+            _o["kelly_fraction"] = _w
+
+    return _models
 
 
 model_data = _load_opp_data_cached()
