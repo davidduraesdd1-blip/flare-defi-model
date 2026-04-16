@@ -344,14 +344,15 @@ FALLBACK_PRICES = {
     "ZBCN":  0.018,   # Zebec Network
 }
 
-# ─── Live Price Refresher: CMC → CoinGecko → OKX cascade ────────────────────
+# ─── Live Price Refresher: CMC → CoinGecko → Kraken → OKX cascade ───────────
 def refresh_fallback_prices(timeout: float = 4.0) -> bool:
     """
-    Fetch live prices via a 3-tier cascade and update FALLBACK_PRICES in-place.
+    Fetch live prices via a 4-tier cascade and update FALLBACK_PRICES in-place.
 
     Tier 1 — CoinMarketCap (primary, broadest coverage for must-have coins)
     Tier 2 — CoinGecko     (secondary, fills any gaps CMC missed or if no CMC key)
-    Tier 3 — OKX REST      (tertiary, no auth required, catches remaining gaps)
+    Tier 3 — Kraken REST   (tertiary, no auth required, XRP/XLM/HBAR/HYPE)
+    Tier 4 — OKX REST      (quaternary, no auth required, catches remaining gaps)
 
     Updates the dict in-place so all modules that imported FALLBACK_PRICES
     by reference see new prices immediately.
@@ -439,8 +440,44 @@ def refresh_fallback_prices(timeout: float = 4.0) -> bool:
         except Exception:
             pass
 
-    # ── Tier 3: OKX REST (no auth, spot last-price) ──────────────────────────
-    # Only for coins still missing or at hardcoded zero after Tiers 1+2.
+    # ── Tier 3: Kraken REST (no auth, spot last-price) ───────────────────────
+    # Only for coins still missing or at zero after Tiers 1+2.
+    # Kraken pair naming: crypto uses X-prefix (XXRP), fiat uses Z-prefix (ZUSD).
+    # The response key is Kraken's internal pair name; c[0] = last trade price.
+    _KRAKEN_PAIRS = {
+        "XXRPZUSD":  "XRP",
+        "XXLMZUSD":  "XLM",
+        "HBARUSD":   "HBAR",
+        "HYPEUSD":   "HYPE",
+    }
+    _kraken_needed = [_kp for _kp, _sym in _KRAKEN_PAIRS.items()
+                      if FALLBACK_PRICES.get(_sym, 0) == 0]
+    if _kraken_needed:
+        try:
+            _resp = _rq.get(
+                "https://api.kraken.com/0/public/Ticker",
+                params={"pair": ",".join(_kraken_needed)},
+                timeout=timeout,
+            )
+            if _resp.status_code == 200:
+                _kdata = _resp.json().get("result", {})
+                for _kpair, _sym in _KRAKEN_PAIRS.items():
+                    # Kraken may return the pair under its own canonical key
+                    _kentry = _kdata.get(_kpair)
+                    if not _kentry:
+                        # Try alternate key (Kraken sometimes strips the X/Z prefixes)
+                        _kalt = _kpair.lstrip("XZ").replace("ZUSD", "USD")
+                        _kentry = _kdata.get(_kalt)
+                    if _kentry:
+                        _px = float((_kentry.get("c") or ["0"])[0] or 0)
+                        if _px > 0 and FALLBACK_PRICES.get(_sym, 0) == 0:
+                            FALLBACK_PRICES[_sym] = round(_px, 6)
+                            _updated += 1
+        except Exception:
+            pass
+
+    # ── Tier 4: OKX REST (no auth, spot last-price) ──────────────────────────
+    # Only for coins still missing or at hardcoded zero after Tiers 1+2+3.
     _OKX_PAIRS = {
         "CC-USDT":   "CC",
         "XDC-USDT":  "XDC",
@@ -841,8 +878,9 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "api.zerion.io",                # Zerion wallet portfolio API (#111)
     "api.telegram.org",             # Telegram bot API — webhook alert delivery (#18)
     "discord.com",                  # Discord webhook alerts (#18)
-    "pro-api.coinmarketcap.com",    # CoinMarketCap — primary price source (triple-backup chain)
-    "www.okx.com",                  # OKX REST — tertiary price fallback (no auth required)
+    "pro-api.coinmarketcap.com",    # CoinMarketCap — primary price source (4-tier fallback chain)
+    "api.kraken.com",               # Kraken REST   — Tier 3 price fallback (no auth required)
+    "www.okx.com",                  # OKX REST      — Tier 4 price fallback (no auth required)
 })
 
 # ─── Coin Universe (Phase 2, item 16) ────────────────────────────────────────

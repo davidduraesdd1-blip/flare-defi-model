@@ -296,31 +296,7 @@ try:
                 for r in _bridge_protocols
             ]
             st.dataframe(pd.DataFrame(_bp_rows), width='stretch', hide_index=True)
-            # Live capital flow data from DeFiLlama
-            try:
-                from scanners.defillama import fetch_bridge_flows as _fetch_bf
-                _flows = _fetch_bf(["Flare", "Ethereum", "Base", "Arbitrum", "Polygon"])
-                if _flows:
-                    st.markdown(
-                        "<div style='font-size:0.85rem;color:#64748b;margin:10px 0 4px'>Live chain TVL flows (7-day):</div>",
-                        unsafe_allow_html=True,
-                    )
-                    _flow_rows = []
-                    for _f in _flows:
-                        _sig   = _f.get("flow_signal", "STABLE")
-                        _arrow = "▲" if _sig == "INFLOW" else ("▼" if _sig == "OUTFLOW" else "■")
-                        _col   = "#22c55e" if _sig == "INFLOW" else ("#ef4444" if _sig == "OUTFLOW" else "#94a3b8")
-                        _d7    = _f.get("change_7d_pct", 0) or 0
-                        _flow_rows.append({
-                            "Chain":    _f.get("chain", ""),
-                            "TVL":      f"${_f.get('tvl_usd', 0)/1e9:.2f}B" if _f.get("tvl_usd", 0) >= 1e9
-                                        else f"${_f.get('tvl_usd', 0)/1e6:.0f}M",
-                            "7d Flow":  f"{_arrow} {abs(_d7):.1f}%",
-                            "Signal":   _sig,
-                        })
-                    st.dataframe(pd.DataFrame(_flow_rows), width='stretch', hide_index=True)
-            except Exception:
-                pass
+            st.caption("Live chain TVL flows available in Opportunities → Bridge Flow Monitor.")
 
 except Exception as _assist_exc:
     st.info("DeFi Assistant unavailable. Check logs for details.")
@@ -1478,91 +1454,7 @@ if _intent_input:
                 pass
 
 
-# ─── Protocol Revenue Health (#57) ───────────────────────────────────────────
-
-if pro_mode:
-    st.divider()
-    render_section_header(
-        "Protocol Revenue Health",
-        "24h vs 30-day average fee revenue — real demand signal for each protocol",
-    )
-
-    try:
-        from scanners.defillama import fetch_protocol_revenue as _fetch_pr
-
-        with st.spinner("Loading protocol fee revenue data…"):
-            if demo_mode:
-                _rev_data = {
-                    "aave-v3":      {"fees_24h": 820_000, "fees_30d": 21_000_000, "trend": 1.17, "health": "GREEN"},
-                    "lido":         {"fees_24h": 1_200_000, "fees_30d": 39_000_000, "trend": 0.92, "health": "GREEN"},
-                    "uniswap":      {"fees_24h": 3_500_000, "fees_30d": 130_000_000, "trend": 0.81, "health": "GREEN"},
-                    "compound-v3":  {"fees_24h": 95_000, "fees_30d": 3_500_000, "trend": 0.81, "health": "GREEN"},
-                    "curve-dex":    {"fees_24h": 210_000, "fees_30d": 8_500_000, "trend": 0.74, "health": "YELLOW"},
-                    "pendle":       {"fees_24h": 180_000, "fees_30d": 9_000_000, "trend": 0.60, "health": "YELLOW"},
-                    "morpho":       {"fees_24h": 55_000, "fees_30d": 900_000, "trend": 1.83, "health": "GREEN"},
-                    "aerodrome-v2": {"fees_24h": 420_000, "fees_30d": 11_000_000, "trend": 1.15, "health": "GREEN"},
-                    "timestamp":    "2026-03-27T00:00:00Z",
-                    "errors":       [],
-                }
-            else:
-                _rev_data = _fetch_pr()
-
-        _rev_rows = []
-        for _slug, _rdata in _rev_data.items():
-            if _slug in ("timestamp", "errors") or not isinstance(_rdata, dict):
-                continue
-            _f24 = _rdata.get("fees_24h", 0)
-            _f30 = _rdata.get("fees_30d", 0)
-            _trend = _rdata.get("trend", 0)
-            _health = _rdata.get("health", "RED")
-            _hcolor = "#22c55e" if _health == "GREEN" else ("#f59e0b" if _health == "YELLOW" else "#ef4444")
-            _rev_rows.append({
-                "Protocol":  _slug.replace("-", " ").title(),
-                "24h Fees":  (f"${_f24/1e6:.2f}M" if _f24 >= 1e6 else f"${_f24:,.0f}"),
-                "30d Fees":  (f"${_f30/1e6:.1f}M" if _f30 >= 1e6 else f"${_f30:,.0f}"),
-                "Trend":     f"{_trend:.2f}x",
-                "_health":   _health,
-                "_hcolor":   _hcolor,
-            })
-
-        if _rev_rows:
-            for _rr in _rev_rows:
-                _hbadge = (
-                    f"<span style='background:rgba(34,197,94,0.12);color:#22c55e;"
-                    f"padding:2px 8px;border-radius:4px;font-size:0.85rem;font-weight:600'>{_rr['_health']}</span>"
-                    if _rr["_health"] == "GREEN" else
-                    f"<span style='background:rgba(245,158,11,0.12);color:#f59e0b;"
-                    f"padding:2px 8px;border-radius:4px;font-size:0.85rem;font-weight:600'>{_rr['_health']}</span>"
-                    if _rr["_health"] == "YELLOW" else
-                    f"<span style='background:rgba(239,68,68,0.12);color:#ef4444;"
-                    f"padding:2px 8px;border-radius:4px;font-size:0.85rem;font-weight:600'>{_rr['_health']}</span>"
-                )
-                st.markdown(
-                    f"<div style='background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);"
-                    f"border-left:3px solid {_rr['_hcolor']};border-radius:6px;"
-                    f"padding:8px 14px;margin-bottom:6px;font-size:0.85rem;"
-                    f"display:flex;justify-content:space-between;align-items:center'>"
-                    f"<div>"
-                    f"<b style='color:#f1f5f9'>{_html.escape(_rr['Protocol'])}</b>"
-                    f"<span style='color:#64748b;font-size:0.85rem;margin-left:10px'>"
-                    f"24h: {_html.escape(_rr['24h Fees'])} · 30d: {_html.escape(_rr['30d Fees'])} · "
-                    f"Trend: {_html.escape(_rr['Trend'])}</span>"
-                    f"</div>"
-                    f"<div>{_hbadge}</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-            st.caption(
-                "Fee revenue = real demand for the protocol's services. "
-                "Declining fees can signal reduced usage before TVL drops. "
-                "Trend: 24h fees vs 30-day daily average. Source: DeFiLlama · cached 1h."
-            )
-        else:
-            st.info("Protocol revenue data unavailable. Check API connectivity.")
-
-    except Exception as _pr_err:
-        logger.warning("[MarketIntel] protocol revenue failed: %s", _pr_err)
-        st.caption("Protocol revenue data temporarily unavailable — try refreshing in a few minutes.")
+# Protocol Revenue moved to Opportunities → Protocol Intelligence tab to avoid duplication.
 
 
 # ─── RWA Credit Protocol Health (#58) ────────────────────────────────────────
