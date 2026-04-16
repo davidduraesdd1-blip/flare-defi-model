@@ -2288,9 +2288,9 @@ with _tab_pos:
 
 # ─── FAssets Data Loader (used by FAssets tab) ───────────────────────────────
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=3600)
 def _load_fasset_data() -> dict:
-    """Load FAsset data from most recent scan or direct API."""
+    """Load FAsset data from most recent scan or direct API. §12 on-chain = 60 min."""
     cached = load_latest().get("fasset", {})
     if cached and isinstance(cached.get("assets"), dict) and cached["assets"]:
         return cached
