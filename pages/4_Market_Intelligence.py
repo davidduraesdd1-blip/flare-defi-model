@@ -177,129 +177,130 @@ with _t_timing:
 
 # ─── DeFi Assistant (#87) ─────────────────────────────────────────────────────
 
-render_section_header("DeFi Assistant", "Ask any DeFi question — AI detects your intent and surfaces relevant data")
-
-try:
-    if demo_mode:
-        st.info("DeFi Assistant is disabled in Demo Mode. Toggle Demo Mode off in the sidebar to use it.")
-        _defi_query = ""
-    else:
-        _defi_query = st.text_input(
-            "Ask about DeFi (e.g. 'best place to stake ETH', 'how to LP on Aerodrome', 'compare restaking yields')",
-            key="defi_assistant_query",
-            placeholder="Type your DeFi question here…",
-        )
-
-    if not demo_mode and _defi_query and _defi_query.strip():
-        with st.spinner("Classifying intent…"):
-            _intent_result = classify_defi_intent(_defi_query.strip())
-
-        _primary    = _intent_result.get("primary", "OTHER")
-        _secondary  = _intent_result.get("secondary")
-        _conf       = _intent_result.get("confidence", 0.0)
-        _action     = _intent_result.get("suggested_action", "")
-        _src        = _intent_result.get("source", "keyword_fallback")
-        _src_label  = "Claude AI" if _src == "claude_haiku" else "keyword matching"
-
-        _conf_pct   = round(_conf * 100)
-        _intent_col = {
-            "SWAP":             "#3b82f6",
-            "PROVIDE_LIQUIDITY":"#22c55e",
-            "STAKE":            "#8b5cf6",
-            "BORROW":           "#f59e0b",
-            "LEND":             "#14b8a6",
-            "CLAIM_REWARDS":    "#84cc16",
-            "BRIDGE":           "#ec4899",
-            "PORTFOLIO_CHECK":  "#64748b",
-            "YIELD_HUNT":       "#f97316",
-            "RISK_ASSESSMENT":  "#ef4444",
-            "OTHER":            "#475569",
-        }.get(_primary, "#475569")
-
-        _sec_str = f" · secondary: **{_secondary}**" if _secondary else ""
-        st.markdown(
-            f"<div style='background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.07);"
-            f"border-left:3px solid {_intent_col};border-radius:8px;padding:12px 16px;margin:8px 0'>"
-            f"<div style='margin-bottom:6px'>"
-            f"Intent detected: <span style='font-weight:700;color:{_intent_col};font-size:1.05rem'>"
-            f"{_primary}</span> ({_conf_pct}% confidence){_sec_str}"
-            f"<span style='float:right;font-size:0.85rem;color:#334155'>via {_src_label}</span>"
-            f"</div>"
-            f"<div style='color:#c4cbdb;font-size:0.87rem'>{_html.escape(_action)}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-        render_what_this_means(
-            f"Your question was classified as: '{_primary}'. "
-            "This tells the model what kind of DeFi action you're looking for so it can show you the most relevant data. "
-            f"The confidence ({_conf_pct}%) shows how certain the model is about this classification. "
-            "If the intent is wrong, try rephrasing — e.g. 'best place to stake FLR' instead of just 'staking'.",
-            title="What does this intent detection mean?",
-            intermediate_message=f"Intent: {_primary} ({_conf_pct}% confidence). Model routing query to relevant data feeds and opportunity scanner.",
-        )
-
-        # Context-relevant data based on intent
-        if _primary in ("STAKE", "YIELD_HUNT", "LEND"):
+with _t_sent:
+    render_section_header("DeFi Assistant", "Ask any DeFi question — AI detects your intent and surfaces relevant data")
+    
+    try:
+        if demo_mode:
+            st.info("DeFi Assistant is disabled in Demo Mode. Toggle Demo Mode off in the sidebar to use it.")
+            _defi_query = ""
+        else:
+            _defi_query = st.text_input(
+                "Ask about DeFi (e.g. 'best place to stake ETH', 'how to LP on Aerodrome', 'compare restaking yields')",
+                key="defi_assistant_query",
+                placeholder="Type your DeFi question here…",
+            )
+    
+        if not demo_mode and _defi_query and _defi_query.strip():
+            with st.spinner("Classifying intent…"):
+                _intent_result = classify_defi_intent(_defi_query.strip())
+    
+            _primary    = _intent_result.get("primary", "OTHER")
+            _secondary  = _intent_result.get("secondary")
+            _conf       = _intent_result.get("confidence", 0.0)
+            _action     = _intent_result.get("suggested_action", "")
+            _src        = _intent_result.get("source", "keyword_fallback")
+            _src_label  = "Claude AI" if _src == "claude_haiku" else "keyword matching"
+    
+            _conf_pct   = round(_conf * 100)
+            _intent_col = {
+                "SWAP":             "#3b82f6",
+                "PROVIDE_LIQUIDITY":"#22c55e",
+                "STAKE":            "#8b5cf6",
+                "BORROW":           "#f59e0b",
+                "LEND":             "#14b8a6",
+                "CLAIM_REWARDS":    "#84cc16",
+                "BRIDGE":           "#ec4899",
+                "PORTFOLIO_CHECK":  "#64748b",
+                "YIELD_HUNT":       "#f97316",
+                "RISK_ASSESSMENT":  "#ef4444",
+                "OTHER":            "#475569",
+            }.get(_primary, "#475569")
+    
+            _sec_str = f" · secondary: **{_secondary}**" if _secondary else ""
             st.markdown(
-                "<div style='color:#475569;font-size:0.85rem;margin:10px 0 4px'>"
-                "Relevant: top yield opportunities — check the Opportunities tab for live APY data.</div>",
+                f"<div style='background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.07);"
+                f"border-left:3px solid {_intent_col};border-radius:8px;padding:12px 16px;margin:8px 0'>"
+                f"<div style='margin-bottom:6px'>"
+                f"Intent detected: <span style='font-weight:700;color:{_intent_col};font-size:1.05rem'>"
+                f"{_primary}</span> ({_conf_pct}% confidence){_sec_str}"
+                f"<span style='float:right;font-size:0.85rem;color:#334155'>via {_src_label}</span>"
+                f"</div>"
+                f"<div style='color:#c4cbdb;font-size:0.87rem'>{_html.escape(_action)}</div>"
+                f"</div>",
                 unsafe_allow_html=True,
             )
-            try:
-                from scanners.defillama import fetch_yields_pools as _fetch_yp
-                _assist_pools = _fetch_yp(min_tvl_usd=10_000_000, max_results=5)
-                if _assist_pools:
-                    _assist_rows = []
-                    for _ap in _assist_pools[:5]:
-                        _assist_rows.append({
-                            "Protocol": str(_ap.get("project", "—")).replace("-", " ").title(),
-                            "Pool":     _ap.get("symbol", "—"),
-                            "Chain":    _ap.get("chain", "—"),
-                            "APY %":    f"{float(_ap.get('apy') or 0):.2f}%",
-                            "TVL":      (f"${float(_ap.get('tvlUsd',0))/1e6:.0f}M"
-                                         if float(_ap.get('tvlUsd',0)) >= 1e6
-                                         else f"${float(_ap.get('tvlUsd',0)):,.0f}"),
-                        })
-                    st.dataframe(pd.DataFrame(_assist_rows), width='stretch', hide_index=True)
-            except Exception:
-                pass
-
-        elif _primary == "PROVIDE_LIQUIDITY":
-            st.info("Head to the **Opportunities** tab — use the Multi-Chain Pools and Solana DeFi sections to compare LP yields.")
-
-        elif _primary in ("BORROW",):
-            st.info("Compare borrow rates in the Multi-Chain Pools section (Opportunities tab). Aave v3 and Morpho are shown there.")
-
-        elif _primary == "PORTFOLIO_CHECK":
-            st.info("Your portfolio is on the **Portfolio** tab (tab 1).")
-
-        elif _primary == "RISK_ASSESSMENT":
-            st.info("Protocol risk scores are shown in the Opportunities tab — look for the 'Risk Score' column in the Multi-Chain Pools table.")
-
-        elif _primary == "BRIDGE":
-            st.markdown(
-                "<div style='font-size:0.9rem;color:#94a3b8;margin-bottom:8px'>"
-                "Cross-chain bridge options for Flare Network — capital flow data from DeFiLlama"
-                "</div>",
-                unsafe_allow_html=True,
+    
+            render_what_this_means(
+                f"Your question was classified as: '{_primary}'. "
+                "This tells the model what kind of DeFi action you're looking for so it can show you the most relevant data. "
+                f"The confidence ({_conf_pct}%) shows how certain the model is about this classification. "
+                "If the intent is wrong, try rephrasing — e.g. 'best place to stake FLR' instead of just 'staking'.",
+                title="What does this intent detection mean?",
+                intermediate_message=f"Intent: {_primary} ({_conf_pct}% confidence). Model routing query to relevant data feeds and opportunity scanner.",
             )
-            # Show bridge recommendations and live chain flow data
-            _bridge_protocols = [
-                {"name": "LayerZero", "chains": "ETH → Flare, Base → Flare", "type": "Message passing + token bridge", "url_hint": "layerzero.network"},
-                {"name": "Li.Fi",     "chains": "15+ EVM chains incl. Flare", "type": "DEX aggregator + bridge router", "url_hint": "li.fi"},
-                {"name": "Stargate",  "chains": "ETH, BSC, Polygon, Arbitrum", "type": "Liquidity bridge (USDC/USDT)", "url_hint": "stargate.finance"},
-                {"name": "Wanchain",  "chains": "XRP Ledger ↔ Flare, ETH ↔ Flare", "type": "Cross-chain atomic swaps", "url_hint": "wanchain.org"},
-            ]
-            _bp_rows = [
-                {"Bridge": r["name"], "Supported Routes": r["chains"], "Type": r["type"]}
-                for r in _bridge_protocols
-            ]
-            st.dataframe(pd.DataFrame(_bp_rows), width='stretch', hide_index=True)
-            st.caption("Live chain TVL flows available in Opportunities → Bridge Flow Monitor.")
-
-except Exception as _assist_exc:
-    st.info("DeFi Assistant unavailable. Check logs for details.")
+    
+            # Context-relevant data based on intent
+            if _primary in ("STAKE", "YIELD_HUNT", "LEND"):
+                st.markdown(
+                    "<div style='color:#475569;font-size:0.85rem;margin:10px 0 4px'>"
+                    "Relevant: top yield opportunities — check the Opportunities tab for live APY data.</div>",
+                    unsafe_allow_html=True,
+                )
+                try:
+                    from scanners.defillama import fetch_yields_pools as _fetch_yp
+                    _assist_pools = _fetch_yp(min_tvl_usd=10_000_000, max_results=5)
+                    if _assist_pools:
+                        _assist_rows = []
+                        for _ap in _assist_pools[:5]:
+                            _assist_rows.append({
+                                "Protocol": str(_ap.get("project", "—")).replace("-", " ").title(),
+                                "Pool":     _ap.get("symbol", "—"),
+                                "Chain":    _ap.get("chain", "—"),
+                                "APY %":    f"{float(_ap.get('apy') or 0):.2f}%",
+                                "TVL":      (f"${float(_ap.get('tvlUsd',0))/1e6:.0f}M"
+                                             if float(_ap.get('tvlUsd',0)) >= 1e6
+                                             else f"${float(_ap.get('tvlUsd',0)):,.0f}"),
+                            })
+                        st.dataframe(pd.DataFrame(_assist_rows), width='stretch', hide_index=True)
+                except Exception:
+                    pass
+    
+            elif _primary == "PROVIDE_LIQUIDITY":
+                st.info("Head to the **Opportunities** tab — use the Multi-Chain Pools and Solana DeFi sections to compare LP yields.")
+    
+            elif _primary in ("BORROW",):
+                st.info("Compare borrow rates in the Multi-Chain Pools section (Opportunities tab). Aave v3 and Morpho are shown there.")
+    
+            elif _primary == "PORTFOLIO_CHECK":
+                st.info("Your portfolio is on the **Portfolio** tab (tab 1).")
+    
+            elif _primary == "RISK_ASSESSMENT":
+                st.info("Protocol risk scores are shown in the Opportunities tab — look for the 'Risk Score' column in the Multi-Chain Pools table.")
+    
+            elif _primary == "BRIDGE":
+                st.markdown(
+                    "<div style='font-size:0.9rem;color:#94a3b8;margin-bottom:8px'>"
+                    "Cross-chain bridge options for Flare Network — capital flow data from DeFiLlama"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+                # Show bridge recommendations and live chain flow data
+                _bridge_protocols = [
+                    {"name": "LayerZero", "chains": "ETH → Flare, Base → Flare", "type": "Message passing + token bridge", "url_hint": "layerzero.network"},
+                    {"name": "Li.Fi",     "chains": "15+ EVM chains incl. Flare", "type": "DEX aggregator + bridge router", "url_hint": "li.fi"},
+                    {"name": "Stargate",  "chains": "ETH, BSC, Polygon, Arbitrum", "type": "Liquidity bridge (USDC/USDT)", "url_hint": "stargate.finance"},
+                    {"name": "Wanchain",  "chains": "XRP Ledger ↔ Flare, ETH ↔ Flare", "type": "Cross-chain atomic swaps", "url_hint": "wanchain.org"},
+                ]
+                _bp_rows = [
+                    {"Bridge": r["name"], "Supported Routes": r["chains"], "Type": r["type"]}
+                    for r in _bridge_protocols
+                ]
+                st.dataframe(pd.DataFrame(_bp_rows), width='stretch', hide_index=True)
+                st.caption("Live chain TVL flows available in Opportunities → Bridge Flow Monitor.")
+    
+    except Exception as _assist_exc:
+        st.info("DeFi Assistant unavailable. Check logs for details.")
 
 # end _t_sent
 
@@ -307,818 +308,818 @@ except Exception as _assist_exc:
 with _t_eco:
     render_section_header("Ecosystem Monitor", "New protocols · recent news · on-chain activity")
 
-# Demo Mode: skip live fetches, show placeholder (#67)
-if demo_mode:
-    st.warning(
-        "Demo Mode — live API fetches are disabled. Showing sample analysis placeholder.",
-        icon="🎭",
-    )
-    st.markdown(
-        "<div style='background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);"
-        "border-radius:10px;padding:16px 20px;font-size:0.92rem'>"
-        "<b>Sample Analysis</b><br><br>"
-        "In Demo Mode, the Intelligence page skips all live network calls. "
-        "When running with real data, this section shows:<br><br>"
-        "• New Flare protocols discovered by the web monitor<br>"
-        "• On-chain activity summaries from DeFiLlama<br>"
-        "• AI-generated ecosystem digest (requires ANTHROPIC_API_KEY)<br>"
-        "• Active governance proposals from Snapshot<br>"
-        "• Model accuracy and feedback loop metrics"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-    st.stop()
-
-with st.spinner("Analyzing on-chain data..."):
-    digest = load_monitor_digest()
-if not digest:
-    st.info(
-        "No monitor data yet. Trigger manually: "
-        "`python -c \"from scanners.web_monitor import run_web_monitor; run_web_monitor()\"`"
-    )
-else:
-    generated  = digest.get("generated_at", "")
-    new_p      = len(digest.get("new_protocols") or [])
-    news_n     = len(digest.get("news_items") or [])
-    known_tvl  = digest.get("known_tvl") or {}
-
-    # Status bar
-    parts = []
-    if generated:
-        parts.append(f"Last checked: {_ts_fmt(generated)}")
-    if new_p:
-        parts.append(f"{new_p} new protocol(s)")
-    if news_n:
-        parts.append(f"{news_n} news item(s)")
-    if parts:
+    # Demo Mode: skip live fetches, show placeholder (#67)
+    if demo_mode:
+        st.warning(
+            "Demo Mode — live API fetches are disabled. Showing sample analysis placeholder.",
+            icon="🎭",
+        )
         st.markdown(
-            f"<div style='color:#475569; font-size:0.85rem; margin-bottom:14px;'>"
-            f"{'  ·  '.join(parts)}</div>",
+            "<div style='background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);"
+            "border-radius:10px;padding:16px 20px;font-size:0.92rem'>"
+            "<b>Sample Analysis</b><br><br>"
+            "In Demo Mode, the Intelligence page skips all live network calls. "
+            "When running with real data, this section shows:<br><br>"
+            "• New Flare protocols discovered by the web monitor<br>"
+            "• On-chain activity summaries from DeFiLlama<br>"
+            "• AI-generated ecosystem digest (requires ANTHROPIC_API_KEY)<br>"
+            "• Active governance proposals from Snapshot<br>"
+            "• Model accuracy and feedback loop metrics"
+            "</div>",
             unsafe_allow_html=True,
         )
-
-    # AI summary
-    ai_text = digest.get("ai_digest", "").strip()
-    if ai_text:
-        st.markdown(
-            f"<div class='opp-card' style='border-left:3px solid #8b5cf6; "
-            f"background:rgba(139,92,246,0.04);'>"
-            f"<div style='display:flex; align-items:center; gap:8px; margin-bottom:10px;'>"
-            f"<span style='font-size:1rem;'>🤖</span>"
-            f"<span class='badge-new'>AI Summary</span>"
-            f"<span style='font-size:0.85rem; color:#334155; margin-left:auto;'>Claude AI · Not financial advice</span>"
-            f"</div>"
-            f"<div style='color:#c4cbdb; font-size:0.90rem; line-height:1.65;'>{_html.escape(ai_text)}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
+        st.stop()
+    
+    with st.spinner("Analyzing on-chain data..."):
+        digest = load_monitor_digest()
+    if not digest:
+        st.info(
+            "No monitor data yet. Trigger manually: "
+            "`python -c \"from scanners.web_monitor import run_web_monitor; run_web_monitor()\"`"
         )
     else:
-        st.markdown(
-            "<div style='background:rgba(139,92,246,0.04); border:1px solid rgba(139,92,246,0.12); "
-            "border-radius:10px; padding:12px 16px; font-size:0.85rem; color:#475569;'>"
-            "🤖 Set <code style='background:rgba(255,255,255,0.06); padding:1px 6px; border-radius:4px;'>"
-            "ANTHROPIC_API_KEY</code> to enable AI-generated ecosystem summaries.</div>",
-            unsafe_allow_html=True,
-        )
-
-    st.divider()
-
-    # New protocols
-    new_protocols = digest.get("new_protocols") or []
-    if new_protocols:
-        st.markdown(f"#### New Protocols on Flare ({len(new_protocols)})")
-        for proto in new_protocols:
-            tvl_str  = f"${proto['tvl_usd']:,.0f}" if proto.get("tvl_usd") else "TVL unknown"
-            url_md   = f" · [Visit]({proto['url']})" if proto.get("url") else ""
-            desc     = _html.escape(str(proto.get("description", "")))
+        generated  = digest.get("generated_at", "")
+        new_p      = len(digest.get("new_protocols") or [])
+        news_n     = len(digest.get("news_items") or [])
+        known_tvl  = digest.get("known_tvl") or {}
+    
+        # Status bar
+        parts = []
+        if generated:
+            parts.append(f"Last checked: {_ts_fmt(generated)}")
+        if new_p:
+            parts.append(f"{new_p} new protocol(s)")
+        if news_n:
+            parts.append(f"{news_n} news item(s)")
+        if parts:
             st.markdown(
-                f"<div class='arb-tag'>"
-                f"<span style='font-weight:700; color:#f1f5f9;'>{_html.escape(str(proto.get('name', '?')))}</span>"
-                f"<span style='color:#475569;'> · {_html.escape(str(proto.get('category','?')))} · {tvl_str}{url_md}</span>"
-                f"{'<div style=\"color:#64748b;font-size:0.85rem;margin-top:6px\">' + desc + '</div>' if desc else ''}"
-                f"</div>",
+                f"<div style='color:#475569; font-size:0.85rem; margin-bottom:14px;'>"
+                f"{'  ·  '.join(parts)}</div>",
                 unsafe_allow_html=True,
             )
-    else:
-        st.markdown(
-            "<div style='color:#334155; font-size:0.85rem;'>No new protocols detected since last check.</div>",
-            unsafe_allow_html=True,
-        )
-
-    # TVL table
-    if known_tvl:
-        with st.expander(f"Live TVL — {len(known_tvl)} tracked protocols"):
-            tvl_rows = [
-                {"Protocol": name, "TVL (USD)": f"${data.get('tvl_usd', 0):,.0f}", "Category": data.get("category", "")}
-                for name, data in sorted(
-                    known_tvl.items(),
-                    key=lambda x: x[1].get("tvl_usd", 0) if isinstance(x[1], dict) else 0,
-                    reverse=True,
-                )
-                if isinstance(data, dict)
-            ]
-            st.dataframe(pd.DataFrame(tvl_rows), width='stretch', hide_index=True)
-
-    # News
-    news_items = digest.get("news_items") or []
-    if news_items:
-        st.markdown(
-            f"<div style='font-size:0.85rem; font-weight:700; color:#94a3b8; "
-            f"text-transform:uppercase; letter-spacing:1.2px; margin:16px 0 10px;'>"
-            f"Recent News <span style='color:#334155; font-weight:400;'>({len(news_items)} articles)</span></div>",
-            unsafe_allow_html=True,
-        )
-        for item in news_items[:10]:
-            if not isinstance(item, dict):
-                continue
-            title    = _html.escape(str(item.get("title", "Untitled")))
-            link     = item.get("link", "")
-            title_md = f"<a href='{_html.escape(link)}' target='_blank' style='color:#c4cbdb; font-weight:600; text-decoration:none;'>{title} ↗</a>" if link else f"<span style='color:#94a3b8; font-weight:600;'>{title}</span>"
-            summary  = _html.escape(str(item.get("summary", "")))
-            src      = _html.escape(str(item.get("source", "")))
-            pub      = _html.escape(str(item.get("published", "")))
-            sum_html = f"<div style='color:#64748b; font-size:0.85rem; margin-top:5px; line-height:1.5;'>{summary}</div>" if summary else ""
+    
+        # AI summary
+        ai_text = digest.get("ai_digest", "").strip()
+        if ai_text:
             st.markdown(
-                f"<div style='background:rgba(13,14,20,0.8); border-radius:12px; padding:13px 16px; "
-                f"margin-bottom:8px; border:1px solid rgba(255,255,255,0.06); "
-                f"transition: border-color 0.2s;'>"
-                f"<div>{title_md}</div>"
-                f"<div style='color:#334155; font-size:0.85rem; margin-top:4px; display:flex; gap:8px;'>"
-                f"<span style='color:#475569;'>{src}</span>"
-                f"{'<span style=\"color:#1e293b\">·</span>' if src and pub else ''}"
-                f"<span>{pub}</span>"
+                f"<div class='opp-card' style='border-left:3px solid #8b5cf6; "
+                f"background:rgba(139,92,246,0.04);'>"
+                f"<div style='display:flex; align-items:center; gap:8px; margin-bottom:10px;'>"
+                f"<span style='font-size:1rem;'>🤖</span>"
+                f"<span class='badge-new'>AI Summary</span>"
+                f"<span style='font-size:0.85rem; color:#334155; margin-left:auto;'>Claude AI · Not financial advice</span>"
                 f"</div>"
-                f"{sum_html}"
+                f"<div style='color:#c4cbdb; font-size:0.90rem; line-height:1.65;'>{_html.escape(ai_text)}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
-        if len(news_items) > 10:
-            with st.expander(f"Show all {len(news_items)} articles"):
-                for item in news_items[10:]:
-                    link_md = f"[{item.get('title', 'Untitled')}]({item['link']})" if item.get("link") else item.get("title", "Untitled")
-                    st.markdown(f"- **{link_md}** — {item.get('source','')} · {item.get('published','')}")
-    else:
-        st.markdown(
-            "<div style='color:#334155; font-size:0.85rem;'>No news in the last 48 hours.</div>",
-            unsafe_allow_html=True,
-        )
-
-    errors = digest.get("errors") or []
-    if errors:
-        with st.expander("Monitor errors (non-critical)"):
-            for err in errors:
-                st.caption(err)
-
-st.divider()
-
-
-# ─── AI Model Health ──────────────────────────────────────────────────────────
-
-render_section_header("AI Model Health", "How accurately has the model predicted real yields? Updates after each scan")
-
-try:
-    from ai.feedback_loop import get_feedback_dashboard
-    feedback = get_feedback_dashboard()
-except Exception as e:
-    import logging as _lg_mi
-    _lg_mi.getLogger(__name__).warning("[MarketIntel] feedback load error: %s", e)
-    st.warning("AI model health data not yet available — run a scan to generate feedback.")
-    feedback = None
-
-if feedback:
-    overall = feedback.get("overall_health", 50)
-    trend   = feedback.get("trend", "building")
-    trend_icon = {"improving": "📈", "stable": "➡️", "declining": "📉", "building": "🔧"}.get(trend, "➡️")
-    health_color = "#10b981" if overall >= 70 else ("#f59e0b" if overall >= 45 else "#ef4444")
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f"""
-        <div class="metric-card card-blue">
-            <div class="label">Overall Health</div>
-            <div class="big-number" style="color:{health_color};">{overall}<span style="font-size:1rem; color:#475569;">/100</span></div>
-        </div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div class="metric-card card-blue">
-            <div class="label">Trend</div>
-            <div class="big-number">{trend_icon}</div>
-            <div style="color:#475569; font-size:0.85rem; margin-top:4px;">{trend.capitalize()}</div>
-        </div>""", unsafe_allow_html=True)
-    with c3:
-        scans     = feedback.get("total_scans", 0)
-        evaluated = feedback.get("evaluated_scans", 0)
-        st.markdown(f"""
-        <div class="metric-card card-blue">
-            <div class="label">Predictions</div>
-            <div class="big-number">{evaluated}</div>
-            <div style="color:#475569; font-size:0.85rem; margin-top:4px;">of {scans} evaluated</div>
-        </div>""", unsafe_allow_html=True)
-
-    st.divider()
-    st.markdown("#### Per-Profile Accuracy")
-
-    from config import RISK_PROFILE_NAMES, RISK_PROFILES
-
-    # Toggle between 24h and 7d accuracy windows (upgrade #11)
-    acc_window = st.radio(
-        "Evaluation window",
-        ["24h", "7d"],
-        horizontal=True,
-        key="acc_window",
-        help="24h: accuracy vs next-day actuals. 7d: accuracy vs 7-day actuals.",
-    )
-    profile_data = (
-        (feedback.get("per_profile") or {})
-        if acc_window == "24h"
-        else (feedback.get("per_profile_7d") or feedback.get("per_profile") or {})
-    )
-
-    for p in RISK_PROFILE_NAMES:
-        acc   = profile_data.get(p) or {}
-        pcfg  = RISK_PROFILES[p]
-        pcol  = pcfg["color"]
-        grade = acc.get("grade", "N/A")
-        score = acc.get("health_score", 50)
-        msg   = acc.get("message", "Building history…")
-        acc_pct = acc.get("accuracy_pct")
-        err_pct = acc.get("avg_error_pct")
-        dir_pct = acc.get("directional_pct")   # upgrade #10
-        sc      = acc.get("sample_count", 0)
-
-        sc_color = "#10b981" if score >= 70 else ("#f59e0b" if score >= 45 else "#ef4444")
-
-        st.markdown(
-            f"<div class='opp-card' style='border-left:3px solid {pcol};'>"
-            f"<div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;'>"
-            f"<span style='font-weight:700; color:#f1f5f9;'>{pcfg['label']}</span>"
-            f"<div style='display:flex; gap:16px; font-size:0.85rem; color:#475569;'>"
-            f"<span>Grade: <span style='color:#f1f5f9; font-weight:700;'>{grade}</span></span>"
-            f"<span>Score: <span style='color:{sc_color}; font-weight:700;'>{score}/100</span></span>"
-            f"{'<span>Accuracy: <span style=\"color:#94a3b8\">' + str(acc_pct) + '%</span></span>' if acc_pct is not None else ''}"
-            f"{'<span>Avg error: <span style=\"color:#94a3b8\">' + str(err_pct) + '%</span></span>' if err_pct is not None else ''}"
-            f"{'<span>Directional: <span style=\"color:#94a3b8\">' + str(dir_pct) + '%</span></span>' if dir_pct is not None else ''}"
-            f"<span style='color:#334155;'>{sc} samples</span>"
-            f"</div></div>"
-            f"<div style='color:#475569; font-size:0.85rem; margin-top:8px;'>{msg}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    # Model weights
-    weights = feedback.get("model_weights") or {}
-    if weights:
+        else:
+            st.markdown(
+                "<div style='background:rgba(139,92,246,0.04); border:1px solid rgba(139,92,246,0.12); "
+                "border-radius:10px; padding:12px 16px; font-size:0.85rem; color:#475569;'>"
+                "🤖 Set <code style='background:rgba(255,255,255,0.06); padding:1px 6px; border-radius:4px;'>"
+                "ANTHROPIC_API_KEY</code> to enable AI-generated ecosystem summaries.</div>",
+                unsafe_allow_html=True,
+            )
+    
         st.divider()
-        st.markdown("#### Model Confidence Weights")
-        st.markdown(
-            "<div style='color:#475569; font-size:0.85rem; margin-bottom:10px;'>"
-            "Higher accuracy = higher weight. Adjusted automatically after each scan.</div>",
-            unsafe_allow_html=True,
+    
+        # New protocols
+        new_protocols = digest.get("new_protocols") or []
+        if new_protocols:
+            st.markdown(f"#### New Protocols on Flare ({len(new_protocols)})")
+            for proto in new_protocols:
+                tvl_str  = f"${proto['tvl_usd']:,.0f}" if proto.get("tvl_usd") else "TVL unknown"
+                url_md   = f" · [Visit]({proto['url']})" if proto.get("url") else ""
+                desc     = _html.escape(str(proto.get("description", "")))
+                st.markdown(
+                    f"<div class='arb-tag'>"
+                    f"<span style='font-weight:700; color:#f1f5f9;'>{_html.escape(str(proto.get('name', '?')))}</span>"
+                    f"<span style='color:#475569;'> · {_html.escape(str(proto.get('category','?')))} · {tvl_str}{url_md}</span>"
+                    f"{'<div style=\"color:#64748b;font-size:0.85rem;margin-top:6px\">' + desc + '</div>' if desc else ''}"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.markdown(
+                "<div style='color:#334155; font-size:0.85rem;'>No new protocols detected since last check.</div>",
+                unsafe_allow_html=True,
+            )
+    
+        # TVL table
+        if known_tvl:
+            with st.expander(f"Live TVL — {len(known_tvl)} tracked protocols"):
+                tvl_rows = [
+                    {"Protocol": name, "TVL (USD)": f"${data.get('tvl_usd', 0):,.0f}", "Category": data.get("category", "")}
+                    for name, data in sorted(
+                        known_tvl.items(),
+                        key=lambda x: x[1].get("tvl_usd", 0) if isinstance(x[1], dict) else 0,
+                        reverse=True,
+                    )
+                    if isinstance(data, dict)
+                ]
+                st.dataframe(pd.DataFrame(tvl_rows), width='stretch', hide_index=True)
+    
+        # News
+        news_items = digest.get("news_items") or []
+        if news_items:
+            st.markdown(
+                f"<div style='font-size:0.85rem; font-weight:700; color:#94a3b8; "
+                f"text-transform:uppercase; letter-spacing:1.2px; margin:16px 0 10px;'>"
+                f"Recent News <span style='color:#334155; font-weight:400;'>({len(news_items)} articles)</span></div>",
+                unsafe_allow_html=True,
+            )
+            for item in news_items[:10]:
+                if not isinstance(item, dict):
+                    continue
+                title    = _html.escape(str(item.get("title", "Untitled")))
+                link     = item.get("link", "")
+                title_md = f"<a href='{_html.escape(link)}' target='_blank' style='color:#c4cbdb; font-weight:600; text-decoration:none;'>{title} ↗</a>" if link else f"<span style='color:#94a3b8; font-weight:600;'>{title}</span>"
+                summary  = _html.escape(str(item.get("summary", "")))
+                src      = _html.escape(str(item.get("source", "")))
+                pub      = _html.escape(str(item.get("published", "")))
+                sum_html = f"<div style='color:#64748b; font-size:0.85rem; margin-top:5px; line-height:1.5;'>{summary}</div>" if summary else ""
+                st.markdown(
+                    f"<div style='background:rgba(13,14,20,0.8); border-radius:12px; padding:13px 16px; "
+                    f"margin-bottom:8px; border:1px solid rgba(255,255,255,0.06); "
+                    f"transition: border-color 0.2s;'>"
+                    f"<div>{title_md}</div>"
+                    f"<div style='color:#334155; font-size:0.85rem; margin-top:4px; display:flex; gap:8px;'>"
+                    f"<span style='color:#475569;'>{src}</span>"
+                    f"{'<span style=\"color:#1e293b\">·</span>' if src and pub else ''}"
+                    f"<span>{pub}</span>"
+                    f"</div>"
+                    f"{sum_html}"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            if len(news_items) > 10:
+                with st.expander(f"Show all {len(news_items)} articles"):
+                    for item in news_items[10:]:
+                        link_md = f"[{item.get('title', 'Untitled')}]({item['link']})" if item.get("link") else item.get("title", "Untitled")
+                        st.markdown(f"- **{link_md}** — {item.get('source','')} · {item.get('published','')}")
+        else:
+            st.markdown(
+                "<div style='color:#334155; font-size:0.85rem;'>No news in the last 48 hours.</div>",
+                unsafe_allow_html=True,
+            )
+    
+        errors = digest.get("errors") or []
+        if errors:
+            with st.expander("Monitor errors (non-critical)"):
+                for err in errors:
+                    st.caption(err)
+    
+    st.divider()
+    
+    
+    # ─── AI Model Health ──────────────────────────────────────────────────────────
+    
+    render_section_header("AI Model Health", "How accurately has the model predicted real yields? Updates after each scan")
+    
+    try:
+        from ai.feedback_loop import get_feedback_dashboard
+        feedback = get_feedback_dashboard()
+    except Exception as e:
+        import logging as _lg_mi
+        _lg_mi.getLogger(__name__).warning("[MarketIntel] feedback load error: %s", e)
+        st.warning("AI model health data not yet available — run a scan to generate feedback.")
+        feedback = None
+    
+    if feedback:
+        overall = feedback.get("overall_health", 50)
+        trend   = feedback.get("trend", "building")
+        trend_icon = {"improving": "📈", "stable": "➡️", "declining": "📉", "building": "🔧"}.get(trend, "➡️")
+        health_color = "#10b981" if overall >= 70 else ("#f59e0b" if overall >= 45 else "#ef4444")
+    
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f"""
+            <div class="metric-card card-blue">
+                <div class="label">Overall Health</div>
+                <div class="big-number" style="color:{health_color};">{overall}<span style="font-size:1rem; color:#475569;">/100</span></div>
+            </div>""", unsafe_allow_html=True)
+        with c2:
+            st.markdown(f"""
+            <div class="metric-card card-blue">
+                <div class="label">Trend</div>
+                <div class="big-number">{trend_icon}</div>
+                <div style="color:#475569; font-size:0.85rem; margin-top:4px;">{trend.capitalize()}</div>
+            </div>""", unsafe_allow_html=True)
+        with c3:
+            scans     = feedback.get("total_scans", 0)
+            evaluated = feedback.get("evaluated_scans", 0)
+            st.markdown(f"""
+            <div class="metric-card card-blue">
+                <div class="label">Predictions</div>
+                <div class="big-number">{evaluated}</div>
+                <div style="color:#475569; font-size:0.85rem; margin-top:4px;">of {scans} evaluated</div>
+            </div>""", unsafe_allow_html=True)
+    
+        st.divider()
+        st.markdown("#### Per-Profile Accuracy")
+    
+        from config import RISK_PROFILE_NAMES, RISK_PROFILES
+    
+        # Toggle between 24h and 7d accuracy windows (upgrade #11)
+        acc_window = st.radio(
+            "Evaluation window",
+            ["24h", "7d"],
+            horizontal=True,
+            key="acc_window",
+            help="24h: accuracy vs next-day actuals. 7d: accuracy vs 7-day actuals.",
         )
-        rows = [{"Profile": p.capitalize(), "Weight": f"{w:.4f}",
-                 "Effect": "Boosted" if w > 1.0 else ("Reduced" if w < 0.9 else "Neutral")}
-                for p, w in weights.items()]
-        st.dataframe(pd.DataFrame(rows), width='stretch', hide_index=True)
-
+        profile_data = (
+            (feedback.get("per_profile") or {})
+            if acc_window == "24h"
+            else (feedback.get("per_profile_7d") or feedback.get("per_profile") or {})
+        )
+    
+        for p in RISK_PROFILE_NAMES:
+            acc   = profile_data.get(p) or {}
+            pcfg  = RISK_PROFILES[p]
+            pcol  = pcfg["color"]
+            grade = acc.get("grade", "N/A")
+            score = acc.get("health_score", 50)
+            msg   = acc.get("message", "Building history…")
+            acc_pct = acc.get("accuracy_pct")
+            err_pct = acc.get("avg_error_pct")
+            dir_pct = acc.get("directional_pct")   # upgrade #10
+            sc      = acc.get("sample_count", 0)
+    
+            sc_color = "#10b981" if score >= 70 else ("#f59e0b" if score >= 45 else "#ef4444")
+    
+            st.markdown(
+                f"<div class='opp-card' style='border-left:3px solid {pcol};'>"
+                f"<div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;'>"
+                f"<span style='font-weight:700; color:#f1f5f9;'>{pcfg['label']}</span>"
+                f"<div style='display:flex; gap:16px; font-size:0.85rem; color:#475569;'>"
+                f"<span>Grade: <span style='color:#f1f5f9; font-weight:700;'>{grade}</span></span>"
+                f"<span>Score: <span style='color:{sc_color}; font-weight:700;'>{score}/100</span></span>"
+                f"{'<span>Accuracy: <span style=\"color:#94a3b8\">' + str(acc_pct) + '%</span></span>' if acc_pct is not None else ''}"
+                f"{'<span>Avg error: <span style=\"color:#94a3b8\">' + str(err_pct) + '%</span></span>' if err_pct is not None else ''}"
+                f"{'<span>Directional: <span style=\"color:#94a3b8\">' + str(dir_pct) + '%</span></span>' if dir_pct is not None else ''}"
+                f"<span style='color:#334155;'>{sc} samples</span>"
+                f"</div></div>"
+                f"<div style='color:#475569; font-size:0.85rem; margin-top:8px;'>{msg}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+    
+        # Model weights
+        weights = feedback.get("model_weights") or {}
+        if weights:
+            st.divider()
+            st.markdown("#### Model Confidence Weights")
+            st.markdown(
+                "<div style='color:#475569; font-size:0.85rem; margin-bottom:10px;'>"
+                "Higher accuracy = higher weight. Adjusted automatically after each scan.</div>",
+                unsafe_allow_html=True,
+            )
+            rows = [{"Profile": p.capitalize(), "Weight": f"{w:.4f}",
+                     "Effect": "Boosted" if w > 1.0 else ("Reduced" if w < 0.9 else "Neutral")}
+                    for p, w in weights.items()]
+            st.dataframe(pd.DataFrame(rows), width='stretch', hide_index=True)
+    
 # end _t_eco (first block: Ecosystem Monitor + AI Model Health)
 
 
 with _t_macro:
     render_section_header("Macro Intelligence", "FRED + yfinance · 10Y yield · 2Y10Y spread · VIX · CPI · BTC rolling correlations")
 
-try:
-    import macro_feeds as _mf
-    import plotly.graph_objects as go
-
-    _fred = _mf.fetch_fred_macro()
-    _yf   = _mf.fetch_yfinance_macro()
-
-    _mc1, _mc2, _mc3, _mc4, _mc5, _mc6, _mc7 = st.columns(7)
-    _mc1.metric("10Y Yield",  f"{_fred.get('ten_yr_yield', 4.35):.2f}%")
-    _mc2.metric("M2 ($B)",    f"${_fred.get('m2_supply_bn', 21500):,.0f}B")
-    _mc3.metric("ISM Mfg",    f"{_fred.get('ism_manufacturing', 52.0):.1f}")
-    _mc4.metric("WTI Oil",    f"${_fred.get('wti_crude', 67.5):.1f}")
-    _mc5.metric("DXY",        f"{_yf.get('dxy', 104.0):.1f}")
-    _mc6.metric("VIX",        f"{_yf.get('vix', 18.0):.1f}")
-    _mc7.metric("Gold",       f"${_yf.get('gold_spot', 2900.0):,.0f}")
-
-    st.markdown(
-        f"<div style='color:#475569; font-size:0.75rem; margin-bottom:14px;'>"
-        f"FRED: {_fred.get('source','?')} · yfinance: {_yf.get('source','?')} · Cached 1 hour</div>",
-        unsafe_allow_html=True,
-    )
-
-    _corr_w = st.select_slider(
-        "BTC correlation window (days)",
-        options=[14, 30, 60, 90],
-        value=30,
-        key="defi_macro_corr_days",
-    )
-    _ts = _mf.fetch_macro_timeseries(max(90, _corr_w * 3))
-
-    if _ts and "BTC" in _ts:
-        _frames: dict = {}
-        for _key in ["BTC", "VIX", "Gold", "SPX", "DXY", "Oil"]:
-            _s = _ts.get(_key)
-            if _s and isinstance(_s, dict):
-                _frames[_key] = pd.Series(_s)
-        if len(_frames) >= 2:
-            _dft = pd.DataFrame(_frames).sort_index().ffill()
-            _dft.index = pd.to_datetime(_dft.index)
-            _dfr = _dft.pct_change().dropna()
-            _fig = go.Figure()
-            _clrs = {"VIX": "#ef4444", "Gold": "#f59e0b", "SPX": "#10b981",
-                     "DXY": "#6366f1", "Oil": "#f97316"}
-            for _fac in [c for c in _dfr.columns if c != "BTC"]:
-                if "BTC" in _dfr.columns:
-                    _rc = _dfr["BTC"].rolling(_corr_w).corr(_dfr[_fac]).dropna()
-                    if not _rc.empty:
-                        _fig.add_trace(go.Scatter(
-                            x=_rc.index, y=_rc.values, mode="lines", name=_fac,
-                            line=dict(color=_clrs.get(_fac, "#888"), width=2),
-                        ))
-            _fig.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.25)")
-            _fig.update_layout(
-                height=260,
-                title=dict(text=f"BTC {_corr_w}-day Rolling Correlation", font=dict(size=13)),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#e2e8f0", size=11),
-                margin=dict(l=0, r=0, t=40, b=0),
-                yaxis=dict(range=[-1, 1], gridcolor="rgba(255,255,255,0.07)"),
-                xaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            )
-            st.plotly_chart(_fig, width='stretch')
-        else:
-            st.info("Loading macro timeseries… (yfinance required)")
-    else:
-        st.info("Install yfinance for BTC macro correlations: `pip install yfinance`")
-
-except Exception as _macro_err:
-    logger.warning("[MarketIntel] macro data failed: %s", _macro_err)
-    st.caption("Macro data temporarily unavailable — try refreshing in a few minutes.")
-
-# ─── BTC Technical Analysis (Layer 1 TA signals) ──────────────────────────────
-st.divider()
-render_section_header("BTC Technical Analysis", "Layer 1 · RSI-14 · MA Cross · 30d Momentum · yfinance daily OHLCV")
-
-try:
-    import macro_feeds as _mf_ta
-    _ta = _mf_ta.fetch_btc_ta_signals()
-
-    _rsi_val   = _ta.get("rsi_14")
-    _ma_sig    = _ta.get("ma_signal", "NEUTRAL")
-    _mom_20    = _ta.get("price_momentum")   # 20d lookback (Issue #R1)
-    _ab200     = _ta.get("above_200ma")
-    _btc_px    = _ta.get("btc_price")
-
-    # RSI color + label
-    if _rsi_val is None:
-        _rsi_color, _rsi_label = "#6b7280", "N/A"
-    elif _rsi_val < 30:
-        _rsi_color, _rsi_label = "#22c55e", "Oversold — buy zone"
-    elif _rsi_val > 70:
-        _rsi_color, _rsi_label = "#ef4444", "Overbought — caution"
-    else:
-        _rsi_color, _rsi_label = "#f59e0b", "Neutral range"
-
-    # MA cross color + icon
-    _ma_meta = {
-        "GOLDEN_CROSS": ("#22c55e", "▲ Golden Cross", "50d crossed above 200d · bullish trend"),
-        "DEATH_CROSS":  ("#ef4444", "▼ Death Cross",  "50d crossed below 200d · bearish trend"),
-        "NEUTRAL":      ("#9ca3af", "■ Neutral",       "No definitive MA cross signal"),
-    }
-    _ma_c, _ma_icon, _ma_desc = _ma_meta.get(_ma_sig, ("#9ca3af", "■ Neutral", ""))
-
-    # Momentum color
-    if _mom_20 is None:
-        _mom_color, _mom_str = "#6b7280", "N/A"
-    elif _mom_20 > 10:
-        _mom_color, _mom_str = "#22c55e", f"+{_mom_20:.1f}%"
-    elif _mom_20 < -10:
-        _mom_color, _mom_str = "#ef4444", f"{_mom_20:.1f}%"
-    else:
-        _mom_color, _mom_str = "#f59e0b", f"{_mom_20:+.1f}%"
-
-    # 200MA position
-    _ab200_str   = "Above 200d MA ▲" if _ab200 else "Below 200d MA ▼"
-    _ab200_color = "#22c55e" if _ab200 else "#ef4444"
-
-    # Pre-compute display strings (avoid complex expressions inside f-strings)
-    _rsi_disp  = f"{_rsi_val:.1f}" if _rsi_val is not None else "N/A"
-    _btc_disp  = f"${_btc_px:,.0f} BTC/USD" if _btc_px else "Price N/A"
-    if _mom_20 is not None and _mom_20 > 10:
-        _mom_trend = "Strong uptrend"
-    elif _mom_20 is not None and _mom_20 < -10:
-        _mom_trend = "Strong downtrend"
-    else:
-        _mom_trend = "Mild drift"
-
-    _tac1, _tac2, _tac3, _tac4 = st.columns(4)
-
-    with _tac1:
-        st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_rsi_color};
-            border-radius:10px;padding:10px;text-align:center">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">RSI-14</div>
-  <div style="font-size:20px;font-weight:700;color:{_rsi_color}">{_rsi_disp}</div>
-  <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_rsi_label}</div>
-  <div style="font-size:10px;color:#6b7280;margin-top:6px">Wilder 1978 · 14-day</div>
-</div>
-""", unsafe_allow_html=True)
-
-    with _tac2:
-        st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_ma_c};
-            border-radius:10px;padding:10px;text-align:center">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MA Cross</div>
-  <div style="font-size:18px;font-weight:700;color:{_ma_c}">{_ma_icon}</div>
-  <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_ma_desc}</div>
-  <div style="font-size:10px;color:#6b7280;margin-top:6px">50d vs 200d · Glassnode 71% accuracy</div>
-</div>
-""", unsafe_allow_html=True)
-
-    with _tac3:
-        st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mom_color};
-            border-radius:10px;padding:10px;text-align:center">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">30d Momentum</div>
-  <div style="font-size:20px;font-weight:700;color:{_mom_color}">{_mom_str}</div>
-  <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_mom_trend}</div>
-  <div style="font-size:10px;color:#6b7280;margin-top:6px">Price change: 30 days</div>
-</div>
-""", unsafe_allow_html=True)
-
-    with _tac4:
-        st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_ab200_color};
-            border-radius:10px;padding:10px;text-align:center">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">200d MA Position</div>
-  <div style="font-size:16px;font-weight:700;color:{_ab200_color}">{_ab200_str}</div>
-  <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_btc_disp}</div>
-  <div style="font-size:10px;color:#6b7280;margin-top:6px">Long-term trend filter</div>
-</div>
-""", unsafe_allow_html=True)
-
-    # Beginner explanation
-    _user_level = st.session_state.get("user_level", "beginner")
-    if _user_level == "beginner":
-        _ta_summary_parts = []
-        if _rsi_val is not None:
-            if _rsi_val < 30:
-                _ta_summary_parts.append("BTC is in an **oversold** zone — historically a good time to consider buying")
-            elif _rsi_val > 70:
-                _ta_summary_parts.append("BTC appears **overbought** — momentum may slow or reverse")
+    try:
+        import macro_feeds as _mf
+        import plotly.graph_objects as go
+    
+        _fred = _mf.fetch_fred_macro()
+        _yf   = _mf.fetch_yfinance_macro()
+    
+        _mc1, _mc2, _mc3, _mc4, _mc5, _mc6, _mc7 = st.columns(7)
+        _mc1.metric("10Y Yield",  f"{_fred.get('ten_yr_yield', 4.35):.2f}%")
+        _mc2.metric("M2 ($B)",    f"${_fred.get('m2_supply_bn', 21500):,.0f}B")
+        _mc3.metric("ISM Mfg",    f"{_fred.get('ism_manufacturing', 52.0):.1f}")
+        _mc4.metric("WTI Oil",    f"${_fred.get('wti_crude', 67.5):.1f}")
+        _mc5.metric("DXY",        f"{_yf.get('dxy', 104.0):.1f}")
+        _mc6.metric("VIX",        f"{_yf.get('vix', 18.0):.1f}")
+        _mc7.metric("Gold",       f"${_yf.get('gold_spot', 2900.0):,.0f}")
+    
+        st.markdown(
+            f"<div style='color:#475569; font-size:0.75rem; margin-bottom:14px;'>"
+            f"FRED: {_fred.get('source','?')} · yfinance: {_yf.get('source','?')} · Cached 1 hour</div>",
+            unsafe_allow_html=True,
+        )
+    
+        _corr_w = st.select_slider(
+            "BTC correlation window (days)",
+            options=[14, 30, 60, 90],
+            value=30,
+            key="defi_macro_corr_days",
+        )
+        _ts = _mf.fetch_macro_timeseries(max(90, _corr_w * 3))
+    
+        if _ts and "BTC" in _ts:
+            _frames: dict = {}
+            for _key in ["BTC", "VIX", "Gold", "SPX", "DXY", "Oil"]:
+                _s = _ts.get(_key)
+                if _s and isinstance(_s, dict):
+                    _frames[_key] = pd.Series(_s)
+            if len(_frames) >= 2:
+                _dft = pd.DataFrame(_frames).sort_index().ffill()
+                _dft.index = pd.to_datetime(_dft.index)
+                _dfr = _dft.pct_change().dropna()
+                _fig = go.Figure()
+                _clrs = {"VIX": "#ef4444", "Gold": "#f59e0b", "SPX": "#10b981",
+                         "DXY": "#6366f1", "Oil": "#f97316"}
+                for _fac in [c for c in _dfr.columns if c != "BTC"]:
+                    if "BTC" in _dfr.columns:
+                        _rc = _dfr["BTC"].rolling(_corr_w).corr(_dfr[_fac]).dropna()
+                        if not _rc.empty:
+                            _fig.add_trace(go.Scatter(
+                                x=_rc.index, y=_rc.values, mode="lines", name=_fac,
+                                line=dict(color=_clrs.get(_fac, "#888"), width=2),
+                            ))
+                _fig.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.25)")
+                _fig.update_layout(
+                    height=260,
+                    title=dict(text=f"BTC {_corr_w}-day Rolling Correlation", font=dict(size=13)),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e2e8f0", size=11),
+                    margin=dict(l=0, r=0, t=40, b=0),
+                    yaxis=dict(range=[-1, 1], gridcolor="rgba(255,255,255,0.07)"),
+                    xaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                )
+                st.plotly_chart(_fig, width='stretch')
             else:
-                _ta_summary_parts.append("BTC momentum is in a **neutral** range")
-        if _ma_sig == "GOLDEN_CROSS":
-            _ta_summary_parts.append("the short-term trend is crossing **above** the long-term average (bullish)")
-        elif _ma_sig == "DEATH_CROSS":
-            _ta_summary_parts.append("the short-term trend has dropped **below** the long-term average (bearish)")
-        if _ta_summary_parts:
-            st.info("What this means for you: " + "; ".join(_ta_summary_parts) + ".")
-
-    st.caption(f"Source: {_ta.get('source', 'yfinance')} · Cached 1 hour · Layer 1 Technical Analysis")
-
-except Exception as _ta_err:
-    logger.warning("[MarketIntel] BTC TA failed: %s", _ta_err)
-    st.caption("BTC technical signals temporarily unavailable — try refreshing in a few minutes.")
-
-# ─── Blood in the Streets · DCA Multiplier (Group 3) ─────────────────────────
-st.divider()
-render_section_header("Blood in the Streets", "Multi-factor capitulation signal · DCA sizing guide")
-
-try:
-    import macro_feeds as _mf3
-    _fred3 = _mf3.fetch_fred_macro()
-    _yf3   = _mf3.fetch_yfinance_macro()
-
-    # Use F&G from session state if available, else default to 50
-    _fg_v3 = st.session_state.get("fear_greed_value", 50)
-    _bits3 = _mf3.compute_blood_in_streets(_fg_v3)
-    _dca3  = _bits3["dca_multiplier"]
-
-    # Color maps
-    _bc3 = {"BLOOD_IN_STREETS": "#ef4444", "EXTREME_FEAR": "#f59e0b", "NORMAL": "#6b7280"}.get(_bits3["signal"], "#6b7280")
-    _bg3 = {"BLOOD_IN_STREETS": "#1f0000",  "EXTREME_FEAR": "#1c1200", "NORMAL": "#111827"}.get(_bits3["signal"], "#111827")
-    _dc3 = {0.0: "#ef4444", 0.5: "#f97316", 1.0: "#9ca3af", 2.0: "#10b981", 3.0: "#00d4aa"}.get(_dca3, "#9ca3af")
-    _dl3 = {0.0: "HOLD — no new buys", 0.5: "0.5× — reduce size", 1.0: "1× — base size", 2.0: "2× — accumulate", 3.0: "3× — max accumulate"}.get(_dca3, f"{_dca3}×")
-
-    _col1, _col2 = st.columns(2)
-    with _col1:
-        st.markdown(f"""
-<div style="background:{_bg3};border:1px solid {_bc3};border-top:3px solid {_bc3};
-            border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Blood in Streets Signal</div>
-  <div style="font-size:20px;font-weight:700;color:{_bc3}">{_bits3["signal"].replace("_", " ")}</div>
-  <div style="font-size:12px;color:#9ca3af;margin-top:4px">{_bits3["strength"]} · {_bits3["criteria_met"]}/3 criteria met</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:8px">{_bits3["description"]}</div>
-  <div style="margin-top:10px;font-size:11px;color:#6b7280">
-    {"✅" if _bits3["criteria"]["extreme_fear"] else "❌"} F&amp;G≤25 &nbsp;
-    {"✅" if _bits3["criteria"]["rsi_oversold"] else "❌"} RSI≤30 &nbsp;
-    {"✅" if _bits3["criteria"]["exchange_outflow"] else "❌"} Exchange outflow
-  </div>
-</div>
-""", unsafe_allow_html=True)
-    with _col2:
-        st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_dc3};
-            border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">DCA Multiplier</div>
-  <div style="font-size:24px;font-weight:700;color:{_dc3}">{_dca3}×</div>
-  <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_dl3}</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:8px">
-    F&amp;G: {_fg_v3}/100<br/>
-    DXY {_yf3.get("dxy", "—")} · 10Y {_fred3.get("ten_yr_yield", "—")}%
-  </div>
-</div>
-""", unsafe_allow_html=True)
-except Exception as _bits_err:
-    logger.warning("[MarketIntel] Blood in Streets failed: %s", _bits_err)
-    st.caption("Market signal temporarily unavailable — try refreshing in a few minutes.")
-
+                st.info("Loading macro timeseries… (yfinance required)")
+        else:
+            st.info("Install yfinance for BTC macro correlations: `pip install yfinance`")
+    
+    except Exception as _macro_err:
+        logger.warning("[MarketIntel] macro data failed: %s", _macro_err)
+        st.caption("Macro data temporarily unavailable — try refreshing in a few minutes.")
+    
+    # ─── BTC Technical Analysis (Layer 1 TA signals) ──────────────────────────────
+    st.divider()
+    render_section_header("BTC Technical Analysis", "Layer 1 · RSI-14 · MA Cross · 30d Momentum · yfinance daily OHLCV")
+    
+    try:
+        import macro_feeds as _mf_ta
+        _ta = _mf_ta.fetch_btc_ta_signals()
+    
+        _rsi_val   = _ta.get("rsi_14")
+        _ma_sig    = _ta.get("ma_signal", "NEUTRAL")
+        _mom_20    = _ta.get("price_momentum")   # 20d lookback (Issue #R1)
+        _ab200     = _ta.get("above_200ma")
+        _btc_px    = _ta.get("btc_price")
+    
+        # RSI color + label
+        if _rsi_val is None:
+            _rsi_color, _rsi_label = "#6b7280", "N/A"
+        elif _rsi_val < 30:
+            _rsi_color, _rsi_label = "#22c55e", "Oversold — buy zone"
+        elif _rsi_val > 70:
+            _rsi_color, _rsi_label = "#ef4444", "Overbought — caution"
+        else:
+            _rsi_color, _rsi_label = "#f59e0b", "Neutral range"
+    
+        # MA cross color + icon
+        _ma_meta = {
+            "GOLDEN_CROSS": ("#22c55e", "▲ Golden Cross", "50d crossed above 200d · bullish trend"),
+            "DEATH_CROSS":  ("#ef4444", "▼ Death Cross",  "50d crossed below 200d · bearish trend"),
+            "NEUTRAL":      ("#9ca3af", "■ Neutral",       "No definitive MA cross signal"),
+        }
+        _ma_c, _ma_icon, _ma_desc = _ma_meta.get(_ma_sig, ("#9ca3af", "■ Neutral", ""))
+    
+        # Momentum color
+        if _mom_20 is None:
+            _mom_color, _mom_str = "#6b7280", "N/A"
+        elif _mom_20 > 10:
+            _mom_color, _mom_str = "#22c55e", f"+{_mom_20:.1f}%"
+        elif _mom_20 < -10:
+            _mom_color, _mom_str = "#ef4444", f"{_mom_20:.1f}%"
+        else:
+            _mom_color, _mom_str = "#f59e0b", f"{_mom_20:+.1f}%"
+    
+        # 200MA position
+        _ab200_str   = "Above 200d MA ▲" if _ab200 else "Below 200d MA ▼"
+        _ab200_color = "#22c55e" if _ab200 else "#ef4444"
+    
+        # Pre-compute display strings (avoid complex expressions inside f-strings)
+        _rsi_disp  = f"{_rsi_val:.1f}" if _rsi_val is not None else "N/A"
+        _btc_disp  = f"${_btc_px:,.0f} BTC/USD" if _btc_px else "Price N/A"
+        if _mom_20 is not None and _mom_20 > 10:
+            _mom_trend = "Strong uptrend"
+        elif _mom_20 is not None and _mom_20 < -10:
+            _mom_trend = "Strong downtrend"
+        else:
+            _mom_trend = "Mild drift"
+    
+        _tac1, _tac2, _tac3, _tac4 = st.columns(4)
+    
+        with _tac1:
+            st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_rsi_color};
+                border-radius:10px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">RSI-14</div>
+      <div style="font-size:20px;font-weight:700;color:{_rsi_color}">{_rsi_disp}</div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_rsi_label}</div>
+      <div style="font-size:10px;color:#6b7280;margin-top:6px">Wilder 1978 · 14-day</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+        with _tac2:
+            st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_ma_c};
+                border-radius:10px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MA Cross</div>
+      <div style="font-size:18px;font-weight:700;color:{_ma_c}">{_ma_icon}</div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_ma_desc}</div>
+      <div style="font-size:10px;color:#6b7280;margin-top:6px">50d vs 200d · Glassnode 71% accuracy</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+        with _tac3:
+            st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mom_color};
+                border-radius:10px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">30d Momentum</div>
+      <div style="font-size:20px;font-weight:700;color:{_mom_color}">{_mom_str}</div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_mom_trend}</div>
+      <div style="font-size:10px;color:#6b7280;margin-top:6px">Price change: 30 days</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+        with _tac4:
+            st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_ab200_color};
+                border-radius:10px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">200d MA Position</div>
+      <div style="font-size:16px;font-weight:700;color:{_ab200_color}">{_ab200_str}</div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_btc_disp}</div>
+      <div style="font-size:10px;color:#6b7280;margin-top:6px">Long-term trend filter</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+        # Beginner explanation
+        _user_level = st.session_state.get("user_level", "beginner")
+        if _user_level == "beginner":
+            _ta_summary_parts = []
+            if _rsi_val is not None:
+                if _rsi_val < 30:
+                    _ta_summary_parts.append("BTC is in an **oversold** zone — historically a good time to consider buying")
+                elif _rsi_val > 70:
+                    _ta_summary_parts.append("BTC appears **overbought** — momentum may slow or reverse")
+                else:
+                    _ta_summary_parts.append("BTC momentum is in a **neutral** range")
+            if _ma_sig == "GOLDEN_CROSS":
+                _ta_summary_parts.append("the short-term trend is crossing **above** the long-term average (bullish)")
+            elif _ma_sig == "DEATH_CROSS":
+                _ta_summary_parts.append("the short-term trend has dropped **below** the long-term average (bearish)")
+            if _ta_summary_parts:
+                st.info("What this means for you: " + "; ".join(_ta_summary_parts) + ".")
+    
+        st.caption(f"Source: {_ta.get('source', 'yfinance')} · Cached 1 hour · Layer 1 Technical Analysis")
+    
+    except Exception as _ta_err:
+        logger.warning("[MarketIntel] BTC TA failed: %s", _ta_err)
+        st.caption("BTC technical signals temporarily unavailable — try refreshing in a few minutes.")
+    
+    # ─── Blood in the Streets · DCA Multiplier (Group 3) ─────────────────────────
+    st.divider()
+    render_section_header("Blood in the Streets", "Multi-factor capitulation signal · DCA sizing guide")
+    
+    try:
+        import macro_feeds as _mf3
+        _fred3 = _mf3.fetch_fred_macro()
+        _yf3   = _mf3.fetch_yfinance_macro()
+    
+        # Use F&G from session state if available, else default to 50
+        _fg_v3 = st.session_state.get("fear_greed_value", 50)
+        _bits3 = _mf3.compute_blood_in_streets(_fg_v3)
+        _dca3  = _bits3["dca_multiplier"]
+    
+        # Color maps
+        _bc3 = {"BLOOD_IN_STREETS": "#ef4444", "EXTREME_FEAR": "#f59e0b", "NORMAL": "#6b7280"}.get(_bits3["signal"], "#6b7280")
+        _bg3 = {"BLOOD_IN_STREETS": "#1f0000",  "EXTREME_FEAR": "#1c1200", "NORMAL": "#111827"}.get(_bits3["signal"], "#111827")
+        _dc3 = {0.0: "#ef4444", 0.5: "#f97316", 1.0: "#9ca3af", 2.0: "#10b981", 3.0: "#00d4aa"}.get(_dca3, "#9ca3af")
+        _dl3 = {0.0: "HOLD — no new buys", 0.5: "0.5× — reduce size", 1.0: "1× — base size", 2.0: "2× — accumulate", 3.0: "3× — max accumulate"}.get(_dca3, f"{_dca3}×")
+    
+        _col1, _col2 = st.columns(2)
+        with _col1:
+            st.markdown(f"""
+    <div style="background:{_bg3};border:1px solid {_bc3};border-top:3px solid {_bc3};
+                border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Blood in Streets Signal</div>
+      <div style="font-size:20px;font-weight:700;color:{_bc3}">{_bits3["signal"].replace("_", " ")}</div>
+      <div style="font-size:12px;color:#9ca3af;margin-top:4px">{_bits3["strength"]} · {_bits3["criteria_met"]}/3 criteria met</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:8px">{_bits3["description"]}</div>
+      <div style="margin-top:10px;font-size:11px;color:#6b7280">
+        {"✅" if _bits3["criteria"]["extreme_fear"] else "❌"} F&amp;G≤25 &nbsp;
+        {"✅" if _bits3["criteria"]["rsi_oversold"] else "❌"} RSI≤30 &nbsp;
+        {"✅" if _bits3["criteria"]["exchange_outflow"] else "❌"} Exchange outflow
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+        with _col2:
+            st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_dc3};
+                border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">DCA Multiplier</div>
+      <div style="font-size:24px;font-weight:700;color:{_dc3}">{_dca3}×</div>
+      <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_dl3}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:8px">
+        F&amp;G: {_fg_v3}/100<br/>
+        DXY {_yf3.get("dxy", "—")} · 10Y {_fred3.get("ten_yr_yield", "—")}%
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    except Exception as _bits_err:
+        logger.warning("[MarketIntel] Blood in Streets failed: %s", _bits_err)
+        st.caption("Market signal temporarily unavailable — try refreshing in a few minutes.")
+    
 # end _t_macro
 
 
 with _t_onchain:
     render_section_header("On-Chain Intelligence", "CoinMetrics · MVRV Z-Score · SOPR · Hash Ribbons · Puell Multiple")
 
-try:
-    import macro_feeds as _mf4
-    _oc4 = _mf4.fetch_coinmetrics_onchain(days=400)
-
-    if _oc4.get("error") and not _oc4.get("mvrv_z"):
-        st.info(f"On-chain data unavailable. {_oc4.get('error')}")
-    else:
-        _mz4  = _oc4.get("mvrv_z")
-        _ms4  = _oc4.get("mvrv_signal", "N/A")
-        _sp4  = _oc4.get("sopr")
-        _ss4  = _oc4.get("sopr_signal", "N/A")
-        _rc4  = _oc4.get("realized_cap")
-        _mv4  = _oc4.get("mvrv_ratio")
-        _aa4  = _oc4.get("active_addresses")
-
-        _mvrv_color = {"UNDERVALUED": "#00d4aa", "FAIR_VALUE": "#10b981", "OVERVALUED": "#f59e0b", "EXTREME_HEAT": "#ef4444"}.get(_ms4, "#6b7280")
-        _sc4 = {"CAPITULATION": "#00d4aa", "MILD_LOSS": "#10b981", "NORMAL": "#6b7280", "PROFIT_TAKING": "#f59e0b"}.get(_ss4, "#6b7280")
-
-        def _fmtb(v):
-            if v is None: return "—"
-            if v >= 1e12: return f"${v/1e12:.2f}T"
-            if v >= 1e9:  return f"${v/1e9:.1f}B"
-            return f"${v/1e6:.0f}M"
-
-        _c1, _c2, _c3, _c4 = st.columns(4)
-        with _c1:
-            st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mvrv_color};border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MVRV Z-Score</div>
-  <div style="font-size:21px;font-weight:700;color:{_mvrv_color}">{f"{_mz4:+.2f}" if _mz4 is not None else "—"}</div>
-  <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ms4.replace("_", " ")}</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:6px">MVRV ratio: {f"{_mv4:.3f}" if _mv4 else "—"}</div>
-</div>
-""", unsafe_allow_html=True)
-        with _c2:
-            st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc4};border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">SOPR</div>
-  <div style="font-size:21px;font-weight:700;color:{_sc4}">{f"{_sp4:.4f}" if _sp4 is not None else "—"}</div>
-  <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ss4.replace("_", " ")}</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:6px">&gt;1 profit-taking · &lt;1 capitulation</div>
-</div>
-""", unsafe_allow_html=True)
-        with _c3:
-            st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Realized Cap</div>
-  <div style="font-size:22px;font-weight:700;color:#6366f1">{_fmtb(_rc4)}</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:8px">BTC at last-moved price</div>
-</div>
-""", unsafe_allow_html=True)
-        with _c4:
-            st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #8b5cf6;border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Active Addresses</div>
-  <div style="font-size:22px;font-weight:700;color:#8b5cf6">{f"{_aa4:,}" if _aa4 else "—"}</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:8px">Unique BTC addresses today</div>
-</div>
-""", unsafe_allow_html=True)
-
-        # MVRV Z-Score chart
-        _mh4 = _oc4.get("mvrv_history", {})
-        if _mh4:
-            _mhs = pd.Series(_mh4).sort_index()
-            _mhz = (_mhs - _mhs.rolling(365, min_periods=30).mean()) / _mhs.rolling(365, min_periods=30).std().clip(lower=1e-6)
-            _fig_mz = go.Figure()
-            _fig_mz.add_trace(go.Scatter(x=_mhz.index, y=_mhz.values, mode="lines",
-                                         name="MVRV Z-Score", line=dict(color="#6366f1", width=2)))
-            for _th, _tl, _tc in [(3.0, "Extreme >3", "#ef4444"), (1.5, "Overvalued", "#f59e0b"), (-0.5, "Undervalued", "#00d4aa")]:
-                _fig_mz.add_hline(y=_th, line_dash="dash", line_color=_tc, opacity=0.4,
-                                  annotation_text=_tl, annotation_font_size=9)
-            _fig_mz.update_layout(
-                height=240,
-                title=dict(text="MVRV Z-Score (365-day rolling)", font=dict(size=13)),
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#e2e8f0", size=11), margin=dict(l=0, r=0, t=40, b=0),
-                yaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
-                xaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
-                showlegend=False,
-            )
-            st.plotly_chart(_fig_mz, width='stretch')
-
-        # Hash Ribbons + Puell Multiple — added in composite signal sprint
-        _hr_sig  = _oc4.get("hash_ribbon_signal", "N/A")
-        _puell   = _oc4.get("puell_multiple")
-        _p_sig   = _oc4.get("puell_signal", "N/A")
-        _hr_color = {
-            "BUY": "#22c55e", "RECOVERY": "#00d4aa",
-            "CAPITULATION": "#ef4444", "CAPITULATION_START": "#f97316",
-        }.get(_hr_sig, "#6b7280")
-        _p_color = {
-            "EXTREME_BOTTOM": "#22c55e", "ACCUMULATION": "#00d4aa",
-            "FAIR_VALUE": "#6b7280", "DISTRIBUTION": "#f59e0b", "EXTREME_TOP": "#ef4444",
-        }.get(_p_sig, "#6b7280")
-
-        if _hr_sig != "N/A" or _puell is not None:
-            st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
-            _h1, _h2 = st.columns(2)
-            with _h1:
+    try:
+        import macro_feeds as _mf4
+        _oc4 = _mf4.fetch_coinmetrics_onchain(days=400)
+    
+        if _oc4.get("error") and not _oc4.get("mvrv_z"):
+            st.info(f"On-chain data unavailable. {_oc4.get('error')}")
+        else:
+            _mz4  = _oc4.get("mvrv_z")
+            _ms4  = _oc4.get("mvrv_signal", "N/A")
+            _sp4  = _oc4.get("sopr")
+            _ss4  = _oc4.get("sopr_signal", "N/A")
+            _rc4  = _oc4.get("realized_cap")
+            _mv4  = _oc4.get("mvrv_ratio")
+            _aa4  = _oc4.get("active_addresses")
+    
+            _mvrv_color = {"UNDERVALUED": "#00d4aa", "FAIR_VALUE": "#10b981", "OVERVALUED": "#f59e0b", "EXTREME_HEAT": "#ef4444"}.get(_ms4, "#6b7280")
+            _sc4 = {"CAPITULATION": "#00d4aa", "MILD_LOSS": "#10b981", "NORMAL": "#6b7280", "PROFIT_TAKING": "#f59e0b"}.get(_ss4, "#6b7280")
+    
+            def _fmtb(v):
+                if v is None: return "—"
+                if v >= 1e12: return f"${v/1e12:.2f}T"
+                if v >= 1e9:  return f"${v/1e9:.1f}B"
+                return f"${v/1e6:.0f}M"
+    
+            _c1, _c2, _c3, _c4 = st.columns(4)
+            with _c1:
                 st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_hr_color};border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Hash Ribbons</div>
-  <div style="font-size:22px;font-weight:700;color:{_hr_color}">{_hr_sig.replace("_", " ") if _hr_sig != "N/A" else "—"}</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:8px">30d vs 60d hash rate MA · C. Edwards 2019</div>
-</div>
-""", unsafe_allow_html=True)
-            with _h2:
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mvrv_color};border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MVRV Z-Score</div>
+      <div style="font-size:21px;font-weight:700;color:{_mvrv_color}">{f"{_mz4:+.2f}" if _mz4 is not None else "—"}</div>
+      <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ms4.replace("_", " ")}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">MVRV ratio: {f"{_mv4:.3f}" if _mv4 else "—"}</div>
+    </div>
+    """, unsafe_allow_html=True)
+            with _c2:
                 st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_p_color};border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Puell Multiple</div>
-  <div style="font-size:21px;font-weight:700;color:{_p_color}">{f"{_puell:.3f}" if _puell is not None else "—"}</div>
-  <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_p_sig.replace("_", " ")}</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:6px">Daily miner USD / 365d MA · D. Puell 2019</div>
-</div>
-""", unsafe_allow_html=True)
-
-        _ts4 = _oc4.get("timestamp", "")[:19]
-        st.caption(f"Source: CoinMetrics Community · {_ts4} UTC · Cached 1h · MVRV (Mahmudov & Puell 2018) · SOPR (Shirakashi 2019)")
-except Exception as _oc_err:
-    logger.warning("[MarketIntel] on-chain data failed: %s", _oc_err)
-    st.caption("On-chain data temporarily unavailable — try refreshing in a few minutes.")
-
-# ── GROUP 5: Options Flow ─────────────────────────────────────────────────────
-st.markdown("---")
-render_section_header("📐 Options Flow", "Deribit public API · OI by Strike · Put/Call Ratio · Max Pain · IV Term Structure · no key required")
-
-try:
-    import macro_feeds as _mf5
-    _oc5 = _mf5.fetch_deribit_options_chain(currency="BTC")
-
-    if _oc5.get("error") and not _oc5.get("oi_by_strike"):
-        st.caption(f"Options data unavailable: {_oc5.get('error')}")
-    else:
-        _pc5   = _oc5.get("put_call_ratio")
-        _mp5   = _oc5.get("max_pain")
-        _tput5 = _oc5.get("total_put_oi", 0)
-        _tcal5 = _oc5.get("total_call_oi", 0)
-        _osig5 = _oc5.get("signal", "N/A")
-        _spot5 = _oc5.get("spot_price")
-
-        _sc5 = {
-            "EXTREME_PUTS": "#ef4444", "BEARISH": "#f59e0b",
-            "NEUTRAL": "#6b7280", "BULLISH": "#10b981", "EXTREME_CALLS": "#00d4aa",
-        }.get(_osig5, "#6b7280")
-
-        _d5a, _d5b, _d5c, _d5d = st.columns(4)
-        with _d5a:
-            st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc5};border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Put/Call Ratio</div>
-  <div style="font-size:28px;font-weight:700;color:{_sc5}">{f"{_pc5:.3f}" if _pc5 is not None else "—"}</div>
-  <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_osig5.replace("_", " ")}</div>
-</div>
-""", unsafe_allow_html=True)
-        with _d5b:
-            _mp5_d = f"{abs(_mp5 - _spot5) / _spot5 * 100:.1f}% {'below' if _mp5 < _spot5 else 'above'} spot" if _mp5 and _spot5 else ""
-            st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Max Pain</div>
-  <div style="font-size:24px;font-weight:700;color:#6366f1">{f"${_mp5:,.0f}" if _mp5 else "—"}</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:6px">{_mp5_d}</div>
-</div>
-""", unsafe_allow_html=True)
-        with _d5c:
-            st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #ef4444;border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Put OI</div>
-  <div style="font-size:24px;font-weight:700;color:#ef4444">{f"{_tput5:,.0f}" if _tput5 else "—"}</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:6px">contracts</div>
-</div>
-""", unsafe_allow_html=True)
-        with _d5d:
-            st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #10b981;border-radius:10px;padding:10px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Call OI</div>
-  <div style="font-size:24px;font-weight:700;color:#10b981">{f"{_tcal5:,.0f}" if _tcal5 else "—"}</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:6px">contracts</div>
-</div>
-""", unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        _oi5d  = _oc5.get("oi_by_strike", [])
-        _ts5d  = [t for t in _oc5.get("term_structure", []) if t.get("atm_iv") is not None and t.get("dte", 0) <= 365]
-        _col5L, _col5R = st.columns([3, 2])
-
-        with _col5L:
-            if _oi5d:
-                import plotly.graph_objects as go
-                _fig5d = go.Figure()
-                _sk5   = [str(int(r["strike"])) for r in _oi5d]
-                _fig5d.add_trace(go.Bar(name="Puts", x=_sk5,
-                    y=[r["put_oi"] for r in _oi5d], marker_color="rgba(239,68,68,0.8)"))
-                _fig5d.add_trace(go.Bar(name="Calls", x=_sk5,
-                    y=[r["call_oi"] for r in _oi5d], marker_color="rgba(16,185,129,0.8)"))
-                # Use add_shape instead of add_vline — the x-axis uses string
-                # categorical labels (strike prices as strings), so add_vline()
-                # triggers Plotly's internal _mean() TypeError on string values.
-                if _mp5:
-                    _mp5_str = str(int(_mp5))
-                    _fig5d.add_shape(
-                        type="line",
-                        x0=_mp5_str, x1=_mp5_str,
-                        y0=0, y1=1,
-                        xref="x", yref="paper",
-                        line=dict(color="#6366f1", dash="dash", width=1.5),
-                        opacity=0.8,
-                    )
-                    _fig5d.add_annotation(
-                        x=_mp5_str, y=1,
-                        xref="x", yref="paper",
-                        text=f"Max Pain ${_mp5:,.0f}",
-                        showarrow=False,
-                        font=dict(color="#6366f1", size=10),
-                        xanchor="left",
-                        yanchor="top",
-                    )
-                if _spot5:
-                    _spot5_str = str(int(_spot5))
-                    _fig5d.add_shape(
-                        type="line",
-                        x0=_spot5_str, x1=_spot5_str,
-                        y0=0, y1=1,
-                        xref="x", yref="paper",
-                        line=dict(color="#f59e0b", dash="dot", width=1.5),
-                        opacity=0.6,
-                    )
-                    _fig5d.add_annotation(
-                        x=_spot5_str, y=0.95,
-                        xref="x", yref="paper",
-                        text="Spot",
-                        showarrow=False,
-                        font=dict(color="#f59e0b", size=10),
-                        xanchor="left",
-                        yanchor="top",
-                    )
-                _fig5d.update_layout(
-                    title="OI by Strike (Top 20)", barmode="stack",
-                    height=300, paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#e2e8f0", size=11),
-                    margin=dict(l=0, r=0, t=40, b=60),
-                    legend=dict(orientation="h", y=1.08),
-                    xaxis=dict(tickangle=-45, gridcolor="rgba(255,255,255,0.05)"),
-                    yaxis=dict(gridcolor="rgba(255,255,255,0.07)", title="OI (contracts)"),
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc4};border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">SOPR</div>
+      <div style="font-size:21px;font-weight:700;color:{_sc4}">{f"{_sp4:.4f}" if _sp4 is not None else "—"}</div>
+      <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ss4.replace("_", " ")}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">&gt;1 profit-taking · &lt;1 capitulation</div>
+    </div>
+    """, unsafe_allow_html=True)
+            with _c3:
+                st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Realized Cap</div>
+      <div style="font-size:22px;font-weight:700;color:#6366f1">{_fmtb(_rc4)}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:8px">BTC at last-moved price</div>
+    </div>
+    """, unsafe_allow_html=True)
+            with _c4:
+                st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #8b5cf6;border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Active Addresses</div>
+      <div style="font-size:22px;font-weight:700;color:#8b5cf6">{f"{_aa4:,}" if _aa4 else "—"}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:8px">Unique BTC addresses today</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+            # MVRV Z-Score chart
+            _mh4 = _oc4.get("mvrv_history", {})
+            if _mh4:
+                _mhs = pd.Series(_mh4).sort_index()
+                _mhz = (_mhs - _mhs.rolling(365, min_periods=30).mean()) / _mhs.rolling(365, min_periods=30).std().clip(lower=1e-6)
+                _fig_mz = go.Figure()
+                _fig_mz.add_trace(go.Scatter(x=_mhz.index, y=_mhz.values, mode="lines",
+                                             name="MVRV Z-Score", line=dict(color="#6366f1", width=2)))
+                for _th, _tl, _tc in [(3.0, "Extreme >3", "#ef4444"), (1.5, "Overvalued", "#f59e0b"), (-0.5, "Undervalued", "#00d4aa")]:
+                    _fig_mz.add_hline(y=_th, line_dash="dash", line_color=_tc, opacity=0.4,
+                                      annotation_text=_tl, annotation_font_size=9)
+                _fig_mz.update_layout(
+                    height=240,
+                    title=dict(text="MVRV Z-Score (365-day rolling)", font=dict(size=13)),
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e2e8f0", size=11), margin=dict(l=0, r=0, t=40, b=0),
+                    yaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
+                    xaxis=dict(gridcolor="rgba(255,255,255,0.07)"),
+                    showlegend=False,
                 )
-                st.plotly_chart(_fig5d, width='stretch')
-
-        with _col5R:
-            if _ts5d:
-                import plotly.graph_objects as go
-                _fig5e = go.Figure()
-                _fig5e.add_trace(go.Scatter(
-                    x=[t["dte"] for t in _ts5d], y=[t["atm_iv"] for t in _ts5d],
-                    mode="lines+markers", name="ATM IV",
-                    line=dict(color="#6366f1", width=2), marker=dict(size=6),
-                    text=[t["expiry"] for t in _ts5d],
-                    hovertemplate="%{text}<br>DTE: %{x}<br>IV: %{y:.1f}%<extra></extra>",
-                ))
-                _fig5e.update_layout(
-                    title="IV Term Structure (ATM)",
-                    height=300, paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#e2e8f0", size=11),
-                    margin=dict(l=0, r=0, t=40, b=0),
-                    xaxis=dict(title="Days to Expiry", gridcolor="rgba(255,255,255,0.05)"),
-                    yaxis=dict(title="IV (%)", gridcolor="rgba(255,255,255,0.07)"),
-                )
-                st.plotly_chart(_fig5e, width='stretch')
-
-        _ts5_txt = _oc5.get("timestamp", "")[:19]
-        st.caption(f"Source: Deribit · {_ts5_txt} UTC · Cached 15 min")
-except Exception as _opt_err:
-    logger.warning("[MarketIntel] options data failed: %s", _opt_err)
-    st.caption("Options data temporarily unavailable — try refreshing in a few minutes.")
-
+                st.plotly_chart(_fig_mz, width='stretch')
+    
+            # Hash Ribbons + Puell Multiple — added in composite signal sprint
+            _hr_sig  = _oc4.get("hash_ribbon_signal", "N/A")
+            _puell   = _oc4.get("puell_multiple")
+            _p_sig   = _oc4.get("puell_signal", "N/A")
+            _hr_color = {
+                "BUY": "#22c55e", "RECOVERY": "#00d4aa",
+                "CAPITULATION": "#ef4444", "CAPITULATION_START": "#f97316",
+            }.get(_hr_sig, "#6b7280")
+            _p_color = {
+                "EXTREME_BOTTOM": "#22c55e", "ACCUMULATION": "#00d4aa",
+                "FAIR_VALUE": "#6b7280", "DISTRIBUTION": "#f59e0b", "EXTREME_TOP": "#ef4444",
+            }.get(_p_sig, "#6b7280")
+    
+            if _hr_sig != "N/A" or _puell is not None:
+                st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
+                _h1, _h2 = st.columns(2)
+                with _h1:
+                    st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_hr_color};border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Hash Ribbons</div>
+      <div style="font-size:22px;font-weight:700;color:{_hr_color}">{_hr_sig.replace("_", " ") if _hr_sig != "N/A" else "—"}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:8px">30d vs 60d hash rate MA · C. Edwards 2019</div>
+    </div>
+    """, unsafe_allow_html=True)
+                with _h2:
+                    st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_p_color};border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Puell Multiple</div>
+      <div style="font-size:21px;font-weight:700;color:{_p_color}">{f"{_puell:.3f}" if _puell is not None else "—"}</div>
+      <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_p_sig.replace("_", " ")}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">Daily miner USD / 365d MA · D. Puell 2019</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+            _ts4 = _oc4.get("timestamp", "")[:19]
+            st.caption(f"Source: CoinMetrics Community · {_ts4} UTC · Cached 1h · MVRV (Mahmudov & Puell 2018) · SOPR (Shirakashi 2019)")
+    except Exception as _oc_err:
+        logger.warning("[MarketIntel] on-chain data failed: %s", _oc_err)
+        st.caption("On-chain data temporarily unavailable — try refreshing in a few minutes.")
+    
+    # ── GROUP 5: Options Flow ─────────────────────────────────────────────────────
+    st.markdown("---")
+    render_section_header("📐 Options Flow", "Deribit public API · OI by Strike · Put/Call Ratio · Max Pain · IV Term Structure · no key required")
+    
+    try:
+        import macro_feeds as _mf5
+        _oc5 = _mf5.fetch_deribit_options_chain(currency="BTC")
+    
+        if _oc5.get("error") and not _oc5.get("oi_by_strike"):
+            st.caption(f"Options data unavailable: {_oc5.get('error')}")
+        else:
+            _pc5   = _oc5.get("put_call_ratio")
+            _mp5   = _oc5.get("max_pain")
+            _tput5 = _oc5.get("total_put_oi", 0)
+            _tcal5 = _oc5.get("total_call_oi", 0)
+            _osig5 = _oc5.get("signal", "N/A")
+            _spot5 = _oc5.get("spot_price")
+    
+            _sc5 = {
+                "EXTREME_PUTS": "#ef4444", "BEARISH": "#f59e0b",
+                "NEUTRAL": "#6b7280", "BULLISH": "#10b981", "EXTREME_CALLS": "#00d4aa",
+            }.get(_osig5, "#6b7280")
+    
+            _d5a, _d5b, _d5c, _d5d = st.columns(4)
+            with _d5a:
+                st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc5};border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Put/Call Ratio</div>
+      <div style="font-size:28px;font-weight:700;color:{_sc5}">{f"{_pc5:.3f}" if _pc5 is not None else "—"}</div>
+      <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_osig5.replace("_", " ")}</div>
+    </div>
+    """, unsafe_allow_html=True)
+            with _d5b:
+                _mp5_d = f"{abs(_mp5 - _spot5) / _spot5 * 100:.1f}% {'below' if _mp5 < _spot5 else 'above'} spot" if _mp5 and _spot5 else ""
+                st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Max Pain</div>
+      <div style="font-size:24px;font-weight:700;color:#6366f1">{f"${_mp5:,.0f}" if _mp5 else "—"}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">{_mp5_d}</div>
+    </div>
+    """, unsafe_allow_html=True)
+            with _d5c:
+                st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #ef4444;border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Put OI</div>
+      <div style="font-size:24px;font-weight:700;color:#ef4444">{f"{_tput5:,.0f}" if _tput5 else "—"}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">contracts</div>
+    </div>
+    """, unsafe_allow_html=True)
+            with _d5d:
+                st.markdown(f"""
+    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #10b981;border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Call OI</div>
+      <div style="font-size:24px;font-weight:700;color:#10b981">{f"{_tcal5:,.0f}" if _tcal5 else "—"}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">contracts</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+            st.markdown("<br>", unsafe_allow_html=True)
+            _oi5d  = _oc5.get("oi_by_strike", [])
+            _ts5d  = [t for t in _oc5.get("term_structure", []) if t.get("atm_iv") is not None and t.get("dte", 0) <= 365]
+            _col5L, _col5R = st.columns([3, 2])
+    
+            with _col5L:
+                if _oi5d:
+                    import plotly.graph_objects as go
+                    _fig5d = go.Figure()
+                    _sk5   = [str(int(r["strike"])) for r in _oi5d]
+                    _fig5d.add_trace(go.Bar(name="Puts", x=_sk5,
+                        y=[r["put_oi"] for r in _oi5d], marker_color="rgba(239,68,68,0.8)"))
+                    _fig5d.add_trace(go.Bar(name="Calls", x=_sk5,
+                        y=[r["call_oi"] for r in _oi5d], marker_color="rgba(16,185,129,0.8)"))
+                    # Use add_shape instead of add_vline — the x-axis uses string
+                    # categorical labels (strike prices as strings), so add_vline()
+                    # triggers Plotly's internal _mean() TypeError on string values.
+                    if _mp5:
+                        _mp5_str = str(int(_mp5))
+                        _fig5d.add_shape(
+                            type="line",
+                            x0=_mp5_str, x1=_mp5_str,
+                            y0=0, y1=1,
+                            xref="x", yref="paper",
+                            line=dict(color="#6366f1", dash="dash", width=1.5),
+                            opacity=0.8,
+                        )
+                        _fig5d.add_annotation(
+                            x=_mp5_str, y=1,
+                            xref="x", yref="paper",
+                            text=f"Max Pain ${_mp5:,.0f}",
+                            showarrow=False,
+                            font=dict(color="#6366f1", size=10),
+                            xanchor="left",
+                            yanchor="top",
+                        )
+                    if _spot5:
+                        _spot5_str = str(int(_spot5))
+                        _fig5d.add_shape(
+                            type="line",
+                            x0=_spot5_str, x1=_spot5_str,
+                            y0=0, y1=1,
+                            xref="x", yref="paper",
+                            line=dict(color="#f59e0b", dash="dot", width=1.5),
+                            opacity=0.6,
+                        )
+                        _fig5d.add_annotation(
+                            x=_spot5_str, y=0.95,
+                            xref="x", yref="paper",
+                            text="Spot",
+                            showarrow=False,
+                            font=dict(color="#f59e0b", size=10),
+                            xanchor="left",
+                            yanchor="top",
+                        )
+                    _fig5d.update_layout(
+                        title="OI by Strike (Top 20)", barmode="stack",
+                        height=300, paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#e2e8f0", size=11),
+                        margin=dict(l=0, r=0, t=40, b=60),
+                        legend=dict(orientation="h", y=1.08),
+                        xaxis=dict(tickangle=-45, gridcolor="rgba(255,255,255,0.05)"),
+                        yaxis=dict(gridcolor="rgba(255,255,255,0.07)", title="OI (contracts)"),
+                    )
+                    st.plotly_chart(_fig5d, width='stretch')
+    
+            with _col5R:
+                if _ts5d:
+                    import plotly.graph_objects as go
+                    _fig5e = go.Figure()
+                    _fig5e.add_trace(go.Scatter(
+                        x=[t["dte"] for t in _ts5d], y=[t["atm_iv"] for t in _ts5d],
+                        mode="lines+markers", name="ATM IV",
+                        line=dict(color="#6366f1", width=2), marker=dict(size=6),
+                        text=[t["expiry"] for t in _ts5d],
+                        hovertemplate="%{text}<br>DTE: %{x}<br>IV: %{y:.1f}%<extra></extra>",
+                    ))
+                    _fig5e.update_layout(
+                        title="IV Term Structure (ATM)",
+                        height=300, paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#e2e8f0", size=11),
+                        margin=dict(l=0, r=0, t=40, b=0),
+                        xaxis=dict(title="Days to Expiry", gridcolor="rgba(255,255,255,0.05)"),
+                        yaxis=dict(title="IV (%)", gridcolor="rgba(255,255,255,0.07)"),
+                    )
+                    st.plotly_chart(_fig5e, width='stretch')
+    
+            _ts5_txt = _oc5.get("timestamp", "")[:19]
+            st.caption(f"Source: Deribit · {_ts5_txt} UTC · Cached 15 min")
+    except Exception as _opt_err:
+        logger.warning("[MarketIntel] options data failed: %s", _opt_err)
+        st.caption("Options data temporarily unavailable — try refreshing in a few minutes.")
+    
 # end _t_onchain
 
 # ─── Item 37: In/Out of the Money metric for tracked coins ───────────────────
