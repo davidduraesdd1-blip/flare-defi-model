@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import gc
 import logging
+import math
 import threading
 import time
 import datetime as _dt
@@ -499,8 +500,9 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             if mc and tx:
                 try:
                     tx_f = float(tx)
-                    if tx_f > 0:
-                        nvt_vals.append(float(mc) / tx_f)
+                    mc_f = float(mc)
+                    if tx_f > 0 and math.isfinite(mc_f) and math.isfinite(tx_f):
+                        nvt_vals.append(mc_f / tx_f)
                 except (ValueError, ZeroDivisionError):
                     pass
 
