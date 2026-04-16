@@ -10,6 +10,7 @@ The RiskGuard is the final authority — the AI is advisory only.
 """
 
 import json
+import math
 import os
 import sys
 from dataclasses import dataclass, field
@@ -145,6 +146,15 @@ class TradeDecision:
         }
 
 
+def _safe_float(val, default: float = 0.0) -> float:
+    """Convert val to float; return default if result is NaN, Inf, or conversion fails."""
+    try:
+        result = float(val or 0)
+        return result if math.isfinite(result) else default
+    except (TypeError, ValueError):
+        return default
+
+
 def _hold(reason: str) -> TradeDecision:
     """Return a safe HOLD decision."""
     return TradeDecision(
@@ -189,8 +199,8 @@ def _parse_response(text: str) -> TradeDecision:
         pool                   = str(data.get("pool") or ""),
         token_in               = str(data.get("token_in") or ""),
         token_out              = str(data.get("token_out") or ""),
-        size_usd               = float(data.get("size_usd") or 0),
-        expected_apy           = float(data.get("expected_apy") or 0),
+        size_usd               = _safe_float(data.get("size_usd")),
+        expected_apy           = _safe_float(data.get("expected_apy")),
         confidence             = confidence,
         reasoning              = str(data.get("reasoning") or ""),
         risk_factors           = list(data.get("risk_factors") or []),
