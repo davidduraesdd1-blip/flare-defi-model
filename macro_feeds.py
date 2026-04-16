@@ -670,7 +670,13 @@ def fetch_btc_ta_signals() -> dict[str, Any]:
 
         try:
             # E5: Pi Cycle Top needs 350d; fetch 400d for buffer
-            hist = yf.Ticker("BTC-USD").history(period="400d")
+            # Pass 5: wrap yfinance in executor to prevent indefinite hang on network stall
+            with ThreadPoolExecutor(max_workers=1) as _yf_ex:
+                _yf_fut = _yf_ex.submit(lambda: yf.Ticker("BTC-USD").history(period="400d"))
+                try:
+                    hist = _yf_fut.result(timeout=20)
+                except Exception:
+                    return None
             if hist.empty or len(hist) < 30:
                 return {"source": "insufficient_data"}
             closes = hist["Close"].dropna().values.tolist()
@@ -739,7 +745,15 @@ def fetch_btc_ta_signals() -> dict[str, Any]:
         # overbought/oversold zones (Murphy 1999, Elder 2002 triple-screen method).
         rsi_14_weekly = None
         try:
-            hist_w = yf.Ticker("BTC-USD").history(period="2y", interval="1wk")
+            # Pass 5: wrap weekly yfinance fetch in executor to prevent indefinite hang
+            with ThreadPoolExecutor(max_workers=1) as _yf_wex:
+                _yf_wfut = _yf_wex.submit(
+                    lambda: yf.Ticker("BTC-USD").history(period="2y", interval="1wk")
+                )
+                try:
+                    hist_w = _yf_wfut.result(timeout=20)
+                except Exception:
+                    hist_w = None
             if hist_w is not None and len(hist_w) >= 16:
                 w_closes = hist_w["Close"].dropna().values.tolist()
                 if len(w_closes) >= 16:
