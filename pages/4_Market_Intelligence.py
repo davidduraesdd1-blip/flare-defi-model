@@ -762,8 +762,8 @@ try:
 """, unsafe_allow_html=True)
 
     # Beginner explanation
-    _user_level = st.session_state.get("user_level", "Beginner")
-    if _user_level == "Beginner":
+    _user_level = st.session_state.get("user_level", "beginner")
+    if _user_level == "beginner":
         _ta_summary_parts = []
         if _rsi_val is not None:
             if _rsi_val < 30:
@@ -1313,8 +1313,8 @@ with _t_onchain:
                 "Source: DeFiLlama · Cached 30 min."
             )
 
-            _user_level_liq = st.session_state.get("user_level", "Beginner")
-            if _user_level_liq == "Beginner":
+            _user_level_liq = st.session_state.get("user_level", "beginner")
+            if _user_level_liq == "beginner":
                 st.info(
                     "**What this means for you:** When FLR price drops, people who borrowed "
                     "against their FLR can be forced to sell (liquidated) if they don't add "

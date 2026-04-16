@@ -155,7 +155,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.expander("📋 What's in each tab?", expanded=(_user_level == "Beginner")):
+with st.expander("📋 What's in each tab?", expanded=(_user_level == "beginner")):
     st.markdown(
         "| Tab | What it does |\n"
         "|-----|--------------|\n"
@@ -521,8 +521,8 @@ with tab5:
         _is_med_risk   = "Medium" in risk_tol
         _short_horizon = time_horiz in ("<3 months", "3–6 months")
         _long_horizon  = time_horiz in ("6–12 months", "1–2 years", "2+ years")
-        _is_beginner   = exp_level == "Beginner"
-        _is_advanced   = exp_level == "Advanced"
+        _is_beginner   = exp_level == "beginner"
+        _is_advanced   = exp_level == "advanced"
 
         days_to_jul26 = max(0, (datetime(2026, 7, 1, tzinfo=timezone.utc) - datetime.now(timezone.utc)).days)
         _incentive_ok = days_to_jul26 > 60
@@ -1341,7 +1341,7 @@ with tab7:
         "At what price change does impermanent loss wipe out all yield earned?",
     )
 
-    if _user_level == "Beginner":
+    if _user_level == "beginner":
         st.info(
             "**What this means for you:** When you provide liquidity in a DeFi pool, "
             "you can lose money if the price of one token moves far from where it was "
@@ -1522,7 +1522,7 @@ with tab7:
         "Break-even solves (1−y)r − 2√r + (1−y) = 0 where y = yield earned"
     )
 
-    if _user_level == "Beginner":
+    if _user_level == "beginner":
         st.markdown("""
 **Reading this table:**
 - **IL** = the % you lose relative to just holding both tokens (always 0 or negative)
