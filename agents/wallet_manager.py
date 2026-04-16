@@ -12,12 +12,15 @@ Wallet files live in data/agent/ which is git-ignored.
 """
 
 import json
+import logging
 import os
 import secrets
 import struct
 import tempfile
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from agents.config import (
     WALLET_FILE, KDF_ITERATIONS, KDF_SALT_BYTES,
