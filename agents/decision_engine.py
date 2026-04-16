@@ -164,7 +164,14 @@ def _parse_response(text: str) -> TradeDecision:
         lines = text.split("\n")
         text = "\n".join(l for l in lines if not l.startswith("```"))
 
-    data = json.loads(text)
+    try:
+        data = json.loads(text)
+        if not isinstance(data, dict):
+            raise ValueError(f"Expected JSON object, got {type(data).__name__}")
+    except (json.JSONDecodeError, ValueError) as _je:
+        import logging as _log
+        _log.getLogger(__name__).warning("[DecisionEngine] Claude JSON parse failed: %s", _je)
+        return _hold(f"Decision parse failed: {_je}")
 
     confidence = float(data.get("confidence", 0))
     action     = str(data.get("action", "HOLD")).upper().strip()

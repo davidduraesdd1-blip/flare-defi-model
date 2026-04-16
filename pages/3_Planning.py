@@ -759,7 +759,7 @@ with tab5:
                              f"~{_il_est:.0f}% IL</span>") if _il_est > 0 else ""
 
                 # Audit badge
-                _proto_slug = plan["protocol"].lower().split()[0]
+                _proto_slug = (plan["protocol"].lower().split() or [""])[0]
                 _aud_data   = PROTOCOL_AUDITS.get(_proto_slug, {})
                 _aud_html   = ""
                 if _aud_data.get("auditors"):
@@ -812,7 +812,7 @@ with tab5:
             _monthly_rate = (1 + blended_apy / 100) ** (1 / 12) - 1 if blended_apy > 0 else 0.0
             monthly_usd   = capital * _monthly_rate
             _decay_note = f" · RFLR incentives decay-adjusted (~{_incentive_decay_factor()*100:.0f}% remaining)" if any(
-                p["protocol"].lower().split()[0] in {"blazeswap","enosys","sparkdex"} for p in _plans
+                (p["protocol"].lower().split() or [""])[0] in {"blazeswap","enosys","sparkdex"} for p in _plans
             ) else ""
             st.markdown(
                 f"<div style='background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.14); "
@@ -827,7 +827,7 @@ with tab5:
                 unsafe_allow_html=True,
             )
             # Data freshness indicator
-            _live_count = sum(1 for p in _plans if _resolve_apy(_live_apys, p["protocol"].lower().split()[0], "", 0) > 0)
+            _live_count = sum(1 for p in _plans if _resolve_apy(_live_apys, (p["protocol"].lower().split() or [""])[0], "", 0) > 0)
             _live_badge = (
                 "<span style='background:rgba(34,197,94,0.12);color:#22c55e;font-size:0.65rem;"
                 "font-weight:700;padding:1px 7px;border-radius:8px;border:1px solid rgba(34,197,94,0.28);"

@@ -1755,7 +1755,7 @@ def render_opportunity_card(
     )
 
     # Audit badge: look up protocol in PROTOCOL_AUDITS
-    proto_key    = str(opp.get("protocol", "")).lower().split()[0]
+    proto_key    = (str(opp.get("protocol", "")).lower().split() or [""])[0]
     _audit_data  = PROTOCOL_AUDITS.get(proto_key, {})
     _auditors    = _audit_data.get("auditors", [])
     _audit_year  = _audit_data.get("year", "")

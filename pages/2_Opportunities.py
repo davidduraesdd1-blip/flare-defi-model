@@ -615,7 +615,7 @@ with _tab_yield:
                     _il_str  = f"{(opp.get('il_risk') or '—').upper()} (~{_il_est:.1f}%)" if _il_est > 0 else (opp.get("il_risk") or "—").upper()
 
                     # Audit info
-                    _proto_k = str(opp.get("protocol", "")).lower().split()[0]
+                    _proto_k = (str(opp.get("protocol", "")).lower().split() or [""])[0]
                     _aud     = PROTOCOL_AUDITS.get(_proto_k, {})
                     _aud_lbl = f"🛡 {_aud['auditors'][0]}" if _aud.get("auditors") else "—"
 
@@ -676,7 +676,7 @@ with _tab_yield:
     # ─── Correlated Risk Warning (Item 7) ────────────────────────────────────────
     # Warn when 2+ recommended pools share the same underlying dependency.
     _cur_opps = model_data.get(profile) or []
-    _cur_protos = [str(o.get("protocol", "")).lower().split()[0] for o in _cur_opps[:6]]
+    _cur_protos = [(str(o.get("protocol", "")).lower().split() or [""])[0] for o in _cur_opps[:6]]
     _dep_counts: dict = {}
     for _cp in _cur_protos:
         _dep = PROTOCOL_DEPENDENCIES.get(_cp, {})
