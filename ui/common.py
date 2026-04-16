@@ -723,15 +723,20 @@ _CSS_DARK = """
 # run_every=0.5 auto-reruns only this fragment (not the full page) on each tick,
 # avoiding the old time.sleep(0.5) + full st.rerun() pattern.
 
-@st.fragment(run_every=0.5)
+@st.fragment(run_every=2)
 def _scan_progress_fragment() -> None:
-    """Poll for scan completion every 0.5 s using a Streamlit fragment.
+    """Poll for scan completion every 2 s using a Streamlit fragment.
+
+    This fragment is ALWAYS rendered in the sidebar (not gated on _scanning) so
+    its DOM element always exists and Streamlit never logs "fragment does not exist"
+    warnings after a full app rerun.  The guard below makes it a cheap no-op when
+    no scan is running.
 
     When the scan finishes: clears the history cache and triggers a full rerun
     so all pages see fresh data.  When the deadline expires, marks scan as done.
     """
     if not st.session_state.get("_scanning"):
-        return  # scan already finished — fragment is a no-op
+        return  # no-op — fragment DOM element stays alive, no polling work done
     try:
         with open(HISTORY_FILE, encoding="utf-8") as _ff:
             _hist_ts = (json.load(_ff).get("latest") or {}).get("completed_at") or ""
@@ -849,7 +854,7 @@ def render_sidebar() -> dict:
                         creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
                     )
                     st.session_state._scanning = True
-                    st.session_state._scan_deadline = time.time() + 120
+                    st.session_state._scan_deadline = time.time() + 300
                     st.session_state._scan_baseline = ""
                 except Exception:
                     pass  # user can click ▶ Scan manually
@@ -948,7 +953,7 @@ def render_sidebar() -> dict:
                         creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
                     )
                     st.session_state._scanning = True
-                    st.session_state._scan_deadline = time.time() + 120
+                    st.session_state._scan_deadline = time.time() + 300
                     st.session_state._scan_baseline = (
                         latest.get("completed_at") or latest.get("run_id") or ""
                     )
@@ -962,11 +967,10 @@ def render_sidebar() -> dict:
                         st.error("Could not start scan — please try again in a moment.")
 
         # ─── Scan completion polling (OPT-43) ─────────────────────────────────
-        # _scan_progress_fragment is a module-level @st.fragment(run_every=0.5).
-        # Only this fragment section rerenders on each 0.5 s tick — no full-page
-        # st.rerun() and no blocking time.sleep() in the main server thread.
-        if st.session_state.get("_scanning"):
-            _scan_progress_fragment()
+        # Always render the fragment so its DOM element persists across full reruns.
+        # The fragment's internal guard makes it a no-op when _scanning=False,
+        # preventing "fragment does not exist" log spam after scan completes.
+        _scan_progress_fragment()
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 

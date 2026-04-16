@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Use the shared retry-aware session and rate limiters from utils.http (#11 / #12)
 from utils.http import _SESSION, fred_limiter as _FRED_LIMITER, coinmetrics_limiter as _COINMETRICS_LIMITER
+import requests as _requests_no_retry  # used for FRED: fast-fail (no retry) so scan isn't blocked
 
 _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()
@@ -96,7 +97,9 @@ def _fetch_single_fred(key: str, series_id: str) -> tuple[str, float | None]:
     url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
     _FRED_LIMITER.acquire()
     try:
-        resp = _SESSION.get(url, timeout=10)
+        # Use a plain requests.get (no retry adapter) so a slow FRED response
+        # fails fast — solid fallback values exist for all series.
+        resp = _requests_no_retry.get(url, timeout=5)
         if resp.status_code == 200:
             lines = [l for l in resp.text.strip().split("\n")[1:] if l.strip()]
             # For CPI: need 13 valid rows to compute YoY
