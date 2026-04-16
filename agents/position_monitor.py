@@ -6,6 +6,7 @@ The RiskGuard reads from this to enforce max open positions and drawdown limits.
 """
 
 import json
+import logging
 import sqlite3
 import threading
 import time
@@ -15,6 +16,8 @@ from typing import Optional
 
 from agents.config import AGENT_DB_FILE, PAPER_STARTING_BALANCE_USD
 from agents.audit_log import AuditLog, init_db
+
+logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _audit = AuditLog()
