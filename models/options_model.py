@@ -78,6 +78,13 @@ def black_scholes(
 
     vega = S * norm.pdf(d1) * np.sqrt(T) / 100   # per 1% vol move
 
+    # Guard: clamp any NaN/Inf that could arise from extreme inputs
+    price = 0.0         if not np.isfinite(price) else price
+    delta = max(-1.0, min(1.0, delta)) if np.isfinite(delta) else 0.0
+    gamma = 0.0         if not np.isfinite(gamma) else gamma
+    theta = 0.0         if not np.isfinite(theta) else theta
+    vega  = 0.0         if not np.isfinite(vega)  else vega
+
     return (
         round(float(price), 6),
         round(float(delta), 4),
@@ -220,8 +227,12 @@ def covered_call_analysis(spot: float, token: str, vol: float, expiry_days: int 
     strike = spot * 1.10    # 10% OTM
     call   = price_option(token, spot, strike, expiry_days, vol, "call")
 
-    premium_pct    = call.price / spot * 100
-    annualised_pct = round(((1 + premium_pct / 100) ** (365.0 / expiry_days) - 1) * 100, 1) if expiry_days > 0 else 0.0
+    premium_pct    = (call.price / spot * 100) if spot > 0 else 0.0
+    if expiry_days > 0:
+        annualised_pct = round(((1 + premium_pct / 100) ** (365.0 / expiry_days) - 1) * 100, 1)
+        annualised_pct = max(0.0, annualised_pct)  # annualised premium can't be negative
+    else:
+        annualised_pct = 0.0
 
     return {
         "strategy":       "Covered Call",
