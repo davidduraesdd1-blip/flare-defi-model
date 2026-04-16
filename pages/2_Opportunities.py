@@ -2001,8 +2001,9 @@ with _tab_yield:
                 {"pool_id":"10", "protocol": "clearpool-lending","chain": "Flare",   "symbol": "USD0 X-Pool",  "apy": 11.5, "tvl_usd": 46_000_000,    "apy_7d": 11.2, "il_risk": "no"},
             ]
         else:
-            _gy_pools = fetch_llama_yield_pools(min_tvl_usd=100_000, top_n=50)
-    
+            with st.spinner("Fetching live yield pools..."):
+                _gy_pools = fetch_llama_yield_pools(min_tvl_usd=100_000, top_n=50)
+
     # Filter controls
     _gy_chains = sorted({p["chain"] for p in _gy_pools}) if _gy_pools else []
     _gy_col1, _gy_col2 = st.columns([2, 1])

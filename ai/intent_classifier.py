@@ -113,7 +113,8 @@ def _call_haiku(query: str) -> dict | None:
         text = (response.content[0].text or "").strip()
         # Strip optional markdown fences
         if text.startswith("```"):
-            text = text.split("```")[1]
+            _parts = text.split("```")
+            text = _parts[1] if len(_parts) > 1 else _parts[0]
             if text.startswith("json"):
                 text = text[4:]
         parsed = json.loads(text)

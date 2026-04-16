@@ -1293,7 +1293,7 @@ if _opt_input_ok:
             if _opt_lower < _opt_upper:
                 _range_span   = _opt_upper - _opt_lower
                 _cp_in_range  = _opt_lower <= _opt_price <= _opt_upper
-                _cp_pct       = min(100, max(0, (_opt_price - _opt_lower) / _range_span * 100)) if _range_span > 0 else 50
+                _cp_pct       = min(100, max(0, (_opt_price - _opt_lower) / _range_span * 100)) if _range_span > 1e-6 else 50
                 _bar_color    = "#22c55e" if _cp_in_range else "#ef4444"
                 _status_text  = "In range — fees accruing" if _cp_in_range else "OUT OF RANGE — no fees"
                 st.markdown(

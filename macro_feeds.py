@@ -241,7 +241,7 @@ def fetch_yfinance_macro() -> dict[str, Any]:
                         if key == "dxy" and len(series) >= 30:
                             cur   = float(series.iloc[-1])
                             past  = float(series.iloc[-30])
-                            result["dxy_30d_roc"] = round((cur - past) / past * 100, 2) if past else None
+                            result["dxy_30d_roc"] = round((cur - past) / past * 100, 2) if past > 0 else None
                 except Exception as e:
                     logger.debug("[yfinance] %s: %s", key, e)
 
