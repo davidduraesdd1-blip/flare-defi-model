@@ -200,8 +200,8 @@ def compute_pool_sharpe(
     if apy_history and len(apy_history) >= 14:
         valid = [h / 100.0 for h in apy_history if h is not None and h >= 0]
         if len(valid) >= 14:
-            # Daily APY std dev, annualised via sqrt(365)
-            volatility = max(float(np.std(valid)) * (365 ** 0.5), 0.005)
+            # Daily APY std dev, annualised via sqrt(365). ddof=1: unbiased sample std.
+            volatility = max(float(np.std(valid, ddof=1)) * (365 ** 0.5), 0.005)
             vol_method = "history"
         else:
             volatility = None
