@@ -342,7 +342,10 @@ def generate_investment_committee_pdf(
         opp_widths = [36, 36, 18, 20, 28, 24]   # 162 mm
         _header_row(pdf, opp_cols, opp_widths)
         for i, opp in enumerate(top_opportunities[:5]):
-            _ot = float(opp.get("tvl_usd", opp.get("tvlUsd", 0)))
+            try:
+                _ot = float(opp.get("tvl_usd", opp.get("tvlUsd", 0)) or 0)
+            except (TypeError, ValueError):
+                _ot = 0.0
             row = [
                 str(opp.get("protocol", opp.get("project", "-")))[:20],
                 str(opp.get("pool", opp.get("symbol", "-")))[:20],
@@ -536,7 +539,10 @@ def generate_ria_advisor_pdf(
         _section(pdf, _PROFILE_LABELS.get(profile_key, profile_key.upper()))
         _header_row(pdf, cols, widths)
         for i, o in enumerate(opps[:10]):
-            _risk_num = o.get("risk_score", 5.0)
+            try:
+                _risk_num = float(o.get("risk_score") or 5.0)
+            except (TypeError, ValueError):
+                _risk_num = 5.0
             _grade, _ = (("A", "#22c55e") if _risk_num < 2 else
                          ("B", "#10b981") if _risk_num < 3.5 else
                          ("C", "#f59e0b") if _risk_num < 5.0 else

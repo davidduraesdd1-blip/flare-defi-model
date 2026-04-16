@@ -95,7 +95,8 @@ def _estimate_gas_usd(w3: "Web3", gas_units: int) -> float:
             params={"ids": "flare-networks", "vs_currencies": "usd"},
             timeout=5,
         )
-        flr_usd = r.json().get("flare-networks", {}).get("usd", 0.018) if r.status_code == 200 else 0.018
+        _flr_raw = (r.json() or {}).get("flare-networks", {}).get("usd") if r.status_code == 200 else None
+        flr_usd = float(_flr_raw) if (_flr_raw and float(_flr_raw) > 0) else 0.018
         return gas_cost_flr * flr_usd
     except Exception:
         return 0.05  # conservative $0.05 fallback
@@ -137,7 +138,8 @@ class FlareExecutor:
                 params={"ids": "flare-networks", "vs_currencies": "usd"},
                 timeout=5,
             )
-            flr_usd = r.json().get("flare-networks", {}).get("usd", 0.018) if r.status_code == 200 else 0.018
+            _flr_raw = (r.json() or {}).get("flare-networks", {}).get("usd") if r.status_code == 200 else None
+        flr_usd = float(_flr_raw) if (_flr_raw and float(_flr_raw) > 0) else 0.018
             return balance_flr * flr_usd
         except Exception:
             return 0.0

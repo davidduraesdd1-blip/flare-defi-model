@@ -248,7 +248,7 @@ class DecisionEngine:
                 system    = _SYSTEM_PROMPT,
                 messages  = [{"role": "user", "content": user_message}],
             )
-            raw = response.content[0].text if response.content else ""
+            raw = (response.content[0].text if response.content and hasattr(response.content[0], "text") else "")
             if not raw.strip():
                 return _hold("Claude returned empty response")
 

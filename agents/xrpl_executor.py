@@ -120,7 +120,8 @@ class XRPLExecutor:
                 params={"ids": "ripple", "vs_currencies": "usd"},
                 timeout=5,
             )
-            xrp_usd = r.json().get("ripple", {}).get("usd", 2.30) if r.status_code == 200 else 2.30
+            _xrp_raw = (r.json() or {}).get("ripple", {}).get("usd") if r.status_code == 200 else None
+            xrp_usd = float(_xrp_raw) if (_xrp_raw and float(_xrp_raw) > 0) else 2.30
             return xrp * xrp_usd
         except Exception:
             return 0.0
@@ -212,7 +213,8 @@ class XRPLExecutor:
                     params={"ids": "ripple", "vs_currencies": "usd"},
                     timeout=5,
                 )
-                xrp_usd = r.json().get("ripple", {}).get("usd", 2.30) if r.status_code == 200 else 2.30
+                _xrp_raw = (r.json() or {}).get("ripple", {}).get("usd") if r.status_code == 200 else None
+            xrp_usd = float(_xrp_raw) if (_xrp_raw and float(_xrp_raw) > 0) else 2.30
                 xrp_amount = adjusted_size_usd / xrp_usd
                 rlusd_amount = adjusted_size_usd  # 1:1 with USD
             except Exception:

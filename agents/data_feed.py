@@ -215,7 +215,9 @@ def _get_fear_greed() -> dict:
 
 
 # ─── Simple in-process cache ──────────────────────────────────────────────────
+import threading as _threading
 _cache: dict = {"data": None, "expires": 0.0}
+_cache_lock = _threading.Lock()
 
 
 def get_agent_context(
@@ -235,9 +237,12 @@ def get_agent_context(
         operating_mode:     "PAPER" | "LIVE_PHASE2" | "LIVE_PHASE3"
     """
     now = time.time()
-    if _cache["data"] and _cache["expires"] > now:
+    with _cache_lock:
+        _cached_data = _cache["data"]
+        _cache_valid = bool(_cached_data) and _cache["expires"] > now
+    if _cache_valid:
         # Update dynamic fields even on cache hit
-        ctx = dict(_cache["data"])
+        ctx = dict(_cached_data)
         ctx["wallet"]["balance_usd"]  = round(wallet_balance_usd, 2)
         ctx["daily_pnl"]["usd"]       = round(daily_pnl_usd, 2)
         ctx["daily_pnl"]["pct"]       = round(daily_pnl_usd / max(wallet_balance_usd, 1) * 100, 3)
@@ -321,8 +326,9 @@ def get_agent_context(
             "xrpl":  sorted(XRPL_PROTOCOL_WHITELIST),
         },
     }
-    _cache["data"]    = ctx
-    _cache["expires"] = now + DECISION_LOOP_INTERVAL_SECONDS
+    with _cache_lock:
+        _cache["data"]    = ctx
+        _cache["expires"] = now + DECISION_LOOP_INTERVAL_SECONDS
     return ctx
 
 

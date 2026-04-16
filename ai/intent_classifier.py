@@ -110,6 +110,8 @@ def _call_haiku(query: str) -> dict | None:
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": query}],
         )
+        if not response.content or not hasattr(response.content[0], "text"):
+            return IntentResult(primary="OTHER", secondary=None, confidence=0.5)
         text = (response.content[0].text or "").strip()
         # Strip optional markdown fences
         if text.startswith("```"):
