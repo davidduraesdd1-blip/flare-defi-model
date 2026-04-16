@@ -2826,8 +2826,11 @@ with _tab_yield:
             _tp_in   = _tp_low <= _tp_cur <= _tp_high
             if not _tp_in:
                 _oor_count += 1
-                _dist = ((_tp_low - _tp_cur) / _tp_cur * 100 if _tp_cur < _tp_low
-                         else (_tp_cur - _tp_high) / _tp_cur * 100)
+                if _tp_cur > 0:
+                    _dist = ((_tp_low - _tp_cur) / _tp_cur * 100 if _tp_cur < _tp_low
+                             else (_tp_cur - _tp_high) / _tp_cur * 100)
+                else:
+                    _dist = 0.0
                 st.warning(
                     f"**{_html.escape(_tp.get('pair', 'Unknown'))}** out of range — "
                     f"price ${_tp_cur:,.2f} is {_dist:.1f}% outside range "
