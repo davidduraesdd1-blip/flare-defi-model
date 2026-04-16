@@ -135,6 +135,8 @@ class PositionMonitor:
                         WHERE trade_id=?
                     """, (current_value, unrealized, trade_id))
                     conn.commit()
+            except Exception as _e:
+                logger.warning("[PositionMonitor] update_position_value failed for %s: %s", trade_id, _e)
             finally:
                 conn.close()
 

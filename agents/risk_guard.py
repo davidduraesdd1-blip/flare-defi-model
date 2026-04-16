@@ -133,7 +133,7 @@ class RiskGuard:
         if last_loss_timestamp > 0:
             elapsed = time.time() - last_loss_timestamp
             if elapsed < C.COOLDOWN_AFTER_LOSS_SECONDS:
-                remaining = int(C.COOLDOWN_AFTER_LOSS_SECONDS - elapsed)
+                remaining = max(0, int(C.COOLDOWN_AFTER_LOSS_SECONDS - elapsed))
                 return RiskDecision(
                     False,
                     f"Loss cooldown active: {remaining // 60}m {remaining % 60}s remaining"

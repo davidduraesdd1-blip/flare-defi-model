@@ -150,7 +150,8 @@ with col_stop:
 
 with col_cycle:
     if st.button("⚡ Run One Cycle Now", use_container_width=True):
-        _runner.run_cycle_now()
+        with st.spinner("Running agent cycle..."):
+            _runner.run_cycle_now()
         st.success("Cycle complete.")
         st.rerun()
 
@@ -458,7 +459,7 @@ elif live_unlocked:
     st.success(f"✓ Live mode unlocked. Current mode: **{mode}**. "
                f"Phase 2 wallet cap: ${PHASE2_WALLET_CAP_USD:,.0f}")
 else:
-    remaining = PAPER_TRADING_GATE_DAYS - paper_days
+    remaining = max(0, PAPER_TRADING_GATE_DAYS - paper_days)
     st.info(f"ℹ️ {remaining} more paper trading days needed before live unlock is available.")
 
 st.divider()

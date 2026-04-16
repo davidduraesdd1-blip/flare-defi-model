@@ -100,7 +100,8 @@ def _load_wallet_file() -> dict:
         return {}
     try:
         return json.loads(WALLET_FILE.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as _e:
+        logger.warning("[WalletManager] wallet file read failed: %s", _e)
         return {}
 
 

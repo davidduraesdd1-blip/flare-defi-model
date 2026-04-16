@@ -450,6 +450,7 @@ with _ctrl_tab_export:
         unsafe_allow_html=True,
     )
     if st.button("Generate Investment Committee PDF", key="ic_pdf_btn", use_container_width=True):
+      with st.spinner("Generating Investment Committee PDF..."):
         try:
             from pdf_export import generate_investment_committee_pdf
             from agents.agent_runner import AgentRunner as _AR
@@ -514,6 +515,7 @@ with _ctrl_tab_export:
     _ria_advisor = st.text_input("Advisor Name (optional)", key="ria_advisor_name", placeholder="Jane Smith, CFP")
     _ria_client  = st.text_input("Client Name (optional)",  key="ria_client_name",  placeholder="Smith Family Account")
     if st.button("Generate RIA Advisor PDF", key="ria_pdf_btn", use_container_width=True):
+      with st.spinner("Generating RIA Advisor PDF..."):
         try:
             from pdf_export import generate_ria_advisor_pdf
             from models.composite_signal import compute_composite_signal
