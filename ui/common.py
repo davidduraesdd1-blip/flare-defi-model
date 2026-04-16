@@ -2134,42 +2134,6 @@ def render_welcome_banner() -> None:
             st.rerun()
 
 
-# ── Signal Badge — Shape Encoding (Phase 2, item 10) ──────────────────────────
-
-def signal_badge_html(direction: str, label: str = "") -> str:
-    """Return HTML for a shape+color signal badge (color-blind safe).
-
-    Shape encoding:  ▲ BUY  /  ▼ SELL  /  ■ NEUTRAL
-    Shape + color always combined — never color alone.
-
-    Parameters
-    ----------
-    direction : str
-        One of: BUY, BULLISH, BULL, LONG, SELL, BEARISH, BEAR, SHORT,
-                NEUTRAL, HOLD, SIDEWAYS, or any other (→ NEUTRAL).
-    label : str
-        Override the display text. If empty, uses the canonical label.
-    """
-    _dir = direction.upper().strip()
-    if _dir in {"BUY", "BULLISH", "BULL", "LONG"}:
-        _shape, _bg, _txt, _border = "▲", "rgba(34,197,94,0.12)", "#22c55e", "rgba(34,197,94,0.3)"
-        _default = "BUY"
-    elif _dir in {"SELL", "BEARISH", "BEAR", "SHORT"}:
-        _shape, _bg, _txt, _border = "▼", "rgba(239,68,68,0.12)", "#ef4444", "rgba(239,68,68,0.3)"
-        _default = "SELL"
-    else:
-        _shape, _bg, _txt, _border = "■", "rgba(100,116,139,0.12)", "#94a3b8", "rgba(100,116,139,0.3)"
-        _default = "NEUTRAL"
-
-    _display = label if label else _default
-    return (
-        f"<span style='display:inline-flex;align-items:center;gap:4px;"
-        f"background:{_bg};border:1px solid {_border};border-radius:6px;"
-        f"padding:2px 8px;font-size:0.85rem;font-weight:700;color:{_txt};'>"
-        f"{_shape} {_display}</span>"
-    )
-
-
 # ── Beginner UX — "What does this mean?" Panel (Phase 2, item 8) ──────────────
 
 def render_what_this_means(
@@ -2242,69 +2206,70 @@ def render_gauge(
     )
 
 
-# ── Yield Sustainability Score (Phase 2, item 12) ─────────────────────────────
+# ── Shared Composite Signal (4-layer, cached 1 h) ─────────────────────────────
 
-def render_yield_sustainability(
-    fee_apy: float,
-    reward_apy: float,
-    user_level: str = "beginner",
-) -> None:
-    """Render a yield sustainability score widget.
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_composite_signal_cached() -> dict:
+    """Compute the 4-layer composite market environment signal. Cached 1 hour.
 
-    Shows real yield ratio (fee revenue vs emissions) with color coding
-    and a plain-English explanation at Beginner level.
-
-    Real yield ratio = fee_apy / (fee_apy + reward_apy)
-    ≥ 70% = Sustainable (green)
-    35–70% = Partial (amber)
-    < 35%  = Incentive-Driven (red) — Ponzi-risk signal
+    Uses ThreadPoolExecutor for parallel macro/on-chain/TA fetches (~10s vs ~30s
+    sequential). Includes Fear & Greed current value and 30-day average.
+    Shared across Dashboard (app.py) and Opportunities page — one cache entry,
+    one data fetch cycle regardless of which page the user visits first.
     """
-    _total = fee_apy + reward_apy
-    if _total <= 0:
-        return
-
-    _ratio = fee_apy / _total
-    _pct   = round(_ratio * 100)
-
-    if _ratio >= 0.70:
-        _label, _color, _icon = "Sustainable",       "#22c55e", "✅"
-        _explain = (
-            "Most of this yield comes from real trading fees — not from the protocol printing "
-            "new tokens. This is a healthy, sustainable return that should persist over time."
+    try:
+        from models.composite_signal import compute_composite_signal as _ccs
+        from macro_feeds import (
+            fetch_all_macro_data as _fmac,
+            fetch_coinmetrics_onchain as _foc,
+            fetch_btc_ta_signals as _fta,
         )
-    elif _ratio >= 0.35:
-        _label, _color, _icon = "Partially Sustainable", "#f59e0b", "⚠️"
-        _explain = (
-            "About half of this yield comes from trading fees, the rest from reward token "
-            "emissions. The yield is partly reliable but may decrease if emission rewards run out."
-        )
-    else:
-        _label, _color, _icon = "Incentive-Driven", "#ef4444", "🚨"
-        _explain = (
-            "Most of this yield is paid in reward tokens being printed by the protocol — "
-            "not from real trading fees. These high APYs often shrink or disappear when "
-            "the reward program ends. Approach with caution."
-        )
+    except ImportError:
+        return {}
 
-    st.markdown(
-        f"<div style='padding:10px 14px;background:rgba(17,24,39,0.6);"
-        f"border-radius:8px;border-left:3px solid {_color};margin-top:8px;'>"
-        f"<div style='font-size:0.85rem;color:#6b7280;text-transform:uppercase;"
-        f"letter-spacing:0.7px;margin-bottom:4px;'>Yield Sustainability</div>"
-        f"<div style='display:flex;align-items:center;gap:8px;'>"
-        f"<span style='font-size:1.1rem;'>{_icon}</span>"
-        f"<span style='font-weight:700;color:{_color};font-size:0.88rem;'>{_label}</span>"
-        f"<span style='color:#6b7280;font-size:0.85rem;'>({_pct}% real fees)</span>"
-        f"</div>"
-        f"<div style='margin-top:6px;background:rgba(255,255,255,0.05);"
-        f"border-radius:3px;height:5px;'>"
-        f"<div style='width:{_pct}%;height:5px;background:{_color};"
-        f"border-radius:3px;'></div>"
-        f"</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    try:
+        import threading as _thr
+        from concurrent.futures import ThreadPoolExecutor
 
-    if user_level == "beginner":
-        st.caption(f"💡 {_explain}")
+        try:
+            from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+            _ctx = get_script_run_ctx()
+        except Exception:
+            _ctx = None
+
+        def _run(fn, *args):
+            if _ctx is not None:
+                try:
+                    add_script_run_ctx(_thr.current_thread(), _ctx)
+                except Exception:
+                    pass
+            return fn(*args)
+
+        with ThreadPoolExecutor(max_workers=3) as _ex:
+            _f1 = _ex.submit(_run, _fmac)
+            _f2 = _ex.submit(_run, _foc, 90)
+            _f3 = _ex.submit(_run, _fta)
+            _macro   = _f1.result(timeout=20)
+            _onchain = _f2.result(timeout=20)
+            _ta      = _f3.result(timeout=20)
+
+        _fg_val, _fg_30d_avg = None, None
+        try:
+            _hist = fetch_fear_greed_history(30)
+            if _hist:
+                _fg_val    = int(_hist[0]["value"])
+                _vals_30   = [int(h["value"]) for h in _hist if "value" in h]
+                _fg_30d_avg = round(sum(_vals_30) / len(_vals_30), 1) if _vals_30 else None
+        except Exception:
+            pass
+
+        return _ccs(
+            macro_data=_macro,
+            onchain_data=_onchain,
+            ta_data=_ta,
+            fg_value=_fg_val,
+            fg_30d_avg=_fg_30d_avg,
+        )
+    except Exception:
+        return {}
 

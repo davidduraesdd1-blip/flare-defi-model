@@ -81,7 +81,7 @@ from ui.common import (
     render_price_strip, render_incentive_warning,
     render_yield_hero_cards, render_opportunity_card,
     render_urgency_badge, render_section_header, load_live_prices,
-    render_welcome_banner, render_what_this_means,
+    render_welcome_banner, render_what_this_means, get_composite_signal_cached,
 )
 import streamlit as st
 
@@ -180,44 +180,8 @@ st.markdown(
 )
 
 # ── Market Environment Banner (4-layer composite signal) ─────────────────────
-@st.cache_data(ttl=3600, show_spinner=False)
-def _dash_composite_signal() -> dict:
-    try:
-        import threading as _thr
-        from concurrent.futures import ThreadPoolExecutor
-        from models.composite_signal import compute_composite_signal as _ccs
-        from macro_feeds import fetch_all_macro_data as _fmac, fetch_coinmetrics_onchain as _foc, fetch_btc_ta_signals as _fta
-        # Forward the Streamlit ScriptRunContext to worker threads so that
-        # any st.session_state access inside macro_feeds doesn't emit warnings.
-        try:
-            from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
-            _ctx = get_script_run_ctx()
-        except Exception:
-            _ctx = None
-
-        def _run(fn, *args):
-            if _ctx is not None:
-                try:
-                    add_script_run_ctx(_thr.current_thread(), _ctx)
-                except Exception:
-                    pass
-            return fn(*args)
-
-        # Run all three data sources in parallel instead of sequentially.
-        # Before: ~30s (3 blocking calls in series). After: ~10s (parallel, limited by slowest).
-        with ThreadPoolExecutor(max_workers=3) as _ex:
-            _f1 = _ex.submit(_run, _fmac)
-            _f2 = _ex.submit(_run, _foc, 90)   # 90 days sufficient for signal; was 400
-            _f3 = _ex.submit(_run, _fta)
-            _macro   = _f1.result(timeout=20)
-            _onchain = _f2.result(timeout=20)
-            _ta      = _f3.result(timeout=20)
-        return _ccs(macro_data=_macro, onchain_data=_onchain, ta_data=_ta)
-    except Exception:
-        return {}
-
 try:
-    _d_csig = _dash_composite_signal()
+    _d_csig = get_composite_signal_cached()
     if not _d_csig:
         # Composite signal failed — show a soft, non-alarming notice
         st.markdown(

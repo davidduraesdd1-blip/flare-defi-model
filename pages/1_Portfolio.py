@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
     load_positions, save_positions, load_wallets, save_wallets,
-    compute_position_pnl, render_opportunity_card, render_section_header,
+    compute_position_pnl, render_section_header,
     _ts_fmt, load_live_prices, risk_score_to_grade, render_ftso_il_calculator,
     render_what_this_means, get_user_level,
 )

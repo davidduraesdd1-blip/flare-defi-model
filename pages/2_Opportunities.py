@@ -19,8 +19,7 @@ logger = logging.getLogger(__name__)
 from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
     render_opportunity_card, render_section_header, risk_score_to_grade,
-    render_what_this_means, render_yield_sustainability, signal_badge_html,
-    get_user_level,
+    render_what_this_means, get_user_level, get_composite_signal_cached,
 )
 # config imports consolidated below in models.risk_models import block
 from scanners.defillama import (
@@ -56,14 +55,6 @@ from config import (
     PROTOCOL_AUDITS, PROTOCOL_DEPENDENCIES, risk_letter_grade,
     PROTOCOLS as _PROTOCOLS_CFG,
 )
-
-try:
-    from models.composite_signal import compute_composite_signal
-    from macro_feeds import fetch_all_macro_data, fetch_coinmetrics_onchain, fetch_btc_ta_signals
-    from ui.common import fetch_fear_greed_history as _fetch_fg_history
-    _COMPOSITE_AVAIL = True
-except ImportError:
-    _COMPOSITE_AVAIL = False
 
 # Agent-executable protocol sets (used to label Multi-Chain Pool rows)
 try:
@@ -182,35 +173,6 @@ def _cached_protocol_revenue():
 def _cached_all_hacks():
     """Cached wrapper for fetch_all_hacks(). TTL=6 hours. (D3)"""
     return fetch_all_hacks()
-
-
-@st.cache_data(ttl=3600)
-def _cached_composite_signal() -> dict:
-    """Compute composite market environment signal (4-layer). Cached 1 hour."""
-    if not _COMPOSITE_AVAIL:
-        return {}
-    try:
-        macro_data   = fetch_all_macro_data()
-        onchain_data = fetch_coinmetrics_onchain(days=400)
-        ta_data      = fetch_btc_ta_signals()
-        fg_val, fg_30d_avg = None, None
-        try:
-            hist = _fetch_fg_history(30)
-            if hist:
-                fg_val     = int(hist[0]["value"])
-                vals_30     = [int(h["value"]) for h in hist if "value" in h]
-                fg_30d_avg  = round(sum(vals_30) / len(vals_30), 1) if vals_30 else None
-        except Exception:
-            pass
-        return compute_composite_signal(
-            macro_data=macro_data,
-            onchain_data=onchain_data,
-            fg_value=fg_val,
-            ta_data=ta_data,
-            fg_30d_avg=fg_30d_avg,
-        )
-    except Exception:
-        return {}
 
 
 page_setup("Opportunities · Family Office · DeFi Intelligence")
@@ -339,7 +301,7 @@ st.markdown(
 )
 
 # ── Market Environment Banner (composite signal) ──────────────────────────────
-_csig = _cached_composite_signal()
+_csig = get_composite_signal_cached()
 if _csig:
     _score  = _csig.get("score", 0.0)
     _signal = _csig.get("signal", "NEUTRAL")
