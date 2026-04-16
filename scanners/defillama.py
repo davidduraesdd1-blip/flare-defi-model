@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import gc
 import logging
+import math
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -411,18 +412,25 @@ def fetch_yields_pools(
             continue
         if tvl < min_tvl_usd:
             continue
+        def _safe_apy(val) -> float:
+            """Convert APY value to float; return 0.0 for NaN/Inf/invalid."""
+            try:
+                f = float(val or 0)
+                return f if math.isfinite(f) else 0.0
+            except (ValueError, TypeError):
+                return 0.0
         filtered.append({
             "pool":         p.get("pool", ""),
             "project":      p.get("project", ""),
             "chain":        p.get("chain", ""),
             "symbol":       p.get("symbol", ""),
-            "apy":          float(p.get("apy") or 0),
-            "apyBase":      float(p.get("apyBase") or 0),
-            "apyReward":    float(p.get("apyReward") or 0),
+            "apy":          _safe_apy(p.get("apy")),
+            "apyBase":      _safe_apy(p.get("apyBase")),
+            "apyReward":    _safe_apy(p.get("apyReward")),
             "tvlUsd":       tvl,
-            "apy7d":        float(p.get("apyMean30d") or p.get("apy") or 0),
-            "volumeUsd1d":  float(p.get("volumeUsd1d") or 0),
-            "il7d":         float(p.get("il7d") or 0),
+            "apy7d":        _safe_apy(p.get("apyMean30d") or p.get("apy")),
+            "volumeUsd1d":  _safe_apy(p.get("volumeUsd1d")),
+            "il7d":         _safe_apy(p.get("il7d")),
             "rewardTokens": p.get("rewardTokens") or [],
             "audits":       int(p.get("audits") or 0),
             "ilRisk":       p.get("ilRisk", "no"),

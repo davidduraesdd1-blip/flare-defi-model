@@ -47,8 +47,8 @@ class _PooledConn:
     def close(self):
         try:
             self.__dict__["_c"].rollback()
-        except Exception:
-            pass
+        except Exception as _rb_err:
+            logger.warning("[DB] Connection rollback failed: %s", _rb_err)
 
     def __enter__(self):       return self.__dict__["_c"].__enter__()
     def __exit__(self, *a):    return self.__dict__["_c"].__exit__(*a)
