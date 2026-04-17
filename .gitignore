@@ -3,7 +3,9 @@
 *.env
 ANTHROPIC_API_KEY*
 .streamlit/secrets.toml
-data/alerts_config.json      # contains SMTP/Telegram/Discord credentials
+# contains SMTP/Telegram/Discord credentials — NEVER commit
+data/alerts_config.json
+data/feedback_checkpoint.json
 
 # ── Database & runtime state ──────────────────────────────────────────────────
 *.db
