@@ -8,8 +8,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from typing import Optional
-
 from config import RISK_PROFILE_NAMES, PROTOCOLS
 
 logger = logging.getLogger(__name__)

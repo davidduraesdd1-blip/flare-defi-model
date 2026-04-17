@@ -41,8 +41,6 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any
-
 import numpy as np
 import pandas as pd
 

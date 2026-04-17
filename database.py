@@ -12,7 +12,7 @@ import logging
 import sqlite3
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import pandas as pd
 

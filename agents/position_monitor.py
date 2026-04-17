@@ -12,8 +12,6 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
-
 from agents.config import AGENT_DB_FILE, PAPER_STARTING_BALANCE_USD
 from agents.audit_log import AuditLog, init_db
 
