@@ -333,6 +333,20 @@ if all_pts:
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+# ── C3: Attribution footer — scan timestamp + data sources ────────────────────
+try:
+    _scan_completed = latest.get("completed_at", "")
+    if _scan_completed:
+        from datetime import datetime as _dt_attr, timezone as _tz_attr
+        _attr_dt  = _dt_attr.fromisoformat(_scan_completed.replace("Z", "+00:00"))
+        _attr_age = int((_dt_attr.now(_tz_attr.utc) - _attr_dt).total_seconds() / 60)
+        _attr_str = f"{_attr_age}m ago" if _attr_age < 60 else f"{_attr_age // 60}h {_attr_age % 60}m ago"
+        st.caption(
+            f"Source: DeFiLlama · Flare FTSO · CoinGecko · Last scan: {_attr_str}"
+        )
+except Exception:
+    pass
+
 # ── Yield Hero Cards ──────────────────────────────────────────────────────────
 model_data = latest.get("models") or {}
 opps       = model_data.get(profile, [])

@@ -80,7 +80,7 @@ from utils.http import _SESSION as _http_session, coingecko_limiter
 
 # ─── API Status Helper (#17) ──────────────────────────────────────────────────
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=1)  # F3: memory guard — no args
 def _get_api_status() -> dict:
     """Return API connectivity status dict. Cached 5 minutes to avoid startup spam."""
     try:
@@ -92,7 +92,7 @@ def _get_api_status() -> dict:
 
 # ─── Live Price Loader (bypasses stale scan data) ─────────────────────────────
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=120, max_entries=1)  # F3: memory guard
 def load_live_prices() -> list:
     """
     Fetch current token prices directly from CoinGecko.
@@ -1283,7 +1283,7 @@ def _history_mtime() -> float:
         return 0.0
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, max_entries=5)  # F3: memory guard — keyed by mtime, small unique set
 def _load_history_file(_mtime: float = 0.0) -> dict:
     """Single cached read of history.json — shared by load_latest() and load_history_runs().
 
@@ -1314,7 +1314,7 @@ def load_history_runs() -> list:
     return _load_history_file(_history_mtime()).get("runs") or []
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, max_entries=1)  # F3: memory guard
 def load_positions() -> list:
     if not POSITIONS_FILE.exists():
         return []
@@ -1334,7 +1334,7 @@ def save_positions(positions: list) -> None:
     load_positions.clear()
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=1)  # F3: memory guard
 def load_wallets() -> list:
     if not WALLETS_FILE.exists():
         return []
@@ -1351,7 +1351,7 @@ def save_wallets(wallets: list) -> None:
     load_wallets.clear()
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=1)  # F3: memory guard
 def load_monitor_digest() -> dict:
     if not MONITOR_DIGEST_FILE.exists():
         return {}
