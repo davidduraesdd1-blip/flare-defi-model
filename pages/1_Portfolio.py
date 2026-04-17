@@ -553,7 +553,7 @@ def _detect_onchain_positions(wallet: str) -> list:
                     "notes":          f"Auto-detected: {bal_human:.6f} k{asset} on Kinetic",
                 })
         except Exception as _e:
-            logger.debug(f"kToken balance check failed for {asset}: {_e}")
+            logger.debug("kToken balance check failed for %s: %s", asset, _e)
 
     # ── sFLR balance (Sceptre staking) ─────────────────────────────────────────
     sflr_addr = TOKENS.get("sFLR")
@@ -581,7 +581,7 @@ def _detect_onchain_positions(wallet: str) -> list:
                     "notes":          f"Auto-detected: {bal:.4f} sFLR staked on Sceptre",
                 })
         except Exception as _e:
-            logger.debug(f"sFLR balance check failed: {_e}")
+            logger.debug("sFLR balance check failed: %s", _e)
 
     # ── stXRP balance (Firelight staking) ──────────────────────────────────────
     stxrp_addr = TOKENS.get("stXRP")
@@ -609,7 +609,7 @@ def _detect_onchain_positions(wallet: str) -> list:
                     "notes":          f"Auto-detected: {bal:.4f} stXRP on Firelight",
                 })
         except Exception as _e:
-            logger.debug(f"stXRP balance check failed: {_e}")
+            logger.debug("stXRP balance check failed: %s", _e)
 
     return suggestions
 
@@ -639,7 +639,7 @@ def _fetch_wallet_balances(wallet: str) -> list:
             bal = contract.functions.balanceOf(addr_cs).call()
             token_balances[sym] = bal / (10 ** dec)
         except Exception as e:
-            logger.debug(f"Failed to fetch {sym} balance for {addr_cs}: {e}")
+            logger.debug("Failed to fetch %s balance for %s: %s", sym, addr_cs, e)
     return [{"Token": k, "Balance": f"{v:,.4f}"} for k, v in token_balances.items() if v >= 0.0001]
 
 

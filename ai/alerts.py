@@ -47,7 +47,7 @@ def load_alerts_config() -> dict:
             with open(ALERTS_CONFIG_FILE, encoding="utf-8") as f:
                 cfg = json.load(f)
         except Exception as e:
-            logger.warning(f"Could not load alerts config: {e}")
+            logger.warning("Could not load alerts config: %s", e)
 
     # Seed from environment variables when sections are missing or tokens are empty.
     # This allows Streamlit Cloud / .env-based deployments to send alerts without
@@ -116,7 +116,7 @@ def send_email_alert(subject: str, body: str, config: dict) -> bool:
     if not cfg.get("enabled") or not cfg.get("address"):
         return False
     if not _is_valid_email(cfg["address"]):
-        logger.warning(f"Email alert skipped — invalid address: {cfg['address']!r}")
+        logger.warning("Email alert skipped — invalid address: %r", cfg['address'])
         return False
     try:
         msg = MIMEMultipart()
@@ -133,10 +133,10 @@ def send_email_alert(subject: str, body: str, config: dict) -> bool:
             if cfg.get("username") and cfg.get("password"):
                 server.login(cfg["username"], cfg["password"])
             server.sendmail(msg["From"], msg["To"], msg.as_string())
-        logger.info(f"Email alert sent: {subject}")
+        logger.info("Email alert sent: %s", subject)
         return True
     except Exception as e:
-        logger.warning(f"Email alert failed: {e}")
+        logger.warning("Email alert failed: %s", e)
         return False
 
 
@@ -158,10 +158,10 @@ def send_telegram_alert(message: str, config: dict) -> bool:
         if r.ok:
             logger.info("Telegram alert sent.")
             return True
-        logger.warning(f"Telegram alert failed: {r.status_code} — {r.text[:200]}")
+        logger.warning("Telegram alert failed: %s — %s", r.status_code, r.text[:200])
         return False
     except Exception as e:
-        logger.warning(f"Telegram alert failed: {e}")
+        logger.warning("Telegram alert failed: %s", e)
         return False
 
 
@@ -184,10 +184,10 @@ def send_discord_alert(message: str, config: dict) -> bool:
         if r.status_code in (200, 204):
             logger.info("Discord alert sent.")
             return True
-        logger.warning(f"Discord alert failed: {r.status_code} — {r.text[:200]}")
+        logger.warning("Discord alert failed: %s — %s", r.status_code, r.text[:200])
         return False
     except Exception as e:
-        logger.warning(f"Discord alert failed: {e}")
+        logger.warning("Discord alert failed: %s", e)
         return False
 
 
@@ -225,10 +225,10 @@ def send_webhook_alert(subject: str, message: str, config: dict) -> bool:
         if r.ok:
             logger.info("Webhook alert sent.")
             return True
-        logger.warning(f"Webhook alert failed: {r.status_code} — {r.text[:200]}")
+        logger.warning("Webhook alert failed: %s — %s", r.status_code, r.text[:200])
         return False
     except Exception as e:
-        logger.warning(f"Webhook alert failed: {e}")
+        logger.warning("Webhook alert failed: %s", e)
         return False
 
 
@@ -516,8 +516,8 @@ def calibrate_alert_thresholds() -> dict:
     delta = new_thresh - old_thresh
     direction = "raised" if delta > 0.5 else ("lowered" if delta < -0.5 else "unchanged")
     logger.info(
-        f"Smart Alert Tuning: threshold {direction} {old_thresh:.1f}% → {new_thresh:.1f}% "
-        f"(p75={p75_apy:.1f}%, n={len(accurate_apys)})"
+        "Smart Alert Tuning: threshold %s %.1f%% → %.1f%% (p75=%.1f%%, n=%d)",
+        direction, old_thresh, new_thresh, p75_apy, len(accurate_apys),
     )
     return {
         "calibrated":     True,

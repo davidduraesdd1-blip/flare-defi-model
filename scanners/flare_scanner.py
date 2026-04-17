@@ -179,7 +179,7 @@ def fetch_sceptre_onchain_rate() -> Optional[float]:
             _sceptre_cache["data"] = result
         return result
     except Exception as exc:
-        logger.warning(f"Sceptre on-chain rate failed: {exc}")
+        logger.warning("Sceptre on-chain rate failed: %s", exc)
         with _sceptre_lock:
             _sceptre_cache["ts"]   = time.time()
             _sceptre_cache["data"] = None
@@ -352,7 +352,7 @@ def _fetch_binance_24h_change() -> dict:
                 if item.get("symbol") in binance_map
             }
     except Exception as e:
-        logger.debug(f"Binance 24h change fallback failed: {e}")
+        logger.debug("Binance 24h change fallback failed: %s", e)
     return {}
 
 
@@ -482,7 +482,7 @@ def fetch_prices() -> list:
             conn.commit()
             conn.close()
         except Exception as _e:
-            logger.debug(f"price_cache SQLite write failed: {_e}")
+            logger.debug("price_cache SQLite write failed: %s", _e)
 
     with _price_cache_lock:
         _price_cache    = results
@@ -557,7 +557,7 @@ def fetch_ftso_prices() -> dict:
                 if data:
                     results = _parse_feeds(data)
             except Exception as exc:
-                logger.debug(f"FTSO endpoint {_ep} failed: {exc}")
+                logger.debug("FTSO endpoint %s failed: %s", _ep, exc)
 
         # Individual feed endpoint variants
         if not results:
@@ -607,10 +607,10 @@ def fetch_ftso_prices() -> dict:
             if results:
                 logger.debug("FTSO prices sourced from CoinGecko fallback")
         except Exception as exc:
-            logger.debug(f"FTSO CoinGecko fallback failed: {exc}")
+            logger.debug("FTSO CoinGecko fallback failed: %s", exc)
 
     if results:
-        logger.info(f"FTSO prices fetched: {results}")
+        logger.info("FTSO prices fetched: %s", results)
     else:
         logger.debug("FTSO prices unavailable — continuing without oracle signal")
     return results
@@ -676,7 +676,7 @@ def _fetch_defillama_raw() -> dict:
             _defillama_cache_ts = time.time()
         total = sum(len(v) for v in result.values())
         if total:
-            logger.info(f"DeFiLlama: fetched {total} Flare pool(s) across {len(result)} protocol(s)")
+            logger.info("DeFiLlama: fetched %d Flare pool(s) across %d protocol(s)", total, len(result))
     else:
         logger.warning("DeFiLlama yields API unavailable — protocols will use baseline data")
 
@@ -687,7 +687,7 @@ def _fetch_defillama_raw() -> dict:
 
 def _baseline_pools(protocol_key: str) -> list:
     """Return config baseline pools when the subgraph API is unavailable."""
-    logger.warning(f"{PROTOCOLS[protocol_key]['name']} subgraph unavailable — using baseline data")
+    logger.warning("%s subgraph unavailable — using baseline data", PROTOCOLS[protocol_key]['name'])
     pools = []
     for name, cfg in PROTOCOLS[protocol_key]["pools"].items():
         try:
@@ -820,9 +820,9 @@ def _prewarm_gt_cache() -> None:
         data = _get(url, timeout=15, headers=_GT_HEADERS)
         result[dex_id] = (data or {}).get("data", [])
         if data is None:
-            logger.warning(f"GeckoTerminal pre-warm {dex_id} failed")
+            logger.warning("GeckoTerminal pre-warm %s failed", dex_id)
         else:
-            logger.debug(f"GT cache: {dex_id} → {len(result[dex_id])} pools")
+            logger.debug("GT cache: %s → %d pools", dex_id, len(result[dex_id]))
     with _gt_cache_lock:
         _gt_cache = result
         _gt_cache_ts = time.time()
@@ -867,7 +867,7 @@ def _fetch_gt_dex_pools(dex_id: str, protocol: str,
                 f"?page=1&order=h24_volume_usd_desc")
         data = _get(url, timeout=15, headers=_GT_HEADERS)
         if data is None:
-            logger.warning(f"GeckoTerminal {dex_id} fetch failed")
+            logger.warning("GeckoTerminal %s fetch failed", dex_id)
             return []
         raw_pools = data.get("data", [])
 
@@ -983,7 +983,7 @@ def _fetch_single_ktoken_rate(w3, asset: str, cfg: dict, n_tokens: int) -> Lendi
         # TVL: convert raw token units → USD using baseline price for non-stablecoins
         underlying_decimals = cfg.get("decimals", 18)
         if not (0 <= underlying_decimals <= 30):
-            logger.warning(f"Kinetic: invalid decimals {underlying_decimals} for {asset} — defaulting to 18")
+            logger.warning("Kinetic: invalid decimals %d for %s — defaulting to 18", underlying_decimals, asset)
             underlying_decimals = 18
         token_amount = (cash + total_borrows) / (10 ** underlying_decimals)
         token_price  = _BASELINE_TOKEN_PRICES.get(asset, 1.0)
@@ -994,7 +994,7 @@ def _fetch_single_ktoken_rate(w3, asset: str, cfg: dict, n_tokens: int) -> Lendi
     except Exception as e:
         # Log at DEBUG — baseline fallback handles this gracefully.
         # Contracts revert when Kinetic upgrades addresses; baselines stay accurate.
-        logger.debug(f"Kinetic on-chain fetch failed for {asset}: {e} — using baseline")
+        logger.debug("Kinetic on-chain fetch failed for %s: %s — using baseline", asset, e)
         supply_apy  = cfg.get("baseline_supply", 0.0)
         borrow_apy  = cfg.get("baseline_borrow", 0.0)
         utilisation = 0.0   # unknown when using baseline; do not fabricate a value
@@ -1037,7 +1037,7 @@ def fetch_kinetic_rates() -> list:
             try:
                 rate_map[asset] = fut.result(timeout=10)
             except Exception as e:
-                logger.debug(f"Kinetic parallel fetch timed out for {asset}: {e}")
+                logger.debug("Kinetic parallel fetch timed out for %s: %s", asset, e)
                 cfg = k_tokens[asset]
                 rate_map[asset] = LendingRate(
                     protocol="kinetic",
@@ -1085,7 +1085,7 @@ def fetch_kinetic_rates() -> list:
                             tvl_usd=pool.get("tvl_usd", 0),
                             data_source="live",
                         )
-                        logger.debug(f"Kinetic {asset}: RPC failed → DeFiLlama live {apy:.1f}%")
+                        logger.debug("Kinetic %s: RPC failed → DeFiLlama live %.1f%%", asset, apy)
 
     # Preserve original ordering (dict insertion order in Python 3.7+)
     return [rate_map[asset] for asset in k_tokens if asset in rate_map]
@@ -1133,7 +1133,7 @@ def fetch_clearpool_rates() -> list:
             if rates:
                 return rates
     except Exception as e:
-        logger.debug(f"Clearpool REST API failed: {e}")
+        logger.debug("Clearpool REST API failed: %s", e)
 
     # 3 — Baseline fallback
     return [LendingRate(
@@ -1484,14 +1484,14 @@ def fetch_fasset_data() -> dict:
                         "note":             base_info.get("note", ""),
                     }
                     _got_any = True
-                    logger.info(f"FAsset {sym} on-chain totalSupply: {supply:,.0f}")
+                    logger.info("FAsset %s on-chain totalSupply: %s", sym, f"{supply:,.0f}")
                 except Exception as exc:
-                    logger.warning(f"On-chain totalSupply failed for {sym}: {exc}")
+                    logger.warning("On-chain totalSupply failed for %s: %s", sym, exc)
             if _got_any:
                 result["data_source"] = "live"
                 result["system_health"] = "healthy"
     except Exception as exc:
-        logger.warning(f"FAsset on-chain fetch failed: {exc}")
+        logger.warning("FAsset on-chain fetch failed: %s", exc)
 
     # ── Attempt 2: DeFiLlama — enrich circulating supply for FXRP ────────────
     # Only run if still on baseline OR on-chain returned a non-zero supply that
@@ -1521,9 +1521,9 @@ def fetch_fasset_data() -> dict:
                         }.items()}
                     result["assets"]["FXRP"]["circulating"] = fxrp_circ
                     result["system_health"] = result["system_health"] if result["system_health"] != "unknown" else "healthy"
-                    logger.info(f"FAsset FXRP supply enriched from DeFiLlama: {fxrp_circ:,}")
+                    logger.info("FAsset FXRP supply enriched from DeFiLlama: %s", f"{fxrp_circ:,}")
         except Exception as exc:
-            logger.warning(f"DeFiLlama FAssets fallback failed: {exc}")
+            logger.warning("DeFiLlama FAssets fallback failed: %s", exc)
 
     # ── Fill any missing assets from static baselines ─────────────────────────
     for sym, base_info in _FASSET_BASELINE.items():
@@ -1583,7 +1583,7 @@ def run_flare_scan() -> ScanResult:
             try:
                 raw[key] = future.result()
             except Exception as _e:
-                logger.error(f"Parallel fetch failed for '{key}': {_e}")
+                logger.error("Parallel fetch failed for '%s': %s", key, _e)
                 raw[key] = []
 
     prices      = raw.get("prices", [])
@@ -1608,8 +1608,8 @@ def run_flare_scan() -> ScanResult:
         )
 
     duration = round(time.time() - start, 2)
-    logger.info(f"Flare scan complete in {duration}s — "
-                f"{len(pools)} pools, {len(lending)} lending rates, {len(staking)} staking yields")
+    logger.info("Flare scan complete in %ss — %d pools, %d lending rates, %d staking yields",
+                duration, len(pools), len(lending), len(staking))
 
     return ScanResult(
         timestamp=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),

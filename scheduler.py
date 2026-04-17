@@ -88,7 +88,7 @@ def _notify(title: str, message: str) -> None:
             timeout=10,
         )
     except Exception as e:
-        logger.debug(f"Notification failed (non-critical): {e}")
+        logger.debug("Notification failed (non-critical): %s", e)
 
 
 # ─── Positions File Init ──────────────────────────────────────────────────────
@@ -138,7 +138,7 @@ def run_quick_check() -> None:
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     logger.info("─" * 40)
-    logger.info(f"QUICK CHECK — {now.strftime('%Y-%m-%d %H:%M UTC')}")
+    logger.info("QUICK CHECK — %s", now.strftime('%Y-%m-%d %H:%M UTC'))
 
     thresholds = SCHEDULER.get("quick_check_thresholds", {})
     util_limit      = float(thresholds.get("kinetic_utilization_spike", 0.90))
@@ -172,7 +172,7 @@ def run_quick_check() -> None:
                 try:
                     results[key] = fut.result(timeout=20)
                 except Exception as _e:
-                    logger.debug(f"Quick check fetch '{key}' failed: {_e}")
+                    logger.debug("Quick check fetch '%s' failed: %s", key, _e)
                     results[key] = []
 
         prices_list  = results["prices"]
@@ -325,7 +325,7 @@ def run_quick_check() -> None:
                 update_model_weights()
             logger.debug("Quick check: feedback loop updated")
         except Exception as _fe:
-            logger.debug(f"Quick check feedback update failed (non-critical): {_fe}")
+            logger.debug("Quick check feedback update failed (non-critical): %s", _fe)
 
         # ── 7. CL out-of-range alerts (Feature 12) ────────────────────────
         try:
@@ -334,7 +334,7 @@ def run_quick_check() -> None:
             _cl_alerts = check_cl_range_alerts(_prices_as_dicts)
             alerts.extend(_cl_alerts)
         except Exception as _cle:
-            logger.debug(f"CL range check failed (non-critical): {_cle}")
+            logger.debug("CL range check failed (non-critical): %s", _cle)
 
         # ── Send alerts if any were triggered ────────────────────────────
         if alerts:
@@ -348,9 +348,9 @@ def run_quick_check() -> None:
             ]
             message = "\n".join(lines)
             subject = f"Flare DeFi Intraday Alert — {len(alerts)} signal(s) detected"
-            logger.info(f"Quick check: {len(alerts)} alert(s) triggered")
+            logger.info("Quick check: %d alert(s) triggered", len(alerts))
             for a in alerts:
-                logger.info(f"  → {a}")
+                logger.info("  → %s", a)
             try:
                 from ai.alerts import (
                     load_alerts_config, send_email_alert, send_telegram_alert,
@@ -362,13 +362,13 @@ def run_quick_check() -> None:
                 send_discord_alert(message, cfg)
                 send_webhook_alert(subject, message, cfg)
             except Exception as _ae:
-                logger.debug(f"Quick check alert delivery failed (non-critical): {_ae}")
+                logger.debug("Quick check alert delivery failed (non-critical): %s", _ae)
             _notify("Flare DeFi Intraday Alert", f"{len(alerts)} signal(s) — check dashboard")
         else:
             logger.info("Quick check: all clear — no thresholds exceeded")
 
     except Exception as e:
-        logger.warning(f"Quick check failed (non-critical): {e}")
+        logger.warning("Quick check failed (non-critical): %s", e)
 
     logger.info("─" * 40)
 
@@ -395,7 +395,7 @@ def run_full_scan() -> None:
 
     run_start = datetime.now(timezone.utc).replace(tzinfo=None)
     logger.info("=" * 60)
-    logger.info(f"SCAN STARTED — {run_start.strftime('%Y-%m-%d %H:%M UTC')}")
+    logger.info("SCAN STARTED — %s", run_start.strftime('%Y-%m-%d %H:%M UTC'))
     logger.info("=" * 60)
 
     try:
@@ -451,7 +451,7 @@ def run_full_scan() -> None:
         try:
             check_and_send_alerts(model_results, arb_results)
         except Exception as _ae:
-            logger.warning(f"Alert check failed: {_ae}")
+            logger.warning("Alert check failed: %s", _ae)
         # Upgrade #6: auto-calibrate thresholds based on prediction accuracy history
         try:
             from ai.alerts import calibrate_alert_thresholds
@@ -462,9 +462,9 @@ def run_full_scan() -> None:
                     _new_thresh = float(_new_thresh)
                 except (TypeError, ValueError):
                     _new_thresh = 0.0
-                logger.info(f"Smart Alert Tuning: threshold {cal.get('direction','?')} → {_new_thresh:.1f}%")
+                logger.info("Smart Alert Tuning: threshold %s → %.1f%%", cal.get('direction','?'), _new_thresh)
         except Exception as _ce:
-            logger.debug(f"Smart alert calibration skipped: {_ce}")
+            logger.debug("Smart alert calibration skipped: %s", _ce)
 
         # ── Assemble and save full result ─────────────────────────────────
         run_end = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -521,7 +521,7 @@ def run_full_scan() -> None:
         _notify("Flare DeFi Scan Complete", summary)
 
     except Exception as e:
-        logger.exception(f"Scan failed: {e}")
+        logger.exception("Scan failed: %s", e)
         _notify(
             "Flare DeFi Scan ERROR",
             f"Scan failed: {str(e)[:100]}. Check scheduler.log for details."
@@ -637,7 +637,7 @@ def send_monthly_report() -> None:
             logger.warning("Monthly report email failed — check SMTP settings.")
 
     except Exception as e:
-        logger.exception(f"Monthly report job failed: {e}")
+        logger.exception("Monthly report job failed: %s", e)
 
 
 # ─── Daily Web Monitor Job ────────────────────────────────────────────────────
@@ -661,7 +661,7 @@ def _run_web_monitor_job() -> None:
                 f"{new_p} new protocol(s)  |  {new_t} new token(s)  |  {news} news item(s)"
             )
     except Exception as e:
-        logger.exception(f"Web monitor job failed: {e}")
+        logger.exception("Web monitor job failed: %s", e)
 
 
 # ─── Scheduler Setup ─────────────────────────────────────────────────────────
@@ -680,7 +680,7 @@ def start_scheduler() -> None:
             hour   = int(parts[0]) if len(parts) >= 1 and parts[0].strip() else 0
             minute = int(parts[1]) if len(parts) >= 2 and parts[1].strip() else 0
         except ValueError:
-            logger.warning(f"Scheduler: invalid run_time format '{t}', skipping")
+            logger.warning("Scheduler: invalid run_time format '%s', skipping", t)
             continue
         scheduler.add_job(
             run_full_scan,
@@ -689,7 +689,7 @@ def start_scheduler() -> None:
             name=f"DeFi Scan at {t}",
             misfire_grace_time=1800,   # 30-minute grace if system was asleep (laptop-friendly)
         )
-        logger.info(f"Scheduled scan at {t} {tz}")
+        logger.info("Scheduled scan at %s %s", t, tz)
 
     # Guard: warn if no full scans were scheduled (all run_times were malformed)
     scheduled_ids = [job.id for job in scheduler.get_jobs()]
@@ -709,7 +709,7 @@ def start_scheduler() -> None:
         name=f"Intraday Alert Check (every {interval_hours}h)",
         misfire_grace_time=1800,   # match full-scan grace — laptop-friendly
     )
-    logger.info(f"Scheduled intraday alert check every {interval_hours} hours")
+    logger.info("Scheduled intraday alert check every %d hours", interval_hours)
 
     # Monthly summary email — 1st of each month at 7:00 AM local time
     scheduler.add_job(
@@ -719,7 +719,7 @@ def start_scheduler() -> None:
         name="Monthly Summary Report",
         misfire_grace_time=3600,
     )
-    logger.info(f"Scheduled monthly report on the 1st of each month at 07:00 {tz}")
+    logger.info("Scheduled monthly report on the 1st of each month at 07:00 %s", tz)
 
     # Daily web monitor — ecosystem news, new protocols, new token listings
     monitor_hour = int(SCHEDULER.get("web_monitor_hour", 8))
@@ -730,10 +730,10 @@ def start_scheduler() -> None:
         name=f"Daily Web Monitor at {monitor_hour:02d}:00",
         misfire_grace_time=3600,
     )
-    logger.info(f"Scheduled daily web monitor at {monitor_hour:02d}:00 {tz}")
+    logger.info("Scheduled daily web monitor at %02d:00 %s", monitor_hour, tz)
 
     logger.info("Scheduler running. Press Ctrl+C to stop.")
-    logger.info(f"Next scans: {', '.join(run_times)} {tz}")
+    logger.info("Next scans: %s %s", ', '.join(run_times), tz)
 
     # P1: Startup catch-up — restore checkpoint weights and detect overdue predictions
     if _FEEDBACK_AVAILABLE:
@@ -741,7 +741,7 @@ def start_scheduler() -> None:
             from ai.feedback_loop import startup_catchup_evaluation
             startup_catchup_evaluation()
         except Exception as _su:
-            logger.debug(f"Startup catch-up (non-critical): {_su}")
+            logger.debug("Startup catch-up (non-critical): %s", _su)
 
     # Run once immediately on startup so the UI has data right away
     logger.info("Running initial scan on startup...")

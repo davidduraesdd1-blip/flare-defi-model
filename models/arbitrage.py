@@ -451,7 +451,7 @@ def _run_all_detectors(scan_result: dict, multi_result: dict) -> list:
             try:
                 opps.extend(fut.result(timeout=15) or [])
             except Exception as e:
-                logger.warning(f"[arb] {fname} failed: {e}")
+                logger.warning("[arb] %s failed: %s", fname, e)
     return opps
 
 
@@ -463,8 +463,8 @@ def detect_all_arbitrage(scan_result: dict, multi_result: dict, risk_profile: st
     all_opps = _run_all_detectors(scan_result, multi_result)
     filtered = [o for o in all_opps if risk_profile in o.applicable_profiles]
     filtered.sort(key=lambda x: x.estimated_profit, reverse=True)
-    logger.info(f"Arbitrage scan: {len(all_opps)} total opportunities, "
-                f"{len(filtered)} for {risk_profile} profile")
+    logger.info("Arbitrage scan: %d total opportunities, %d for %s profile",
+                len(all_opps), len(filtered), risk_profile)
     return [asdict(o) for o in filtered]
 
 
@@ -479,5 +479,5 @@ def detect_all_arbitrage_all_profiles(scan_result: dict, multi_result: dict) -> 
         filtered = [o for o in all_opps if profile in o.applicable_profiles]
         filtered.sort(key=lambda x: x.estimated_profit, reverse=True)
         results[profile] = [asdict(o) for o in filtered]
-    logger.info(f"Arbitrage scan: {len(all_opps)} total opportunities across all profiles")
+    logger.info("Arbitrage scan: %d total opportunities across all profiles", len(all_opps))
     return results

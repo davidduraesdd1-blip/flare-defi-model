@@ -134,7 +134,7 @@ def fetch_defillama_protocols() -> dict:
                 "url":         proto.get("url", ""),
                 "description": (proto.get("description") or "")[:300],
             })
-            logger.info(f"NEW PROTOCOL ON FLARE detected: {name} (TVL ${tvl:,.0f})")
+            logger.info("NEW PROTOCOL ON FLARE detected: %s (TVL $%s)", name, f"{tvl:,.0f}")
 
     logger.info(
         f"DeFi Llama: {len(result['new_protocols'])} new protocol(s), "
@@ -196,7 +196,7 @@ def fetch_coingecko_flare_tokens() -> dict:
             "address": flare_address,
         })
 
-    logger.info(f"CoinGecko: {len(result['new_tokens'])} new Flare token(s) detected")
+    logger.info("CoinGecko: %d new Flare token(s) detected", len(result['new_tokens']))
     return result
 
 
@@ -223,7 +223,7 @@ def fetch_rss_news(max_age_hours: int = 720) -> dict:  # 30-day default
         try:
             feed = feedparser.parse(feed_cfg["url"])
             if not feed.entries:
-                logger.debug(f"RSS {feed_cfg['name']}: no entries")
+                logger.debug("RSS %s: no entries", feed_cfg['name'])
                 continue
 
             result["feeds_ok"] += 1
@@ -253,7 +253,7 @@ def fetch_rss_news(max_age_hours: int = 720) -> dict:  # 30-day default
                 })
 
         except Exception as e:
-            logger.debug(f"RSS {feed_cfg['name']} failed: {e}")
+            logger.debug("RSS %s failed: %s", feed_cfg['name'], e)
 
     # Sort by publish time, newest first
     result["items"].sort(key=lambda x: x.get("pub_ts") or 0, reverse=True)
@@ -341,7 +341,7 @@ def claude_digest(
         logger.info("Claude AI digest generated.")
         return digest_text
     except Exception as e:
-        logger.warning(f"Claude digest API call failed: {e}")
+        logger.warning("Claude digest API call failed: %s", e)
         return ""
 
 
@@ -356,7 +356,7 @@ def run_web_monitor() -> dict:
     """
     t0 = time.monotonic()
     logger.info("─" * 50)
-    logger.info(f"WEB MONITOR — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+    logger.info("WEB MONITOR — %s", datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'))
 
     digest: dict = {
         "generated_at":         datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
@@ -380,7 +380,7 @@ def run_web_monitor() -> dict:
         if dl.get("error"):
             digest["errors"].append(dl["error"])
     except Exception as e:
-        logger.warning(f"DeFi Llama layer error: {e}")
+        logger.warning("DeFi Llama layer error: %s", e)
         digest["errors"].append(f"defillama: {e}")
 
     # ── Layer 2: CoinGecko ────────────────────────────────────────────────────
@@ -392,7 +392,7 @@ def run_web_monitor() -> dict:
         if cg.get("error"):
             digest["errors"].append(cg["error"])
     except Exception as e:
-        logger.warning(f"CoinGecko layer error: {e}")
+        logger.warning("CoinGecko layer error: %s", e)
         digest["errors"].append(f"coingecko: {e}")
 
     # ── Layer 3: RSS ──────────────────────────────────────────────────────────
@@ -404,7 +404,7 @@ def run_web_monitor() -> dict:
         if rss.get("error"):
             digest["errors"].append(rss["error"])
     except Exception as e:
-        logger.warning(f"RSS layer error: {e}")
+        logger.warning("RSS layer error: %s", e)
         digest["errors"].append(f"rss: {e}")
 
     # ── Layer 4: Claude digest ─────────────────────────────────────────────────
@@ -418,7 +418,7 @@ def run_web_monitor() -> dict:
         if digest["ai_digest"]:
             digest["sources_checked"].append("claude_ai")
     except Exception as e:
-        logger.warning(f"AI digest error: {e}")
+        logger.warning("AI digest error: %s", e)
 
     # ── Save ──────────────────────────────────────────────────────────────────
     digest["run_duration_seconds"] = round(time.monotonic() - t0, 1)

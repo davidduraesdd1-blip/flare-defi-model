@@ -28,7 +28,7 @@ def atomic_json_write(path: Path, data: Any) -> bool:
         os.replace(tmp_path, path)
         return True
     except Exception as e:
-        logger.error(f"Could not write {path.name}: {e}")
+        logger.error("Could not write %s: %s", path.name, e)
         if tmp_path:
             try:
                 os.unlink(tmp_path)

@@ -731,7 +731,7 @@ def _load_history_data() -> tuple:
                     tvl_map.setdefault((proto_name, name), []).append(float(tvl))
         return apy_map, tvl_map
     except Exception as e:
-        logger.warning(f"_load_history_data: failed to load historical APY/TVL — {e}")
+        logger.warning("_load_history_data: failed to load historical APY/TVL — %s", e)
         return {}, {}
 
 
@@ -948,14 +948,14 @@ def run_all_models(scan_result: dict) -> dict:
         from ai.feedback_loop import get_profile_win_rates
         win_rate_map = get_profile_win_rates()
         if win_rate_map:
-            logger.debug(f"Feedback win rates: {win_rate_map}")
+            logger.debug("Feedback win rates: %s", win_rate_map)
     except Exception:
         win_rate_map = {}
 
     # Upgrade #3: compute FTSO oracle signal from scan data
     ftso_signal = _compute_ftso_signal(scan_result)
     if ftso_signal > 0:
-        logger.info(f"FTSO oracle signal: {ftso_signal:.1f} confidence boost")
+        logger.info("FTSO oracle signal: %.1f confidence boost", ftso_signal)
 
     base_candidates = _build_candidate_list(scan_result, apy_history_map, tvl_history_map, win_rate_map, ftso_signal)
     results = {}

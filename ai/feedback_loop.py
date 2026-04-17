@@ -33,9 +33,9 @@ def load_history() -> dict:
             with open(HISTORY_FILE, encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
-            logger.warning(f"history.json is malformed ({e}) — starting fresh")
+            logger.warning("history.json is malformed (%s) — starting fresh", e)
         except Exception as e:
-            logger.warning(f"Could not read history.json ({e}) — starting fresh")
+            logger.warning("Could not read history.json (%s) — starting fresh", e)
     return {"predictions": [], "actuals": [], "model_weights": _default_weights()}
 
 
@@ -104,9 +104,9 @@ def record_prediction(model_results: dict) -> None:
         ]
 
     if not save_history(history):
-        logger.error(f"Prediction {prediction['id']} could not be persisted — data may be lost on restart")
+        logger.error("Prediction %s could not be persisted — data may be lost on restart", prediction['id'])
     else:
-        logger.info(f"Prediction recorded: {prediction['id']}")
+        logger.info("Prediction recorded: %s", prediction['id'])
 
 
 # ─── Record Actuals (called 24h later) ───────────────────────────────────────
@@ -318,7 +318,7 @@ def update_model_weights() -> dict:
 
     history["model_weights"] = weights
     save_history(history)
-    logger.info(f"Model weights updated: {weights}")
+    logger.info("Model weights updated: %s", weights)
     export_feedback_checkpoint()   # P4: keep git checkpoint current after every weight update
     return weights
 

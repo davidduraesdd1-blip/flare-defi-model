@@ -214,7 +214,7 @@ class XRPLExecutor:
                     timeout=5,
                 )
                 _xrp_raw = (r.json() or {}).get("ripple", {}).get("usd") if r.status_code == 200 else None
-            xrp_usd = float(_xrp_raw) if (_xrp_raw and float(_xrp_raw) > 0) else 2.30
+                xrp_usd = float(_xrp_raw) if (_xrp_raw and float(_xrp_raw) > 0) else 2.30
                 xrp_amount = adjusted_size_usd / xrp_usd
                 rlusd_amount = adjusted_size_usd  # 1:1 with USD
             except Exception:

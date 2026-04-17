@@ -66,7 +66,7 @@ def fetch_hyperliquid_perps() -> list:
                     mark    = float(ctx.get("markPx", 0) or 0)
                     oi      = float(ctx.get("openInterest", 0) or 0)
                 except (TypeError, ValueError):
-                    logger.debug(f"Hyperliquid: invalid numeric data for {name}, skipping")
+                    logger.debug("Hyperliquid: invalid numeric data for %s, skipping", name)
                     continue
 
                 results.append(PerpData(
@@ -185,7 +185,7 @@ def run_multi_scan() -> dict:
     perps  = fetch_hyperliquid_perps() + fetch_sparkdex_funding() + fetch_flamix_baseline()
     prices = fetch_cross_chain_prices()
 
-    logger.info(f"Multi-scan complete — {len(perps)} perps, {len(prices)} cross-chain prices")
+    logger.info("Multi-scan complete — %d perps, %d cross-chain prices", len(perps), len(prices))
     return {
         "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "perps":     [asdict(p) for p in perps],

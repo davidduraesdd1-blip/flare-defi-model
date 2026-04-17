@@ -78,7 +78,7 @@ def fetch_historical_volatility(token_id: str = "ripple", days: int = 30) -> Opt
             if np.isfinite(daily_vol) and daily_vol != 0:
                 result = round(float(daily_vol * np.sqrt(365)), 4)
     except Exception as e:
-        logger.debug(f"Historical vol calculation failed: {e}")
+        logger.debug("Historical vol calculation failed: %s", e)
     with _vol_cache_lock:
         _vol_cache[cache_key] = {"data": result, "ts": time.time()}
     return result
@@ -134,7 +134,7 @@ def fetch_volatility_data() -> list:
         iv = round(hv * 1.15, 4)
         spot = live_prices.get(symbol) or FALLBACK_PRICES.get(symbol)
         if spot is None:
-            logger.warning(f"options_scanner: no price for {symbol}, skipping volatility calc")
+            logger.warning("options_scanner: no price for %s, skipping volatility calc", symbol)
             continue
         results.append(VolatilityData(
             token=symbol,
@@ -272,7 +272,7 @@ def run_options_scan(risk_profile: str = "medium") -> dict:
     vol_data   = fetch_volatility_data()
     strategies = recommend_options_strategies(vol_data, risk_profile)
 
-    logger.info(f"Options scan complete — {len(strategies)} strategies for {risk_profile} profile")
+    logger.info("Options scan complete — %d strategies for %s profile", len(strategies), risk_profile)
     return {
         "timestamp":   datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "volatility":  [asdict(v) for v in vol_data],
