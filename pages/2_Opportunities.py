@@ -83,37 +83,37 @@ def _agent_executable(project: str, chain: str) -> str:
 
 # ── OPT-39: module-level @st.cache_data wrappers ──────────────────────────────
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=900, max_entries=3)
 def _cached_yields_pools(**kwargs):
     """Cached wrapper for fetch_yields_pools(). TTL=15 min."""
     return fetch_yields_pools(**kwargs)
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, max_entries=1)
 def _cached_eigenlayer_lrt_yields():
     """Cached wrapper for fetch_eigenlayer_lrt_yields(). TTL=10 min."""
     return fetch_eigenlayer_lrt_yields()
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, max_entries=1)
 def _cached_kamino_yields():
     """Cached wrapper for fetch_kamino_yields(). TTL=10 min."""
     return fetch_kamino_yields()
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, max_entries=1)
 def _cached_meteora_yields():
     """Cached wrapper for fetch_meteora_yields(). TTL=10 min."""
     return fetch_meteora_yields()
 
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=900, max_entries=1)
 def _cached_flare_gecko_pools():
     """Cached wrapper for fetch_flare_gecko_pools(). TTL=15 min."""
     return fetch_flare_gecko_pools(pages=5, min_tvl_usd=5_000)
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=1)
 def _cached_bridge_flows():
     """Streamlit-managed bridge flow cache (TTL=10 min).
 
@@ -127,49 +127,49 @@ def _cached_bridge_flows():
     return _dl.fetch_bridge_flows()
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=1)
 def _cached_erc4626_yield_data():
     """Cached wrapper for fetch_erc4626_yield_data(). TTL=5 min."""
     return fetch_erc4626_yield_data()
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, max_entries=1)
 def _cached_ethena_yield():
     """Cached wrapper for fetch_ethena_yield(). TTL=10 min."""
     return fetch_ethena_yield()
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, max_entries=1)
 def _cached_aerodrome_pools():
     """Cached wrapper for fetch_aerodrome_pools(). TTL=10 min."""
     return fetch_aerodrome_pools()
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, max_entries=1)
 def _cached_morpho_vaults():
     """Cached wrapper for fetch_morpho_vaults(). TTL=10 min."""
     return fetch_morpho_vaults()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=5)
 def _cached_token_unlock_alerts(within_days: int = 30):
     """Cached wrapper for fetch_token_unlock_alerts(). TTL=1 hour (date-based data)."""
     return fetch_token_unlock_alerts(within_days=within_days)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=1)
 def _cached_governance_alerts_opp():
     """Cached wrapper for fetch_governance_alerts(). TTL=1 hour."""
     return fetch_governance_alerts()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=1)
 def _cached_protocol_revenue():
     """Cached wrapper for fetch_protocol_revenue(). TTL=1 hour. (D4)"""
     return fetch_protocol_revenue()
 
 
-@st.cache_data(ttl=21600)
+@st.cache_data(ttl=21600, max_entries=1)
 def _cached_all_hacks():
     """Cached wrapper for fetch_all_hacks(). TTL=6 hours. (D3)"""
     return fetch_all_hacks()
@@ -190,7 +190,7 @@ _user_level    = ctx.get("user_level", get_user_level())
 # The sidebar toggle is the canonical source; this reads it for page-level conditionals.
 _pro_mode = st.session_state.get("defi_pro_mode", False)
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, max_entries=1)
 def _load_opp_data_cached() -> dict:
     """Load and return model_data for all profiles, keyed by profile name.
     Cached for 10 minutes to avoid duplicate queries for radar chart and table.
@@ -360,7 +360,7 @@ try:
     import yfinance as _opp_yf
     from top_bottom_detector import compute_composite_top_bottom_score as _opp_ctb
 
-    @st.cache_data(ttl=7200, show_spinner=False)
+    @st.cache_data(ttl=7200, show_spinner=False, max_entries=1)
     def _opp_btc_ohlcv():
         try:
             _t = _opp_yf.Ticker("BTC-USD")
@@ -436,7 +436,7 @@ with _tab_yield:
         "Global Yield Table",
         "Top opportunities across all chains — sorted by risk-adjusted return",
     )
-    @st.cache_data(ttl=900)
+    @st.cache_data(ttl=900, max_entries=1)
     def _cached_top_global_yields_compact() -> list:
         try:
             pools = fetch_llama_yield_pools(min_tvl_usd=10_000_000, top_n=100) or []
@@ -2389,7 +2389,7 @@ with _tab_intel:
         if score >= 35:  return "D", "#f97316",  "High risk — significant hack history"
         return             "F", "#ef4444",  "Very high risk — multiple large hacks"
     
-    @st.cache_data(ttl=86400, show_spinner=False)
+    @st.cache_data(ttl=86400, show_spinner=False, max_entries=1)
     def _load_d1_risk_scores() -> list:
         results = []
         for slug, name, category, audit_est in _D1_PROTOCOLS:
@@ -3065,7 +3065,7 @@ with _tab_intel:
         "FTSO Oracle Price Monitor",
         "Live Flare oracle prices vs CoinGecko — divergence signals arb opportunity",
     )
-    @st.cache_data(ttl=120)
+    @st.cache_data(ttl=120, max_entries=1)
     def _cached_ftso_prices() -> dict:
         try:
             from scanners.flare_scanner import fetch_ftso_prices
@@ -3118,7 +3118,7 @@ with _tab_intel:
         "Runway analysis — stablecoin vs native token treasury mix per protocol",
     )
 
-    @st.cache_data(ttl=3600)
+    @st.cache_data(ttl=3600, max_entries=1)
     def _cached_treasuries() -> list:
         return fetch_protocol_treasuries()
 

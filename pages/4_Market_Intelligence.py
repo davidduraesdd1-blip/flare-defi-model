@@ -79,7 +79,7 @@ with _t_timing:
             key="timing_asset_select",
         )
 
-        @st.cache_data(ttl=3600, show_spinner=False)
+        @st.cache_data(ttl=3600, show_spinner=False, max_entries=10)
         def _fetch_timing_ohlcv(ticker: str, period: str = "6mo", interval: str = "1d"):
             try:
                 _t = _yf.Ticker(ticker)
@@ -1130,7 +1130,7 @@ with _t_onchain:
         "What % of tracked coin holders are currently profitable (above average cost basis)",
     )
 
-    @st.cache_data(ttl=1800)
+    @st.cache_data(ttl=1800, max_entries=1)
     def _fetch_iotm_data() -> list[dict]:
         """Fetch price, ATH, and ATH change % from CoinGecko for tracked coins.
         Computes an IOTM proxy score: % of holders estimated in profit.
@@ -1259,7 +1259,7 @@ with _t_onchain:
         "DeFiLlama · Kinetic Finance · estimated at-risk TVL at FLR price scenarios",
     )
 
-    @st.cache_data(ttl=1800, show_spinner=False)
+    @st.cache_data(ttl=1800, show_spinner=False, max_entries=1)
     def _fetch_kinetic_liq_risk() -> dict:
         """Estimate at-risk borrow TVL for Kinetic Finance at various FLR price drops."""
         from scanners.defillama import fetch_protocol_tvl
@@ -1566,7 +1566,7 @@ with _t_eco:
         "All whitelisted Flare protocols — TVL, APY, and agent-executable status in one view",
     )
 
-    @st.cache_data(ttl=900)
+    @st.cache_data(ttl=900, max_entries=1)
     def _cached_flare_eco():
         try:
             from scanners.defillama import fetch_yields_pools as _fup
@@ -1639,7 +1639,7 @@ with _t_eco:
         "XRP Ledger AMM pools + Flare EVM bridge activity — unified cross-chain view",
     )
 
-    @st.cache_data(ttl=900)
+    @st.cache_data(ttl=900, max_entries=1)
     def _cached_xrpl_pools():
         try:
             from scanners.defillama import fetch_yields_pools as _fup

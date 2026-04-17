@@ -183,7 +183,7 @@ informational purposes only. Not investment advice. Consult a licensed advisor.
 </div>""", unsafe_allow_html=True)
 
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=86400, max_entries=2)
 def _build_css(theme: str) -> str:
     """Return the full CSS string for the given theme. Cached for 24 hours (upgrade #32)."""
     if theme == "light":
@@ -2019,7 +2019,7 @@ _STABLECOINS: frozenset[str] = frozenset({
 })
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=1)
 def fetch_coin_universe() -> list[dict]:
     """Fetch top-30 non-stablecoin coins + 7 must-haves from CoinGecko.
 
@@ -2068,7 +2068,7 @@ def fetch_coin_universe() -> list[dict]:
 
 # ── Fear & Greed Trend (Phase 2, item 14) ─────────────────────────────────────
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=3)
 def fetch_fear_greed_history(days: int = 30) -> list[dict]:
     """Fetch Fear & Greed Index history from alternative.me API.
 
@@ -2248,7 +2248,7 @@ def render_gauge(
 
 # ── Shared Composite Signal (4-layer, cached 1 h) ─────────────────────────────
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False, max_entries=1)
 def get_composite_signal_cached() -> dict:
     """Compute the 4-layer composite market environment signal. Cached 1 hour.
 

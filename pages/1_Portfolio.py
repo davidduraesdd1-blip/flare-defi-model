@@ -44,7 +44,7 @@ def _sanitize_address(addr: str) -> str:
     return ("0x" + hex_cleaned)[:42]
 
 
-@st.cache_data(ttl=14400, show_spinner=False)
+@st.cache_data(ttl=14400, show_spinner=False, max_entries=10)
 def _fetch_live_token_corr(tokens_key: str) -> dict:
     """Fetch 90-day Pearson correlations for known tokens via yfinance (4-hour cache).
 
@@ -751,7 +751,7 @@ with _tab_wallet:
 
     render_section_header("Wallet Positions", "Live DeFi portfolio via Zerion — chain breakdown & top positions")
 
-    @st.cache_data(ttl=120)
+    @st.cache_data(ttl=120, max_entries=5)
     def _fetch_zerion_cached(addr: str) -> dict:
         from scanners.wallet import fetch_zerion_portfolio
         return fetch_zerion_portfolio(addr)
@@ -1130,7 +1130,7 @@ with _tab_pos:
         render_section_header("Triple P&L Benchmarks", "How your DeFi strategy compares to holding USD, ETH, or your own tokens")
 
         # ── Fetch ETH price benchmark ──────────────────────────────────────────
-        @st.cache_data(ttl=900)
+        @st.cache_data(ttl=900, max_entries=20)
         def _get_eth_benchmark_prices(entry_date_str: str) -> dict:
             """Get ETH-USD price at entry date and today using yfinance."""
             try:
@@ -2288,7 +2288,7 @@ with _tab_pos:
 
 # ─── FAssets Data Loader (used by FAssets tab) ───────────────────────────────
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=1)
 def _load_fasset_data() -> dict:
     """Load FAsset data from most recent scan or direct API. §12 on-chain = 60 min."""
     cached = load_latest().get("fasset", {})

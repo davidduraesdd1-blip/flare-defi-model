@@ -775,6 +775,46 @@ def fetch_btc_ta_signals() -> dict[str, Any]:
         except Exception:
             pass
 
+        # ── ADX-14 (Wilder, 1978) — regime detection gate for composite signal ──
+        # TRENDING (ADX≥25): TA momentum reliable. RANGING (ADX<20): sentiment leads.
+        # Previously missing: TRENDING/RANGING regimes were unreachable (always NORMAL/CRISIS).
+        adx_14 = None
+        try:
+            if len(hist) >= 28 and "High" in hist.columns and "Low" in hist.columns:
+                _h = hist["High"].dropna().values[-100:]
+                _l = hist["Low"].dropna().values[-100:]
+                _c = hist["Close"].dropna().values[-100:]
+                _n = min(len(_h), len(_l), len(_c))
+                if _n >= 28:
+                    _h, _l, _c = _h[-_n:], _l[-_n:], _c[-_n:]
+                    _tr  = np.maximum.reduce([_h[1:] - _l[1:],
+                                              np.abs(_h[1:] - _c[:-1]),
+                                              np.abs(_l[1:] - _c[:-1])])
+                    _up  = _h[1:] - _h[:-1]
+                    _dn  = _l[:-1] - _l[1:]
+                    _pdm = np.where((_up > _dn) & (_up > 0), _up, 0.0)
+                    _ndm = np.where((_dn > _up) & (_dn > 0), _dn, 0.0)
+                    _p = 14
+                    def _ws14(arr):
+                        s = np.zeros(len(arr))
+                        s[_p - 1] = arr[:_p].sum()
+                        for i in range(_p, len(arr)):
+                            s[i] = s[i - 1] - s[i - 1] / _p + arr[i]
+                        return s
+                    _atr14 = _ws14(_tr)
+                    _pdi = 100 * _ws14(_pdm) / np.where(_atr14 > 0, _atr14, 1)
+                    _ndi = 100 * _ws14(_ndm) / np.where(_atr14 > 0, _atr14, 1)
+                    _dx  = 100 * np.abs(_pdi - _ndi) / np.where(_pdi + _ndi > 0, _pdi + _ndi, 1)
+                    _adx = np.zeros(len(_dx))
+                    _adx[_p - 1] = _dx[:_p].mean()
+                    for i in range(_p, len(_dx)):
+                        _adx[i] = (_adx[i - 1] * (_p - 1) + _dx[i]) / _p
+                    _last_adx = float(_adx[-1])
+                    if _last_adx > 0:
+                        adx_14 = round(_last_adx, 2)
+        except Exception:
+            pass
+
         return {
             "rsi_14":          rsi_14,
             "rsi_14_weekly":   rsi_14_weekly,
@@ -783,6 +823,7 @@ def fetch_btc_ta_signals() -> dict[str, Any]:
             "above_200ma":     above_200ma,
             "above_20sma":     above_20sma,
             "pi_cycle_ratio":  pi_cycle_ratio,
+            "adx_14":          adx_14,
             "btc_price":       round(closes[-1], 2) if closes else None,
             "source":          "yfinance",
         }

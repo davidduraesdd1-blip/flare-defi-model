@@ -52,7 +52,7 @@ def _validate_range(value: float, min_v: float, max_v: float, name: str) -> "tup
 
 # ─── Live APY Loader for Strategy Planner ────────────────────────────────────
 
-@st.cache_data(ttl=900, show_spinner=False)
+@st.cache_data(ttl=900, show_spinner=False, max_entries=1)
 def _load_live_apys() -> dict:
     """
     Fetch live pool APYs from two sources and merge into
