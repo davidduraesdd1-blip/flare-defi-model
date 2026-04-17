@@ -85,6 +85,14 @@ from ui.common import (
 )
 import streamlit as st
 
+# ── pandas Copy-on-Write (perf: 30% memory reduction, avoids silent DF copies) ──
+try:
+    import pandas as _pd_perf
+    _pd_perf.options.mode.copy_on_write = True
+    del _pd_perf
+except Exception:
+    pass
+
 # ── Feature Flags (#21) ───────────────────────────────────────────────────────
 try:
     from web3 import Web3  # noqa: F401

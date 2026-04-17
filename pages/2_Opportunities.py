@@ -1468,6 +1468,7 @@ with _tab_yield:
                     _yc_df,
                     x="Risk Score", y="APY",
                     size="TVL ($M)", color="Protocol",
+                    render_mode="webgl",
                     hover_data={"Pool": True, "Confidence": True, "TVL ($M)": True, "Type": True},
                     labels={"Risk Score": "Risk Score (0=safest)", "APY": "Est. APY (%)"},
                     title="",

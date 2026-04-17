@@ -309,7 +309,7 @@ if _hero["total_value"] > 0 or positions:
                 _nw_values = [_v]
 
             _fig_nw = go.Figure()
-            _fig_nw.add_trace(go.Scatter(
+            _fig_nw.add_trace(go.Scattergl(  # WebGL: 5-10x faster render for time series
                 x=_nw_dates, y=_nw_values,
                 mode="lines", fill="tozeroy",
                 line=dict(color="#00d4aa", width=2),

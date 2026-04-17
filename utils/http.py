@@ -65,7 +65,7 @@ def _build_session() -> requests.Session:
     session.mount("http://", adapter)
     session.headers.update({
         "Accept": "application/json",
-        "Accept-Encoding": "gzip, deflate",
+        "Accept-Encoding": "gzip, deflate, br",  # br = Brotli: 15-25% better compression than gzip
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36"
