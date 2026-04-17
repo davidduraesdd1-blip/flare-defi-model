@@ -86,10 +86,12 @@ from ui.common import (
 )
 import streamlit as st
 
-# ── pandas Copy-on-Write (perf: 30% memory reduction, avoids silent DF copies) ──
+# pandas >= 3.0 enables Copy-on-Write permanently; setting it is a no-op that
+# emits a deprecation warning on every rerun — skip silently on modern pandas
 try:
     import pandas as _pd_perf
-    _pd_perf.options.mode.copy_on_write = True
+    if tuple(int(x) for x in _pd_perf.__version__.split(".")[:2]) < (3, 0):
+        _pd_perf.options.mode.copy_on_write = True
     del _pd_perf
 except Exception:
     pass

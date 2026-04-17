@@ -1507,7 +1507,7 @@ def fetch_fasset_data() -> dict:
     _fxrp_onchain_supply = (result["assets"].get("FXRP") or {}).get("circulating", -1)
     if result["data_source"] == "baseline" or _fxrp_onchain_supply == -1:
         try:
-            dl = _get("https://api.llama.fi/protocol/flare-fassets", timeout=8)
+            dl = _get("https://api.llama.fi/protocol/fassets", timeout=8)
             if dl and isinstance(dl, dict):
                 # Pull latest TVL figures and back-calculate FXRP circulating supply
                 current_tvl = dl.get("currentChainTvls", {})
