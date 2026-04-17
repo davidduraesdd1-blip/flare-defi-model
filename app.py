@@ -93,6 +93,27 @@ try:
 except Exception:
     pass
 
+# ── A4: Startup cache pre-warm — background thread, one per process ───────────
+# Kick off the 3 most expensive cache calls in a daemon thread so they are
+# warm by the time the first user navigates to Opportunities or Market Intel.
+# Uses a module-level flag so it only fires once even across Streamlit reruns.
+if not globals().get("_DEFI_PREWARM_STARTED"):
+    globals()["_DEFI_PREWARM_STARTED"] = True
+    import threading as _threading_pw
+    def _defi_cache_prewarm():
+        try:
+            from scanners.flare_scanner import fetch_prices          as _fp
+            from scanners.defillama    import fetch_llama_yield_pools as _fyp
+            from macro_feeds           import fetch_yfinance_macro    as _fym
+            _fp()    # warm FLR/XRP/SPRK/RLUSD prices (CoinGecko → SQLite fallback)
+            _fyp()   # warm DeFiLlama yield pools (largest payload, slowest)
+            _fym()   # warm yfinance VIX/Gold/SPX/DXY macro data
+        except Exception as _pw_err:
+            import logging
+            logging.debug("[DeFi prewarm] %s", _pw_err)
+    _threading_pw.Thread(target=_defi_cache_prewarm, daemon=True,
+                         name="defi-cache-prewarm").start()
+
 # ── Feature Flags (#21) ───────────────────────────────────────────────────────
 try:
     from web3 import Web3  # noqa: F401
@@ -315,6 +336,57 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 # ── Yield Hero Cards ──────────────────────────────────────────────────────────
 model_data = latest.get("models") or {}
 opps       = model_data.get(profile, [])
+
+# ── C1: Today's #1 Opportunity — prominent hero card before all other content ──
+# Finds the highest-APY live opportunity across ALL risk profiles and surfaces it
+# as a full-width banner card. Financial advisors see the best pick at a glance.
+try:
+    _all_opps_flat = [o for _prof_opps in model_data.values() for o in (_prof_opps or [])]
+    _all_opps_flat = [o for o in _all_opps_flat if float(o.get("estimated_apy", 0) or
+                                                          o.get("fee_apy", 0) or 0) > 0]
+    if _all_opps_flat:
+        _best_opp  = max(_all_opps_flat,
+                         key=lambda o: float(o.get("estimated_apy", 0) or o.get("fee_apy", 0) or 0))
+        _best_apy  = float(_best_opp.get("estimated_apy", 0) or _best_opp.get("fee_apy", 0) or 0)
+        _best_proto= str(_best_opp.get("protocol", "—")).replace("-", " ").title()
+        _best_pool = str(_best_opp.get("asset_or_pool", "")).strip()
+        _best_risk,_ = risk_score_to_grade(_best_opp.get("risk_score", 5))
+        _grade_colors= {"A": "#22c55e", "B": "#00d4aa", "C": "#f59e0b",
+                        "D": "#f97316", "F": "#ef4444"}
+        _best_gc   = _grade_colors.get(_best_risk[0], "#6b7280")
+        _best_plain= str(_best_opp.get("plain_english") or _best_opp.get("action") or "—")
+        _best_pool_lbl = f" · {_best_pool}" if _best_pool else ""
+        _best_earning = _best_apy / 100 * portfolio_size
+        _best_monthly = _best_earning / 12
+        st.markdown(
+            f"""<div style="background:linear-gradient(135deg,rgba(0,212,170,0.08),rgba(0,212,170,0.03));
+border:1px solid rgba(0,212,170,0.35);border-left:4px solid #00d4aa;border-radius:12px;
+padding:18px 22px;margin:0 0 18px;display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+<div style="flex:1;min-width:180px">
+  <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:#00d4aa;
+  text-transform:uppercase;margin-bottom:6px">⭐ Today's Best Opportunity</div>
+  <div style="font-size:18px;font-weight:800;color:#e2e8f0">{_best_proto}{_best_pool_lbl}</div>
+  <div style="font-size:13px;color:#94a3b8;margin-top:4px">{_best_plain}</div>
+</div>
+<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+  <div style="text-align:center">
+    <div style="font-size:28px;font-weight:900;color:#00d4aa">{_best_apy:.1f}%</div>
+    <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px">APY</div>
+  </div>
+  <div style="text-align:center">
+    <div style="font-size:20px;font-weight:800;color:{_best_gc}">{_best_risk}</div>
+    <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px">Grade</div>
+  </div>
+  <div style="text-align:center">
+    <div style="font-size:16px;font-weight:700;color:#22c55e">${_best_monthly:,.0f}/mo</div>
+    <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px">Est. on ${portfolio_size:,.0f}</div>
+  </div>
+</div>
+</div>""",
+            unsafe_allow_html=True,
+        )
+except Exception as _hero_err:
+    import logging as _hlg; _hlg.getLogger(__name__).debug("[Hero card] %s", _hero_err)
 
 render_section_header("Estimated Yield", "Projected returns based on your top-3 ranked opportunities")
 render_yield_hero_cards(positions, opps, portfolio_size)
