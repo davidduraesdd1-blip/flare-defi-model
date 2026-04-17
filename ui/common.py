@@ -955,6 +955,11 @@ def render_sidebar() -> dict:
                     clear_macro_caches()
                 except Exception:
                     pass
+                try:
+                    from cycle_indicators import clear_cycle_caches
+                    clear_cycle_caches()
+                except Exception:
+                    pass
                 _get_history_cache()["data"] = None
                 _FEEDBACK_CACHE["data"] = None
                 st.success("All caches cleared — fetching fresh data…")
@@ -2303,13 +2308,36 @@ def get_composite_signal_cached() -> dict:
         except Exception:
             pass
 
-        return _ccs(
+        _csig = _ccs(
             macro_data=_macro,
             onchain_data=_onchain,
             ta_data=_ta,
             fg_value=_fg_val,
             fg_30d_avg=_fg_30d_avg,
         )
+
+        # ── CoinsKid cycle indicators (additive; optional signals) ────────────
+        try:
+            from cycle_indicators import (
+                fetch_google_trends_signal as _ftrends,
+                fetch_stablecoin_supply_delta as _fstable,
+                cycle_score_100 as _cscore,
+            )
+            _trends = _ftrends("bitcoin")
+            _stable = _fstable()
+            _extras = {
+                "trends":       (_trends or {}).get("score"),
+                "stable_delta": (_stable or {}).get("score"),
+            }
+            _cycle = _cscore(_csig.get("score"), extras=_extras)
+            _csig["cycle_100"]       = _cycle
+            _csig["trends_signal"]   = _trends
+            _csig["stable_signal"]   = _stable
+        except Exception as _ci_err:
+            import logging as _cilg
+            _cilg.getLogger(__name__).debug("[CycleIndicators] wire failed: %s", _ci_err)
+
+        return _csig
     except Exception:
         return {}
 

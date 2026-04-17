@@ -15,6 +15,7 @@ yfinance>=0.2.40
 anthropic>=0.40.0
 sentry-sdk>=1.40.0
 feedparser>=6.0.10
+pytrends>=4.9.2   # Google Trends retail sentiment (optional — graceful fallback if rate-limited)
 # Agent dependencies
 # web3>=6.20.0,<7.0.0  -- optional; install separately to enable on-chain wallet features
 # xrpl>=3.0.0  -- no Python 3.14 wheel; imported conditionally in agents/xrpl_executor.py

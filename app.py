@@ -211,9 +211,24 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Market Environment Banner (4-layer composite signal) ─────────────────────
+# ── Market Cycle Position Gauge (CoinsKid-style 1-100 + 5 zones) ─────────────
+# Wraps the full 4-layer composite + new cycle indicators (Google Trends retail
+# sentiment, stablecoin supply delta) into one Beginner-friendly 1-100 gauge.
 try:
     _d_csig = get_composite_signal_cached()
+    _d_cycle = (_d_csig or {}).get("cycle_100") if _d_csig else None
+    if _d_cycle:
+        try:
+            from cycle_indicators import render_cycle_gauge_html as _rcg
+            st.markdown(_rcg(_d_cycle, user_level), unsafe_allow_html=True)
+        except Exception as _cg_err:
+            import logging as _cglg
+            _cglg.getLogger(__name__).debug("[CycleGauge] render failed: %s", _cg_err)
+except Exception:
+    _d_csig = {}
+
+# ── Market Environment Banner (4-layer composite signal) ─────────────────────
+try:
     if not _d_csig:
         # Composite signal failed — show a soft, non-alarming notice
         st.markdown(
