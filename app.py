@@ -82,6 +82,7 @@ from ui.common import (
     render_yield_hero_cards, render_opportunity_card,
     render_urgency_badge, render_section_header, load_live_prices,
     render_welcome_banner, render_what_this_means, get_composite_signal_cached,
+    get_cycle_position_cached,
     risk_score_to_grade,
 )
 import streamlit as st
@@ -198,25 +199,29 @@ positions = load_positions()
 render_welcome_banner()
 
 # ── Header ────────────────────────────────────────────────────────────────────
+# Typography tightened: heading sized at 28-32px to match rest of UI hierarchy;
+# subtitle contrast bumped to be readable without squinting.
 st.markdown(
-    "<h1 style='margin-bottom:4px;'>Dashboard</h1>"
-    "<div style='color:#475569; font-size:0.87rem; margin-bottom:20px; "
-    "display:flex; align-items:center; gap:12px; flex-wrap:wrap;'>"
+    "<h1 style='margin:0 0 2px; font-size:clamp(24px, 2.2vw, 32px); "
+    "font-weight:800; letter-spacing:-0.5px; line-height:1.1;'>Dashboard</h1>"
+    "<div style='color:#94a3b8; font-size:clamp(12px, 0.85vw, 14px); "
+    "margin-bottom:16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;'>"
     "<span>Live prices</span>"
-    "<span style='color:#1e293b;'>·</span>"
+    "<span style='color:#475569;'>·</span>"
     "<span>Top opportunities</span>"
-    "<span style='color:#1e293b;'>·</span>"
+    "<span style='color:#475569;'>·</span>"
     "<span>Arbitrage alerts</span>"
     "</div>",
     unsafe_allow_html=True,
 )
 
 # ── Market Cycle Position Gauge (CoinsKid-style 1-100 + 5 zones) ─────────────
-# Wraps the full 4-layer composite + new cycle indicators (Google Trends retail
-# sentiment, stablecoin supply delta) into one Beginner-friendly 1-100 gauge.
+# Renders INDEPENDENTLY of the full composite signal — even during macro feed
+# warm-up. Uses Google Trends + stablecoin supply delta + composite score when
+# available.  Never shows an empty loading state.
 try:
-    _d_csig = get_composite_signal_cached()
-    _d_cycle = (_d_csig or {}).get("cycle_100") if _d_csig else None
+    _d_cycle_pkg = get_cycle_position_cached() or {}
+    _d_cycle = _d_cycle_pkg.get("cycle_100")
     if _d_cycle:
         try:
             from cycle_indicators import render_cycle_gauge_html as _rcg
@@ -225,10 +230,17 @@ try:
             import logging as _cglg
             _cglg.getLogger(__name__).debug("[CycleGauge] render failed: %s", _cg_err)
 except Exception:
+    pass
+
+# Still fetch the full composite signal for the downstream Market Environment banner
+try:
+    _d_csig = get_composite_signal_cached()
+except Exception:
     _d_csig = {}
 
 # ── Market Environment Banner (4-layer composite signal) ─────────────────────
 try:
+    _d_csig = _d_csig or {}
     if not _d_csig:
         # Composite signal failed — show a soft, non-alarming notice
         st.markdown(
@@ -492,9 +504,18 @@ render_section_header("Arbitrage Alerts", "Real-time profit opportunities from p
 
 arb_data = (latest.get("arbitrage") or {}).get(profile, [])
 if not arb_data:
+    # Compact, well-bounded empty state — no more whitespace void
     st.markdown(
-        "<div style='color:#334155; font-size:0.88rem; padding:16px 0;'>"
-        "No significant arbitrage detected right now.</div>",
+        "<div style='background:rgba(30,41,59,0.4); border:1px solid rgba(100,116,139,0.2);"
+        "border-radius:10px; padding:14px 18px; margin:6px 0 8px;"
+        "display:flex; align-items:center; gap:12px;'>"
+        "<div style='font-size:22px;'>⚡</div>"
+        "<div style='flex:1;'>"
+        "<div style='color:#cbd5e1; font-size:0.9rem; font-weight:600;'>"
+        "No arbitrage opportunities right now</div>"
+        "<div style='color:#64748b; font-size:0.8rem; margin-top:2px;'>"
+        "The model is scanning continuously — we'll surface one here the moment spreads widen.</div>"
+        "</div></div>",
         unsafe_allow_html=True,
     )
 else:
@@ -557,19 +578,24 @@ except Exception:
     _active_protocols_str = "13+"
 
 _fxrp_stats = [
-    ("FXRP Minted",        _fxrp_minted_str,     "Total FXRP in circulation (live from scan)"),
-    ("In Active DeFi",     "~89%",                "Share of FXRP deployed in DeFi protocols"),
-    ("FAssets Incentives", "2.2B FLR",            "Total rFLR distributing over 12 months"),
-    ("Active Protocols",   _active_protocols_str, "Flare DeFi protocols tracked by this model"),
+    ("FXRP Minted",        _fxrp_minted_str,     "Total FXRP in circulation (live from scan)",      "🪙", "#00d4aa"),
+    ("In Active DeFi",     "~89%",                "Share of FXRP deployed in DeFi protocols",        "⚡", "#f59e0b"),
+    ("FAssets Incentives", "2.2B FLR",            "Total rFLR distributing over 12 months",          "💎", "#60a5fa"),
+    ("Active Protocols",   _active_protocols_str, "Flare DeFi protocols tracked by this model",      "🔗", "#a78bfa"),
 ]
-for col, (label, value, tip) in zip(_fxrp_cols, _fxrp_stats):
+for col, (label, value, tip, icon, accent) in zip(_fxrp_cols, _fxrp_stats):
     with col:
         st.markdown(
-            f"<div style='background:rgba(30,41,59,0.7); border:1px solid rgba(99,102,241,0.25); "
-            f"border-radius:8px; padding:7px 10px; text-align:center;' title='{tip}'>"
-            f"<div style='font-size:0.58rem; font-weight:600; color:#64748b; text-transform:uppercase; "
-            f"letter-spacing:0.06em; margin-bottom:2px;'>{label}</div>"
-            f"<div style='font-size:0.85rem; font-weight:700; color:#e2e8f0;'>{value}</div>"
+            f"<div style='background:linear-gradient(135deg, rgba(30,41,59,0.8), rgba(30,41,59,0.4)); "
+            f"border:1px solid {accent}33; border-top:1px solid {accent}66; "
+            f"border-radius:10px; padding:10px 12px; "
+            f"box-shadow:0 1px 3px rgba(0,0,0,0.25);' title='{tip}'>"
+            f"<div style='display:flex; align-items:center; gap:6px; margin-bottom:4px;'>"
+            f"<span style='font-size:14px; opacity:0.9;'>{icon}</span>"
+            f"<span style='font-size:0.62rem; font-weight:700; color:{accent}; text-transform:uppercase; "
+            f"letter-spacing:0.08em;'>{label}</span></div>"
+            f"<div style='font-size:1.05rem; font-weight:800; color:#e2e8f0; line-height:1.1; "
+            f"letter-spacing:-0.3px;'>{value}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -584,10 +610,26 @@ if warnings:
         for w in warnings:
             st.markdown(f"<div style='font-size:0.85rem;color:#94a3b8;line-height:1.5;'>⚠ {_html.escape(str(w))}</div>", unsafe_allow_html=True)
 
+_footer_protocols = [
+    "Blazeswap", "SparkDEX", "Ēnosys", "Kinetic", "Clearpool", "Spectra",
+    "Upshift", "Mystic", "Hyperliquid", "Flamix", "Firelight", "Cyclo",
+    "Sceptre", "Kinza", "OrbitalX",
+]
+_chips_html = "".join(
+    f"<span style='display:inline-block; background:rgba(30,41,59,0.5); "
+    f"border:1px solid rgba(100,116,139,0.25); border-radius:999px; "
+    f"padding:2px 10px; margin:2px 3px; color:#94a3b8; "
+    f"font-size:0.72rem; font-weight:500;'>{p}</span>"
+    for p in _footer_protocols
+)
 st.markdown(
-    "<div style='color:#1e293b; font-size:0.85rem; text-align:center; padding-top:4px; line-height:1.7;'>"
-    "Flare DeFi Model · Blazeswap · SparkDEX · Ēnosys · Kinetic · Clearpool · Spectra · Upshift · Mystic · Hyperliquid · Flamix · Firelight · Cyclo · Sceptre · Kinza · OrbitalX<br>"
-    "<span style='color:#64748b;'>Not financial advice · Always DYOR</span>"
+    "<div style='text-align:center; padding:8px 0 4px; line-height:1.8;'>"
+    "<div style='color:#64748b; font-size:0.72rem; font-weight:700; "
+    "text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;'>"
+    "Protocols Tracked</div>"
+    f"<div style='max-width:720px; margin:0 auto;'>{_chips_html}</div>"
+    "<div style='color:#475569; font-size:0.72rem; margin-top:10px; "
+    "letter-spacing:0.05em;'>Not financial advice · Always DYOR</div>"
     "</div>",
     unsafe_allow_html=True,
 )

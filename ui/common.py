@@ -159,6 +159,17 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
         initial_sidebar_state="collapsed" if _embed else "expanded",
     )
     _inject_css()
+    # Rename Streamlit's auto-generated "app" root nav item to "Dashboard"
+    # (uses CSS ::before because Streamlit derives the label from app.py filename)
+    st.markdown("""
+<style>
+section[data-testid="stSidebarNav"] ul li:first-child a span { visibility: hidden; }
+section[data-testid="stSidebarNav"] ul li:first-child a::before {
+    content: "Dashboard"; visibility: visible; position: absolute;
+    color: inherit; font-weight: inherit; font-size: inherit;
+}
+section[data-testid="stSidebarNav"] ul li:first-child a { position: relative; }
+</style>""", unsafe_allow_html=True)
     if _embed:
         # Embed mode: hide sidebar, navigation arrows, top toolbar, and Streamlit chrome.
         # This gives a clean iframe-embeddable surface for advisor platforms.
@@ -817,28 +828,31 @@ def render_sidebar() -> dict:
         except Exception:
             pass
         _is_light = _native_light or st.session_state.get("_theme") == "light"
-        _logo_col, _theme_col = st.columns([3, 1])
-        with _logo_col:
-            if BRAND_LOGO_PATH and Path(BRAND_LOGO_PATH).exists():
-                st.image(BRAND_LOGO_PATH, width=120)
-            else:
-                _header_text = _html.escape(str(BRAND_NAME)) if BRAND_NAME else "⚡ Family Office · DeFi Intelligence"
-                st.markdown(
-                    f"<div style='font-size:1.25rem; font-weight:800; "
-                    f"background: linear-gradient(90deg, #00d4aa, #60a5fa); "
-                    f"-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
-                    f"background-clip: text; letter-spacing:-0.3px; margin-bottom:0px;'>{_header_text}</div>"
-                    "<div style='font-size:0.85rem; letter-spacing:1.2px; "
-                    "text-transform:uppercase; margin-bottom:4px;'>Analytics Dashboard</div>",
-                    unsafe_allow_html=True,
-                )
-        with _theme_col:
-            st.markdown("<div style='padding-top:6px;'></div>", unsafe_allow_html=True)
-            if st.button("☀" if _is_light else "🌙", key="_theme_toggle",
-                         help="Switch to light mode" if not _is_light else "Switch to dark mode",
-                         use_container_width=True):
-                st.session_state["_theme"] = "dark" if _is_light else "light"
-                st.rerun()
+        # ── Brand row (full-width) — compact 2-line layout that doesn't wrap ────
+        if BRAND_LOGO_PATH and Path(BRAND_LOGO_PATH).exists():
+            st.image(BRAND_LOGO_PATH, width=140)
+        else:
+            _header_text = _html.escape(str(BRAND_NAME)) if BRAND_NAME else "⚡ Family Office"
+            _subtitle    = "" if BRAND_NAME else "DeFi Intelligence"
+            _sub_color = "#64748b" if not _is_light else "#475569"
+            st.markdown(
+                f"<div style='font-size:1.02rem; font-weight:800; line-height:1.15; "
+                f"background: linear-gradient(90deg, #00d4aa, #60a5fa); "
+                f"-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
+                f"background-clip: text; letter-spacing:-0.2px; margin:2px 0 0;'>"
+                f"{_header_text}</div>"
+                + (f"<div style='font-size:0.82rem; color:{_sub_color}; "
+                   f"font-weight:600; letter-spacing:0.3px; margin:1px 0 6px;'>"
+                   f"{_subtitle}</div>" if _subtitle else ""),
+                unsafe_allow_html=True,
+            )
+        # ── Theme toggle — dedicated row below brand, full-width with label ────
+        _tt_label = "☀ Light mode" if not _is_light else "🌙 Dark mode"
+        if st.button(_tt_label, key="_theme_toggle",
+                     help="Switch theme" + (" (currently light)" if _is_light else " (currently dark)"),
+                     use_container_width=True):
+            st.session_state["_theme"] = "dark" if _is_light else "light"
+            st.rerun()
 
         latest    = load_latest()
         last_scan = latest.get("completed_at") or latest.get("run_id")
@@ -890,15 +904,18 @@ def render_sidebar() -> dict:
             _cnt_days  = max(0, (_exp_dt - datetime.now()).days)
             if _cnt_days <= 90:
                 _cnt_color = "#ef4444" if _cnt_days <= 30 else "#f59e0b"
-                _cnt_icon  = "🔴" if _cnt_days == 0 else ("⚠️" if _cnt_days <= 30 else "⏳")
+                _cnt_bg    = f"{_cnt_color}1f"   # ~12% opacity bg (higher contrast than 0.15 black)
+                _cnt_icon  = "🔴" if _cnt_days == 0 else ("⚠" if _cnt_days <= 30 else "⏳")
                 _cnt_msg   = "Rewards ended" if _cnt_days == 0 else f"Rewards expire in {_cnt_days}d"
                 _exp_str = INCENTIVE_PROGRAM.get("expires", "2026-07-01")
                 st.markdown(
-                    f"<div style='background:rgba(0,0,0,0.15); border:1px solid {_cnt_color}44; "
-                    f"border-left:3px solid {_cnt_color}; border-radius:6px; "
-                    f"padding:4px 10px; margin:4px 0; font-size:0.85rem; color:{_cnt_color}; font-weight:600;' "
+                    f"<div style='background:{_cnt_bg}; border:1px solid {_cnt_color}aa; "
+                    f"border-left:4px solid {_cnt_color}; border-radius:6px; "
+                    f"padding:6px 10px; margin:6px 0; font-size:0.82rem; color:{_cnt_color}; "
+                    f"font-weight:700; line-height:1.35;' "
                     f"title='RFLR/SPRK incentive program expires {_exp_str}. Base fee yield continues after this date.'>"
-                    f"{_cnt_icon} {_cnt_msg} \u2014 only base yield after</div>",
+                    f"{_cnt_icon} {_cnt_msg}<br>"
+                    f"<span style='font-weight:500; font-size:0.75rem; opacity:0.85;'>Only base yield after</span></div>",
                     unsafe_allow_html=True,
                 )
         except Exception:
@@ -1844,15 +1861,15 @@ def render_opportunity_card(
     pool     = _html.escape(str(pool))
     action   = _html.escape(str(action))
 
-    # ── BUY / HOLD / SELL badge (CLAUDE.md §8: shape + color always combined) ────
+    # ── BUY / HOLD / AVOID badge (CLAUDE.md §8: shape + color always combined) ──
     # Derived from model confidence (already weighted by risk profile multiplier).
-    # ≥70% = strong opportunity → BUY; 45-70% = hold existing; <45% = not recommended.
+    # ≥70% = strong opportunity → BUY; 45-70% = hold existing; <45% = avoid.
     if conf >= 70:
         _action_shape, _action_label, _action_color = "▲", "BUY", "#22c55e"
     elif conf >= 45:
         _action_shape, _action_label, _action_color = "■", "HOLD", "#94a3b8"
     else:
-        _action_shape, _action_label, _action_color = "▼", "SELL / SKIP", "#ef4444"
+        _action_shape, _action_label, _action_color = "▼", "AVOID", "#ef4444"
     _action_badge_html = (
         f"<span style='font-size:0.75rem;font-weight:800;color:{_action_color};"
         f"background:rgba(0,0,0,0.25);padding:2px 8px;border-radius:5px;"
@@ -1981,36 +1998,69 @@ def render_opportunity_card(
     conf_bar_pct = f"{conf:.0f}%"
     conf_color   = "#22c55e" if conf >= 70 else ("#f59e0b" if conf >= 45 else "#ef4444")
 
+    # Safety score (inverse of risk) mapped to 0-100 for visual bar
+    safety_pct    = max(0, min(100, int(round((10.0 - rs) * 10))))
+    safety_color  = "#22c55e" if safety_pct >= 66 else ("#f59e0b" if safety_pct >= 33 else "#ef4444")
+    safety_label  = "Good" if safety_pct >= 66 else ("Moderate" if safety_pct >= 33 else "Low")
+    conf_label    = "Strong" if conf >= 70 else ("Moderate" if conf >= 45 else "Low")
+
+    # Beginner: hide advanced chips behind the card (reduce from 13+ elements to ~7)
+    _is_beg = _card_user_level == "beginner"
+    _ry_html_render     = "" if _is_beg else _ry_html
+    _spread_html_render = "" if _is_beg else _spread_html
+    _audit_html_render  = "" if _is_beg else _audit_html
+
+    # Integrated confidence + safety bars — rendered INSIDE the card so they
+    # visually belong to it rather than floating below.
+    _integrated_bars_html = (
+        f"<div style='display:flex;gap:12px;margin-top:8px;"
+        f"padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);'>"
+        f"<div style='flex:1;'>"
+        f"<div style='display:flex;justify-content:space-between;align-items:baseline;"
+        f"font-size:0.72rem;margin-bottom:3px;'>"
+        f"<span style='color:#64748b;text-transform:uppercase;letter-spacing:0.05em;'>Model Confidence</span>"
+        f"<span style='color:{conf_color};font-weight:700;'>{conf_label} · {conf:.0f}%</span>"
+        f"</div>"
+        f"<div style='height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;'>"
+        f"<div style='width:{conf_bar_pct};height:100%;background:{conf_color};border-radius:3px;'></div>"
+        f"</div></div>"
+        f"<div style='flex:1;'>"
+        f"<div style='display:flex;justify-content:space-between;align-items:baseline;"
+        f"font-size:0.72rem;margin-bottom:3px;'>"
+        f"<span style='color:#64748b;text-transform:uppercase;letter-spacing:0.05em;'>Safety Score</span>"
+        f"<span style='color:{safety_color};font-weight:700;'>{safety_label} · {safety_pct}%</span>"
+        f"</div>"
+        f"<div style='height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;'>"
+        f"<div style='width:{safety_pct}%;height:100%;background:{safety_color};border-radius:3px;'></div>"
+        f"</div></div>"
+        f"</div>"
+    )
+
+    # Grade chip — upgraded to prominent filled chip (was: small letter)
+    _grade_chip_html = (
+        f"<span class='grade-badge' style='background:{grade_color};color:#fff;"
+        f"font-weight:800;letter-spacing:0.8px;padding:3px 10px;border-radius:5px;"
+        f"font-size:0.8rem;text-shadow:0 1px 2px rgba(0,0,0,0.3);' "
+        f"title='Safety Grade — A=safest, F=riskiest'>GRADE {grade}</span>"
+    )
+
     st.markdown(f"""<div class="opp-card" style="border-left:3px solid {color};">
 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
 <div style="flex:1;min-width:0;display:flex;align-items:center;gap:5px;flex-wrap:wrap;"><span style="font-size:0.85rem;color:#475569;">{medal}</span><span style="font-size:0.95rem;font-weight:700;color:#f1f5f9;">{proto}</span><span style="color:#334155;margin:0 4px;">·</span><span style="font-size:0.85rem;color:#94a3b8;">{pool}</span>{(' ' + _preview_badge_html) if _preview_badge_html else ''}</div>
-<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">{_action_badge_html}<span class="grade-badge" style="background:{grade_color};color:#fff;font-weight:800;letter-spacing:0.5px;" title="Safety Grade: A=safest, F=riskiest">{grade}</span><span class="{glow_cls}" style="font-size:0.95rem;font-weight:800;color:{color};letter-spacing:-0.5px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
+<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">{_action_badge_html}{_grade_chip_html}<span class="{glow_cls}" style="font-size:1.05rem;font-weight:800;color:{color};letter-spacing:-0.5px;font-variant-numeric:tabular-nums;">{apy:.1f}%{est_tag}</span></div>
 </div>
 {_apy_decomp_html}
 <div style="color:#94a3b8;font-size:0.85rem;margin-top:4px;line-height:1.35;">{action}</div>
 <div style="display:flex;gap:10px;font-size:0.85rem;color:#475569;margin-top:5px;flex-wrap:wrap;align-items:center;">
 <span><span style="color:{il_color};font-weight:700;">{il_icon}</span><span style="margin-left:2px;">Risk: <span style="color:{il_color};font-weight:600;">{il.upper()}</span>{il_est_html}</span></span>
-<span style="display:flex;align-items:center;gap:4px;">Conf:<span style="display:inline-block;width:36px;height:4px;background:rgba(255,255,255,0.07);border-radius:3px;vertical-align:middle;overflow:hidden;"><span style="display:block;width:{conf_bar_pct};height:100%;background:{conf_color};border-radius:3px;"></span></span><span style="color:{conf_color};font-weight:600;">{conf:.0f}%</span></span>
 <span>Alloc: <span style="color:#94a3b8;font-weight:600;">{alloc_str}</span></span>
 {tvl_html}
-{_ry_html}
-{_spread_html}
+{_ry_html_render}
+{_spread_html_render}
 </div>
-{f'<div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap;align-items:center;">{_audit_html}{_url_html}</div>' if (_audit_html or _url_html) else ""}
+{f'<div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap;align-items:center;">{_audit_html_render}{_url_html}</div>' if (_audit_html_render or _url_html) else ""}
+{_integrated_bars_html}
 </div>""", unsafe_allow_html=True)
-
-    # Beginner: plain-English gauges. Intermediate: numeric gauges. Advanced: no gauges.
-    if _card_user_level in ("beginner", "intermediate"):
-        _g1, _g2 = st.columns(2)
-        with _g1:
-            render_gauge(conf, "Model Confidence", min_v=0, max_v=100,
-                         low_threshold=0.45, high_threshold=0.70,
-                         user_level=_card_user_level, unit="%")
-        with _g2:
-            # Risk score: lower = better, so invert for gauge (10−rs maps to 0–10 scale)
-            render_gauge(10.0 - rs, "Safety Score", min_v=0, max_v=10,
-                         low_threshold=0.33, high_threshold=0.66,
-                         user_level=_card_user_level)
 
 
 # ─── Phase 2 — New helpers ────────────────────────────────────────────────────
@@ -2161,20 +2211,21 @@ def render_welcome_banner() -> None:
     if st.session_state.get("_defi_welcome_dismissed"):
         return
 
-    _wc1, _wc2 = st.columns([20, 1])
+    _wc1, _wc2 = st.columns([30, 1])
     with _wc1:
         st.markdown(
-            "<div style='background:rgba(30,58,138,0.25);border:1px solid rgba(59,130,246,0.35);"
-            "border-radius:6px;padding:8px 14px;margin-bottom:4px;line-height:1.5;'>"
-            "<span style='font-size:13px;font-weight:700;color:#93c5fd;'>👋 Welcome to Flare DeFi Analytics!</span>"
-            "<span style='font-size:13px;color:#94a3b8;'> &nbsp;·&nbsp; Find top yields on Flare — plain English, no jargon. "
-            "Start at <b style='color:#cbd5e1;'>Opportunities</b> or <b style='color:#cbd5e1;'>Intelligence</b>. "
-            "💡 Change experience level in the sidebar anytime.</span>"
+            "<div style='background:rgba(30,58,138,0.22);border:1px solid rgba(59,130,246,0.3);"
+            "border-left:3px solid #60a5fa;border-radius:6px;padding:5px 12px;margin-bottom:8px;"
+            "line-height:1.35; font-size:12px;'>"
+            "<b style='color:#93c5fd;'>👋 Welcome to Flare DeFi Analytics.</b> "
+            "<span style='color:#94a3b8;'>Start at "
+            "<b style='color:#cbd5e1;'>Opportunities</b> · "
+            "Change experience level in the sidebar any time.</span>"
             "</div>",
             unsafe_allow_html=True,
         )
     with _wc2:
-        if st.button("✕", key="_defi_dismiss_welcome", help="Dismiss welcome message"):
+        if st.button("✕", key="_defi_dismiss_welcome", help="Dismiss"):
             st.session_state["_defi_welcome_dismissed"] = True
             st.rerun()
 
@@ -2340,4 +2391,58 @@ def get_composite_signal_cached() -> dict:
         return _csig
     except Exception:
         return {}
+
+
+# ── Cycle Position Gauge — INDEPENDENT of composite signal ────────────────────
+# Renders even if macro feeds are still warming up. Uses whatever inputs are
+# available: composite score (if fetched), Google Trends, stablecoin delta.
+# Always returns a valid dict with cycle_100 populated — never empty.
+
+@st.cache_data(ttl=1800, show_spinner=False, max_entries=1)
+def get_cycle_position_cached() -> dict:
+    """
+    Fetch the Cycle Position score independently of the full composite signal.
+
+    Returns a dict with 'cycle_100' populated even during composite warm-up.
+    TTL: 30 min (shorter than composite because cycle inputs are lighter).
+    """
+    try:
+        from cycle_indicators import (
+            fetch_google_trends_signal as _ftrends,
+            fetch_stablecoin_supply_delta as _fstable,
+            cycle_score_100 as _cscore,
+        )
+    except ImportError:
+        return {"cycle_100": {"score": 50, "zone": "NEUTRAL", "zone_label": "Neutral",
+                              "color": "#64748b", "inputs_used": 0}}
+
+    # Opportunistically reuse composite score if already cached
+    _composite_score = None
+    try:
+        _csig = get_composite_signal_cached()
+        if _csig and _csig.get("score") is not None:
+            _composite_score = _csig.get("score")
+    except Exception:
+        pass
+
+    _trends = _stable = None
+    try:
+        _trends = _ftrends("bitcoin")
+    except Exception:
+        pass
+    try:
+        _stable = _fstable()
+    except Exception:
+        pass
+
+    _extras = {
+        "trends":       (_trends or {}).get("score"),
+        "stable_delta": (_stable or {}).get("score"),
+    }
+    _cycle = _cscore(_composite_score, extras=_extras)
+    return {
+        "cycle_100":     _cycle,
+        "trends_signal": _trends,
+        "stable_signal": _stable,
+    }
 
