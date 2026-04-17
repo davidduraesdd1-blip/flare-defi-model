@@ -1052,6 +1052,29 @@ def render_sidebar() -> dict:
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+        # ── PDF Export ──────────────────────────────────────────────────────────
+        try:
+            import pdf_export as _pdf_exp
+            _scan_data = load_latest()
+            _model_data = (_scan_data.get("models") or {}) if _scan_data else {}
+            if _model_data:
+                _pdf_bytes = _pdf_exp.generate_opportunities_pdf(_model_data)
+                from datetime import datetime as _dt_pdf, timezone as _tz_pdf
+                _pdf_ts = _dt_pdf.now(_tz_pdf.utc).strftime("%Y%m%d_%H%M")
+                st.download_button(
+                    label="📄 Download Report (PDF)",
+                    data=_pdf_bytes,
+                    file_name=f"defi_opportunities_{_pdf_ts}.pdf",
+                    mime="application/pdf",
+                    key="sidebar_pdf_export",
+                    use_container_width=True,
+                    help="Download a PDF report of all current DeFi opportunities across all risk profiles.",
+                )
+        except Exception:
+            pass  # PDF export never crashes the sidebar
+
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
         # ── Glossary popover (Phase 1) ─────────────────────────────────────────
         try:
             from ui.glossary import glossary_popover as _glossary_pop
