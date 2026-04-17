@@ -303,36 +303,55 @@ if _hero["total_value"] > 0 or positions:
                         _nw_values.append(_rv)
                 except Exception:
                     pass
-            # Fall back to current point only if no history
-            if not _nw_values:
-                _nw_dates  = [datetime.now(timezone.utc).strftime("%Y-%m-%d")]
-                _nw_values = [_v]
 
-            _fig_nw = go.Figure()
-            _fig_nw.add_trace(go.Scattergl(  # WebGL: 5-10x faster render for time series
-                x=_nw_dates, y=_nw_values,
-                mode="lines", fill="tozeroy",
-                line=dict(color="#00d4aa", width=2),
-                fillcolor="rgba(0,212,170,0.08)",
-                name="Net Worth",
-            ))
-            _fig_nw.update_layout(
-                xaxis=dict(showgrid=False, tickfont_size=10, showticklabels=len(_nw_dates) > 1),
-                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.04)",
-                           tickprefix="$", tickfont_size=10),
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#94a3b8", margin=dict(l=8, r=8, t=20, b=8),
-                height=180, title_text="Net Worth History", title_font_size=12,
-                showlegend=False,
-            )
-            st.plotly_chart(_fig_nw, width='stretch', config={"displayModeBar": False})
+            if len(_nw_values) < 2:
+                # Not enough history to draw a meaningful trend — show a clear
+                # info card instead of an empty grid with no line.
+                st.markdown(
+                    "<div style='height:180px;display:flex;flex-direction:column;"
+                    "align-items:center;justify-content:center;gap:6px;"
+                    "background:rgba(30,41,59,0.35);border:1px solid rgba(100,116,139,0.2);"
+                    "border-radius:10px;padding:14px;'>"
+                    "<div style='font-size:10px;letter-spacing:0.1em;font-weight:700;"
+                    "color:#64748b;text-transform:uppercase;'>Net Worth History</div>"
+                    "<div style='font-size:20px;font-weight:800;color:#e2e8f0;'>"
+                    f"${_v:,.0f}</div>"
+                    "<div style='font-size:11px;color:#64748b;text-align:center;line-height:1.4;'>"
+                    "History chart will appear after the next few scans.<br>"
+                    "Scans run every 4 hours.</div>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                _fig_nw = go.Figure()
+                _fig_nw.add_trace(go.Scattergl(  # WebGL: 5-10x faster render
+                    x=_nw_dates, y=_nw_values,
+                    mode="lines+markers", fill="tozeroy",
+                    line=dict(color="#00d4aa", width=2),
+                    marker=dict(size=4, color="#00d4aa"),
+                    fillcolor="rgba(0,212,170,0.08)",
+                    name="Net Worth",
+                ))
+                _fig_nw.update_layout(
+                    xaxis=dict(showgrid=False, tickfont_size=10,
+                               tickfont=dict(family="Inter")),
+                    yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.04)",
+                               tickprefix="$", tickfont_size=10,
+                               tickfont=dict(family="Inter")),
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(family="Inter", color="#94a3b8"),
+                    margin=dict(l=8, r=8, t=20, b=8),
+                    height=180, title_text="Net Worth History", title_font_size=12,
+                    showlegend=False,
+                )
+                st.plotly_chart(_fig_nw, width='stretch', config={"displayModeBar": False})
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 
 # ─── Main Portfolio Tabs ─────────────────────────────────────────────────────
 _tab_pos, _tab_wallet, _tab_rewards, _tab_fassets = st.tabs([
-    "📊 Positions", "👛 Wallet", "🎁 Rewards & Incentives", "🔗 FAssets",
+    "Positions", "Wallet", "Rewards & Incentives", "FAssets",
 ])
 
 with _tab_pos:
@@ -849,49 +868,60 @@ with _tab_pos:
         total_pnl     = total_value - total_deposit
         pnl_color     = "#10b981" if total_pnl >= 0 else "#ef4444"
 
-        c1, c2, c3, c4 = st.columns(4)
-        for col, label, val, sub, cls in [
-            (c1, "Portfolio Value",   f"${total_value:,.0f}",             "",                       "card-blue"),
-            (c2, "Total P&L",         f"${total_pnl:+,.0f}",              f"vs ${total_deposit:,.0f} in", "card-green" if total_pnl >= 0 else "card-red"),
-            (c3, "Unclaimed Fees",    f"${total_fees:,.2f}",              "",                       "card-green"),
-            (c4, "Open Positions",    str(len(positions)),                 "",                       "card-blue"),
-        ]:
-            with col:
-                st.markdown(f"""
-                <div class="metric-card {cls}">
-                    <div class="label">{label}</div>
-                    <div class="big-number">{val}</div>
-                    <div style="color:#475569; font-size:0.85rem; margin-top:4px;">{sub}</div>
-                </div>""", unsafe_allow_html=True)
-
-        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+        # Single compact P&L summary strip — removes the redundant 4-metric row
+        # that used to duplicate the hero KPIs at top of page.
+        _pnl_sign = "+" if total_pnl >= 0 else ""
+        _pnl_pct  = (total_pnl / total_deposit * 100.0) if total_deposit > 0 else 0.0
+        st.markdown(
+            f"<div style='display:flex;gap:20px;flex-wrap:wrap;align-items:baseline;"
+            f"background:rgba(30,41,59,0.35);border:1px solid rgba(100,116,139,0.15);"
+            f"border-radius:8px;padding:10px 16px;margin:4px 0 12px;'>"
+            f"<div><span style='font-size:0.72rem;color:#64748b;text-transform:uppercase;"
+            f"letter-spacing:0.08em;'>P&L</span> "
+            f"<span style='font-size:1rem;font-weight:800;color:{pnl_color};"
+            f"margin-left:6px;'>{_pnl_sign}${total_pnl:,.0f}</span>"
+            f"<span style='font-size:0.8rem;color:{pnl_color};margin-left:4px;'>"
+            f"({_pnl_sign}{_pnl_pct:.1f}%)</span></div>"
+            f"<div style='color:#475569;'>·</div>"
+            f"<div><span style='font-size:0.72rem;color:#64748b;text-transform:uppercase;"
+            f"letter-spacing:0.08em;'>Invested</span> "
+            f"<span style='font-size:0.95rem;font-weight:700;color:#cbd5e1;"
+            f"margin-left:6px;'>${total_deposit:,.0f}</span></div>"
+            f"<div style='color:#475569;'>·</div>"
+            f"<div><span style='font-size:0.72rem;color:#64748b;text-transform:uppercase;"
+            f"letter-spacing:0.08em;'>Unclaimed Fees</span> "
+            f"<span style='font-size:0.95rem;font-weight:700;color:#10b981;"
+            f"margin-left:6px;'>${total_fees:,.2f}</span></div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
         # Compute P&L once for all positions — reused in cards and exit timeline below
         pnl_results = [compute_position_pnl(pos, prices) for pos in positions]
 
-        # ── Export ────────────────────────────────────────────────────────────────
-        _exp_csv, _exp_pdf = st.columns([1, 1])
+        # ── Export — compact secondary buttons (was full-width primary) ──────
+        _exp_csv, _exp_pdf, _exp_spacer = st.columns([2, 2, 3])
         with _exp_csv:
             _csv_bytes = _build_csv_export(positions, pnl_results)
             st.download_button(
-                "⬇ Export CSV",
+                "⬇ CSV",
                 data=_csv_bytes,
                 file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
                 mime="text/csv",
                 use_container_width=True,
+                help="Export positions table as CSV",
             )
         with _exp_pdf:
             _pdf_bytes = _build_pdf_export(positions, pnl_results)
             if _pdf_bytes:
                 st.download_button(
-                    "⬇ Export PDF",
+                    "⬇ PDF",
                     data=_pdf_bytes,
                     file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
                     use_container_width=True,
+                    help="Export portfolio report as PDF",
                 )
-            else:
-                st.caption("PDF: `pip install fpdf2`")
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -908,14 +938,21 @@ with _tab_pos:
             il_pct   = pnl["il_pct"]
             hodl     = pnl["hodl_value"]
 
-            # Feature 8: Risk grade per position
+            # Feature 8: Risk grade per position (clarified: was ambiguous "F"
+            # chip, now shows "Risk: HIGH / MED / LOW" with matching color)
             _ptype_lower = pos.get("position_type", "lp")
             _il_risk = "high" if _ptype_lower == "lp" else "none"
             _rs = 7.0 if _ptype_lower == "lp" else (2.0 if _ptype_lower == "lending" else 1.0)
             _grade, _grade_color = risk_score_to_grade(_rs)
+            if _rs >= 6.0:   _rlabel = "HIGH RISK"
+            elif _rs >= 3.0: _rlabel = "MED RISK"
+            else:            _rlabel = "LOW RISK"
             _grade_html = (
-                f"<span style='background:{_grade_color}; color:#000; font-size:0.65rem; "
-                f"font-weight:800; padding:1px 7px; border-radius:4px; margin-left:6px;'>{_grade}</span>"
+                f"<span style='background:{_grade_color}22; color:{_grade_color}; "
+                f"border:1px solid {_grade_color}55; font-size:0.65rem; "
+                f"font-weight:700; padding:2px 8px; border-radius:4px; margin-left:6px; "
+                f"letter-spacing:0.05em;' title='Safety Grade {_grade} — {_rlabel}'>"
+                f"{_rlabel}</span>"
             )
 
             days_str  = f"{days}d" if days > 0 else "—"
@@ -1344,7 +1381,15 @@ with _tab_pos:
     render_section_header("Net Worth Projection", "Portfolio value over time — based on your positions + top opportunity APY")
 
     if positions:
-        total_dep_nw = sum(float(p.get("deposit_usd", 0)) for p in positions)
+        # Try multiple field names — positions may store deposit as deposit_usd,
+        # entry_value, or current_value depending on source. Prior fallback
+        # always returned 0 leading to the stale "Add positions..." message even
+        # though user already had positions.
+        total_dep_nw = sum(
+            float(p.get("deposit_usd") or p.get("entry_value") or
+                  p.get("current_value") or 0)
+            for p in positions
+        )
         avg_apy      = 0.0
         _latest_opps = (latest.get("models") or {}).get(ctx.get("profile", "medium")) or []
         if _latest_opps:
@@ -1406,11 +1451,15 @@ with _tab_pos:
                 )
             fig_nw.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                font_color="#475569",
-                xaxis=dict(gridcolor="rgba(148,163,184,0.15)", color="#475569"),
-                yaxis=dict(title="Portfolio Value ($)", gridcolor="rgba(148,163,184,0.15)", color="#475569",
-                           tickprefix="$", tickformat=",.0f"),
-                legend=dict(font=dict(size=10, color="#64748b"), bgcolor="rgba(0,0,0,0)"),
+                font=dict(family="Inter", color="#94a3b8", size=11),
+                xaxis=dict(gridcolor="rgba(148,163,184,0.08)", color="#94a3b8",
+                           tickfont=dict(family="Inter")),
+                yaxis=dict(title="Portfolio Value ($)",
+                           gridcolor="rgba(148,163,184,0.08)", color="#94a3b8",
+                           tickprefix="$", tickformat=",.0f",
+                           tickfont=dict(family="Inter")),
+                legend=dict(font=dict(family="Inter", size=10, color="#94a3b8"),
+                            bgcolor="rgba(0,0,0,0)"),
                 margin=dict(l=60, r=20, t=20, b=40),
                 height=290,
             )
@@ -1420,9 +1469,29 @@ with _tab_pos:
                 f"Post-incentive drops to ~{base_fee_apy:.0f}% (base fees only). Not financial advice."
             )
         else:
-            st.info("Add positions and run a scan to see the net worth projection.")
+            # Contextual empty state — tells user exactly what's missing
+            _missing = []
+            if total_dep_nw <= 0:
+                _missing.append("position deposit values")
+            if avg_apy <= 0:
+                _missing.append("a completed scan (scans run every 4h)")
+            _msg = " and ".join(_missing) if _missing else "more data"
+            st.markdown(
+                f"<div style='background:rgba(30,41,59,0.35);"
+                f"border:1px solid rgba(100,116,139,0.2);border-radius:10px;"
+                f"padding:14px 18px;color:#94a3b8;font-size:0.85rem;'>"
+                f"Waiting on {_msg} to project future net worth.</div>",
+                unsafe_allow_html=True,
+            )
     else:
-        st.info("Add positions to see the net worth projection chart.")
+        st.markdown(
+            "<div style='background:rgba(30,41,59,0.35);"
+            "border:1px solid rgba(100,116,139,0.2);border-radius:10px;"
+            "padding:14px 18px;color:#94a3b8;font-size:0.85rem;'>"
+            "Add at least one position (under Your Positions above) to see a "
+            "net worth projection chart.</div>",
+            unsafe_allow_html=True,
+        )
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -1455,16 +1524,26 @@ with _tab_pos:
         ))
         fig.update_layout(
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#475569",
-            xaxis=dict(gridcolor="rgba(148,163,184,0.15)", color="#475569"),
-            yaxis=dict(title="APY %", gridcolor="rgba(148,163,184,0.15)", color="#475569"),
+            font=dict(family="Inter", color="#94a3b8", size=12),
+            xaxis=dict(gridcolor="rgba(148,163,184,0.1)", color="#94a3b8",
+                       tickfont=dict(family="Inter")),
+            yaxis=dict(title="APY %", gridcolor="rgba(148,163,184,0.1)",
+                       color="#94a3b8", tickfont=dict(family="Inter")),
             margin=dict(l=40, r=20, t=20, b=40),
             height=260,
             showlegend=False,
         )
         st.plotly_chart(fig, width='stretch')
     else:
-        st.info("Need at least 2 scans to show the chart.")
+        # Compact info card instead of raw st.info banner
+        st.markdown(
+            "<div style='background:rgba(30,41,59,0.35);"
+            "border:1px solid rgba(100,116,139,0.2);border-radius:10px;"
+            "padding:14px 18px;color:#94a3b8;font-size:0.85rem;'>"
+            "Need at least 2 completed scans to show the APY trend chart. "
+            "Scans run every 4 hours.</div>",
+            unsafe_allow_html=True,
+        )
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -1708,20 +1787,21 @@ with _tab_pos:
             "border-radius:4px;padding:1px 7px;font-size:0.85rem;color:#64748b;font-weight:600;'>"
             "○ Estimated</span>"
         )
-        _sc1, _sc2, _ = st.columns([2, 2, 4])
-        with _sc1:
-            st.metric(
-                "Diversification Score",
-                f"{_div_score}/100" if _corr_lv != "beginner" else _div_label,
-                help=(
-                    "Size-weighted: large positions count more than small ones. "
-                    "100 = completely uncorrelated (maximum diversification). "
-                    "0 = all positions move identically (no diversification). "
-                    f"Weighted avg cross-position correlation: {_avg_corr:.2f}"
-                ),
-            )
-        with _sc2:
-            st.markdown(f"<div style='margin-top:28px;'>{_src_badge}</div>", unsafe_allow_html=True)
+        # Show number + label + data-source badge inline (no separate hidden-in-tooltip number)
+        st.markdown(
+            f"<div style='display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;"
+            f"margin:8px 0 12px;'>"
+            f"<div><span style='font-size:0.72rem;color:#64748b;text-transform:uppercase;"
+            f"letter-spacing:0.08em;'>Diversification Score</span>"
+            f"<span style='font-size:1.6rem;font-weight:800;color:{_div_color};"
+            f"margin-left:10px;letter-spacing:-0.5px;'>{_div_score:.0f}</span>"
+            f"<span style='font-size:0.9rem;color:#64748b;'>/100</span></div>"
+            f"<div style='color:{_div_color};font-size:0.9rem;font-weight:700;'>"
+            f"· {_div_label}</div>"
+            f"<div>{_src_badge}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
         if _corr_lv == "beginner":
             from ui.common import render_gauge as _rg
@@ -1730,17 +1810,31 @@ with _tab_pos:
                 user_level="beginner", unit="/100")
 
         # ── Heatmap ───────────────────────────────────────────────────────────
-        def _corr_label(v: float) -> str:
+        # Diagonal is always 1.0 (self-correlation) — label as "—" to prevent
+        # users misreading "High" as meaningful cross-correlation.
+        def _corr_label(v: float, is_diag: bool = False) -> str:
+            if is_diag:
+                return "—"
             if _corr_lv == "beginner":
                 if v >= 0.80: return "High"
                 if v >= 0.50: return "Med"
                 return "Low"
             return f"{v:.2f}"
 
+        # Shorten axis labels — drop "(Protocol)" suffix to prevent overlap
+        _short_labels = [
+            (lbl.split(" (")[0] if " (" in lbl else lbl)[:24]
+            for lbl in pos_labels
+        ]
+
+        _z_display = [[(None if i == j else corr_matrix[i][j]) for j in range(n)]
+                      for i in range(n)]
+        _text_matrix = [[_corr_label(corr_matrix[i][j], is_diag=(i == j))
+                         for j in range(n)] for i in range(n)]
+
         fig_corr = go.Figure(data=go.Heatmap(
-            z=corr_matrix,
-            x=pos_labels,
-            y=pos_labels,
+            z=_z_display,
+            x=_short_labels, y=_short_labels,
             colorscale=[
                 [0.0, "rgba(16,185,129,0.15)"],
                 [0.3, "rgba(59,130,246,0.25)"],
@@ -1748,18 +1842,21 @@ with _tab_pos:
                 [1.0, "rgba(239,68,68,0.65)"],
             ],
             zmin=0, zmax=1,
-            text=[[_corr_label(v) for v in row] for row in corr_matrix],
-            texttemplate="%{text}",
-            textfont={"size": 11, "color": "#1e293b"},
+            text=_text_matrix, texttemplate="%{text}",
+            textfont={"size": 11, "color": "#1e293b", "family": "Inter"},
             hovertemplate="<b>%{y}</b> vs <b>%{x}</b><br>Correlation: %{z:.2f}<extra></extra>",
+            hoverongaps=False,
+            showscale=True,
         ))
         fig_corr.update_layout(
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#475569",
-            xaxis=dict(tickangle=-30, tickfont=dict(size=10, color="#475569")),
-            yaxis=dict(tickfont=dict(size=10, color="#475569")),
-            margin=dict(l=20, r=20, t=20, b=80),
-            height=max(240, 80 + 60 * n),
+            font=dict(family="Inter", color="#94a3b8"),
+            xaxis=dict(tickangle=-25, tickfont=dict(size=10, color="#94a3b8",
+                                                   family="Inter"), automargin=True),
+            yaxis=dict(tickfont=dict(size=10, color="#94a3b8",
+                                     family="Inter"), automargin=True),
+            margin=dict(l=30, r=20, t=20, b=90),
+            height=max(260, 100 + 70 * n),
         )
         st.plotly_chart(fig_corr, width='stretch')
 
@@ -2226,12 +2323,16 @@ with _tab_pos:
                 ))
                 _d5_fig.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    font_color="#475569",
-                    xaxis=dict(tickangle=-30, gridcolor="rgba(148,163,184,0.1)"),
-                    yaxis=dict(title="Monthly Income ($)", gridcolor="rgba(148,163,184,0.1)",
-                               tickprefix="$"),
-                    height=240, margin=dict(l=40, r=20, t=20, b=80),
+                    font=dict(family="Inter", color="#94a3b8", size=11),
+                    xaxis=dict(tickangle=0, gridcolor="rgba(148,163,184,0.08)",
+                               tickfont=dict(family="Inter", size=11)),
+                    yaxis=dict(title="Monthly Income ($)",
+                               gridcolor="rgba(148,163,184,0.08)",
+                               tickprefix="$", tickfont=dict(family="Inter", size=11),
+                               type="log"),    # log scale fixes small-bar invisibility
+                    height=260, margin=dict(l=50, r=20, t=20, b=60),
                     showlegend=False,
+                    bargap=0.4,
                 )
                 st.plotly_chart(_d5_fig, width='stretch', config={"displayModeBar": False})
 

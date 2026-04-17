@@ -828,7 +828,8 @@ def render_sidebar() -> dict:
         except Exception:
             pass
         _is_light = _native_light or st.session_state.get("_theme") == "light"
-        # ── Brand row (full-width) — compact 2-line layout that doesn't wrap ────
+        # ── Brand row (full-width) — 2-line layout, no wrapping per line ──────
+        # Line 1: "⚡ Family Office"   Line 2: "DeFi Intelligence" (subtitle)
         if BRAND_LOGO_PATH and Path(BRAND_LOGO_PATH).exists():
             st.image(BRAND_LOGO_PATH, width=140)
         else:
@@ -836,13 +837,15 @@ def render_sidebar() -> dict:
             _subtitle    = "" if BRAND_NAME else "DeFi Intelligence"
             _sub_color = "#64748b" if not _is_light else "#475569"
             st.markdown(
-                f"<div style='font-size:1.02rem; font-weight:800; line-height:1.15; "
+                f"<div style='font-size:0.95rem; font-weight:800; line-height:1.2; "
                 f"background: linear-gradient(90deg, #00d4aa, #60a5fa); "
                 f"-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
-                f"background-clip: text; letter-spacing:-0.2px; margin:2px 0 0;'>"
+                f"background-clip: text; letter-spacing:-0.2px; margin:2px 0 0; "
+                f"white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>"
                 f"{_header_text}</div>"
-                + (f"<div style='font-size:0.82rem; color:{_sub_color}; "
-                   f"font-weight:600; letter-spacing:0.3px; margin:1px 0 6px;'>"
+                + (f"<div style='font-size:0.75rem; color:{_sub_color}; "
+                   f"font-weight:600; letter-spacing:0.4px; margin:1px 0 6px; "
+                   f"white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>"
                    f"{_subtitle}</div>" if _subtitle else ""),
                 unsafe_allow_html=True,
             )
@@ -944,20 +947,38 @@ def render_sidebar() -> dict:
         except Exception:
             pass
 
+        # Force sidebar buttons to keep labels on one line (Streamlit otherwise
+        # character-wraps when 3 buttons share a narrow sidebar — "Reload" becomes
+        # "R-e-l-o-a-d" vertical).  Also reduce padding for better fit.
+        st.markdown("""
+<style>
+section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]
+button[kind="secondary"] div[data-testid="stMarkdownContainer"] p {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    font-size: 0.82rem !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]
+button[kind="secondary"] {
+    padding: 6px 4px !important;
+    min-width: 0 !important;
+}
+</style>""", unsafe_allow_html=True)
         col_r, col_s, col_all = st.columns(3)
         with col_r:
-            if st.button("↺ Reload", key="sidebar_refresh",
+            if st.button("↺", key="sidebar_refresh",
                          use_container_width=True,
-                         help="Reload the latest saved scan data from disk"):
+                         help="Reload — load the latest saved scan data from disk"):
                 # OPT-44: targeted clear — reload scan data and live prices only
                 _load_history_file.clear()
                 _get_history_cache()["data"] = None   # coherence: clear shared resource cache too
                 load_live_prices.clear()
                 st.rerun()
         with col_all:
-            if st.button("🔄 All", key="sidebar_refresh_all",
+            if st.button("⟳", key="sidebar_refresh_all",
                          use_container_width=True,
-                         help="Refresh All Data — clears every cache and fetches fresh data from all sources"):
+                         help="Refresh All — clears every cache and fetches fresh data from all sources"):
                 # Nuclear clear: invalidate EVERY st.cache_data in this module
                 try:
                     st.cache_data.clear()
@@ -982,9 +1003,9 @@ def render_sidebar() -> dict:
                 st.success("All caches cleared — fetching fresh data…")
                 st.rerun()
         with col_s:
-            if st.button("▶ Scan", key="sidebar_scan_now",
+            if st.button("▶", key="sidebar_scan_now",
                          use_container_width=True,
-                         help="Run a fresh scan now (~30 seconds). Auto-reloads when done."):
+                         help="Scan — run a fresh scan now (~30 seconds). Auto-reloads when done."):
                 try:
                     scheduler_path = str(Path(__file__).parent.parent / "scheduler.py")
                     subprocess.Popen(
