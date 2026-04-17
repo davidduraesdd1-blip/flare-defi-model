@@ -63,7 +63,7 @@ try:
         session.mount("http://", adapter)
         session.headers.update({
             "Accept": "application/json",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip, deflate",
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36"
@@ -80,10 +80,17 @@ logger = logging.getLogger(__name__)
 # orjson is in requirements.txt; fall back to stdlib json if not installed.
 try:
     import orjson as _orjson
+    import json as _json_stdlib
+
     def _parse_json(content: bytes):
-        return _orjson.loads(content)
+        try:
+            return _orjson.loads(content)
+        except Exception:
+            # orjson rejects surrogate pairs and some non-standard UTF-8 — stdlib is more lenient
+            return _json_stdlib.loads(content.decode("utf-8", errors="replace"))
 except ImportError:
     import json as _json_fallback
+
     def _parse_json(content: bytes):
         return _json_fallback.loads(content)
 
@@ -137,7 +144,7 @@ if not _CACHE_AVAILABLE:
         session.mount("http://", adapter)
         session.headers.update({
             "Accept": "application/json",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip, deflate",
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36"

@@ -643,44 +643,51 @@ def _fetch_defillama_raw() -> dict:
       symbol, apy, apy_base, apy_reward, tvl_usd, il_7d
     """
     global _defillama_cache, _defillama_cache_ts
+
+    # Fast path — no lock needed for a cache hit
+    if _defillama_cache is not None and (time.time() - _defillama_cache_ts) < _DEFILLAMA_CACHE_TTL:
+        return dict(_defillama_cache)
+
+    # Slow path — hold lock for the entire fetch so parallel threads wait and reuse
     with _defillama_cache_lock:
-        if _defillama_cache and (time.time() - _defillama_cache_ts) < _DEFILLAMA_CACHE_TTL:
+        # Re-check inside lock: another thread may have populated the cache while we waited
+        if _defillama_cache is not None and (time.time() - _defillama_cache_ts) < _DEFILLAMA_CACHE_TTL:
             return dict(_defillama_cache)
 
-    data = _get("https://yields.llama.fi/pools", timeout=15)
-    result: dict = {}
+        data = _get("https://yields.llama.fi/pools", timeout=15)
+        result: dict = {}
 
-    if data and "data" in data:
-        for pool in data["data"]:
-            if (pool.get("chain") or "").lower() != "flare":
-                continue
-            project   = (pool.get("project") or "").lower()
-            proto_key = _DL_PROTOCOL_MAP.get(project)
-            if not proto_key:
-                continue
+        if data and "data" in data:
             def _sf(val, default=0.0):
                 try:
                     return float(val) if val is not None else default
                 except (TypeError, ValueError):
                     return default
-            result.setdefault(proto_key, []).append({
-                "symbol":     pool.get("symbol", ""),
-                "apy":        _sf(pool.get("apy")),
-                "apy_base":   _sf(pool.get("apyBase")),
-                "apy_reward": _sf(pool.get("apyReward")),
-                "tvl_usd":    _sf(pool.get("tvlUsd")),
-                "il_7d":      pool.get("il7d"),
-            })
-        with _defillama_cache_lock:
-            _defillama_cache    = result
-            _defillama_cache_ts = time.time()
-        total = sum(len(v) for v in result.values())
-        if total:
-            logger.info("DeFiLlama: fetched %d Flare pool(s) across %d protocol(s)", total, len(result))
-    else:
-        logger.warning("DeFiLlama yields API unavailable — protocols will use baseline data")
+            for pool in data["data"]:
+                if (pool.get("chain") or "").lower() != "flare":
+                    continue
+                project   = (pool.get("project") or "").lower()
+                proto_key = _DL_PROTOCOL_MAP.get(project)
+                if not proto_key:
+                    continue
+                result.setdefault(proto_key, []).append({
+                    "symbol":     pool.get("symbol", ""),
+                    "apy":        _sf(pool.get("apy")),
+                    "apy_base":   _sf(pool.get("apyBase")),
+                    "apy_reward": _sf(pool.get("apyReward")),
+                    "tvl_usd":    _sf(pool.get("tvlUsd")),
+                    "il_7d":      pool.get("il7d"),
+                })
+            total = sum(len(v) for v in result.values())
+            if total:
+                logger.info("DeFiLlama: fetched %d Flare pool(s) across %d protocol(s)", total, len(result))
+        else:
+            logger.warning("DeFiLlama yields API unavailable — protocols will use baseline data")
 
-    return result
+        # Cache result whether success or failure (empty dict) to prevent thundering herd
+        _defillama_cache    = result
+        _defillama_cache_ts = time.time()
+        return result
 
 
 # ─── DEX Pool Fallback Helper ─────────────────────────────────────────────────
