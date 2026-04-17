@@ -3,6 +3,7 @@ Shared HTTP helpers for all scanners.
 - HTTPAdapter with exponential backoff retry (#12)
 - SSRF domain allowlist (#10)
 - Token bucket rate limiter (#11)
+- requests-cache: in-memory response cache with per-domain TTLs
 """
 
 import logging
@@ -15,6 +16,63 @@ import requests
 from requests.adapters import HTTPAdapter
 from requests.exceptions import HTTPError
 from urllib3.util.retry import Retry
+
+# ── requests-cache: in-memory cache with per-domain TTLs ─────────────────────
+# Falls back to a plain Session if requests-cache is not installed.
+# Memory backend: zero disk I/O, safe on Streamlit Cloud ephemeral filesystem.
+# Per-domain TTLs prevent stale prices (60s) while caching slower macro data (1h).
+try:
+    from requests_cache import CachedSession, NEVER_EXPIRE
+    _URLS_EXPIRE_AFTER = {
+        # Live price feeds — short TTL so data stays fresh
+        "*/coingecko.com/*":       60,
+        "*/pro-api.coingecko.com/*": 60,
+        "*/binance.com/*":         30,
+        "*/hyperliquid.xyz/*":     30,
+        "*/alternative.me/*":      300,   # Fear & Greed: 5 min
+        # DeFi protocol data — medium TTL
+        "*/llama.fi/*":            300,   # DeFiLlama: 5 min
+        "*/geckoterminal.com/*":   300,
+        "*/curve.fi/*":            300,
+        "*/lido.fi/*":             300,
+        "*/pendle.finance/*":      300,
+        "*/clearpool.finance/*":   300,
+        # Macro / slow-moving data — long TTL
+        "*/stlouisfed.org/*":      3600,  # FRED: 1 hour
+        "*/coinmetrics.io/*":      3600,
+        "*/deribit.com/*":         120,   # Options: 2 min
+        # Default: 2 minutes for anything not matched above
+        "*":                       120,
+    }
+    def _build_session():
+        """CachedSession with retry/backoff, per-domain TTLs, memory backend."""
+        session = CachedSession(
+            backend="memory",
+            urls_expire_after=_URLS_EXPIRE_AFTER,
+            stale_if_error=True,   # serve stale on network errors rather than raising
+        )
+        retry = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"],
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        session.headers.update({
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate, br",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36"
+            ),
+        })
+        return session
+    _CACHE_AVAILABLE = True
+except ImportError:
+    _CACHE_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -60,29 +118,32 @@ class RateLimiter:
 
 
 # ─── Retry-aware shared session (#12) ────────────────────────────────────────
+# When requests-cache is available _build_session() is already defined above
+# (CachedSession variant). When it's not, define the plain fallback here.
 
-def _build_session() -> requests.Session:
-    """Build a requests.Session with retry/backoff and a browser-like User-Agent."""
-    session = requests.Session()
-    retry = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET"],
-        raise_on_status=False,
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-    session.headers.update({
-        "Accept": "application/json",
-        "Accept-Encoding": "gzip, deflate, br",  # br = Brotli: 15-25% better compression than gzip
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36"
-        ),
-    })
-    return session
+if not _CACHE_AVAILABLE:
+    def _build_session() -> requests.Session:
+        """Fallback: plain Session when requests-cache is not installed."""
+        session = requests.Session()
+        retry = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"],
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        session.headers.update({
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate, br",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36"
+            ),
+        })
+        return session
 
 
 _SESSION = _build_session()
