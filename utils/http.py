@@ -18,6 +18,17 @@ from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
+# ── orjson: 4x faster JSON parsing than stdlib json ──────────────────────────
+# orjson is in requirements.txt; fall back to stdlib json if not installed.
+try:
+    import orjson as _orjson
+    def _parse_json(content: bytes):
+        return _orjson.loads(content)
+except ImportError:
+    import json as _json_fallback
+    def _parse_json(content: bytes):
+        return _json_fallback.loads(content)
+
 
 # ─── Token Bucket Rate Limiter (#11) ─────────────────────────────────────────
 
@@ -160,7 +171,7 @@ def http_get(
         try:
             r = _SESSION.get(url, params=params, headers=headers, timeout=timeout)
             r.raise_for_status()
-            return r.json()
+            return _parse_json(r.content)
         except HTTPError as e:
             status = getattr(e.response, "status_code", None)
             # 4xx = client/endpoint error — retrying will never help; fail immediately.
@@ -204,7 +215,7 @@ def http_post(
         try:
             r = _SESSION.post(url, json=payload, headers=headers, timeout=timeout)
             r.raise_for_status()
-            return r.json()
+            return _parse_json(r.content)
         except Exception as e:
             if attempt < retries:
                 time.sleep(1.5 ** attempt)
