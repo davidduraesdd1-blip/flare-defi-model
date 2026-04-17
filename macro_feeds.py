@@ -159,7 +159,9 @@ def fetch_fred_macro() -> dict[str, Any]:
         # C4: M2 YoY growth rate (needs 13 monthly observations — same pattern as CPI)
         try:
             m2_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=M2SL"
-            m2_resp = _SESSION.get(m2_url, timeout=10)
+            # Use no-retry session (same as _fetch_single_fred) — FRED timeouts
+            # cost 10s × 3 session retries = 30s with _SESSION. Fast-fail instead.
+            m2_resp = _requests_no_retry.get(m2_url, timeout=5)
             if m2_resp.status_code == 200:
                 m2_lines = [l for l in m2_resp.text.strip().split("\n")[1:] if l.strip()]
                 m2_vals: list = []

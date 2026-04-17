@@ -161,16 +161,27 @@ def http_get(
             r = _SESSION.get(url, params=params, headers=headers, timeout=timeout)
             r.raise_for_status()
             return r.json()
+        except HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            # 4xx = client/endpoint error — retrying will never help; fail immediately.
+            # 404 logged at DEBUG (expected for deprecated endpoints).
+            # All other 4xx logged at WARNING.
+            if status and 400 <= status < 500:
+                if status == 404:
+                    logger.debug("GET %s → 404 Not Found (endpoint may have moved)", url)
+                else:
+                    logger.warning("GET %s failed after 1 attempt(s): %s %s", url, status, e)
+                return None
+            # 5xx / network error — retry with backoff
+            if attempt < retries:
+                time.sleep(1.5 ** attempt)
+                continue
+            logger.warning("GET %s failed after %d attempt(s): %s", url, retries + 1, e)
         except Exception as e:
             if attempt < retries:
                 time.sleep(1.5 ** attempt)
                 continue
-            # 404 = endpoint gone/deprecated (expected for APIs that restructure);
-            # log at DEBUG to avoid log spam. All other failures stay at WARNING.
-            if isinstance(e, HTTPError) and getattr(e.response, "status_code", None) == 404:
-                logger.debug("GET %s → 404 Not Found (endpoint may have moved)", url)
-            else:
-                logger.warning("GET %s failed after %d attempt(s): %s", url, retries + 1, e)
+            logger.warning("GET %s failed after %d attempt(s): %s", url, retries + 1, e)
     return None
 
 
