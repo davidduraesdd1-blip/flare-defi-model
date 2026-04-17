@@ -82,6 +82,7 @@ from ui.common import (
     render_yield_hero_cards, render_opportunity_card,
     render_urgency_badge, render_section_header, load_live_prices,
     render_welcome_banner, render_what_this_means, get_composite_signal_cached,
+    risk_score_to_grade,
 )
 import streamlit as st
 

@@ -92,6 +92,23 @@ def _get_api_status() -> dict:
 
 # ─── Live Price Loader (bypasses stale scan data) ─────────────────────────────
 
+@st.cache_data(ttl=900, max_entries=1, show_spinner=False)
+def _gen_opportunities_pdf_cached(completed_at: str) -> bytes:
+    """Generate DeFi opportunities PDF once per scan, keyed by completed_at timestamp.
+    Avoids re-rendering the PDF (CPU-intensive) on every sidebar rerun.
+    Returns empty bytes if model_data is unavailable or pdf_export fails.
+    """
+    try:
+        import pdf_export as _pdf_exp
+        _scan = load_latest()
+        _mdata = (_scan.get("models") or {}) if _scan else {}
+        if not _mdata:
+            return b""
+        return _pdf_exp.generate_opportunities_pdf(_mdata)
+    except Exception:
+        return b""
+
+
 @st.cache_data(ttl=120, max_entries=1)  # F3: memory guard
 def load_live_prices() -> list:
     """
@@ -1054,22 +1071,22 @@ def render_sidebar() -> dict:
 
         # ── PDF Export ──────────────────────────────────────────────────────────
         try:
-            import pdf_export as _pdf_exp
-            _scan_data = load_latest()
-            _model_data = (_scan_data.get("models") or {}) if _scan_data else {}
-            if _model_data:
-                _pdf_bytes = _pdf_exp.generate_opportunities_pdf(_model_data)
-                from datetime import datetime as _dt_pdf, timezone as _tz_pdf
-                _pdf_ts = _dt_pdf.now(_tz_pdf.utc).strftime("%Y%m%d_%H%M")
-                st.download_button(
-                    label="📄 Download Report (PDF)",
-                    data=_pdf_bytes,
-                    file_name=f"defi_opportunities_{_pdf_ts}.pdf",
-                    mime="application/pdf",
-                    key="sidebar_pdf_export",
-                    use_container_width=True,
-                    help="Download a PDF report of all current DeFi opportunities across all risk profiles.",
-                )
+            _scan_data  = load_latest()
+            _completed_at = (_scan_data.get("completed_at") or "") if _scan_data else ""
+            if _completed_at:
+                _pdf_bytes = _gen_opportunities_pdf_cached(_completed_at)
+                if _pdf_bytes:
+                    from datetime import datetime as _dt_pdf, timezone as _tz_pdf
+                    _pdf_ts = _dt_pdf.now(_tz_pdf.utc).strftime("%Y%m%d_%H%M")
+                    st.download_button(
+                        label="📄 Download Report (PDF)",
+                        data=_pdf_bytes,
+                        file_name=f"defi_opportunities_{_pdf_ts}.pdf",
+                        mime="application/pdf",
+                        key="sidebar_pdf_export",
+                        use_container_width=True,
+                        help="Download a PDF report of all current DeFi opportunities across all risk profiles.",
+                    )
         except Exception:
             pass  # PDF export never crashes the sidebar
 
