@@ -573,7 +573,7 @@ with _t_eco:
             acc   = profile_data.get(p) or {}
             pcfg  = RISK_PROFILES[p]
             pcol  = pcfg["color"]
-            grade = acc.get("grade", "N/A")
+            grade = acc.get("grade", "—")
             score = acc.get("health_score", 50)
             msg   = acc.get("message", "Building history…")
             acc_pct = acc.get("accuracy_pct")
@@ -710,7 +710,7 @@ with _t_macro:
     
         # RSI color + label
         if _rsi_val is None:
-            _rsi_color, _rsi_label = "#6b7280", "N/A"
+            _rsi_color, _rsi_label = "#6b7280", "—"
         elif _rsi_val < 30:
             _rsi_color, _rsi_label = "#22c55e", "Oversold — buy zone"
         elif _rsi_val > 70:
@@ -728,7 +728,7 @@ with _t_macro:
     
         # Momentum color
         if _mom_20 is None:
-            _mom_color, _mom_str = "#6b7280", "N/A"
+            _mom_color, _mom_str = "#6b7280", "—"
         elif _mom_20 > 10:
             _mom_color, _mom_str = "#22c55e", f"+{_mom_20:.1f}%"
         elif _mom_20 < -10:
@@ -741,7 +741,7 @@ with _t_macro:
         _ab200_color = "#22c55e" if _ab200 else "#ef4444"
     
         # Pre-compute display strings (avoid complex expressions inside f-strings)
-        _rsi_disp  = f"{_rsi_val:.1f}" if _rsi_val is not None else "N/A"
+        _rsi_disp  = f"{_rsi_val:.1f}" if _rsi_val is not None else "—"
         _btc_disp  = f"${_btc_px:,.0f} BTC/USD" if _btc_px else "Price N/A"
         if _mom_20 is not None and _mom_20 > 10:
             _mom_trend = "Strong uptrend"
@@ -887,9 +887,9 @@ with _t_onchain:
             st.info(f"On-chain data unavailable. {_oc4.get('error')}")
         else:
             _mz4  = _oc4.get("mvrv_z")
-            _ms4  = _oc4.get("mvrv_signal", "N/A")
+            _ms4  = _oc4.get("mvrv_signal", "—")
             _sp4  = _oc4.get("sopr")
-            _ss4  = _oc4.get("sopr_signal", "N/A")
+            _ss4  = _oc4.get("sopr_signal", "—")
             _rc4  = _oc4.get("realized_cap")
             _mv4  = _oc4.get("mvrv_ratio")
             _aa4  = _oc4.get("active_addresses")
@@ -962,9 +962,9 @@ with _t_onchain:
                 st.plotly_chart(_fig_mz, width='stretch')
     
             # Hash Ribbons + Puell Multiple — added in composite signal sprint
-            _hr_sig  = _oc4.get("hash_ribbon_signal", "N/A")
+            _hr_sig  = _oc4.get("hash_ribbon_signal", "—")
             _puell   = _oc4.get("puell_multiple")
-            _p_sig   = _oc4.get("puell_signal", "N/A")
+            _p_sig   = _oc4.get("puell_signal", "—")
             _hr_color = {
                 "BUY": "#22c55e", "RECOVERY": "#00d4aa",
                 "CAPITULATION": "#ef4444", "CAPITULATION_START": "#f97316",
@@ -974,14 +974,14 @@ with _t_onchain:
                 "FAIR_VALUE": "#6b7280", "DISTRIBUTION": "#f59e0b", "EXTREME_TOP": "#ef4444",
             }.get(_p_sig, "#6b7280")
     
-            if _hr_sig != "N/A" or _puell is not None:
+            if _hr_sig != "—" or _puell is not None:
                 st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
                 _h1, _h2 = st.columns(2)
                 with _h1:
                     st.markdown(f"""
     <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_hr_color};border-radius:10px;padding:10px">
       <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Hash Ribbons</div>
-      <div style="font-size:22px;font-weight:700;color:{_hr_color}">{_hr_sig.replace("_", " ") if _hr_sig != "N/A" else "—"}</div>
+      <div style="font-size:22px;font-weight:700;color:{_hr_color}">{_hr_sig.replace("_", " ") if _hr_sig != "—" else "—"}</div>
       <div style="font-size:11px;color:#6b7280;margin-top:8px">30d vs 60d hash rate MA · C. Edwards 2019</div>
     </div>
     """, unsafe_allow_html=True)
@@ -1016,7 +1016,7 @@ with _t_onchain:
             _mp5   = _oc5.get("max_pain")
             _tput5 = _oc5.get("total_put_oi", 0)
             _tcal5 = _oc5.get("total_call_oi", 0)
-            _osig5 = _oc5.get("signal", "N/A")
+            _osig5 = _oc5.get("signal", "—")
             _spot5 = _oc5.get("spot_price")
     
             _sc5 = {

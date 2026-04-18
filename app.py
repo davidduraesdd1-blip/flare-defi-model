@@ -323,7 +323,7 @@ try:
                 )
             _xai_note = ("Each bar shows how much that factor pushed the signal bullish (+) or bearish (−)."
                          if user_level == "beginner"
-                         else f"Weighted contributions · regime: {_d_csig.get('regime', 'N/A')} · weights are regime-adjusted.")
+                         else f"Weighted contributions · regime: {_d_csig.get('regime', '—')} · weights are regime-adjusted.")
             st.html(f"<div style='padding:4px 0 8px;'>"
                     f"<div style='font-size:0.85rem;color:#64748b;margin-bottom:8px;'>{_xai_note}</div>"
                     f"{_xai_rows}</div>")

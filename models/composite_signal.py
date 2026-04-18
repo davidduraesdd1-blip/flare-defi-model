@@ -548,7 +548,7 @@ def _score_hash_ribbon(
       BUY + 20d SMA unknown:      +0.8  (no data to downgrade — fail open)
     Returns None when data is unavailable.
     """
-    if signal is None or signal == "N/A":
+    if signal is None or signal == "—":
         return None
     base = {
         "BUY":                 +0.8,

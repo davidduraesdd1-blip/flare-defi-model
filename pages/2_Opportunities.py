@@ -1359,7 +1359,7 @@ with _tab_yield:
                 "Market":      _sym,
                 "Chain":       _chain,
                 "PT APY (Fixed)": f"{_pt_apy:.1f}%",
-                "YT APY (Implied)": f"{_yt_apy:.1f}%" if _yt_apy > 0 else "N/A",
+                "YT APY (Implied)": f"{_yt_apy:.1f}%" if _yt_apy > 0 else "—",
                 "Maturity":    f"{_days_left}d" if _days_left is not None else (_maturity or "—"),
                 "Recommendation": _rec,
             }

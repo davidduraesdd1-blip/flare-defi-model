@@ -544,7 +544,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
 
         # Use smoothed aSOPR proxy as the primary SOPR signal
         sopr_for_signal = sopr_7d_ema if sopr_7d_ema is not None else sopr
-        if sopr_for_signal is None: sopr_signal = "N/A"
+        if sopr_for_signal is None: sopr_signal = "—"
         elif sopr_for_signal < 0.99:   sopr_signal = "CAPITULATION"
         elif sopr_for_signal < 1.0:    sopr_signal = "MILD_LOSS"
         elif sopr_for_signal < 1.02:   sopr_signal = "NORMAL"
@@ -566,7 +566,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         # Uses 30-day MA vs 60-day MA of BTC hash rate.
         # Capitulation: 30d MA < 60d MA (miners shutting off)
         # Recovery/Buy: 30d MA crosses above 60d MA (miners back online)
-        hash_ribbon_signal = "N/A"
+        hash_ribbon_signal = "—"
         hash_ma_30 = None
         hash_ma_60 = None
         if len(hash_vals) >= 60:
@@ -588,7 +588,7 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         # < 0.5 = historically strong buy (miner capitulation)
         # > 4.0 = historically strong sell (miner excess profit)
         puell_multiple = None
-        puell_signal   = "N/A"
+        puell_signal   = "—"
         if len(rev_vals) >= 365:
             cur_rev      = rev_vals[-1]
             ma_365       = _stats.mean(rev_vals[-365:])
@@ -951,7 +951,7 @@ def fetch_deribit_options_chain(currency: str = "BTC") -> dict:
                     "call_oi": round(ed["call_oi"], 1),
                 })
 
-            if pc_ratio is None:      signal = "N/A"
+            if pc_ratio is None:      signal = "—"
             elif pc_ratio > 1.5:      signal = "EXTREME_PUTS"
             elif pc_ratio > 1.1:      signal = "BEARISH"
             elif pc_ratio < 0.6:      signal = "EXTREME_CALLS"

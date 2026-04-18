@@ -242,7 +242,7 @@ def compute_accuracy(profile: str, history: dict = None, window: str = "24h") ->
             "win_rate":        None,
             "directional_pct": None,
             "sample_count":    raw_count,
-            "grade":           "N/A",
+            "grade":           "—",
             "health_score":    50,
             "message":         f"Building accuracy history ({raw_count}/{MIN_SAMPLES} samples). Check back soon.",
         }

@@ -35,7 +35,7 @@ def _ps(s: str) -> str:
             .encode("latin-1", errors="replace").decode("latin-1"))
 
 
-def _fmt(val, prefix="", suffix="", decimals=2, fallback="N/A"):
+def _fmt(val, prefix="", suffix="", decimals=2, fallback="—"):
     try:
         return f"{prefix}{float(val):,.{decimals}f}{suffix}"
     except (TypeError, ValueError):
@@ -135,7 +135,7 @@ def generate_opportunities_pdf(model_results: dict) -> bytes:
                 _fmt(o.get("estimated_apy"), suffix="%", decimals=1),
                 _fmt(o.get("confidence"), suffix="%", decimals=0),
                 _fmt(o.get("risk_score"), decimals=1),
-                _fmt(tvl_m, prefix="$", decimals=1) if tvl_m > 0 else "N/A",
+                _fmt(tvl_m, prefix="$", decimals=1) if tvl_m > 0 else "—",
                 str(o.get("strategy") or o.get("opportunity_type") or "")[:20],
                 str(o.get("urgency") or "normal")[:14],
             ]
@@ -205,7 +205,7 @@ def generate_arb_pdf(arb_results: dict) -> bytes:
             str(a.get("leg_a_protocol") or a.get("asset_a") or "?")[:24],
             str(a.get("leg_b_protocol") or a.get("asset_b") or "?")[:24],
             _fmt(a.get("estimated_profit"), suffix="%", decimals=2),
-            _fmt(a.get("min_capital_usd"), prefix="$", decimals=0) if a.get("min_capital_usd") else "N/A",
+            _fmt(a.get("min_capital_usd"), prefix="$", decimals=0) if a.get("min_capital_usd") else "—",
             str(a.get("urgency") or "normal")[:14],
         ]
         _data_row(pdf, row, widths, even=i % 2 == 0)
@@ -292,7 +292,7 @@ def generate_investment_committee_pdf(
     mkt_widths = [60, 55, 55]
     mkt_data   = [
         ["Fear & Greed",
-         f"{_fg.get('value', 'N/A')} ({_fg.get('label', '-')})",
+         f"{_fg.get('value', '—')} ({_fg.get('label', '-')})",
          f"7d avg: {_fg.get('avg_7d', '-')}"],
         ["FLR Price",
          _fmt(_pric.get("FLR", market_context.get("flr_price_usd", 0)), prefix="$", decimals=4),
@@ -301,7 +301,7 @@ def generate_investment_committee_pdf(
          _fmt(_pric.get("XRP", market_context.get("xrp_price_usd", 0)), prefix="$", decimals=4),
          "-"],
         ["Composite Signal",
-         str(_comp.get("regime", _comp.get("signal", "N/A"))),
+         str(_comp.get("regime", _comp.get("signal", "—"))),
          str(_comp.get("score", "-"))],
     ]
     _header_row(pdf, mkt_cols, mkt_widths)
@@ -496,7 +496,7 @@ def generate_ria_advisor_pdf(
     # ── Market Environment (if composite signal available) ────────────────────
     if composite_signal and composite_signal.get("signal"):
         _section(pdf, "Market Environment Summary")
-        _sig   = composite_signal.get("signal", "N/A")
+        _sig   = composite_signal.get("signal", "—")
         _score = composite_signal.get("score", 0)
         _summ  = composite_signal.get("beginner_summary", "Market conditions are mixed.")
         _layers = composite_signal.get("layers", {})
@@ -553,7 +553,7 @@ def generate_ria_advisor_pdf(
                 str(o.get("asset_or_pool") or "?")[:24],
                 _fmt(o.get("estimated_apy"), suffix="% APY (TWR)", decimals=1),
                 f"{_grade} ({_fmt(o.get('risk_score', 5), decimals=1)}/10)",
-                str(o.get("il_risk", "N/A")).capitalize(),
+                str(o.get("il_risk", "—")).capitalize(),
                 _fmt(o.get("confidence"), suffix="%", decimals=0),
             ]
             _data_row(pdf, row, widths, even=i % 2 == 0)

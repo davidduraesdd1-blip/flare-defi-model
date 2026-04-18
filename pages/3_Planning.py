@@ -232,7 +232,7 @@ with tab1:
                 "Strategy":       name,
                 "APY":            f"{apy:.1f}%",
                 "IL Risk":        il,
-                "Capital Needed": f"${annual_usd / (apy / 100):,.0f}" if apy > 0 else "N/A",
+                "Capital Needed": f"${annual_usd / (apy / 100):,.0f}" if apy > 0 else "—",
                 "How To":         action,
             })
         st.markdown(
@@ -1420,7 +1420,7 @@ with tab7:
 """, unsafe_allow_html=True)
 
     with _rm2:
-        _pu_str = f"+{_pct_up:.1f}%" if _pct_up is not None else "N/A"
+        _pu_str = f"+{_pct_up:.1f}%" if _pct_up is not None else "—"
         _pu_col = "#f59e0b" if _pct_up and _pct_up < 50 else "#22c55e"
         st.markdown(f"""
 <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_pu_col};
@@ -1433,7 +1433,7 @@ with tab7:
 """, unsafe_allow_html=True)
 
     with _rm3:
-        _pd_str = f"{_pct_dn:.1f}%" if _pct_dn is not None else "N/A"
+        _pd_str = f"{_pct_dn:.1f}%" if _pct_dn is not None else "—"
         _pd_col = "#f59e0b" if _pct_dn and abs(_pct_dn) < 30 else "#22c55e"
         st.markdown(f"""
 <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_pd_col};

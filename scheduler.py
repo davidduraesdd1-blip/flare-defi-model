@@ -505,15 +505,15 @@ def run_full_scan() -> None:
 
         def _fmt_apy(opp: dict) -> str:
             apy = opp.get("estimated_apy")
-            return f"{apy:.1f}%" if isinstance(apy, (int, float)) else "N/A"
+            return f"{apy:.1f}%" if isinstance(apy, (int, float)) else "—"
 
         summary = (
             f"Scan complete in {duration}s\n"
-            f"Conservative: {top_conservative.get('asset_or_pool') or 'N/A'} "
+            f"Conservative: {top_conservative.get('asset_or_pool') or '—'} "
             f"@ {_fmt_apy(top_conservative)} APY\n"
-            f"Medium: {top_medium.get('asset_or_pool') or 'N/A'} "
+            f"Medium: {top_medium.get('asset_or_pool') or '—'} "
             f"@ {_fmt_apy(top_medium)} APY\n"
-            f"High: {top_high.get('asset_or_pool') or 'N/A'} "
+            f"High: {top_high.get('asset_or_pool') or '—'} "
             f"@ {_fmt_apy(top_high)} APY"
         )
 
