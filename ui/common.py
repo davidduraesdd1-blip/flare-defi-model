@@ -980,7 +980,7 @@ def render_sidebar() -> dict:
         _tt_label = "☀ Light mode" if not _is_light else "🌙 Dark mode"
         if st.button(_tt_label, key="_theme_toggle",
                      help="Switch theme" + (" (currently light)" if _is_light else " (currently dark)"),
-                     use_container_width=True):
+                     width='stretch'):
             st.session_state["_theme"] = "dark" if _is_light else "light"
             st.rerun()
 
@@ -1095,7 +1095,7 @@ button[kind="secondary"] {
         col_r, col_s, col_all = st.columns(3)
         with col_r:
             if st.button("↺", key="sidebar_refresh",
-                         use_container_width=True,
+                         width='stretch',
                          help="Reload — load the latest saved scan data from disk"):
                 # OPT-44: targeted clear — reload scan data and live prices only
                 _load_history_file.clear()
@@ -1104,7 +1104,7 @@ button[kind="secondary"] {
                 st.rerun()
         with col_all:
             if st.button("⟳", key="sidebar_refresh_all",
-                         use_container_width=True,
+                         width='stretch',
                          help="Refresh All — clears every cache and fetches fresh data from all sources"):
                 # Nuclear clear: invalidate EVERY st.cache_data in this module
                 try:
@@ -1131,7 +1131,7 @@ button[kind="secondary"] {
                 st.rerun()
         with col_s:
             if st.button("▶", key="sidebar_scan_now",
-                         use_container_width=True,
+                         width='stretch',
                          help="Scan — run a fresh scan now (~30 seconds). Auto-reloads when done."):
                 try:
                     scheduler_path = str(Path(__file__).parent.parent / "scheduler.py")
@@ -1254,7 +1254,7 @@ button[kind="secondary"] {
                         file_name=f"defi_opportunities_{_pdf_ts}.pdf",
                         mime="application/pdf",
                         key="sidebar_pdf_export",
-                        use_container_width=True,
+                        width='stretch',
                         help="Download a PDF report of all current DeFi opportunities across all risk profiles.",
                     )
         except Exception:
@@ -1312,12 +1312,12 @@ button[kind="secondary"] {
             with _sa_col:
                 _btn_label = "⏸ Pause" if _agent_running else "▶ Start"
                 if st.button(_btn_label, key="sidebar_agent_toggle",
-                         use_container_width=True):
+                         width='stretch'):
                     _agent_set_running(not _agent_running)
                     st.rerun()
             with _sb_col:
                 if st.button("🛑 E-Stop", key="sidebar_agent_estop",
-                         use_container_width=True):
+                         width='stretch'):
                     _agent_set_estop(True, "Sidebar emergency stop")
                     st.rerun()
             st.page_link("pages/5_Agent.py", label="→ Agent Control Panel", icon="🤖")

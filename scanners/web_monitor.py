@@ -29,6 +29,10 @@ try:
     from config import CLAUDE_HAIKU_MODEL as _HAIKU_MODEL
 except Exception:
     _HAIKU_MODEL = "claude-haiku-4-5-20251001"
+try:
+    from config import ANTHROPIC_ENABLED as _ANTHROPIC_ENABLED
+except Exception:
+    _ANTHROPIC_ENABLED = False
 
 logger = logging.getLogger(__name__)
 
@@ -281,6 +285,10 @@ def claude_digest(
     - there is nothing new to summarise
     - the API call fails for any reason
     """
+    if not _ANTHROPIC_ENABLED:
+        logger.debug("ANTHROPIC_ENABLED=False — skipping AI digest")
+        return ""
+
     api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         logger.debug("ANTHROPIC_API_KEY not set — skipping AI digest")
@@ -341,7 +349,14 @@ def claude_digest(
         logger.info("Claude AI digest generated.")
         return digest_text
     except Exception as e:
-        logger.warning("Claude digest API call failed: %s", e)
+        _err_str = str(e).lower()
+        # Credit-exhausted / auth failures are expected when the user hasn't funded
+        # the Anthropic account — log at DEBUG so they don't pollute the console.
+        # Treat these as silent no-ops and rely on ANTHROPIC_ENABLED gating instead.
+        if "credit balance" in _err_str or "insufficient" in _err_str or "401" in _err_str:
+            logger.debug("Claude digest skipped — auth/credits unavailable: %s", e)
+        else:
+            logger.warning("Claude digest API call failed: %s", e)
         return ""
 
 
