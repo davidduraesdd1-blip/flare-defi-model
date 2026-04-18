@@ -492,32 +492,6 @@ def _build_pdf_export(positions: list, pnl_results: list) -> bytes:
     return bytes(pdf.output())
 
 
-def _build_portfolio_csv(holdings: list) -> bytes:
-    """Build a UTF-8 CSV from a list of holding dicts (protocol/asset/amount_usd/apy)."""
-    import pandas as pd
-    if not holdings:
-        return b"protocol,asset,amount_usd,apy\n"
-    df = pd.DataFrame(holdings)
-    return df.to_csv(index=False).encode("utf-8")
-
-
-def _build_portfolio_report(holdings: list, total_value: float) -> bytes:
-    """Build a plain-text portfolio summary report."""
-    lines = [
-        "DeFi Portfolio Report",
-        f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
-        f"Total Value: ${total_value:,.0f}",
-        "",
-        "Holdings:",
-    ]
-    for h in holdings:
-        lines.append(
-            f"  {h.get('protocol') or ''} / {h.get('asset') or ''}: "
-            f"${(h.get('amount_usd') or 0):,.0f} @ {(h.get('apy') or 0) * 100:.1f}% APY"
-        )
-    return "\n".join(lines).encode("utf-8")
-
-
 # ─── Wallet Tracker ───────────────────────────────────────────────────────────
 
 def _detect_onchain_positions(wallet: str) -> list:
@@ -2376,48 +2350,6 @@ with _tab_pos:
     else:
         st.info("Add positions to see daily income estimates.")
 
-
-    # ─── Portfolio Summary Export (Batch 9) ───────────────────────────────────────
-
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-    render_section_header("Portfolio Export", "Download a CSV or text summary of your current holdings")
-
-    _export_holdings = []
-    if positions:
-        for _pos in positions:
-            _pos_apy = float(_pos.get("entry_apy") or 0) / 100.0
-            _export_holdings.append({
-                "protocol":   _pos.get("protocol", ""),
-                "asset":      _pos.get("pool", _pos.get("token_a", "")),
-                "amount_usd": float(_pos.get("current_value") or _pos.get("deposit_usd") or 0),
-                "apy":        _pos_apy,
-                "entry_date": _pos.get("entry_date", ""),
-                "notes":      _pos.get("notes", ""),
-            })
-
-    _exp_total = sum(h["amount_usd"] for h in _export_holdings)
-
-    _col_csv, _col_txt = st.columns(2)
-    with _col_csv:
-        st.download_button(
-            "📥 Export Portfolio CSV",
-            data=_build_portfolio_csv(_export_holdings),
-            file_name=f"portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            use_container_width=True,
-            key="batch9_csv_export",
-        )
-    with _col_txt:
-        st.download_button(
-            "📄 Export Portfolio Report",
-            data=_build_portfolio_report(_export_holdings, _exp_total),
-            file_name=f"portfolio_report_{datetime.now(timezone.utc).strftime('%Y%m%d')}.txt",
-            mime="text/plain",
-            use_container_width=True,
-            key="batch9_txt_export",
-        )
-    if not _export_holdings:
-        st.caption("Add tracked positions to enable portfolio export.")
 
 # ─── FAssets Data Loader (used by FAssets tab) ───────────────────────────────
 
