@@ -334,9 +334,23 @@ with _t_eco:
         digest = load_monitor_digest()
     if not digest:
         st.info(
-            "No monitor data yet. Trigger manually: "
-            "`python -c \"from scanners.web_monitor import run_web_monitor; run_web_monitor()\"`"
+            "🧠 Ecosystem digest hasn't been generated yet. The scheduler builds "
+            "it automatically on its daily run — data will appear here once the "
+            "first digest completes. Use the button below to run it now."
         )
+        if st.button("▶ Run monitor now", key="_run_web_monitor_now"):
+            try:
+                with st.spinner("Scanning ecosystem — this takes ~60 seconds..."):
+                    from scanners.web_monitor import run_web_monitor as _run_now
+                    _run_now()
+                st.success("Monitor complete — refresh the page to view the digest.")
+            except Exception as _wm_e:
+                st.warning(
+                    "Monitor couldn't complete right now — this is usually a "
+                    "temporary data-source issue. Try again in a few minutes.",
+                    icon="⚠️",
+                )
+                logger.warning("web monitor manual trigger failed: %s", _wm_e)
     else:
         generated  = digest.get("generated_at", "")
         new_p      = len(digest.get("new_protocols") or [])
