@@ -414,6 +414,7 @@ def detect_bos_choch(df: pd.DataFrame, swing_n: int = 5) -> dict:
     if df is None:
         return result
 
+    df = df.reset_index(drop=True)
     close = df["close"]
     high  = df["high"]
     low   = df["low"]
