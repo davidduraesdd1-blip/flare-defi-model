@@ -28,6 +28,7 @@ data/monitor_digest.json
 data/quick_cache.json
 data/scan_cache.json
 data/feedback_cache.json
+data/user_feedback.jsonl
 data/*.tmp
 data/*.bak
 
