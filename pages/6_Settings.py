@@ -734,6 +734,53 @@ with _ctrl_tab_cache:
         )
 
 
+# ─── Display Preferences (ToS #10) ────────────────────────────────────────────
+
+st.markdown("<div class='divider' style='margin-top:32px;'></div>", unsafe_allow_html=True)
+
+with st.expander("🎨 Display Preferences", expanded=False):
+    st.markdown(
+        "<div style='color:#94a3b8; font-size:0.88rem; margin-bottom:12px;'>"
+        "Regional color convention for gains and losses.</div>",
+        unsafe_allow_html=True,
+    )
+    _up_is_red_current = st.session_state.get("up_is_red", False)
+    _region_c1, _region_c2, _region_c3 = st.columns([3, 1, 3])
+    with _region_c1:
+        st.markdown(
+            "<div style='text-align:center; padding:8px; border-radius:8px; "
+            + ("background:rgba(148,163,184,0.08);" if _up_is_red_current else "background:rgba(0,212,170,0.08); border:1px solid rgba(0,212,170,0.3);")
+            + "'>"
+            "<div style='color:#22c55e; font-weight:700; font-size:0.95rem;'>+1.00 ▲</div>"
+            "<div style='color:#ef4444; font-weight:700; font-size:0.95rem;'>-1.00 ▼</div>"
+            "<div style='color:#64748b; font-size:0.75rem; margin-top:4px;'>Western (US, EU)</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    with _region_c2:
+        _new_up_is_red = st.toggle(
+            "⇄",
+            value=_up_is_red_current,
+            key="up_is_red_toggle",
+            help="Flip color convention for markets where up = red (China, Japan, Korea).",
+            label_visibility="collapsed",
+        )
+    with _region_c3:
+        st.markdown(
+            "<div style='text-align:center; padding:8px; border-radius:8px; "
+            + ("background:rgba(0,212,170,0.08); border:1px solid rgba(0,212,170,0.3);" if _up_is_red_current else "background:rgba(148,163,184,0.08);")
+            + "'>"
+            "<div style='color:#ef4444; font-weight:700; font-size:0.95rem;'>+1.00 ▲</div>"
+            "<div style='color:#22c55e; font-weight:700; font-size:0.95rem;'>-1.00 ▼</div>"
+            "<div style='color:#64748b; font-size:0.75rem; margin-top:4px;'>Asian (CN, JP, KR)</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    if _new_up_is_red != _up_is_red_current:
+        st.session_state["up_is_red"] = _new_up_is_red
+        st.rerun()
+
+
 # ─── Share Feedback (ToS #9) ──────────────────────────────────────────────────
 
 st.markdown("<div class='divider' style='margin-top:32px;'></div>", unsafe_allow_html=True)

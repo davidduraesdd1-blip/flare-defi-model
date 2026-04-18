@@ -39,6 +39,35 @@ def get_user_level() -> str:
     return st.session_state.get("user_level", "beginner")
 
 
+# ─── Regional Color Preference (ToS #10) ─────────────────────────────────────
+# Western convention: up = green, down = red.
+# Some Asian markets (especially China, Japan, Korea): up = red, down = green.
+# User toggle in Settings flips this globally. Defaults to Western.
+
+_UP_GREEN = "#22c55e"
+_DN_RED   = "#ef4444"
+
+def color_up() -> str:
+    """Return the color for positive/up-moves based on user preference."""
+    return _DN_RED if st.session_state.get("up_is_red", False) else _UP_GREEN
+
+def color_down() -> str:
+    """Return the color for negative/down-moves based on user preference."""
+    return _UP_GREEN if st.session_state.get("up_is_red", False) else _DN_RED
+
+def color_for_delta(delta: float) -> str:
+    """Convenience: pick up/down color based on the sign of a delta value."""
+    if delta is None:
+        return "#64748b"  # neutral grey
+    try:
+        d = float(delta)
+    except (TypeError, ValueError):
+        return "#64748b"
+    if d > 0:  return color_up()
+    if d < 0:  return color_down()
+    return "#64748b"
+
+
 # ─── Security Audit Logger (#15) ────────────────────────────────────────────
 # Dedicated logger for security-relevant events; does NOT propagate to root.
 # Write to /tmp on Linux (Streamlit Cloud mounts /mount/src via NFS — file
