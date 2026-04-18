@@ -408,8 +408,12 @@ def run_full_scan() -> None:
             _f_fasset = _data_pool.submit(fetch_fasset_data)
             flare_scan  = _f_flare.result(timeout=300)
             multi_scan  = _f_multi.result(timeout=300)
-            vol_data    = _f_vol.result(timeout=120)
-            fasset_data = _f_fasset.result(timeout=120)
+            # vol + fasset timeouts raised 120s → 300s because on Streamlit Cloud
+            # the shared-IP rate limits on CoinGecko / Deribit can push the volatility
+            # fetch past 120s, causing TimeoutError and cascading vol_data=None into
+            # options scoring. Matches flare_scan / multi_scan budgets.
+            vol_data    = _f_vol.result(timeout=300)
+            fasset_data = _f_fasset.result(timeout=300)
 
         # ── Steps 3+4+5: Independent — run in parallel ───────────────────
         logger.info("Steps 3-5 — Running models, arbitrage, and options in parallel...")
