@@ -264,7 +264,14 @@ def protective_put_analysis(spot: float, token: str, vol: float, expiry_days: in
     put    = price_option(token, spot, strike, expiry_days, vol, "put")
 
     cost_pct       = put.price / spot * 100
-    annualised_pct = cost_pct * (365 / expiry_days) if expiry_days > 0 else 0.0
+    # Compound annualization (matches covered_call_analysis line 232) so both
+    # option strategies are displayed on the same basis — otherwise a user
+    # comparing "annualised premium received" vs "annualised cost paid" is
+    # comparing different compounding conventions and will misjudge the trade.
+    if expiry_days > 0:
+        annualised_pct = round(((1 + cost_pct / 100) ** (365.0 / expiry_days) - 1) * 100, 1)
+    else:
+        annualised_pct = 0.0
 
     return {
         "strategy":          "Protective Put",
