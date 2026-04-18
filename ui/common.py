@@ -329,6 +329,31 @@ def _inject_css() -> None:
         # ── DARK MODE: complete standalone CSS ────────────────────────────────
         st.markdown(_build_css("dark"), unsafe_allow_html=True)
 
+    # ── Compact Sidebar overlay (ToS #1) ───────────────────────────────────
+    # Per Q2 tiered default: Beginner = off (labels on), Intermediate = off,
+    # Advanced = default on. Explicit user preference overrides.
+    _ul_default = st.session_state.get("user_level", "beginner") == "advanced"
+    _compact = st.session_state.get("compact_sidebar", _ul_default)
+    if _compact:
+        st.markdown("""
+<style>
+    /* Icon-only sidebar nav — compact mode (ToS #1) */
+    [data-testid="stSidebarNav"] a span:not(:first-child) { display: none !important; }
+    [data-testid="stSidebarNav"] a { padding: 8px 10px !important; justify-content: center; }
+    [data-testid="stSidebar"] { min-width: 90px !important; max-width: 110px !important; }
+    [data-testid="stSidebar"] button, [data-testid="stSidebar"] .stTextInput,
+    [data-testid="stSidebar"] label { font-size: 0.72rem !important; }
+    [data-testid="stSidebarNav"] a:hover::after {
+        content: attr(aria-label);
+        position: absolute; left: 100%; margin-left: 8px;
+        background: #1e293b; color: #f1f5f9;
+        padding: 4px 10px; border-radius: 6px;
+        font-size: 0.8rem; white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        pointer-events: none;
+    }
+</style>""", unsafe_allow_html=True)
+
     st.session_state["_defi_css_injected"] = True
     st.session_state["_defi_css_theme_last"] = _theme_key
     st.session_state["_defi_css_page_last"] = _page_key

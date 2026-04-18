@@ -739,6 +739,21 @@ with _ctrl_tab_cache:
 st.markdown("<div class='divider' style='margin-top:32px;'></div>", unsafe_allow_html=True)
 
 with st.expander("🎨 Display Preferences", expanded=False):
+    # ─── Compact Sidebar (ToS #1) — tiered default per Q2 ─────────────────
+    _ul_current = st.session_state.get("user_level", "beginner")
+    _compact_default = _ul_current == "advanced"
+    if _ul_current != "beginner":
+        _compact_new = st.toggle(
+            "Compact sidebar (icons only)",
+            value=st.session_state.get("compact_sidebar", _compact_default),
+            key="compact_sidebar_toggle",
+            help="Hide sidebar labels, show icons only. Hover for tooltips. Advanced-tier default ON.",
+        )
+        if _compact_new != st.session_state.get("compact_sidebar", _compact_default):
+            st.session_state["compact_sidebar"] = _compact_new
+            st.rerun()
+        st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+
     st.markdown(
         "<div style='color:#94a3b8; font-size:0.88rem; margin-bottom:12px;'>"
         "Regional color convention for gains and losses.</div>",
