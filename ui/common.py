@@ -314,11 +314,20 @@ def _inject_css() -> None:
     except Exception:
         pass
 
+    # Toggle state is part of the guard key: when the user flips Focus Mode or
+    # Compact Sidebar, the CSS MUST re-inject on the next rerun so the new
+    # overlay takes effect. Without this, toggles appeared to silently fail.
+    _ul_default = st.session_state.get("user_level", "beginner") == "advanced"
+    _toggle_state = (
+        bool(st.session_state.get("focus_mode", False)),
+        bool(st.session_state.get("compact_sidebar", _ul_default)),
+    )
     if (
         _page_key is not None  # only guard when we can identify the page
         and st.session_state.get("_defi_css_injected")
         and st.session_state.get("_defi_css_theme_last") == _theme_key
         and st.session_state.get("_defi_css_page_last") == _page_key
+        and st.session_state.get("_defi_css_toggles_last") == _toggle_state
     ):
         return
 
@@ -346,7 +355,6 @@ def _inject_css() -> None:
     # ── Compact Sidebar overlay (ToS #1) ───────────────────────────────────
     # Per Q2 tiered default: Beginner = off (labels on), Intermediate = off,
     # Advanced = default on. Explicit user preference overrides.
-    _ul_default = st.session_state.get("user_level", "beginner") == "advanced"
     _compact = st.session_state.get("compact_sidebar", _ul_default)
     if _compact:
         st.markdown("""
@@ -371,6 +379,7 @@ def _inject_css() -> None:
     st.session_state["_defi_css_injected"] = True
     st.session_state["_defi_css_theme_last"] = _theme_key
     st.session_state["_defi_css_page_last"] = _page_key
+    st.session_state["_defi_css_toggles_last"] = _toggle_state
 
 
 # ── CSS constant strings (extracted for module-level caching, upgrade #32) ────
