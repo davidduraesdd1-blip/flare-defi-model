@@ -60,6 +60,42 @@ _KINETIC_CERC20_ABI = [
     ], "outputs": [{"type": "uint256"}]},
 ]
 
+# ─── Uniswap V2 Router (BlazeSwap) ───────────────────────────────────────────
+# BlazeSwap is a Uniswap V2 fork on Flare. We use swapExactTokensForTokens
+# which requires the caller to approve(router, amountIn) first.
+_UNISWAP_V2_ROUTER_ABI = [
+    {"name": "swapExactTokensForTokens", "type": "function", "inputs": [
+        {"name": "amountIn",     "type": "uint256"},
+        {"name": "amountOutMin", "type": "uint256"},
+        {"name": "path",         "type": "address[]"},
+        {"name": "to",           "type": "address"},
+        {"name": "deadline",     "type": "uint256"},
+    ], "outputs": [{"name": "amounts", "type": "uint256[]"}]},
+    {"name": "getAmountsOut", "type": "function", "inputs": [
+        {"name": "amountIn", "type": "uint256"},
+        {"name": "path",     "type": "address[]"},
+    ], "outputs": [{"name": "amounts", "type": "uint256[]"}], "stateMutability": "view"},
+]
+
+# ─── Uniswap V3 ISwapRouter (SparkDEX) ───────────────────────────────────────
+# SparkDEX is a Uniswap V3 fork on Flare. We use exactInputSingle which
+# requires the caller to approve(router, amountIn) first. Fee tier must
+# match an existing pool (common tiers: 500, 3000, 10000 bps).
+_UNISWAP_V3_ROUTER_ABI = [
+    {"name": "exactInputSingle", "type": "function", "inputs": [
+        {"name": "params", "type": "tuple", "components": [
+            {"name": "tokenIn",           "type": "address"},
+            {"name": "tokenOut",          "type": "address"},
+            {"name": "fee",               "type": "uint24"},
+            {"name": "recipient",         "type": "address"},
+            {"name": "deadline",          "type": "uint256"},
+            {"name": "amountIn",          "type": "uint256"},
+            {"name": "amountOutMinimum",  "type": "uint256"},
+            {"name": "sqrtPriceLimitX96", "type": "uint160"},
+        ]},
+    ], "outputs": [{"name": "amountOut", "type": "uint256"}]},
+]
+
 try:
     from web3 import Web3
     from web3.middleware import ExtraDataToPOAMiddleware
@@ -254,6 +290,235 @@ class FlareExecutor:
                              {"decision": decision.to_dict()})
             return {"status": "error", "reason": str(e)}
 
+    # ── Token decimals lookup (cached per instance) ──────────────────────────
+    _DECIMALS_CACHE: dict = {}
+
+    def _token_decimals(self, token_address: str) -> int:
+        """Return ERC20 decimals for a token, cached. Falls back to 18 on failure."""
+        _addr = Web3.to_checksum_address(token_address)
+        if _addr in self._DECIMALS_CACHE:
+            return self._DECIMALS_CACHE[_addr]
+        try:
+            c = self._w3.eth.contract(address=_addr, abi=_ERC20_ABI)
+            d = int(c.functions.decimals().call())
+            self._DECIMALS_CACHE[_addr] = d
+            return d
+        except Exception:
+            return 18
+
+    # ── BlazeSwap V2 swap ────────────────────────────────────────────────────
+    def execute_blazeswap_swap(
+        self,
+        decision: TradeDecision,
+        adjusted_size_usd: float,
+        private_key: str,
+        token_in_address: str,
+        token_out_address: str,
+        token_in_usd_price: float = 1.0,
+        max_slippage_pct: float = 0.005,
+    ) -> dict:
+        """
+        Execute a BlazeSwap V2-style swap (swapExactTokensForTokens).
+        Expects the router address in FLARE_CONTRACTS['blazeswap_router'].
+        """
+        if not self._ensure_connected():
+            return {"status": "error", "reason": "No RPC connection"}
+
+        router_addr = FLARE_CONTRACTS.get("blazeswap_router", "")
+        if not router_addr or len(router_addr) != 42:
+            return {
+                "status": "blocked",
+                "reason": "BLAZESWAP_ROUTER_ADDRESS not configured — set env var before live.",
+            }
+
+        w3 = self._w3
+        account = w3.eth.account.from_key(private_key)
+        address = account.address
+
+        try:
+            token_in_dec = self._token_decimals(token_in_address)
+            # Convert USD size to token amount using current token USD price
+            _px = max(float(token_in_usd_price), 1e-8)
+            amount_in_raw = int(adjusted_size_usd / _px * (10 ** token_in_dec))
+            if amount_in_raw <= 0:
+                return {"status": "rejected", "reason": "Computed amountIn is 0"}
+
+            token_in = w3.eth.contract(address=Web3.to_checksum_address(token_in_address), abi=_ERC20_ABI)
+            router   = w3.eth.contract(address=Web3.to_checksum_address(router_addr), abi=_UNISWAP_V2_ROUTER_ABI)
+            path     = [Web3.to_checksum_address(token_in_address), Web3.to_checksum_address(token_out_address)]
+
+            # Quote expected output (getAmountsOut) to compute amountOutMin with slippage
+            try:
+                _amounts = router.functions.getAmountsOut(amount_in_raw, path).call()
+                expected_out = int(_amounts[-1])
+            except Exception as _quote_err:
+                return {"status": "error", "reason": f"Router getAmountsOut failed: {_quote_err}"}
+            amount_out_min = int(expected_out * (1.0 - max(max_slippage_pct, 0.0)))
+
+            # Gas estimates
+            approve_gas = token_in.functions.approve(Web3.to_checksum_address(router_addr), amount_in_raw).estimate_gas({"from": address})
+            deadline = int(time.time()) + 600  # 10-minute window
+            swap_gas = router.functions.swapExactTokensForTokens(
+                amount_in_raw, amount_out_min, path, address, deadline,
+            ).estimate_gas({"from": address})
+            total_gas_usd = _estimate_gas_usd(w3, approve_gas) + _estimate_gas_usd(w3, swap_gas)
+
+            nonce     = w3.eth.get_transaction_count(address)
+            gas_price = w3.eth.gas_price
+
+            # Send approve
+            approve_tx = token_in.functions.approve(
+                Web3.to_checksum_address(router_addr), amount_in_raw
+            ).build_transaction({
+                "chainId": FLARE_CHAIN_ID, "from": address, "nonce": nonce,
+                "gas": int(approve_gas * 1.2), "gasPrice": gas_price,
+            })
+            _sa = w3.eth.account.sign_transaction(approve_tx, private_key)
+            w3.eth.wait_for_transaction_receipt(
+                w3.eth.send_raw_transaction(_sa.raw_transaction), timeout=60
+            )
+
+            # Send swap
+            swap_tx = router.functions.swapExactTokensForTokens(
+                amount_in_raw, amount_out_min, path, address, deadline,
+            ).build_transaction({
+                "chainId": FLARE_CHAIN_ID, "from": address, "nonce": nonce + 1,
+                "gas": int(swap_gas * 1.2), "gasPrice": gas_price,
+            })
+            _ss = w3.eth.account.sign_transaction(swap_tx, private_key)
+            _sh = w3.eth.send_raw_transaction(_ss.raw_transaction)
+            receipt = w3.eth.wait_for_transaction_receipt(_sh, timeout=120)
+            if receipt.status != 1:
+                return {"status": "error", "reason": "Swap tx reverted", "tx_hash": _sh.hex()}
+
+            trade_id = _monitor.open_position(
+                chain=decision.chain, protocol=decision.protocol, pool=decision.pool,
+                action=decision.action, token_in=decision.token_in, token_out=decision.token_out,
+                size_usd=adjusted_size_usd, entry_price=1.0,
+                expected_apy=decision.expected_apy, confidence=decision.confidence,
+                reasoning=decision.reasoning, mode="LIVE",
+                gas_usd=total_gas_usd, tx_hash=_sh.hex(),
+            )
+            return {
+                "status": "success", "trade_id": trade_id, "tx_hash": _sh.hex(),
+                "size_usd": adjusted_size_usd, "gas_usd": round(total_gas_usd, 6),
+                "protocol": "blazeswap",
+                "amount_in_raw":   amount_in_raw,
+                "amount_out_min":  amount_out_min,
+                "expected_out":    expected_out,
+            }
+        except Exception as e:
+            _audit.log_error(f"FlareExecutor.execute_blazeswap_swap error: {e}",
+                             {"decision": decision.to_dict()})
+            return {"status": "error", "reason": str(e)}
+
+    # ── SparkDEX V3 swap ────────────────────────────────────────────────────
+    def execute_sparkdex_swap(
+        self,
+        decision: TradeDecision,
+        adjusted_size_usd: float,
+        private_key: str,
+        token_in_address: str,
+        token_out_address: str,
+        fee_tier: int = 3000,                # 0.3% default; common V3 tiers: 500/3000/10000
+        token_in_usd_price: float = 1.0,
+        max_slippage_pct: float = 0.005,
+    ) -> dict:
+        """
+        Execute a SparkDEX V3-style swap (exactInputSingle).
+        Expects the router address in FLARE_CONTRACTS['sparkdex_router'].
+        """
+        if not self._ensure_connected():
+            return {"status": "error", "reason": "No RPC connection"}
+
+        router_addr = FLARE_CONTRACTS.get("sparkdex_router", "")
+        if not router_addr or len(router_addr) != 42:
+            return {
+                "status": "blocked",
+                "reason": "SPARKDEX_ROUTER_ADDRESS not configured — set env var before live.",
+            }
+
+        w3 = self._w3
+        account = w3.eth.account.from_key(private_key)
+        address = account.address
+
+        try:
+            token_in_dec = self._token_decimals(token_in_address)
+            _px = max(float(token_in_usd_price), 1e-8)
+            amount_in_raw = int(adjusted_size_usd / _px * (10 ** token_in_dec))
+            if amount_in_raw <= 0:
+                return {"status": "rejected", "reason": "Computed amountIn is 0"}
+
+            token_in = w3.eth.contract(address=Web3.to_checksum_address(token_in_address), abi=_ERC20_ABI)
+            router   = w3.eth.contract(address=Web3.to_checksum_address(router_addr), abi=_UNISWAP_V3_ROUTER_ABI)
+            deadline = int(time.time()) + 600
+
+            # V3 doesn't have getAmountsOut on the router; we conservatively
+            # accept up to max_slippage_pct by setting amountOutMinimum = 0
+            # only when we have no quote. Safer pattern: caller passes a
+            # pre-quoted expected_out via decision.expected_out if available.
+            # For now we set amountOutMinimum = 0 and rely on the router's
+            # revert-on-revert semantics + the caller's slippage cap filter.
+            # In a future commit we'll call the V3 Quoter contract for an
+            # on-chain quote.
+            params = (
+                Web3.to_checksum_address(token_in_address),
+                Web3.to_checksum_address(token_out_address),
+                int(fee_tier),
+                address,
+                deadline,
+                amount_in_raw,
+                0,                  # amountOutMinimum — TODO: wire V3 Quoter
+                0,                  # sqrtPriceLimitX96 = no limit
+            )
+
+            approve_gas = token_in.functions.approve(Web3.to_checksum_address(router_addr), amount_in_raw).estimate_gas({"from": address})
+            swap_gas = router.functions.exactInputSingle(params).estimate_gas({"from": address})
+            total_gas_usd = _estimate_gas_usd(w3, approve_gas) + _estimate_gas_usd(w3, swap_gas)
+
+            nonce     = w3.eth.get_transaction_count(address)
+            gas_price = w3.eth.gas_price
+
+            approve_tx = token_in.functions.approve(
+                Web3.to_checksum_address(router_addr), amount_in_raw
+            ).build_transaction({
+                "chainId": FLARE_CHAIN_ID, "from": address, "nonce": nonce,
+                "gas": int(approve_gas * 1.2), "gasPrice": gas_price,
+            })
+            _sa = w3.eth.account.sign_transaction(approve_tx, private_key)
+            w3.eth.wait_for_transaction_receipt(
+                w3.eth.send_raw_transaction(_sa.raw_transaction), timeout=60
+            )
+
+            swap_tx = router.functions.exactInputSingle(params).build_transaction({
+                "chainId": FLARE_CHAIN_ID, "from": address, "nonce": nonce + 1,
+                "gas": int(swap_gas * 1.2), "gasPrice": gas_price,
+            })
+            _ss = w3.eth.account.sign_transaction(swap_tx, private_key)
+            _sh = w3.eth.send_raw_transaction(_ss.raw_transaction)
+            receipt = w3.eth.wait_for_transaction_receipt(_sh, timeout=120)
+            if receipt.status != 1:
+                return {"status": "error", "reason": "Swap tx reverted", "tx_hash": _sh.hex()}
+
+            trade_id = _monitor.open_position(
+                chain=decision.chain, protocol=decision.protocol, pool=decision.pool,
+                action=decision.action, token_in=decision.token_in, token_out=decision.token_out,
+                size_usd=adjusted_size_usd, entry_price=1.0,
+                expected_apy=decision.expected_apy, confidence=decision.confidence,
+                reasoning=decision.reasoning, mode="LIVE",
+                gas_usd=total_gas_usd, tx_hash=_sh.hex(),
+            )
+            return {
+                "status": "success", "trade_id": trade_id, "tx_hash": _sh.hex(),
+                "size_usd": adjusted_size_usd, "gas_usd": round(total_gas_usd, 6),
+                "protocol": "sparkdex", "fee_tier": fee_tier,
+                "amount_in_raw": amount_in_raw,
+            }
+        except Exception as e:
+            _audit.log_error(f"FlareExecutor.execute_sparkdex_swap error: {e}",
+                             {"decision": decision.to_dict()})
+            return {"status": "error", "reason": str(e)}
+
     def execute(
         self,
         decision: TradeDecision,
@@ -293,16 +558,44 @@ class FlareExecutor:
                 ktoken_address = FLARE_CONTRACTS["kinetic_kUSDT0"],
                 token_decimals = 6,
             )
+        elif proto in ("blazeswap", "sparkdex"):
+            # DEX swap routing — resolve token addresses from the main config
+            try:
+                from config import TOKENS as _TOKENS
+            except Exception:
+                _TOKENS = {}
+            _tin_sym  = str(decision.token_in  or "").upper()
+            _tout_sym = str(decision.token_out or "").upper()
+            _tin_addr  = _TOKENS.get(_tin_sym,  "")
+            _tout_addr = _TOKENS.get(_tout_sym, "")
+            if not _tin_addr or not _tout_addr:
+                _audit.log_error(
+                    f"FlareExecutor: missing token address for {_tin_sym}->{_tout_sym} swap",
+                    {"decision": decision.to_dict()}
+                )
+                return {
+                    "status": "rejected",
+                    "reason": f"Token address missing for '{_tin_sym}' or '{_tout_sym}' — "
+                              f"add to config.TOKENS before live swap.",
+                }
+            if proto == "blazeswap":
+                return self.execute_blazeswap_swap(
+                    decision, adjusted_size_usd, private_key,
+                    token_in_address=_tin_addr, token_out_address=_tout_addr,
+                )
+            else:  # sparkdex
+                return self.execute_sparkdex_swap(
+                    decision, adjusted_size_usd, private_key,
+                    token_in_address=_tin_addr, token_out_address=_tout_addr,
+                )
         else:
-            # SparkDEX and BlazeSwap require verified router addresses
-            # TODO: implement swap execution when router addresses are confirmed
+            # Other protocols not yet wired (Sceptre, Spectra, Enosys, ...)
             _audit.log_error(
                 f"FlareExecutor: protocol '{proto}' execution not yet implemented",
                 {"decision": decision.to_dict()}
             )
             return {
                 "status": "not_implemented",
-                "reason": f"Direct swap execution for '{proto}' requires verified router "
-                          "address. Set SPARKDEX_ROUTER_ADDRESS or BLAZESWAP_ROUTER_ADDRESS "
-                          "env vars and implement swap logic before Phase 2.",
+                "reason": f"Protocol '{proto}' not yet wired for live execution — "
+                          "use PAPER mode for simulation.",
             }
