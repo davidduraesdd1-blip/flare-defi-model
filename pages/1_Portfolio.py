@@ -2144,13 +2144,28 @@ with _tab_pos:
                 for act in sorted(actions, key=lambda x: abs(x["drift"]), reverse=True):
                     _act_color = "#ef4444" if act["action"] == "Reduce" else "#10b981"
                     _act_icon  = "▼" if act["action"] == "Reduce" else "▲"
-                    _msg = (
-                        f"Withdraw ${abs(act['dollar_adj']):,.0f} from {act['bucket']} positions "
-                        f"(currently {_current_pct.get(act['bucket'], 0):.0f}% vs {_target_pct.get(act['bucket'], 0):.0f}% target)"
-                        if act["action"] == "Reduce"
-                        else f"Add ${abs(act['dollar_adj']):,.0f} to {act['bucket']} opportunities "
-                        f"({_current_pct.get(act['bucket'], 0):.0f}% current vs {_target_pct.get(act['bucket'], 0):.0f}% target)"
-                    )
+                    _cur_pct   = _current_pct.get(act["bucket"], 0)
+                    _tgt_pct   = _target_pct.get(act["bucket"], 0)
+                    _full_exit = act["action"] == "Reduce" and _tgt_pct == 0 and _cur_pct > 0
+                    _staged    = _full_exit and _cur_pct > 25
+                    if _full_exit and _staged:
+                        _third = abs(act["dollar_adj"]) / 3
+                        _msg = (
+                            f"Your {RISK_PROFILES[_prof_key]['label']} model does not currently include "
+                            f"{act['bucket']} exposure. Consider a gradual transition — e.g. reduce by "
+                            f"~${_third:,.0f} over each of the next 3 scan cycles (currently {_cur_pct:.0f}%). "
+                            f"Not financial advice."
+                        )
+                    elif act["action"] == "Reduce":
+                        _msg = (
+                            f"Consider reducing {act['bucket']} by ~${abs(act['dollar_adj']):,.0f} "
+                            f"(currently {_cur_pct:.0f}% vs {_tgt_pct:.0f}% target)"
+                        )
+                    else:
+                        _msg = (
+                            f"Consider adding ~${abs(act['dollar_adj']):,.0f} to {act['bucket']} "
+                            f"({_cur_pct:.0f}% current vs {_tgt_pct:.0f}% target)"
+                        )
                     st.markdown(
                         f"<div style='background:rgba(15,23,42,0.5); border:1px solid rgba(148,163,184,0.1); "
                         f"border-left:3px solid {_act_color}; border-radius:8px; padding:10px 14px; "
