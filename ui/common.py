@@ -239,30 +239,62 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
     )
     _inject_css()
     # Rename Streamlit's auto-generated "app" root nav item to "Dashboard".
-    # Streamlit derives the label from app.py filename, so we hide all text
-    # inside the first nav anchor (font-size:0 works regardless of whether
-    # Streamlit wraps the label in a <span>, <div>, or raw text node) and
-    # render "Dashboard" via ::before. Older selector (a span { visibility:
-    # hidden }) only worked on one DOM variant and broke in newer Streamlit.
+    # Streamlit derives the label from app.py filename. Newer Streamlit versions
+    # wrap the label in different DOM variants (<span>, <div>, data-testid
+    # nodes, or raw text), so we target all of them aggressively. Also inject
+    # JS as a fallback for any variant the CSS misses.
     st.markdown("""
 <style>
-section[data-testid="stSidebarNav"] ul li:first-child a {
+/* Hide any rendering of the "app" label in the first nav item */
+section[data-testid="stSidebarNav"] ul li:first-child a,
+section[data-testid="stSidebarNav"] ul li:first-child a span,
+section[data-testid="stSidebarNav"] ul li:first-child a div,
+section[data-testid="stSidebarNav"] ul li:first-child a p,
+[data-testid="stSidebarNav"] li:first-child a,
+[data-testid="stSidebarNavLink"]:first-of-type {
     font-size: 0 !important;
-    position: relative;
+    color: transparent !important;
+    position: relative !important;
 }
-section[data-testid="stSidebarNav"] ul li:first-child a * {
+section[data-testid="stSidebarNav"] ul li:first-child a *,
+[data-testid="stSidebarNav"] li:first-child a *,
+[data-testid="stSidebarNavLink"]:first-of-type * {
     font-size: 0 !important;
     visibility: hidden !important;
+    color: transparent !important;
 }
-section[data-testid="stSidebarNav"] ul li:first-child a::before {
-    content: "Dashboard";
+section[data-testid="stSidebarNav"] ul li:first-child a::before,
+[data-testid="stSidebarNav"] li:first-child a::before,
+[data-testid="stSidebarNavLink"]:first-of-type::before {
+    content: "Dashboard" !important;
     font-size: 0.9rem !important;
     visibility: visible !important;
-    color: inherit;
-    font-weight: inherit;
-    display: inline-block;
+    color: #f1f5f9 !important;
+    font-weight: 500 !important;
+    display: inline-block !important;
+    position: absolute !important;
+    left: 1rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
 }
-</style>""", unsafe_allow_html=True)
+</style>
+<script>
+/* JS fallback — rewrite text content directly for DOM variants CSS can't reach. */
+(function renameAppLabel() {
+    try {
+        const nav = window.parent.document.querySelector('[data-testid="stSidebarNav"]');
+        if (!nav) return;
+        const firstLink = nav.querySelector('li:first-child a');
+        if (!firstLink) return;
+        const textNodes = firstLink.querySelectorAll('span, div, p');
+        textNodes.forEach(n => {
+            if (n.textContent && n.textContent.trim().toLowerCase() === 'app') {
+                n.textContent = 'Dashboard';
+            }
+        });
+    } catch (e) { /* cross-origin or DOM not ready — ignore */ }
+})();
+</script>""", unsafe_allow_html=True)
     if _embed:
         # Embed mode: hide sidebar, navigation arrows, top toolbar, and Streamlit chrome.
         # This gives a clean iframe-embeddable surface for advisor platforms.
@@ -974,8 +1006,17 @@ def render_sidebar() -> dict:
         if BRAND_LOGO_PATH and Path(BRAND_LOGO_PATH).exists():
             st.image(BRAND_LOGO_PATH, width=140)
         else:
-            _header_text = _html.escape(str(BRAND_NAME)) if BRAND_NAME else "⚡ Family Office"
-            _subtitle    = "" if BRAND_NAME else "DeFi Intelligence"
+            # If BRAND_NAME contains a middle-dot or em-dash separator, split it
+            # into a 2-line layout (before / after) so the full name always fits
+            # without ellipsis truncation on the narrow sidebar.
+            if BRAND_NAME and (" · " in BRAND_NAME or " — " in BRAND_NAME):
+                _sep = " · " if " · " in BRAND_NAME else " — "
+                _head_raw, _sub_raw = BRAND_NAME.split(_sep, 1)
+                _header_text = _html.escape(_head_raw.strip())
+                _subtitle    = _html.escape(_sub_raw.strip())
+            else:
+                _header_text = _html.escape(str(BRAND_NAME)) if BRAND_NAME else "⚡ Family Office"
+                _subtitle    = "" if BRAND_NAME else "DeFi Intelligence"
             _sub_color = "#64748b" if not _is_light else "#475569"
             st.markdown(
                 f"<div style='font-size:0.95rem; font-weight:800; line-height:1.2; "
