@@ -22,7 +22,7 @@ except ImportError:
     Web3 = None  # type: ignore[assignment,misc]
     _WEB3_AVAILABLE = False
 
-from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS, FALLBACK_PRICES, COINGECKO_API_KEY, DB_FILE
+from config import APIS, PROTOCOLS, TOKENS, FLARE_RPC_URLS, FALLBACK_PRICES, COINGECKO_API_KEY, COINMARKETCAP_API_KEY, DB_FILE
 from utils.http import http_get as _get, http_post as _post, coingecko_limiter
 
 
@@ -358,11 +358,11 @@ def _fetch_binance_24h_change() -> dict:
 
 def fetch_prices() -> list:
     """
-    Fetch current USD prices for FLR, FXRP, XRP, USD0.
-    Results are cached for 5 minutes so that options_scanner and multi_scanner
-    can reuse them without hitting CoinGecko a second or third time per scan.
-    Uses CoinGecko free tier — falls back to Binance for 24h change if CoinGecko
-    omits that field (common on the unauthenticated free tier).
+    Fetch current USD prices for FLR, FXRP, XRP, USD0, SPRK, RLUSD, HYPE.
+    Price cascade: CoinMarketCap → CoinGecko → in-memory cache → SQLite → hardcoded.
+    CMC is preferred because Streamlit Cloud's shared IP gets rate-limited on
+    CoinGecko's free tier; CMC's per-key limit (333 req/day) is not shared.
+    Results cached for 5 minutes so options_scanner and multi_scanner can reuse.
     """
     global _price_cache, _price_cache_ts
     with _price_cache_lock:
@@ -370,45 +370,81 @@ def fetch_prices() -> list:
             logger.debug("fetch_prices: returning cached prices (TTL not expired)")
             return list(_price_cache)
 
-    # Include SPRK (SparkDEX reward token) and ripple-usd (RLUSD) for reward APY + pool tracking (#68-70)
-    ids = "flare-networks,ripple,tether,sparkdex-ai,ripple-usd,hyperliquid"
-    # Use demo/pro API key when available for higher rate limits.
-    # CG- prefix = Demo key (api.coingecko.com + x-cg-demo-api-key header)
-    # Other prefix = Pro key (pro-api.coingecko.com + x-cg-pro-api-key header)
-    if COINGECKO_API_KEY and COINGECKO_API_KEY.startswith("CG-"):
-        url = f"{APIS['coingecko']}/simple/price"
-        _cg_headers = {"x-cg-demo-api-key": COINGECKO_API_KEY}
-    elif COINGECKO_API_KEY:
-        url = "https://pro-api.coingecko.com/api/v3/simple/price"
-        _cg_headers = {"x-cg-pro-api-key": COINGECKO_API_KEY}
-    else:
-        url = f"{APIS['coingecko']}/simple/price"
-        _cg_headers = None
-    coingecko_limiter.acquire()
-    data = _get(url, params={
-        "ids": ids,
-        "vs_currencies": "usd",
-        "include_24hr_change": "true"
-    }, headers=_cg_headers)
+    # (cg_id, cmc_symbol, internal_symbol)
+    _TARGETS = [
+        ("flare-networks", "FLR",   "FLR"),
+        ("ripple",         "XRP",   "XRP"),
+        ("tether",         "USDT",  "USD0"),   # USD0 panel tracks USDT peg
+        ("sparkdex-ai",    "SPRK",  "SPRK"),
+        ("ripple-usd",     "RLUSD", "RLUSD"),
+        ("hyperliquid",    "HYPE",  "HYPE"),
+    ]
+
+    data: dict = {}  # keyed by cg_id → {"usd": price, "usd_24h_change": chg}
+
+    # ── Tier 1: CoinMarketCap (primary on Streamlit Cloud — per-key limit, no IP share) ──
+    if COINMARKETCAP_API_KEY:
+        try:
+            import requests as _rq
+            _sym_list = ",".join(t[1] for t in _TARGETS)
+            _resp = _rq.get(
+                "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest",
+                params={"symbol": _sym_list, "convert": "USD"},
+                headers={"X-CMC_PRO_API_KEY": COINMARKETCAP_API_KEY,
+                         "Accept": "application/json"},
+                timeout=(3, 8),
+            )
+            if _resp.status_code == 200:
+                _raw = _resp.json().get("data", {})
+                for cg_id, cmc_sym, _ in _TARGETS:
+                    _entry = _raw.get(cmc_sym)
+                    if _entry is None:
+                        continue
+                    if isinstance(_entry, list):
+                        _entry = _entry[0] if _entry else {}
+                    _q = _entry.get("quote", {}).get("USD", {})
+                    _px = _q.get("price") or 0
+                    if _px and float(_px) > 0:
+                        data[cg_id] = {
+                            "usd": float(_px),
+                            "usd_24h_change": float(_q.get("percent_change_24h") or 0),
+                        }
+        except Exception as _e:
+            logger.debug("CMC price fetch failed: %s", _e)
+
+    # ── Tier 2: CoinGecko — only for coins CMC missed ──
+    _cg_missing = [cg_id for cg_id, _, _ in _TARGETS if cg_id not in data]
+    if _cg_missing:
+        if COINGECKO_API_KEY and COINGECKO_API_KEY.startswith("CG-"):
+            url = f"{APIS['coingecko']}/simple/price"
+            _cg_headers = {"x-cg-demo-api-key": COINGECKO_API_KEY}
+        elif COINGECKO_API_KEY:
+            url = "https://pro-api.coingecko.com/api/v3/simple/price"
+            _cg_headers = {"x-cg-pro-api-key": COINGECKO_API_KEY}
+        else:
+            url = f"{APIS['coingecko']}/simple/price"
+            _cg_headers = None
+        coingecko_limiter.acquire()
+        _cg_data = _get(url, params={
+            "ids": ",".join(_cg_missing),
+            "vs_currencies": "usd",
+            "include_24hr_change": "true",
+        }, headers=_cg_headers)
+        if _cg_data:
+            for cg_id in _cg_missing:
+                if cg_id in _cg_data and isinstance(_cg_data[cg_id], dict):
+                    data[cg_id] = _cg_data[cg_id]
 
     results = []
 
     if data:
-        mapping = {
-            "flare-networks": ("FLR",   "live"),
-            "ripple":         ("XRP",   "live"),
-            "tether":         ("USD0",  "live"),
-            "sparkdex-ai":    ("SPRK",  "live"),    # SparkDEX reward token price
-            "ripple-usd":     ("RLUSD", "live"),    # Ripple USD regulated stablecoin
-            "hyperliquid":    ("HYPE",  "live"),    # Hyperliquid native token (#70)
-        }
-        for cg_id, (symbol, src) in mapping.items():
+        for cg_id, _cmc_sym, internal_sym in _TARGETS:
             if cg_id in data and isinstance(data[cg_id], dict):
                 results.append(TokenPrice(
-                    symbol=symbol,
+                    symbol=internal_sym,
                     price_usd=data[cg_id].get("usd", 0),
                     change_24h=data[cg_id].get("usd_24h_change") or 0,
-                    data_source=src,
+                    data_source="live",
                 ))
         # FXRP tracks XRP price (1:1 peg minus small fee)
         xrp = next((p for p in results if p.symbol == "XRP"), None)
