@@ -97,12 +97,16 @@ def render_hero_number(
         if delta not in (None, "") else ""
     )
     _sec_html = ""
-    if secondary_label and secondary_value:
+    # Guard secondary values independently so one missing field doesn't drop
+    # the whole secondary row. None/empty fields render as em-dash "—".
+    if secondary_label or secondary_value:
+        _sec_label_str = str(secondary_label) if secondary_label not in (None, "") else "—"
+        _sec_value_str = str(secondary_value) if secondary_value not in (None, "") else "—"
         _sec_html = (
             f"<div style='margin-top:6px; color:#64748b; font-size:0.82rem;'>"
-            f"{_html.escape(str(secondary_label))}"
+            f"{_html.escape(_sec_label_str)}"
             f"<span style='color:#e2e8f0; margin-left:6px; font-weight:600;'>"
-            f"{_html.escape(str(secondary_value))}</span></div>"
+            f"{_html.escape(_sec_value_str)}</span></div>"
         )
     st.markdown(
         f"<div style='padding:8px 0 16px 0;'>"
@@ -1006,12 +1010,14 @@ def render_sidebar() -> dict:
         if BRAND_LOGO_PATH and Path(BRAND_LOGO_PATH).exists():
             st.image(BRAND_LOGO_PATH, width=140)
         else:
-            # If BRAND_NAME contains a middle-dot or em-dash separator, split it
-            # into a 2-line layout (before / after) so the full name always fits
+            # If BRAND_NAME contains any common separator, split it into a
+            # 2-line layout (before / after) so the full name always fits
             # without ellipsis truncation on the narrow sidebar.
-            if BRAND_NAME and (" · " in BRAND_NAME or " — " in BRAND_NAME):
-                _sep = " · " if " · " in BRAND_NAME else " — "
-                _head_raw, _sub_raw = BRAND_NAME.split(_sep, 1)
+            # Supported: middle-dot, em-dash, en-dash, pipe.
+            _seps = (" · ", " — ", " – ", " | ")
+            _found_sep = next((s for s in _seps if BRAND_NAME and s in BRAND_NAME), None)
+            if _found_sep:
+                _head_raw, _sub_raw = BRAND_NAME.split(_found_sep, 1)
                 _header_text = _html.escape(_head_raw.strip())
                 _subtitle    = _html.escape(_sub_raw.strip())
             else:
