@@ -752,6 +752,18 @@ with st.expander("🎨 Display Preferences", expanded=False):
         if _compact_new != st.session_state.get("compact_sidebar", _compact_default):
             st.session_state["compact_sidebar"] = _compact_new
             st.rerun()
+
+        # ─── Focus Mode (ToS #4) — hide educational scaffolds ─────────────
+        _focus_new = st.toggle(
+            "Focus mode (hide helper content)",
+            value=st.session_state.get("focus_mode", False),
+            key="focus_mode_toggle",
+            help="Hide 'What does this mean for me?' panels and tighten spacing. Maximum data density for advisors.",
+        )
+        if _focus_new != st.session_state.get("focus_mode", False):
+            st.session_state["focus_mode"] = _focus_new
+            st.rerun()
+
         st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
 
     st.markdown(

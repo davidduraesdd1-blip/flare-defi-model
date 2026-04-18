@@ -329,6 +329,20 @@ def _inject_css() -> None:
         # ── DARK MODE: complete standalone CSS ────────────────────────────────
         st.markdown(_build_css("dark"), unsafe_allow_html=True)
 
+    # ── Focus Mode (ToS #4) — hide educational scaffolds, maximize data ───
+    if st.session_state.get("focus_mode", False):
+        st.markdown("""
+<style>
+    /* Hide 'what does this mean for me' Beginner helpers when in Focus Mode */
+    .beginner-help, .what-this-means-box { display: none !important; }
+    /* Hide Beginner welcome banner in Focus Mode */
+    [data-testid="stAlert"].beginner-banner { display: none !important; }
+    /* Tighten block-container padding for more data density */
+    .block-container { padding-top: 0.8rem !important; padding-bottom: 1.5rem !important; }
+    /* Shrink section header margins */
+    .section-header { margin-top: 4px !important; margin-bottom: 10px !important; }
+</style>""", unsafe_allow_html=True)
+
     # ── Compact Sidebar overlay (ToS #1) ───────────────────────────────────
     # Per Q2 tiered default: Beginner = off (labels on), Intermediate = off,
     # Advanced = default on. Explicit user preference overrides.
