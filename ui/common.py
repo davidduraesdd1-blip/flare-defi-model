@@ -159,16 +159,30 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
         initial_sidebar_state="collapsed" if _embed else "expanded",
     )
     _inject_css()
-    # Rename Streamlit's auto-generated "app" root nav item to "Dashboard"
-    # (uses CSS ::before because Streamlit derives the label from app.py filename)
+    # Rename Streamlit's auto-generated "app" root nav item to "Dashboard".
+    # Streamlit derives the label from app.py filename, so we hide all text
+    # inside the first nav anchor (font-size:0 works regardless of whether
+    # Streamlit wraps the label in a <span>, <div>, or raw text node) and
+    # render "Dashboard" via ::before. Older selector (a span { visibility:
+    # hidden }) only worked on one DOM variant and broke in newer Streamlit.
     st.markdown("""
 <style>
-section[data-testid="stSidebarNav"] ul li:first-child a span { visibility: hidden; }
-section[data-testid="stSidebarNav"] ul li:first-child a::before {
-    content: "Dashboard"; visibility: visible; position: absolute;
-    color: inherit; font-weight: inherit; font-size: inherit;
+section[data-testid="stSidebarNav"] ul li:first-child a {
+    font-size: 0 !important;
+    position: relative;
 }
-section[data-testid="stSidebarNav"] ul li:first-child a { position: relative; }
+section[data-testid="stSidebarNav"] ul li:first-child a * {
+    font-size: 0 !important;
+    visibility: hidden !important;
+}
+section[data-testid="stSidebarNav"] ul li:first-child a::before {
+    content: "Dashboard";
+    font-size: 0.9rem !important;
+    visibility: visible !important;
+    color: inherit;
+    font-weight: inherit;
+    display: inline-block;
+}
 </style>""", unsafe_allow_html=True)
     if _embed:
         # Embed mode: hide sidebar, navigation arrows, top toolbar, and Streamlit chrome.
