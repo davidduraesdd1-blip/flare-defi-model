@@ -61,6 +61,12 @@ def fetch_hyperliquid_perps() -> list:
 
             if i < len(asset_ctx):
                 ctx = asset_ctx[i]
+                if not isinstance(ctx, dict):
+                    # Hyperliquid API has been observed to return None or non-dict
+                    # entries in rare cases; ctx.get() would raise AttributeError
+                    # which is NOT caught by the TypeError/ValueError except below.
+                    logger.debug("Hyperliquid: ctx[%d] not a dict for %s, skipping", i, name)
+                    continue
                 try:
                     funding = float(ctx.get("funding", 0) or 0)
                     mark    = float(ctx.get("markPx", 0) or 0)
