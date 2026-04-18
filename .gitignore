@@ -1,3 +1,6 @@
+# ── Git internals (filter-branch / rewrite artifacts) ─────────────────────────
+.git-rewrite/
+
 # ── Secrets & credentials (NEVER commit these) ────────────────────────────────
 .env
 *.env
