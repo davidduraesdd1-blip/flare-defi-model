@@ -727,8 +727,76 @@ with _ctrl_tab_cache:
             f"<div style='display:flex; justify-content:space-between; "
             f"border-bottom:1px solid rgba(148,163,184,0.1); padding:6px 0; font-size:0.85rem;'>"
             f"<span style='color:#e2e8f0;'>{_cn}</span>"
-            f"<span style='color:#3b82f6;'>{_ttl}</span>"
+            f"<span style='color:#00d4aa;'>{_ttl}</span>"
             f"<span style='color:#475569;'>{_desc}</span>"
             f"</div>",
             unsafe_allow_html=True,
         )
+
+
+# ─── Share Feedback (ToS #9) ──────────────────────────────────────────────────
+
+st.markdown("<div class='divider' style='margin-top:32px;'></div>", unsafe_allow_html=True)
+
+with st.expander("💬 Share Feedback", expanded=False):
+    st.markdown(
+        "<div style='color:#94a3b8; font-size:0.88rem; margin-bottom:4px;'>"
+        "Your feedback helps us improve the platform.</div>"
+        "<div style='color:#64748b; font-size:0.82rem; margin-bottom:16px;'>"
+        "Need assistance with an issue? "
+        "<a href='https://github.com/davidduraesdd1-blip/flare-defi-model/issues' "
+        "target='_blank' style='color:#00d4aa; text-decoration:none;'>"
+        "Contact support →</a></div>",
+        unsafe_allow_html=True,
+    )
+
+    _fb_text = st.text_area(
+        "Tell us about your experience",
+        key="feedback_text",
+        placeholder="What's working well? What could be better?",
+        height=120,
+        label_visibility="collapsed",
+    )
+
+    st.markdown(
+        "<div style='color:#94a3b8; font-size:0.85rem; margin:12px 0 8px;'>"
+        "Overall, how satisfied are you with your experience?</div>",
+        unsafe_allow_html=True,
+    )
+    _fb_c1, _fb_c2, _fb_c3, _fb_spacer = st.columns([1, 1, 1, 5])
+    with _fb_c1:
+        _fb_happy = st.button("😊", key="fb_happy", help="Satisfied")
+    with _fb_c2:
+        _fb_neutral = st.button("😐", key="fb_neutral", help="Neutral")
+    with _fb_c3:
+        _fb_sad = st.button("☹", key="fb_sad", help="Dissatisfied")
+
+    _fb_sentiment = None
+    if _fb_happy:   _fb_sentiment = "positive"
+    if _fb_neutral: _fb_sentiment = "neutral"
+    if _fb_sad:     _fb_sentiment = "negative"
+
+    if st.button("Send feedback", key="fb_send", use_container_width=True,
+                 disabled=not _fb_text.strip()):
+        try:
+            from pathlib import Path as _Path
+            import json as _json
+            _fb_path = _Path("data") / "user_feedback.jsonl"
+            _fb_path.parent.mkdir(parents=True, exist_ok=True)
+            _fb_entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "app": "defi",
+                "user_level": st.session_state.get("user_level", "beginner"),
+                "sentiment": st.session_state.get("fb_last_sentiment") or _fb_sentiment,
+                "text": _fb_text.strip(),
+            }
+            with _fb_path.open("a", encoding="utf-8") as _fp:
+                _fp.write(_json.dumps(_fb_entry) + "\n")
+            st.success("Thanks — feedback received.")
+            st.session_state["feedback_text"] = ""
+            st.session_state.pop("fb_last_sentiment", None)
+        except Exception as _fb_err:
+            st.error(f"Couldn't save feedback right now. Try again in a moment. ({_fb_err})")
+
+    if _fb_sentiment:
+        st.session_state["fb_last_sentiment"] = _fb_sentiment
