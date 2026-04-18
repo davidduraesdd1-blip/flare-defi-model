@@ -155,27 +155,42 @@ def fetch_stablecoin_supply_delta() -> dict[str, Any] | None:
         except ImportError:
             return None
 
-        total_now = 0.0
-        total_7d  = 0.0
-        fetched   = 0
-        for coin_id in _STABLE_COINS:
+        # PERF: parallelize the 3 per-coin fetches. Sequential worst-case was
+        # 3 × 10s = 30s if all requests hit their full timeout (e.g. CoinGecko
+        # rate-limit on Streamlit Cloud shared IP). Parallel worst-case is
+        # the single longest fetch, ~10s. Normal-case goes from ~300-600ms
+        # sequential to ~100-300ms parallel.
+        def _fetch_one(coin_id: str):
             try:
                 url = (f"https://api.coingecko.com/api/v3/coins/{coin_id}/"
                        f"market_chart?vs_currency=usd&days=7&interval=daily")
                 r = requests.get(url, timeout=10,
                                  headers={"Accept": "application/json"})
                 if r.status_code != 200:
-                    continue
+                    return None
                 data = r.json()
                 caps = data.get("market_caps") or []
                 if len(caps) < 2:
-                    continue
-                total_now += float(caps[-1][1])
-                total_7d  += float(caps[0][1])
-                fetched   += 1
+                    return None
+                return (float(caps[-1][1]), float(caps[0][1]))
             except Exception as e:
                 logger.debug("[StableSupply] %s failed: %s", coin_id, e)
-                continue
+                return None
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        total_now = 0.0
+        total_7d  = 0.0
+        fetched   = 0
+        with ThreadPoolExecutor(max_workers=3) as _pool:
+            _futs = {_pool.submit(_fetch_one, _cid): _cid for _cid in _STABLE_COINS}
+            for _fut in as_completed(_futs, timeout=12):
+                _res = _fut.result()
+                if _res is None:
+                    continue
+                _now, _prev = _res
+                total_now += _now
+                total_7d  += _prev
+                fetched   += 1
 
         if fetched == 0 or total_7d <= 0:
             return None
