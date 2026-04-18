@@ -207,6 +207,34 @@ prices     = load_live_prices() or flare_scan.get("prices") or []
 st.title("💼 Portfolio")
 st.caption("Track your DeFi positions, wallet balances, P&L, and exit strategies across all Flare protocols")
 
+# ── Hero Number (ToS #6) — total portfolio value front-and-center ────────────
+from ui.common import render_hero_number as _render_hero_number
+_hero_tv = sum(float(p.get("current_value") or 0) for p in positions)
+_hero_dep = sum(float(p.get("deposit_usd") or p.get("entry_value") or 0) for p in positions)
+_hero_pnl = _hero_tv - _hero_dep
+_hero_pnl_pct = (_hero_pnl / _hero_dep * 100) if _hero_dep > 0 else 0.0
+_hero_24h = 0.0
+if len(runs) >= 2:
+    try:
+        _vals = [
+            sum(float(p.get("current_value") or 0) for p in (r.get("positions") or []))
+            for r in runs[-2:]
+        ]
+        if len(_vals) == 2 and _vals[0] > 0:
+            _hero_24h = ((_vals[1] - _vals[0]) / _vals[0]) * 100
+    except Exception:
+        pass
+_hero_delta = f"{_hero_pnl_pct:+.1f}%" if _hero_dep > 0 else None
+_hero_sec_label = "24h" if len(runs) >= 2 else "Positions"
+_hero_sec_value = f"{_hero_24h:+.2f}%" if len(runs) >= 2 else f"{len(positions)}"
+_render_hero_number(
+    label="Total Portfolio Value",
+    value=f"${_hero_tv:,.0f}",
+    delta=_hero_delta,
+    secondary_label=_hero_sec_label,
+    secondary_value=_hero_sec_value,
+)
+
 # ──────────────────────────────────────────────────────────────────────────────
 # HERO CARD — total portfolio value, 24h change, allocation breakdown
 # ──────────────────────────────────────────────────────────────────────────────

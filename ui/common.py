@@ -68,6 +68,51 @@ def color_for_delta(delta: float) -> str:
     return "#64748b"
 
 
+# ─── Hero Number Pattern (ToS #6) ────────────────────────────────────────────
+# ToS pages anchor on ONE big number per page — the thing the user came for.
+# Call this right after page_setup() to establish the page's primary answer.
+
+def render_hero_number(
+    label: str,
+    value: str,
+    delta: str = None,
+    delta_color: str = None,
+    secondary_label: str = None,
+    secondary_value: str = None,
+) -> None:
+    """Render a ToS-style hero number block at the top of a page."""
+    _dc = delta_color or "#64748b"
+    if delta and delta_color is None:
+        _first = next((c for c in delta if c in "+-"), None)
+        if _first == "+":   _dc = color_up()
+        elif _first == "-": _dc = color_down()
+    _delta_html = (
+        f"<span style='color:{_dc}; font-size:1.0rem; font-weight:700; "
+        f"margin-left:14px; font-variant-numeric:tabular-nums;'>{_html.escape(str(delta))}</span>"
+        if delta else ""
+    )
+    _sec_html = ""
+    if secondary_label and secondary_value:
+        _sec_html = (
+            f"<div style='margin-top:6px; color:#64748b; font-size:0.82rem;'>"
+            f"{_html.escape(str(secondary_label))}"
+            f"<span style='color:#e2e8f0; margin-left:6px; font-weight:600;'>"
+            f"{_html.escape(str(secondary_value))}</span></div>"
+        )
+    st.markdown(
+        f"<div style='padding:8px 0 16px 0;'>"
+        f"<div style='color:#64748b; font-size:0.72rem; font-weight:700; "
+        f"letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px;'>"
+        f"{_html.escape(str(label))}</div>"
+        f"<div style='display:flex; align-items:baseline;'>"
+        f"<div style='font-size:clamp(2.0rem, 3.2vw, 2.75rem); font-weight:800; "
+        f"letter-spacing:-1px; line-height:1.0; color:#f1f5f9; "
+        f"font-variant-numeric:tabular-nums; font-family: \"JetBrains Mono\", monospace;'>"
+        f"{_html.escape(str(value))}</div>{_delta_html}</div>{_sec_html}</div>",
+        unsafe_allow_html=True,
+    )
+
+
 # ─── Security Audit Logger (#15) ────────────────────────────────────────────
 # Dedicated logger for security-relevant events; does NOT propagate to root.
 # Write to /tmp on Linux (Streamlit Cloud mounts /mount/src via NFS — file
