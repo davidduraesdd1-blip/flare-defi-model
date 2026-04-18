@@ -505,14 +505,29 @@ with _t_eco:
         trend   = feedback.get("trend", "building")
         trend_icon = {"improving": "📈", "stable": "➡️", "declining": "📉", "building": "🔧"}.get(trend, "➡️")
         health_color = "#10b981" if overall >= 70 else ("#f59e0b" if overall >= 45 else "#ef4444")
-    
+
+        scans     = feedback.get("total_scans", 0)
+        evaluated = feedback.get("evaluated_scans", 0)
+        # Below this threshold, the 50/100 default is statistically meaningless and
+        # looks alarming — show "Awaiting data" instead so users don't read a 50 as "mediocre".
+        _AI_HEALTH_MIN_EVALS = 5
+        learning = evaluated < _AI_HEALTH_MIN_EVALS
+
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.markdown(f"""
-            <div class="metric-card card-blue">
-                <div class="label">Overall Health</div>
-                <div class="big-number" style="color:{health_color};">{overall}<span style="font-size:1rem; color:#475569;">/100</span></div>
-            </div>""", unsafe_allow_html=True)
+            if learning:
+                st.markdown("""
+                <div class="metric-card card-blue">
+                    <div class="label">Overall Health</div>
+                    <div class="big-number" style="color:#94a3b8;">—</div>
+                    <div style="color:#475569; font-size:0.85rem; margin-top:4px;">Awaiting data</div>
+                </div>""", unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="metric-card card-blue">
+                    <div class="label">Overall Health</div>
+                    <div class="big-number" style="color:{health_color};">{overall}<span style="font-size:1rem; color:#475569;">/100</span></div>
+                </div>""", unsafe_allow_html=True)
         with c2:
             st.markdown(f"""
             <div class="metric-card card-blue">
@@ -521,14 +536,19 @@ with _t_eco:
                 <div style="color:#475569; font-size:0.85rem; margin-top:4px;">{trend.capitalize()}</div>
             </div>""", unsafe_allow_html=True)
         with c3:
-            scans     = feedback.get("total_scans", 0)
-            evaluated = feedback.get("evaluated_scans", 0)
             st.markdown(f"""
             <div class="metric-card card-blue">
                 <div class="label">Predictions</div>
                 <div class="big-number">{evaluated}</div>
                 <div style="color:#475569; font-size:0.85rem; margin-top:4px;">of {scans} evaluated</div>
             </div>""", unsafe_allow_html=True)
+
+        if learning:
+            st.caption(
+                f"ℹ️ Model health score needs at least {_AI_HEALTH_MIN_EVALS} evaluated predictions "
+                f"before it's meaningful. Currently {evaluated} of {scans} scans evaluated. "
+                "Each scheduled scan contributes one prediction; evaluations happen on the next cycle."
+            )
     
         st.divider()
         st.markdown("#### Per-Profile Accuracy")
