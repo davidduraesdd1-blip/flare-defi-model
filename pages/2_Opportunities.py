@@ -423,6 +423,27 @@ st.html(
     "— the agent cannot execute on Ethereum, Base, or Solana protocols.</div>"
 )
 
+# ─── Scope Selector (ToS #8 pattern) ─────────────────────────────────────────
+_scope_c1, _scope_c2 = st.columns([1, 5])
+with _scope_c1:
+    st.markdown(
+        "<div style='color:#94a3b8; font-size:0.82rem; padding-top:8px;'>"
+        "<b>Scan In:</b></div>",
+        unsafe_allow_html=True,
+    )
+with _scope_c2:
+    st.session_state["opp_scope"] = st.selectbox(
+        "Scope",
+        options=["All Chains", "Flare Only", "FAssets Only", "Ethereum Only", "L2s (Base/Arb/OP)", "Solana Only"],
+        index=["All Chains", "Flare Only", "FAssets Only", "Ethereum Only", "L2s (Base/Arb/OP)", "Solana Only"].index(
+            st.session_state.get("opp_scope", "All Chains")
+        ),
+        label_visibility="collapsed",
+        key="opp_scope_select",
+    )
+st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
+
 # ─── Sub-tabs: Yield Opportunities | Protocol Intelligence ─────────────────────
 _tab_yield, _tab_intel = st.tabs([
     "🌾 Yield Opportunities",
@@ -451,6 +472,18 @@ with _tab_yield:
             return []
 
     _top_global = _cached_top_global_yields_compact()
+    # Apply scope filter from top-of-page selector
+    _opp_scope = st.session_state.get("opp_scope", "All Chains")
+    _scope_map = {
+        "Flare Only":       lambda c: c.lower() == "flare",
+        "Ethereum Only":    lambda c: c.lower() == "ethereum",
+        "L2s (Base/Arb/OP)":lambda c: c.lower() in ("base", "arbitrum", "optimism"),
+        "Solana Only":      lambda c: c.lower() == "solana",
+        "FAssets Only":     lambda c: "fxrp" in c.lower() or "fasset" in c.lower(),
+    }
+    if _opp_scope in _scope_map:
+        _filter = _scope_map[_opp_scope]
+        _top_global = [p for p in _top_global if _filter(str(p.get("chain") or ""))]
     if _top_global:
         _gyl_rows = []
         for _gp in _top_global:
