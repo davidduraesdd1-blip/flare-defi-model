@@ -256,7 +256,7 @@ try:
         if _d_score >= 0.3:   _d_col, _d_bg = "#22c55e", "rgba(34,197,94,0.07)"
         elif _d_score >= 0.1: _d_col, _d_bg = "#00d4aa", "rgba(0,212,170,0.07)"
         elif _d_score >= -0.1: _d_col, _d_bg = "#f59e0b", "rgba(245,158,11,0.07)"
-        elif _d_score >= -0.3: _d_col, _d_bg = "#f97316", "rgba(249,115,22,0.07)"
+        elif _d_score >= -0.3: _d_col, _d_bg = "#f59e0b", "rgba(249,115,22,0.07)"
         else:                  _d_col, _d_bg = "#ef4444", "rgba(239,68,68,0.07)"
         _d_txt   = _d_csig.get("beginner_summary", _d_signal)
         _d_shape = "▲" if _d_score >= 0.10 else ("▼" if _d_score <= -0.10 else "■")
@@ -396,8 +396,8 @@ try:
         _best_pool = str(_best_opp.get("asset_or_pool", "")).strip()
         _best_risk,_ = risk_score_to_grade(_best_opp.get("risk_score", 5))
         _grade_colors= {"A": "#22c55e", "B": "#00d4aa", "C": "#f59e0b",
-                        "D": "#f97316", "F": "#ef4444"}
-        _best_gc   = _grade_colors.get(_best_risk[0], "#6b7280")
+                        "D": "#f59e0b", "F": "#ef4444"}
+        _best_gc   = _grade_colors.get(_best_risk[0], "#64748b")
         _best_plain= str(_best_opp.get("plain_english") or _best_opp.get("action") or "—")
         _best_pool_lbl = f" · {_best_pool}" if _best_pool else ""
         _best_earning = _best_apy / 100 * portfolio_size
@@ -415,15 +415,15 @@ padding:18px 22px;margin:0 0 18px;display:flex;align-items:center;gap:24px;flex-
 <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
   <div style="text-align:center">
     <div style="font-size:28px;font-weight:900;color:#00d4aa">{_best_apy:.1f}%</div>
-    <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px">APY</div>
+    <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px">APY</div>
   </div>
   <div style="text-align:center">
     <div style="font-size:20px;font-weight:800;color:{_best_gc}">{_best_risk}</div>
-    <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px">Grade</div>
+    <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px">Grade</div>
   </div>
   <div style="text-align:center">
     <div style="font-size:16px;font-weight:700;color:#22c55e">${_best_monthly:,.0f}/mo</div>
-    <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px">Est. on ${portfolio_size:,.0f}</div>
+    <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px">Est. on ${portfolio_size:,.0f}</div>
   </div>
 </div>
 </div>""",
@@ -580,7 +580,7 @@ except Exception:
 _fxrp_stats = [
     ("FXRP Minted",        _fxrp_minted_str,     "Total FXRP in circulation (live from scan)",      "🪙", "#00d4aa"),
     ("In Active DeFi",     "~89%",                "Share of FXRP deployed in DeFi protocols",        "⚡", "#f59e0b"),
-    ("FAssets Incentives", "2.2B FLR",            "Total rFLR distributing over 12 months",          "💎", "#60a5fa"),
+    ("FAssets Incentives", "2.2B FLR",            "Total rFLR distributing over 12 months",          "💎", "#00d4aa"),
     ("Active Protocols",   _active_protocols_str, "Flare DeFi protocols tracked by this model",      "🔗", "#a78bfa"),
 ]
 for col, (label, value, tip, icon, accent) in zip(_fxrp_cols, _fxrp_stats):

@@ -1763,11 +1763,11 @@ def render_top_bottom_widget(result: dict, user_level: str = "beginner") -> None
     if score >= 80:
         color, label, emoji = "#22c55e", "Extreme Bottom — Strong Buy Zone", "▲"
     elif score >= 65:
-        color, label, emoji = "#86efac", "Bottom Zone — Accumulate", "▲"
+        color, label, emoji = "#22c55e", "Bottom Zone — Accumulate", "▲"
     elif score >= 35:
         color, label, emoji = "#f59e0b", "Neutral — Hold / Wait", "■"
     elif score >= 20:
-        color, label, emoji = "#f97316", "Top Zone — Consider Reducing", "▼"
+        color, label, emoji = "#f59e0b", "Top Zone — Consider Reducing", "▼"
     else:
         color, label, emoji = "#ef4444", "Extreme Top — Strong Sell Zone", "▼"
 

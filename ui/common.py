@@ -323,7 +323,7 @@ _CSS_LIGHT = """
     }
     .metric-card:hover { box-shadow: 0 8px 28px rgba(0,0,0,0.10); transform: translateY(-2px); }
     .card-green  { border-left-color: #22c55e; }
-    .card-blue   { border-left-color: #3b82f6; }
+    .card-blue   { border-left-color: #00d4aa; }
     .card-orange { border-left-color: #f59e0b; }
     .card-red    { border-left-color: #ef4444; }
     .card-violet { border-left-color: #8b5cf6; }
@@ -494,7 +494,7 @@ _CSS_LIGHT = """
     /* ── Flip dark inline colors → accessible dark equivalents ───────── */
     :is(div,span,p,a)[style*="color:#f1f5f9"]  { color: #0f172a !important; }
     :is(div,span,p,a)[style*="color:#e2e8f0"]  { color: #1e293b !important; }
-    :is(div,span,p,a)[style*="color:#c4cbdb"]  { color: #334155 !important; }
+    :is(div,span,p,a)[style*="color:#cbd5e1"]  { color: #334155 !important; }
     :is(div,span,p,a)[style*="color:#cbd5e1"]  { color: #334155 !important; }
     :is(div,span,p,a)[style*="color:#94a3b8"]  { color: #475569 !important; }
     :is(div,span,p,a)[style*="color:#64748b"]  { color: #475569 !important; }
@@ -507,7 +507,7 @@ _CSS_LIGHT = """
     :is(div,span,p,a)[style*="color:#a78bfa"]  { color: #5b21b6 !important; }
     :is(div,span,p,a)[style*="color:#22c55e"]  { color: #166534 !important; }
     :is(div,span,p,a)[style*="color:#10b981"]  { color: #065f46 !important; }
-    :is(div,span,p,a)[style*="color:#3b82f6"]  { color: #1d4ed8 !important; }
+    :is(div,span,p,a)[style*="color:#00d4aa"]  { color: #1d4ed8 !important; }
     :is(div,span,p,a)[style*="color:#8b5cf6"]  { color: #5b21b6 !important; }
 
     /* ── Flip dark card backgrounds → white ──────────────────────────── */
@@ -626,7 +626,7 @@ _CSS_DARK = """
     }
     .metric-card:hover { border-color: rgba(255,255,255,0.14); box-shadow: 0 10px 36px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08); transform: translateY(-2px); }
     .card-green  { border-left-color: #22c55e; }
-    .card-blue   { border-left-color: #3b82f6; }
+    .card-blue   { border-left-color: #00d4aa; }
     .card-orange { border-left-color: #f59e0b; }
     .card-red    { border-left-color: #ef4444; }
     .card-violet { border-left-color: #8b5cf6; }
@@ -756,7 +756,7 @@ _CSS_DARK = """
 
     /* ── Misc ─────────────────────────────────────────────────────────── */
     .mono-number { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
-    .rank-1 { color: #fbbf24 !important; }
+    .rank-1 { color: #f59e0b !important; }
     .rank-2 { color: #94a3b8 !important; }
     .rank-3 { color: #b45309 !important; }
 
@@ -881,7 +881,7 @@ def render_sidebar() -> dict:
             _sub_color = "#64748b" if not _is_light else "#475569"
             st.markdown(
                 f"<div style='font-size:0.95rem; font-weight:800; line-height:1.2; "
-                f"background: linear-gradient(90deg, #00d4aa, #60a5fa); "
+                f"background: linear-gradient(90deg, #00d4aa, #00d4aa); "
                 f"-webkit-background-clip: text; -webkit-text-fill-color: transparent; "
                 f"background-clip: text; letter-spacing:-0.2px; margin:2px 0 0; "
                 f"white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>"
@@ -1495,13 +1495,13 @@ def load_latest_cached(ttl: float = 60.0) -> dict:
 
 # ─── Utility Helpers ──────────────────────────────────────────────────────────
 
-_URGENCY_COLOR = {"act_now": "#ef4444", "act_soon": "#f59e0b", "monitor": "#3b82f6"}
+_URGENCY_COLOR = {"act_now": "#ef4444", "act_soon": "#f59e0b", "monitor": "#00d4aa"}
 _URGENCY_LABEL = {"act_now": "ACT NOW", "act_soon": "ACT SOON", "monitor": "MONITOR"}
 
 
 def render_urgency_badge(urgency: str) -> str:
     """Return an HTML badge string for arbitrage urgency levels."""
-    color = _URGENCY_COLOR.get(urgency, "#3b82f6")
+    color = _URGENCY_COLOR.get(urgency, "#00d4aa")
     label = _URGENCY_LABEL.get(urgency, _html.escape((urgency or "").upper()))
     return (
         f"<span style=\"color:{color}; font-weight:700; font-size:0.85rem; "
@@ -1788,7 +1788,7 @@ def render_yield_hero_cards(positions: list, opps: list, portfolio_size: float) 
     c1, c2, c3 = st.columns(3)
     for col, label, value, sub, cls, accent, uid in [
         (c1, "Est. This Week",  f"${weekly_yield:,.2f}",  f"{weekly_rate*100:.3f}% weekly", "card-green",  "#22c55e", "yield-hero-week"),
-        (c2, "Est. This Month", f"${monthly_yield:,.2f}", f"on ${total_value:,.0f}",         "card-blue",   "#3b82f6", "yield-hero-month"),
+        (c2, "Est. This Month", f"${monthly_yield:,.2f}", f"on ${total_value:,.0f}",         "card-blue",   "#00d4aa", "yield-hero-month"),
         (c3, "Est. This Year",  f"${annual_yield:,.2f}",  f"{avg_apy:.1f}% net APY (top-3)","card-orange", "#f59e0b", "yield-hero-year"),
     ]:
         with col:
@@ -1887,7 +1887,7 @@ def render_opportunity_card(
     _audit_year  = _audit_data.get("year", "")
     _audit_note  = _audit_data.get("note", "")
     _audit_html  = (
-        f"<span style='font-size:0.85rem; color:#34d399; font-weight:600; "
+        f"<span style='font-size:0.85rem; color:#22c55e; font-weight:600; "
         f"background:rgba(52,211,153,0.08); padding:1px 6px; border-radius:4px; "
         f"border:1px solid rgba(52,211,153,0.25);' "
         f"title='{_html.escape(_audit_note)}'>"
@@ -2046,9 +2046,9 @@ def render_opportunity_card(
         _ry_ratio = fee_apy / _ry_total if _ry_total > 0 else 0.0
         _ry_pct   = round(_ry_ratio * 100)
         if _ry_ratio >= 0.7:
-            _ry_label, _ry_color = "Sustainable", "#34D399"
+            _ry_label, _ry_color = "Sustainable", "#22c55e"
         elif _ry_ratio >= 0.35:
-            _ry_label, _ry_color = "Partial", "#FBBF24"
+            _ry_label, _ry_color = "Partial", "#f59e0b"
         else:
             _ry_label, _ry_color = "Incentive-Driven", "#EF4444"
         _ry_html = (
@@ -2224,8 +2224,8 @@ def render_fear_greed_trend(user_level: str = "beginner") -> None:
 
     def _fg(v: float) -> tuple[str, str]:
         if v <= 25:  return "Extreme Fear",  "#ef4444"
-        if v <= 45:  return "Fear",           "#f97316"
-        if v <= 55:  return "Neutral",        "#6b7280"
+        if v <= 45:  return "Fear",           "#f59e0b"
+        if v <= 55:  return "Neutral",        "#64748b"
         if v <= 75:  return "Greed",          "#f59e0b"
         return "Extreme Greed", "#22c55e"
 
@@ -2243,7 +2243,7 @@ def render_fear_greed_trend(user_level: str = "beginner") -> None:
             st.markdown(
                 f"<div style='text-align:center;padding:12px;background:rgba(17,24,39,0.7);"
                 f"border-radius:8px;border:1px solid rgba(255,255,255,0.07);'>"
-                f"<div style='font-size:0.62rem;color:#6b7280;text-transform:uppercase;"
+                f"<div style='font-size:0.62rem;color:#64748b;text-transform:uppercase;"
                 f"letter-spacing:0.8px;margin-bottom:4px'>{_period}</div>"
                 f"<div style='font-size:1.9rem;font-weight:800;color:{_col_hex};"
                 f"font-family:JetBrains Mono,monospace'>{_val:.0f}</div>"
@@ -2279,7 +2279,7 @@ def render_welcome_banner() -> None:
     with _wc1:
         st.markdown(
             "<div style='background:rgba(30,58,138,0.22);border:1px solid rgba(59,130,246,0.3);"
-            "border-left:3px solid #60a5fa;border-radius:6px;padding:5px 12px;margin-bottom:8px;"
+            "border-left:3px solid #00d4aa;border-radius:6px;padding:5px 12px;margin-bottom:8px;"
             "line-height:1.35; font-size:12px;'>"
             "<b style='color:#93c5fd;'>👋 Welcome to Flare DeFi Analytics.</b> "
             "<span style='color:#94a3b8;'>Start at "
@@ -2353,7 +2353,7 @@ def render_gauge(
     st.markdown(
         f"<div style='margin-bottom:8px;'>"
         f"<div style='display:flex;justify-content:space-between;"
-        f"font-size:0.85rem;color:#6b7280;margin-bottom:4px;'>"
+        f"font-size:0.85rem;color:#64748b;margin-bottom:4px;'>"
         f"<span>{label}</span>"
         f"<span style='color:{_color};font-weight:700;'>{_display}</span>"
         f"</div>"

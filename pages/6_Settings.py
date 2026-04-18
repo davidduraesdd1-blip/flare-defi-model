@@ -313,7 +313,7 @@ with _ctrl_tab_export:
     <style>
       body  {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                padding: 40px; color: #1e293b; max-width: 1000px; margin: auto; }}
-      h1    {{ color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; font-size: 1.6rem; }}
+      h1    {{ color: #0f172a; border-bottom: 2px solid #00d4aa; padding-bottom: 10px; font-size: 1.6rem; }}
       h2    {{ color: #0f172a; margin-top: 32px; font-size: 1.1rem; }}
       table {{ border-collapse: collapse; width: 100%; margin-top: 12px; }}
       th    {{ background: #1e293b; color: #f8fafc; padding: 10px 12px; text-align: left; font-size:0.85rem; }}

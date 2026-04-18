@@ -546,7 +546,7 @@ def generate_ria_advisor_pdf(
             _grade, _ = (("A", "#22c55e") if _risk_num < 2 else
                          ("B", "#10b981") if _risk_num < 3.5 else
                          ("C", "#f59e0b") if _risk_num < 5.0 else
-                         ("D", "#f97316") if _risk_num < 7.0 else
+                         ("D", "#f59e0b") if _risk_num < 7.0 else
                          ("F", "#ef4444"))
             row = [
                 str(o.get("protocol") or "?")[:18],

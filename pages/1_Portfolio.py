@@ -275,8 +275,8 @@ if _hero["total_value"] > 0 or positions:
             _fig_pie = go.Figure(go.Pie(
                 labels=_alloc_labels, values=_alloc_vals,
                 hole=0.55,
-                marker_colors=["#00d4aa", "#3b82f6", "#f59e0b", "#8b5cf6", "#ef4444",
-                                "#22c55e", "#f97316", "#06b6d4"],
+                marker_colors=["#00d4aa", "#00d4aa", "#f59e0b", "#8b5cf6", "#ef4444",
+                                "#22c55e", "#f59e0b", "#00d4aa"],
                 textfont_size=11,
             ))
             _fig_pie.update_layout(
@@ -1415,7 +1415,7 @@ with _tab_pos:
             fig_nw.add_trace(go.Scatter(
                 x=dates, y=lp_curve,
                 mode="lines", name=f"LP @ {avg_apy:.0f}% APY (current)",
-                line=dict(color="#3b82f6", width=2, dash="dash"),
+                line=dict(color="#00d4aa", width=2, dash="dash"),
                 opacity=0.5,
             ))
             fig_nw.add_trace(go.Scatter(
@@ -1518,8 +1518,8 @@ with _tab_pos:
         fig.add_trace(go.Scatter(
             x=df["date"], y=df["apy"],
             mode="lines+markers",
-            line=dict(color="#3b82f6", width=2),
-            marker=dict(size=5, color="#3b82f6"),
+            line=dict(color="#00d4aa", width=2),
+            marker=dict(size=5, color="#00d4aa"),
             fill="tozeroy",
             fillcolor="rgba(59,130,246,0.06)",
         ))
@@ -2543,7 +2543,7 @@ with _tab_fassets:
 
         # ── Per-Asset Cards ────────────────────────────────────────────────────
         render_section_header("FAsset Details", "Mint · redeem · collateral per bridged asset")
-        _FA_COLOR = {"FXRP": "#3b82f6", "FBTC": "#f59e0b", "FDOGE": "#22c55e"}
+        _FA_COLOR = {"FXRP": "#00d4aa", "FBTC": "#f59e0b", "FDOGE": "#22c55e"}
         _FA_ICON  = {"FXRP": "XRP", "FBTC": "BTC", "FDOGE": "DOGE"}
         for _fa_sym, _fa_info in _fa_assets.items():
             if not isinstance(_fa_info, dict):

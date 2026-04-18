@@ -204,15 +204,15 @@ with _t_sent:
     
             _conf_pct   = round(_conf * 100)
             _intent_col = {
-                "SWAP":             "#3b82f6",
+                "SWAP":             "#00d4aa",
                 "PROVIDE_LIQUIDITY":"#22c55e",
                 "STAKE":            "#8b5cf6",
                 "BORROW":           "#f59e0b",
-                "LEND":             "#14b8a6",
-                "CLAIM_REWARDS":    "#84cc16",
-                "BRIDGE":           "#ec4899",
+                "LEND":             "#00d4aa",
+                "CLAIM_REWARDS":    "#22c55e",
+                "BRIDGE":           "#ef4444",
                 "PORTFOLIO_CHECK":  "#64748b",
-                "YIELD_HUNT":       "#f97316",
+                "YIELD_HUNT":       "#f59e0b",
                 "RISK_ASSESSMENT":  "#ef4444",
                 "OTHER":            "#475569",
             }.get(_primary, "#475569")
@@ -226,7 +226,7 @@ with _t_sent:
                 f"{_primary}</span> ({_conf_pct}% confidence){_sec_str}"
                 f"<span style='float:right;font-size:0.85rem;color:#334155'>via {_src_label}</span>"
                 f"</div>"
-                f"<div style='color:#c4cbdb;font-size:0.87rem'>{_html.escape(_action)}</div>"
+                f"<div style='color:#cbd5e1;font-size:0.87rem'>{_html.escape(_action)}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -383,7 +383,7 @@ with _t_eco:
                 f"<span class='badge-new'>AI Summary</span>"
                 f"<span style='font-size:0.85rem; color:#334155; margin-left:auto;'>Claude AI · Not financial advice</span>"
                 f"</div>"
-                f"<div style='color:#c4cbdb; font-size:0.90rem; line-height:1.65;'>{_html.escape(ai_text)}</div>"
+                f"<div style='color:#cbd5e1; font-size:0.90rem; line-height:1.65;'>{_html.escape(ai_text)}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -448,7 +448,7 @@ with _t_eco:
                     continue
                 title    = _html.escape(str(item.get("title", "Untitled")))
                 link     = item.get("link", "")
-                title_md = f"<a href='{_html.escape(link)}' target='_blank' style='color:#c4cbdb; font-weight:600; text-decoration:none;'>{title} ↗</a>" if link else f"<span style='color:#94a3b8; font-weight:600;'>{title}</span>"
+                title_md = f"<a href='{_html.escape(link)}' target='_blank' style='color:#cbd5e1; font-weight:600; text-decoration:none;'>{title} ↗</a>" if link else f"<span style='color:#94a3b8; font-weight:600;'>{title}</span>"
                 summary  = _html.escape(str(item.get("summary", "")))
                 src      = _html.escape(str(item.get("source", "")))
                 pub      = _html.escape(str(item.get("published", "")))
@@ -663,7 +663,7 @@ with _t_macro:
                 _dfr = _dft.pct_change().dropna()
                 _fig = go.Figure()
                 _clrs = {"VIX": "#ef4444", "Gold": "#f59e0b", "SPX": "#10b981",
-                         "DXY": "#6366f1", "Oil": "#f97316"}
+                         "DXY": "#8b5cf6", "Oil": "#f59e0b"}
                 for _fac in [c for c in _dfr.columns if c != "BTC"]:
                     if "BTC" in _dfr.columns:
                         _rc = _dfr["BTC"].rolling(_corr_w).corr(_dfr[_fac]).dropna()
@@ -710,7 +710,7 @@ with _t_macro:
     
         # RSI color + label
         if _rsi_val is None:
-            _rsi_color, _rsi_label = "#6b7280", "—"
+            _rsi_color, _rsi_label = "#64748b", "—"
         elif _rsi_val < 30:
             _rsi_color, _rsi_label = "#22c55e", "Oversold — buy zone"
         elif _rsi_val > 70:
@@ -722,13 +722,13 @@ with _t_macro:
         _ma_meta = {
             "GOLDEN_CROSS": ("#22c55e", "▲ Golden Cross", "50d crossed above 200d · bullish trend"),
             "DEATH_CROSS":  ("#ef4444", "▼ Death Cross",  "50d crossed below 200d · bearish trend"),
-            "NEUTRAL":      ("#9ca3af", "■ Neutral",       "No definitive MA cross signal"),
+            "NEUTRAL":      ("#94a3b8", "■ Neutral",       "No definitive MA cross signal"),
         }
-        _ma_c, _ma_icon, _ma_desc = _ma_meta.get(_ma_sig, ("#9ca3af", "■ Neutral", ""))
+        _ma_c, _ma_icon, _ma_desc = _ma_meta.get(_ma_sig, ("#94a3b8", "■ Neutral", ""))
     
         # Momentum color
         if _mom_20 is None:
-            _mom_color, _mom_str = "#6b7280", "—"
+            _mom_color, _mom_str = "#64748b", "—"
         elif _mom_20 > 10:
             _mom_color, _mom_str = "#22c55e", f"+{_mom_20:.1f}%"
         elif _mom_20 < -10:
@@ -754,45 +754,45 @@ with _t_macro:
     
         with _tac1:
             st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_rsi_color};
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_rsi_color};
                 border-radius:10px;padding:10px;text-align:center">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">RSI-14</div>
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">RSI-14</div>
       <div style="font-size:20px;font-weight:700;color:{_rsi_color}">{_rsi_disp}</div>
-      <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_rsi_label}</div>
-      <div style="font-size:10px;color:#6b7280;margin-top:6px">Wilder 1978 · 14-day</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px">{_rsi_label}</div>
+      <div style="font-size:10px;color:#64748b;margin-top:6px">Wilder 1978 · 14-day</div>
     </div>
     """, unsafe_allow_html=True)
     
         with _tac2:
             st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_ma_c};
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_ma_c};
                 border-radius:10px;padding:10px;text-align:center">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MA Cross</div>
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MA Cross</div>
       <div style="font-size:18px;font-weight:700;color:{_ma_c}">{_ma_icon}</div>
-      <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_ma_desc}</div>
-      <div style="font-size:10px;color:#6b7280;margin-top:6px">50d vs 200d · Glassnode 71% accuracy</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px">{_ma_desc}</div>
+      <div style="font-size:10px;color:#64748b;margin-top:6px">50d vs 200d · Glassnode 71% accuracy</div>
     </div>
     """, unsafe_allow_html=True)
     
         with _tac3:
             st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mom_color};
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_mom_color};
                 border-radius:10px;padding:10px;text-align:center">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">30d Momentum</div>
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">30d Momentum</div>
       <div style="font-size:20px;font-weight:700;color:{_mom_color}">{_mom_str}</div>
-      <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_mom_trend}</div>
-      <div style="font-size:10px;color:#6b7280;margin-top:6px">Price change: 30 days</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px">{_mom_trend}</div>
+      <div style="font-size:10px;color:#64748b;margin-top:6px">Price change: 30 days</div>
     </div>
     """, unsafe_allow_html=True)
     
         with _tac4:
             st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_ab200_color};
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_ab200_color};
                 border-radius:10px;padding:10px;text-align:center">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">200d MA Position</div>
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">200d MA Position</div>
       <div style="font-size:16px;font-weight:700;color:{_ab200_color}">{_ab200_str}</div>
-      <div style="font-size:11px;color:#9ca3af;margin-top:4px">{_btc_disp}</div>
-      <div style="font-size:10px;color:#6b7280;margin-top:6px">Long-term trend filter</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px">{_btc_disp}</div>
+      <div style="font-size:10px;color:#64748b;margin-top:6px">Long-term trend filter</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -835,9 +835,9 @@ with _t_macro:
         _dca3  = _bits3["dca_multiplier"]
     
         # Color maps
-        _bc3 = {"BLOOD_IN_STREETS": "#ef4444", "EXTREME_FEAR": "#f59e0b", "NORMAL": "#6b7280"}.get(_bits3["signal"], "#6b7280")
+        _bc3 = {"BLOOD_IN_STREETS": "#ef4444", "EXTREME_FEAR": "#f59e0b", "NORMAL": "#64748b"}.get(_bits3["signal"], "#64748b")
         _bg3 = {"BLOOD_IN_STREETS": "#1f0000",  "EXTREME_FEAR": "#1c1200", "NORMAL": "#111827"}.get(_bits3["signal"], "#111827")
-        _dc3 = {0.0: "#ef4444", 0.5: "#f97316", 1.0: "#9ca3af", 2.0: "#10b981", 3.0: "#00d4aa"}.get(_dca3, "#9ca3af")
+        _dc3 = {0.0: "#ef4444", 0.5: "#f59e0b", 1.0: "#94a3b8", 2.0: "#10b981", 3.0: "#00d4aa"}.get(_dca3, "#94a3b8")
         _dl3 = {0.0: "HOLD — no new buys", 0.5: "0.5× — reduce size", 1.0: "1× — base size", 2.0: "2× — accumulate", 3.0: "3× — max accumulate"}.get(_dca3, f"{_dca3}×")
     
         _col1, _col2 = st.columns(2)
@@ -845,11 +845,11 @@ with _t_macro:
             st.markdown(f"""
     <div style="background:{_bg3};border:1px solid {_bc3};border-top:3px solid {_bc3};
                 border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Blood in Streets Signal</div>
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Blood in Streets Signal</div>
       <div style="font-size:20px;font-weight:700;color:{_bc3}">{_bits3["signal"].replace("_", " ")}</div>
-      <div style="font-size:12px;color:#9ca3af;margin-top:4px">{_bits3["strength"]} · {_bits3["criteria_met"]}/3 criteria met</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:8px">{_bits3["description"]}</div>
-      <div style="margin-top:10px;font-size:11px;color:#6b7280">
+      <div style="font-size:12px;color:#94a3b8;margin-top:4px">{_bits3["strength"]} · {_bits3["criteria_met"]}/3 criteria met</div>
+      <div style="font-size:11px;color:#64748b;margin-top:8px">{_bits3["description"]}</div>
+      <div style="margin-top:10px;font-size:11px;color:#64748b">
         {"✅" if _bits3["criteria"]["extreme_fear"] else "❌"} F&amp;G≤25 &nbsp;
         {"✅" if _bits3["criteria"]["rsi_oversold"] else "❌"} RSI≤30 &nbsp;
         {"✅" if _bits3["criteria"]["exchange_outflow"] else "❌"} Exchange outflow
@@ -858,12 +858,12 @@ with _t_macro:
     """, unsafe_allow_html=True)
         with _col2:
             st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_dc3};
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_dc3};
                 border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">DCA Multiplier</div>
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">DCA Multiplier</div>
       <div style="font-size:24px;font-weight:700;color:{_dc3}">{_dca3}×</div>
-      <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_dl3}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:8px">
+      <div style="font-size:13px;color:#94a3b8;margin-top:4px">{_dl3}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:8px">
         F&amp;G: {_fg_v3}/100<br/>
         DXY {_yf3.get("dxy", "—")} · 10Y {_fred3.get("ten_yr_yield", "—")}%
       </div>
@@ -894,8 +894,8 @@ with _t_onchain:
             _mv4  = _oc4.get("mvrv_ratio")
             _aa4  = _oc4.get("active_addresses")
     
-            _mvrv_color = {"UNDERVALUED": "#00d4aa", "FAIR_VALUE": "#10b981", "OVERVALUED": "#f59e0b", "EXTREME_HEAT": "#ef4444"}.get(_ms4, "#6b7280")
-            _sc4 = {"CAPITULATION": "#00d4aa", "MILD_LOSS": "#10b981", "NORMAL": "#6b7280", "PROFIT_TAKING": "#f59e0b"}.get(_ss4, "#6b7280")
+            _mvrv_color = {"UNDERVALUED": "#00d4aa", "FAIR_VALUE": "#10b981", "OVERVALUED": "#f59e0b", "EXTREME_HEAT": "#ef4444"}.get(_ms4, "#64748b")
+            _sc4 = {"CAPITULATION": "#00d4aa", "MILD_LOSS": "#10b981", "NORMAL": "#64748b", "PROFIT_TAKING": "#f59e0b"}.get(_ss4, "#64748b")
     
             def _fmtb(v):
                 if v is None: return "—"
@@ -906,36 +906,36 @@ with _t_onchain:
             _c1, _c2, _c3, _c4 = st.columns(4)
             with _c1:
                 st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_mvrv_color};border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MVRV Z-Score</div>
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_mvrv_color};border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">MVRV Z-Score</div>
       <div style="font-size:21px;font-weight:700;color:{_mvrv_color}">{f"{_mz4:+.2f}" if _mz4 is not None else "—"}</div>
-      <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ms4.replace("_", " ")}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:6px">MVRV ratio: {f"{_mv4:.3f}" if _mv4 else "—"}</div>
+      <div style="font-size:13px;color:#94a3b8;margin-top:4px">{_ms4.replace("_", " ")}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">MVRV ratio: {f"{_mv4:.3f}" if _mv4 else "—"}</div>
     </div>
     """, unsafe_allow_html=True)
             with _c2:
                 st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc4};border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">SOPR</div>
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_sc4};border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">SOPR</div>
       <div style="font-size:21px;font-weight:700;color:{_sc4}">{f"{_sp4:.4f}" if _sp4 is not None else "—"}</div>
-      <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_ss4.replace("_", " ")}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:6px">&gt;1 profit-taking · &lt;1 capitulation</div>
+      <div style="font-size:13px;color:#94a3b8;margin-top:4px">{_ss4.replace("_", " ")}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">&gt;1 profit-taking · &lt;1 capitulation</div>
     </div>
     """, unsafe_allow_html=True)
             with _c3:
                 st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Realized Cap</div>
-      <div style="font-size:22px;font-weight:700;color:#6366f1">{_fmtb(_rc4)}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:8px">BTC at last-moved price</div>
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid #8b5cf6;border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Realized Cap</div>
+      <div style="font-size:22px;font-weight:700;color:#8b5cf6">{_fmtb(_rc4)}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:8px">BTC at last-moved price</div>
     </div>
     """, unsafe_allow_html=True)
             with _c4:
                 st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #8b5cf6;border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Active Addresses</div>
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid #8b5cf6;border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Active Addresses</div>
       <div style="font-size:22px;font-weight:700;color:#8b5cf6">{f"{_aa4:,}" if _aa4 else "—"}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:8px">Unique BTC addresses today</div>
+      <div style="font-size:11px;color:#64748b;margin-top:8px">Unique BTC addresses today</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -946,7 +946,7 @@ with _t_onchain:
                 _mhz = (_mhs - _mhs.rolling(365, min_periods=30).mean()) / _mhs.rolling(365, min_periods=30).std().clip(lower=1e-6)
                 _fig_mz = go.Figure()
                 _fig_mz.add_trace(go.Scatter(x=_mhz.index, y=_mhz.values, mode="lines",
-                                             name="MVRV Z-Score", line=dict(color="#6366f1", width=2)))
+                                             name="MVRV Z-Score", line=dict(color="#8b5cf6", width=2)))
                 for _th, _tl, _tc in [(3.0, "Extreme >3", "#ef4444"), (1.5, "Overvalued", "#f59e0b"), (-0.5, "Undervalued", "#00d4aa")]:
                     _fig_mz.add_hline(y=_th, line_dash="dash", line_color=_tc, opacity=0.4,
                                       annotation_text=_tl, annotation_font_size=9)
@@ -967,31 +967,31 @@ with _t_onchain:
             _p_sig   = _oc4.get("puell_signal", "—")
             _hr_color = {
                 "BUY": "#22c55e", "RECOVERY": "#00d4aa",
-                "CAPITULATION": "#ef4444", "CAPITULATION_START": "#f97316",
-            }.get(_hr_sig, "#6b7280")
+                "CAPITULATION": "#ef4444", "CAPITULATION_START": "#f59e0b",
+            }.get(_hr_sig, "#64748b")
             _p_color = {
                 "EXTREME_BOTTOM": "#22c55e", "ACCUMULATION": "#00d4aa",
-                "FAIR_VALUE": "#6b7280", "DISTRIBUTION": "#f59e0b", "EXTREME_TOP": "#ef4444",
-            }.get(_p_sig, "#6b7280")
+                "FAIR_VALUE": "#64748b", "DISTRIBUTION": "#f59e0b", "EXTREME_TOP": "#ef4444",
+            }.get(_p_sig, "#64748b")
     
             if _hr_sig != "—" or _puell is not None:
                 st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
                 _h1, _h2 = st.columns(2)
                 with _h1:
                     st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_hr_color};border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Hash Ribbons</div>
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_hr_color};border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Hash Ribbons</div>
       <div style="font-size:22px;font-weight:700;color:{_hr_color}">{_hr_sig.replace("_", " ") if _hr_sig != "—" else "—"}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:8px">30d vs 60d hash rate MA · C. Edwards 2019</div>
+      <div style="font-size:11px;color:#64748b;margin-top:8px">30d vs 60d hash rate MA · C. Edwards 2019</div>
     </div>
     """, unsafe_allow_html=True)
                 with _h2:
                     st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_p_color};border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Puell Multiple</div>
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_p_color};border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Puell Multiple</div>
       <div style="font-size:21px;font-weight:700;color:{_p_color}">{f"{_puell:.3f}" if _puell is not None else "—"}</div>
-      <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_p_sig.replace("_", " ")}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:6px">Daily miner USD / 365d MA · D. Puell 2019</div>
+      <div style="font-size:13px;color:#94a3b8;margin-top:4px">{_p_sig.replace("_", " ")}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">Daily miner USD / 365d MA · D. Puell 2019</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1021,41 +1021,41 @@ with _t_onchain:
     
             _sc5 = {
                 "EXTREME_PUTS": "#ef4444", "BEARISH": "#f59e0b",
-                "NEUTRAL": "#6b7280", "BULLISH": "#10b981", "EXTREME_CALLS": "#00d4aa",
-            }.get(_osig5, "#6b7280")
+                "NEUTRAL": "#64748b", "BULLISH": "#10b981", "EXTREME_CALLS": "#00d4aa",
+            }.get(_osig5, "#64748b")
     
             _d5a, _d5b, _d5c, _d5d = st.columns(4)
             with _d5a:
                 st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_sc5};border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Put/Call Ratio</div>
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_sc5};border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Put/Call Ratio</div>
       <div style="font-size:28px;font-weight:700;color:{_sc5}">{f"{_pc5:.3f}" if _pc5 is not None else "—"}</div>
-      <div style="font-size:13px;color:#9ca3af;margin-top:4px">{_osig5.replace("_", " ")}</div>
+      <div style="font-size:13px;color:#94a3b8;margin-top:4px">{_osig5.replace("_", " ")}</div>
     </div>
     """, unsafe_allow_html=True)
             with _d5b:
                 _mp5_d = f"{abs(_mp5 - _spot5) / _spot5 * 100:.1f}% {'below' if _mp5 < _spot5 else 'above'} spot" if _mp5 and _spot5 else ""
                 st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #6366f1;border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Max Pain</div>
-      <div style="font-size:24px;font-weight:700;color:#6366f1">{f"${_mp5:,.0f}" if _mp5 else "—"}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:6px">{_mp5_d}</div>
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid #8b5cf6;border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Max Pain</div>
+      <div style="font-size:24px;font-weight:700;color:#8b5cf6">{f"${_mp5:,.0f}" if _mp5 else "—"}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">{_mp5_d}</div>
     </div>
     """, unsafe_allow_html=True)
             with _d5c:
                 st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #ef4444;border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Put OI</div>
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid #ef4444;border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Put OI</div>
       <div style="font-size:24px;font-weight:700;color:#ef4444">{f"{_tput5:,.0f}" if _tput5 else "—"}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:6px">contracts</div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">contracts</div>
     </div>
     """, unsafe_allow_html=True)
             with _d5d:
                 st.markdown(f"""
-    <div style="background:#111827;border:1px solid #1f2937;border-top:3px solid #10b981;border-radius:10px;padding:10px">
-      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Call OI</div>
+    <div style="background:#111827;border:1px solid #1e293b;border-top:3px solid #10b981;border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Call OI</div>
       <div style="font-size:24px;font-weight:700;color:#10b981">{f"{_tcal5:,.0f}" if _tcal5 else "—"}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:6px">contracts</div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">contracts</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1083,7 +1083,7 @@ with _t_onchain:
                             x0=_mp5_str, x1=_mp5_str,
                             y0=0, y1=1,
                             xref="x", yref="paper",
-                            line=dict(color="#6366f1", dash="dash", width=1.5),
+                            line=dict(color="#8b5cf6", dash="dash", width=1.5),
                             opacity=0.8,
                         )
                         _fig5d.add_annotation(
@@ -1091,7 +1091,7 @@ with _t_onchain:
                             xref="x", yref="paper",
                             text=f"Max Pain ${_mp5:,.0f}",
                             showarrow=False,
-                            font=dict(color="#6366f1", size=10),
+                            font=dict(color="#8b5cf6", size=10),
                             xanchor="left",
                             yanchor="top",
                         )
@@ -1133,7 +1133,7 @@ with _t_onchain:
                     _fig5e.add_trace(go.Scatter(
                         x=[t["dte"] for t in _ts5d], y=[t["atm_iv"] for t in _ts5d],
                         mode="lines+markers", name="ATM IV",
-                        line=dict(color="#6366f1", width=2), marker=dict(size=6),
+                        line=dict(color="#8b5cf6", width=2), marker=dict(size=6),
                         text=[t["expiry"] for t in _ts5d],
                         hovertemplate="%{text}<br>DTE: %{x}<br>IV: %{y:.1f}%<extra></extra>",
                     ))
@@ -1312,7 +1312,7 @@ with _t_onchain:
             # Liquidation: CR falls to 120% trigger → FLR must drop ~20% from entry
             _SCENARIOS = [
                 (-10, "Small correction",     0.05,   "#f59e0b"),  # ~5% liquidated
-                (-20, "Moderate pullback",    0.15,   "#f97316"),  # ~15% liquidated
+                (-20, "Moderate pullback",    0.15,   "#f59e0b"),  # ~15% liquidated
                 (-30, "Significant decline",  0.35,   "#ef4444"),  # ~35% liquidated
                 (-50, "Severe crash",         0.70,   "#dc2626"),  # ~70% liquidated
             ]
@@ -1334,11 +1334,11 @@ with _t_onchain:
             with _liq_c2:
                 _tvl_color = "#22c55e" if _kin_7d >= 0 else "#ef4444"
                 st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-radius:10px;padding:16px;margin-top:8px">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Kinetic Finance TVL</div>
+<div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px;margin-top:8px">
+  <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Kinetic Finance TVL</div>
   <div style="font-size:24px;font-weight:700;color:#00d4aa">${_kin_tvl/1e6:.1f}M</div>
   <div style="font-size:13px;color:{_tvl_color};margin-top:4px">7d: {_kin_7d:+.1f}%</div>
-  <div style="font-size:11px;color:#6b7280;margin-top:8px">Primary Flare lending market<br>sFLR/FLR collateral → USDC/USDT borrowed</div>
+  <div style="font-size:11px;color:#64748b;margin-top:8px">Primary Flare lending market<br>sFLR/FLR collateral → USDC/USDT borrowed</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1372,9 +1372,9 @@ with _t_eco:
     )
 
 _intent_map = {
-    "swap":    {"label": "Swap Tokens",       "icon": "🔄", "color": "#6366F1",
+    "swap":    {"label": "Swap Tokens",       "icon": "🔄", "color": "#8b5cf6",
                 "desc":  "Exchange one token for another at the best available rate."},
-    "provide": {"label": "Provide Liquidity",  "icon": "💧", "color": "#06B6D4",
+    "provide": {"label": "Provide Liquidity",  "icon": "💧", "color": "#00d4aa",
                 "desc":  "Add tokens to an AMM pool to earn trading fees. Comes with IL risk."},
     "stake":   {"label": "Stake / Restake",    "icon": "🔒", "color": "#8B5CF6",
                 "desc":  "Lock tokens in a protocol to earn staking rewards."},
@@ -1382,9 +1382,9 @@ _intent_map = {
                 "desc":  "Deposit assets into a lending protocol to earn interest."},
     "borrow":  {"label": "Borrow",             "icon": "💸", "color": "#F59E0B",
                 "desc":  "Borrow against your collateral. Use carefully — liquidation risk."},
-    "claim":   {"label": "Claim Rewards",      "icon": "🎁", "color": "#EC4899",
+    "claim":   {"label": "Claim Rewards",      "icon": "🎁", "color": "#ef4444",
                 "desc":  "Harvest accumulated reward tokens from a protocol."},
-    "bridge":  {"label": "Bridge Assets",      "icon": "🌉", "color": "#14B8A6",
+    "bridge":  {"label": "Bridge Assets",      "icon": "🌉", "color": "#00d4aa",
                 "desc":  "Move tokens between blockchains via a bridge protocol."},
     "hedge":   {"label": "Hedge / Options",    "icon": "🛡️", "color": "#EF4444",
                 "desc":  "Protect against downside using options or delta-neutral strategies."},
@@ -1428,7 +1428,7 @@ if _intent_input:
         with _intent_cols[_idx % 4]:
             st.markdown(
                 f"<div style='background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.08);"
-                f"border-top:2px solid {_idef.get('color','#6B7280')};border-radius:8px;"
+                f"border-top:2px solid {_idef.get('color','#64748b')};border-radius:8px;"
                 f"padding:10px 12px;text-align:center'>"
                 f"<div style='font-size:1.4rem'>{_idef.get('icon','?')}</div>"
                 f"<div style='font-size:0.85rem;font-weight:700;color:#F1F5F9;margin-top:4px'>{_idef.get('label','—')}</div>"
@@ -1549,8 +1549,8 @@ if pro_mode:
             _c30d    = _rwa_entry.get("tvl_30d_change_pct", 0)
             _chains  = _rwa_entry.get("chains", [])
             _health  = _rwa_entry.get("health", "STABLE")
-            _hcol    = _HEALTH_COLORS.get(_health, "#9ca3af")
-            _hbg     = _HEALTH_BADGES.get(_health, "background:rgba(156,163,175,0.12);color:#9ca3af")
+            _hcol    = _HEALTH_COLORS.get(_health, "#94a3b8")
+            _hbg     = _HEALTH_BADGES.get(_health, "background:rgba(156,163,175,0.12);color:#94a3b8")
             _tvl_str = (f"${_tvl/1e9:.2f}B" if _tvl >= 1e9
                         else f"${_tvl/1e6:.1f}M" if _tvl >= 1e6
                         else f"${_tvl:,.0f}")

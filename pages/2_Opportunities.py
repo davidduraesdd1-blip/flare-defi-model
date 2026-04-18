@@ -315,7 +315,7 @@ if _csig:
     elif _score >= -0.1:
         _sig_color, _sig_bg = "#f59e0b", "rgba(245,158,11,0.07)"
     elif _score >= -0.3:
-        _sig_color, _sig_bg = "#f97316", "rgba(249,115,22,0.07)"
+        _sig_color, _sig_bg = "#f59e0b", "rgba(249,115,22,0.07)"
     else:
         _sig_color, _sig_bg = "#ef4444", "rgba(239,68,68,0.07)"
 
@@ -388,11 +388,11 @@ try:
         if _opp_score >= 80:
             _tc, _tb_col = "✅ EXCELLENT TIME TO ENTER — Market at historical bottom zone", "#22c55e"
         elif _opp_score >= 65:
-            _tc, _tb_col = "👍 GOOD TIME TO ENTER — Market in buy accumulation zone", "#86efac"
+            _tc, _tb_col = "👍 GOOD TIME TO ENTER — Market in buy accumulation zone", "#22c55e"
         elif _opp_score >= 35:
             _tc, _tb_col = "⏳ NEUTRAL — No strong timing signal. Stagger entries.", "#f59e0b"
         elif _opp_score >= 20:
-            _tc, _tb_col = "⚠️ CAUTION — Market near historical top. Reduce new entries.", "#f97316"
+            _tc, _tb_col = "⚠️ CAUTION — Market near historical top. Reduce new entries.", "#f59e0b"
         else:
             _tc, _tb_col = "🛑 AVOID NEW ENTRIES — Market at extreme top zone. Hold cash.", "#ef4444"
 
@@ -991,8 +991,8 @@ with _tab_yield:
     
             _DIMENSIONS = ["APY", "Confidence", "Safety\n(10 - Risk)", "TVL Scale", "IL Safety"]
             _COLORS = [
-                "#6366f1", "#22c55e", "#f59e0b", "#ec4899",
-                "#14b8a6", "#8b5cf6",
+                "#8b5cf6", "#22c55e", "#f59e0b", "#ef4444",
+                "#00d4aa", "#8b5cf6",
             ]
     
             fig_radar = go.Figure()
@@ -1231,7 +1231,7 @@ with _tab_yield:
             _rs_color = (
                 "#22c55e" if _rs_val < 25 else
                 "#f59e0b" if _rs_val < 50 else
-                "#f97316" if _rs_val < 75 else
+                "#f59e0b" if _rs_val < 75 else
                 "#ef4444"
             )
             _row = {
@@ -1538,9 +1538,9 @@ with _tab_yield:
     
     _LRT_LABELS = {
         "eigenlayer_native": ("EigenLayer Native", "#8b5cf6"),
-        "etherfi_weETH":     ("ether.fi weETH",    "#3b82f6"),
-        "renzo_ezETH":       ("Renzo ezETH",        "#ec4899"),
-        "kelp_rsETH":        ("Kelp rsETH",         "#14b8a6"),
+        "etherfi_weETH":     ("ether.fi weETH",    "#00d4aa"),
+        "renzo_ezETH":       ("Renzo ezETH",        "#ef4444"),
+        "kelp_rsETH":        ("Kelp rsETH",         "#00d4aa"),
     }
     
     _lrt_cards = []
@@ -1707,7 +1707,7 @@ with _tab_intel:
         for _al in _tvl_alerts:
             _chg   = _al.get("change_pct", 0)
             _sev   = _al.get("severity", "normal")
-            _col   = "#EF4444" if _sev == "critical" else "#F59E0B" if _sev == "warning" else "#34D399"
+            _col   = "#EF4444" if _sev == "critical" else "#F59E0B" if _sev == "warning" else "#22c55e"
             _icon  = "🚨" if _sev == "critical" else "⚠️" if _sev == "warning" else "✅"
             _tvl_m = round(_al.get("current_tvl", 0) / 1e6, 1)
             st.markdown(
@@ -1753,8 +1753,8 @@ with _tab_intel:
         _sorted_props = _apy_props + _other_props
     
         for _prop in _sorted_props:
-            _imp_badge = (" <span style='background:#1c1200;color:#FBBF24;font-size:0.85rem;"
-                         "padding:1px 6px;border-radius:4px;border:1px solid #fbbf2444'>⚡ APY Impact</span>"
+            _imp_badge = (" <span style='background:#1c1200;color:#f59e0b;font-size:0.85rem;"
+                         "padding:1px 6px;border-radius:4px;border:1px solid #f59e0b44'>⚡ APY Impact</span>"
                          if _prop.get("apy_impact") else "")
             _vote_url  = _html.escape(str(_prop.get("url") or ""))
             _vote_link = (f" · <a href='{_vote_url}' target='_blank' "
@@ -1762,7 +1762,7 @@ with _tab_intel:
                           if _vote_url else "")
             st.markdown(
                 f"<div style='background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);"
-                f"border-left:3px solid {'#FBBF24' if _prop.get('apy_impact') else '#334155'};"
+                f"border-left:3px solid {'#f59e0b' if _prop.get('apy_impact') else '#334155'};"
                 f"border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:0.85rem'>"
                 f"<b>{_html.escape(str(_prop.get('title', '')))}</b>{_imp_badge}<br>"
                 f"<span style='color:#64748b;font-size:0.75rem'>"
@@ -1959,7 +1959,7 @@ with _tab_yield:
             _fl_cols = st.columns(min(len(_flows), 4))
             for _fi, _fl in enumerate(_flows[:4]):
                 _fsig   = _fl["flow_signal"]
-                _fcol   = "#34D399" if _fsig == "INFLOW" else "#EF4444" if _fsig == "OUTFLOW" else "#9CA3AF"
+                _fcol   = "#22c55e" if _fsig == "INFLOW" else "#EF4444" if _fsig == "OUTFLOW" else "#94a3b8"
                 _ficon  = "↑" if _fsig == "INFLOW" else "↓" if _fsig == "OUTFLOW" else "→"
                 _ftvl_m = _fl["tvl_usd"] / 1e9 if _fl["tvl_usd"] >= 1e9 else _fl["tvl_usd"] / 1e6
                 _funit  = "B" if _fl["tvl_usd"] >= 1e9 else "M"
@@ -2045,7 +2045,7 @@ with _tab_yield:
             _g_tvl   = float(_gp.get("tvl_usd", 0))
             _g_sh    = _gp["_sharpe_val"]
             _g_rank  = _gp["_rank"]
-            _sh_col  = {"excellent": "#22c55e", "good": "#84cc16", "fair": "#f59e0b", "poor": "#ef4444"}.get(_g_rank, "#9ca3af")
+            _sh_col  = {"excellent": "#22c55e", "good": "#22c55e", "fair": "#f59e0b", "poor": "#ef4444"}.get(_g_rank, "#94a3b8")
             _row = {
                 "Protocol":   (_gp.get("protocol") or "—").replace("-", " ").title(),
                 "Chain":      _gp.get("chain", "—"),
@@ -2104,14 +2104,14 @@ with _tab_yield:
             total_apy=_eth_apy,
             emission_apy=_eth_apy * 0.5,  # Ethena ~50% emission approximation
         )
-        _eth_sh_col = {"excellent": "#22c55e", "good": "#84cc16", "fair": "#f59e0b", "poor": "#ef4444"}.get(
-            _eth_sharpe["risk_adjusted_rank"], "#9ca3af"
+        _eth_sh_col = {"excellent": "#22c55e", "good": "#22c55e", "fair": "#f59e0b", "poor": "#ef4444"}.get(
+            _eth_sharpe["risk_adjusted_rank"], "#94a3b8"
         )
         _eth_cls    = _eth_real["classification"]
         _eth_cls_col = "#22c55e" if _eth_cls == "SUSTAINABLE" else ("#f59e0b" if _eth_cls == "MIXED" else "#ef4444")
         st.markdown(
             f"<div style='background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.07);"
-            f"border-left:3px solid #6366f1;border-radius:8px;padding:12px 16px;margin-bottom:10px'>"
+            f"border-left:3px solid #8b5cf6;border-radius:8px;padding:12px 16px;margin-bottom:10px'>"
             f"<div style='display:flex;justify-content:space-between;align-items:center'>"
             f"<div>"
             f"<span style='font-weight:700;font-size:1.0rem;color:#e2e8f0'>Ethena sUSDe</span> "
@@ -2384,9 +2384,9 @@ with _tab_intel:
         score += min(audit_count * 5, 20)            # +5 per audit, max +20
         score = max(0, min(100, score))
         if score >= 85:  return "A", "#22c55e",  "Excellent — no hacks, audited, battle-tested"
-        if score >= 70:  return "B", "#84cc16",  "Good — minor incidents or limited audit history"
+        if score >= 70:  return "B", "#22c55e",  "Good — minor incidents or limited audit history"
         if score >= 55:  return "C", "#f59e0b",  "Moderate — some risk factors present"
-        if score >= 35:  return "D", "#f97316",  "High risk — significant hack history"
+        if score >= 35:  return "D", "#f59e0b",  "High risk — significant hack history"
         return             "F", "#ef4444",  "Very high risk — multiple large hacks"
     
     @st.cache_data(ttl=86400, show_spinner=False, max_entries=1)
@@ -2627,7 +2627,7 @@ with _tab_intel:
                     labels=_cat_labels, values=_cat_values,
                     hole=0.55,
                     textinfo="percent",
-                    marker=dict(colors=["#ef4444","#f97316","#f59e0b","#84cc16","#22c55e","#3b82f6","#8b5cf6","#ec4899"]),
+                    marker=dict(colors=["#ef4444","#f59e0b","#f59e0b","#22c55e","#22c55e","#00d4aa","#8b5cf6","#ef4444"]),
                 )])
                 _fig_cats.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -3031,9 +3031,9 @@ with _tab_yield:
         for _ri, _dp in enumerate(_d8_deduped[:25], 1):
             _sh      = _dp["sharpe"]
             _rk      = _dp["rank"]
-            _sh_col  = "#22c55e" if _sh >= 2 else "#84cc16" if _sh >= 1 else "#f59e0b" if _sh >= 0.5 else "#ef4444"
+            _sh_col  = "#22c55e" if _sh >= 2 else "#22c55e" if _sh >= 1 else "#f59e0b" if _sh >= 0.5 else "#ef4444"
             _rk_icon = {"excellent": "▲", "good": "▲", "fair": "■", "poor": "▼"}.get(_rk, "■")
-            _rk_col  = {"excellent": "#22c55e", "good": "#84cc16", "fair": "#f59e0b", "poor": "#ef4444"}.get(_rk, "#9ca3af")
+            _rk_col  = {"excellent": "#22c55e", "good": "#22c55e", "fair": "#f59e0b", "poor": "#ef4444"}.get(_rk, "#94a3b8")
             _tvl_str = (f"${_dp['tvl']/1e9:.1f}B" if _dp["tvl"] >= 1e9
                         else f"${_dp['tvl']/1e6:.0f}M" if _dp["tvl"] >= 1e6
                         else f"${_dp['tvl']/1e3:.0f}K" if _dp["tvl"] >= 1000 else "—")

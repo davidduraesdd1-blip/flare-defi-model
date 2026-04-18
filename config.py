@@ -654,7 +654,7 @@ RISK_GRADE_BANDS = [
     (2.0,  "A", "#22c55e"),   # 0.0–2.0 → A  (excellent — green)
     (3.5,  "B", "#10b981"),   # 2.0–3.5 → B  (good — teal)
     (5.0,  "C", "#f59e0b"),   # 3.5–5.0 → C  (average — amber)
-    (7.0,  "D", "#f97316"),   # 5.0–7.0 → D  (below average — orange)
+    (7.0,  "D", "#f59e0b"),   # 5.0–7.0 → D  (below average — orange)
     (10.1, "F", "#ef4444"),   # 7.0+    → F  (high risk — red)
 ]
 

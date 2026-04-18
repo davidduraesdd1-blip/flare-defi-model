@@ -440,7 +440,7 @@ with tab4:
         st.markdown("""
         <div class="metric-card card-blue">
             <div class="label">FXRP — Live Now</div>
-            <div style="font-size:1.3rem; font-weight:700; color:#3b82f6;">4–10% APY</div>
+            <div style="font-size:1.3rem; font-weight:700; color:#00d4aa;">4–10% APY</div>
             <div style="color:#475569; font-size:0.85rem; margin-top:8px;">
                 Bridge XRP → FXRP via Flare · Deploy in Upshift EarnXRP vault<br>
                 Status: <span style="color:#10b981; font-weight:600;">LIVE</span>
@@ -766,7 +766,7 @@ with tab5:
                     _aud_note = _aud_data.get("note", "")
                     _aud_yr   = _aud_data.get("year", "")
                     _aud_html = (
-                        f"<span style='font-size:0.85rem; color:#34d399; font-weight:600; "
+                        f"<span style='font-size:0.85rem; color:#22c55e; font-weight:600; "
                         f"background:rgba(52,211,153,0.08); padding:1px 6px; border-radius:4px; "
                         f"border:1px solid rgba(52,211,153,0.25);' "
                         f"title='{_aud_note}'>"
@@ -946,7 +946,7 @@ with tab6:
     _fig_cc.add_trace(go.Scatter(
         x=_months_list, y=_principal_line,
         mode="lines", name="Capital Invested",
-        line=dict(color="#6366f1", width=1.5, dash="dash"),
+        line=dict(color="#8b5cf6", width=1.5, dash="dash"),
     ))
     _fig_cc.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -1284,7 +1284,7 @@ if _opt_input_ok:
 
             st.markdown(
                 f"<div style='background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);"
-                f"border-radius:8px;padding:10px 14px;font-size:0.85rem;color:#c4cbdb;margin-top:8px'>"
+                f"border-radius:8px;padding:10px 14px;font-size:0.85rem;color:#cbd5e1;margin-top:8px'>"
                 f"💡 <b>Recommendation:</b> {_opt_res['recommendation']}</div>",
                 unsafe_allow_html=True,
             )
@@ -1410,12 +1410,12 @@ with tab7:
     with _rm1:
         _yield_color = "#22c55e" if _be_yield_pct > 0.01 else "#f59e0b"
         st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_yield_color};
+<div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_yield_color};
             border-radius:10px;padding:18px;text-align:center">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Yield Earned in {_be_days}d</div>
+  <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Yield Earned in {_be_days}d</div>
   <div style="font-size:28px;font-weight:700;color:{_yield_color}">{_be_yield_pct*100:.2f}%</div>
   <div style="font-size:14px;color:#22c55e;margin-top:2px">${_be_yield_usd:,.0f}</div>
-  <div style="font-size:11px;color:#9ca3af;margin-top:6px">This is what IL must exceed to put you underwater</div>
+  <div style="font-size:11px;color:#94a3b8;margin-top:6px">This is what IL must exceed to put you underwater</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1423,12 +1423,12 @@ with tab7:
         _pu_str = f"+{_pct_up:.1f}%" if _pct_up is not None else "—"
         _pu_col = "#f59e0b" if _pct_up and _pct_up < 50 else "#22c55e"
         st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_pu_col};
+<div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_pu_col};
             border-radius:10px;padding:18px;text-align:center">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Break-Even: {_html.escape(str(_be_token_a))} Rises</div>
+  <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Break-Even: {_html.escape(str(_be_token_a))} Rises</div>
   <div style="font-size:28px;font-weight:700;color:{_pu_col}">{_pu_str}</div>
-  <div style="font-size:11px;color:#9ca3af;margin-top:6px">Price must rise MORE than this before IL > yield</div>
-  <div style="font-size:10px;color:#6b7280;margin-top:4px">{"Wide buffer — safer zone" if _pct_up and _pct_up > 50 else "Narrow buffer — watch closely"}</div>
+  <div style="font-size:11px;color:#94a3b8;margin-top:6px">Price must rise MORE than this before IL > yield</div>
+  <div style="font-size:10px;color:#64748b;margin-top:4px">{"Wide buffer — safer zone" if _pct_up and _pct_up > 50 else "Narrow buffer — watch closely"}</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1436,12 +1436,12 @@ with tab7:
         _pd_str = f"{_pct_dn:.1f}%" if _pct_dn is not None else "—"
         _pd_col = "#f59e0b" if _pct_dn and abs(_pct_dn) < 30 else "#22c55e"
         st.markdown(f"""
-<div style="background:#111827;border:1px solid #1f2937;border-top:3px solid {_pd_col};
+<div style="background:#111827;border:1px solid #1e293b;border-top:3px solid {_pd_col};
             border-radius:10px;padding:18px;text-align:center">
-  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Break-Even: {_html.escape(str(_be_token_a))} Falls</div>
+  <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Break-Even: {_html.escape(str(_be_token_a))} Falls</div>
   <div style="font-size:28px;font-weight:700;color:{_pd_col}">{_pd_str}</div>
-  <div style="font-size:11px;color:#9ca3af;margin-top:6px">Price must fall MORE than this before IL > yield</div>
-  <div style="font-size:10px;color:#6b7280;margin-top:4px">{"Wide buffer — safer zone" if _pct_dn and abs(_pct_dn) > 30 else "Narrow buffer — watch closely"}</div>
+  <div style="font-size:11px;color:#94a3b8;margin-top:6px">Price must fall MORE than this before IL > yield</div>
+  <div style="font-size:10px;color:#64748b;margin-top:4px">{"Wide buffer — safer zone" if _pct_dn and abs(_pct_dn) > 30 else "Narrow buffer — watch closely"}</div>
 </div>
 """, unsafe_allow_html=True)
 
