@@ -80,16 +80,21 @@ def render_hero_number(
     secondary_label: str = None,
     secondary_value: str = None,
 ) -> None:
-    """Render a ToS-style hero number block at the top of a page."""
+    """Render a ToS-style hero number block at the top of a page.
+    Renders "—" em-dash when value/label is None or empty.
+    """
+    # Guard: render em-dash placeholder instead of literal "None" string
+    _label_str = str(label) if label not in (None, "") else "—"
+    _value_str = str(value) if value not in (None, "") else "—"
     _dc = delta_color or "#64748b"
     if delta and delta_color is None:
-        _first = next((c for c in delta if c in "+-"), None)
+        _first = next((c for c in str(delta) if c in "+-"), None)
         if _first == "+":   _dc = color_up()
         elif _first == "-": _dc = color_down()
     _delta_html = (
         f"<span style='color:{_dc}; font-size:1.0rem; font-weight:700; "
         f"margin-left:14px; font-variant-numeric:tabular-nums;'>{_html.escape(str(delta))}</span>"
-        if delta else ""
+        if delta not in (None, "") else ""
     )
     _sec_html = ""
     if secondary_label and secondary_value:
@@ -103,12 +108,12 @@ def render_hero_number(
         f"<div style='padding:8px 0 16px 0;'>"
         f"<div style='color:#64748b; font-size:0.72rem; font-weight:700; "
         f"letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px;'>"
-        f"{_html.escape(str(label))}</div>"
+        f"{_html.escape(_label_str)}</div>"
         f"<div style='display:flex; align-items:baseline;'>"
         f"<div style='font-size:clamp(2.0rem, 3.2vw, 2.75rem); font-weight:800; "
         f"letter-spacing:-1px; line-height:1.0; color:#f1f5f9; "
         f"font-variant-numeric:tabular-nums; font-family: \"JetBrains Mono\", monospace;'>"
-        f"{_html.escape(str(value))}</div>{_delta_html}</div>{_sec_html}</div>",
+        f"{_html.escape(_value_str)}</div>{_delta_html}</div>{_sec_html}</div>",
         unsafe_allow_html=True,
     )
 

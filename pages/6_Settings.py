@@ -837,40 +837,54 @@ with st.expander("💬 Share Feedback", expanded=False):
         "Overall, how satisfied are you with your experience?</div>",
         unsafe_allow_html=True,
     )
-    _fb_c1, _fb_c2, _fb_c3, _fb_spacer = st.columns([1, 1, 1, 5])
-    with _fb_c1:
-        _fb_happy = st.button("😊", key="fb_happy", help="Satisfied")
-    with _fb_c2:
-        _fb_neutral = st.button("😐", key="fb_neutral", help="Neutral")
-    with _fb_c3:
-        _fb_sad = st.button("☹", key="fb_sad", help="Dissatisfied")
+    # Sentiment selection uses on_click callbacks so it's written to session_state
+    # BEFORE the rerun completes, avoiding the Streamlit 1-rerun-lag pattern.
+    def _set_sentiment(val: str) -> None:
+        st.session_state["fb_sentiment"] = val
 
-    _fb_sentiment = None
-    if _fb_happy:   _fb_sentiment = "positive"
-    if _fb_neutral: _fb_sentiment = "neutral"
-    if _fb_sad:     _fb_sentiment = "negative"
+    _fb_c1, _fb_c2, _fb_c3, _fb_spacer = st.columns([1, 1, 1, 5])
+    _current_sent = st.session_state.get("fb_sentiment")
+    with _fb_c1:
+        st.button(
+            "😊", key="fb_happy", help="Satisfied",
+            on_click=_set_sentiment, args=("positive",),
+            type=("primary" if _current_sent == "positive" else "secondary"),
+        )
+    with _fb_c2:
+        st.button(
+            "😐", key="fb_neutral", help="Neutral",
+            on_click=_set_sentiment, args=("neutral",),
+            type=("primary" if _current_sent == "neutral" else "secondary"),
+        )
+    with _fb_c3:
+        st.button(
+            "☹", key="fb_sad", help="Dissatisfied",
+            on_click=_set_sentiment, args=("negative",),
+            type=("primary" if _current_sent == "negative" else "secondary"),
+        )
 
     if st.button("Send feedback", key="fb_send", width='stretch',
                  disabled=not _fb_text.strip()):
         try:
             from pathlib import Path as _Path
             import json as _json
-            _fb_path = _Path("data") / "user_feedback.jsonl"
+            # Absolute path resolved relative to this file's project root, so
+            # writes go to the same place regardless of cwd or how Streamlit
+            # invokes the page.
+            _project_root = _Path(__file__).resolve().parent.parent
+            _fb_path = _project_root / "data" / "user_feedback.jsonl"
             _fb_path.parent.mkdir(parents=True, exist_ok=True)
             _fb_entry = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "app": "defi",
                 "user_level": st.session_state.get("user_level", "beginner"),
-                "sentiment": st.session_state.get("fb_last_sentiment") or _fb_sentiment,
+                "sentiment": st.session_state.get("fb_sentiment"),
                 "text": _fb_text.strip(),
             }
             with _fb_path.open("a", encoding="utf-8") as _fp:
                 _fp.write(_json.dumps(_fb_entry) + "\n")
             st.success("Thanks — feedback received.")
             st.session_state["feedback_text"] = ""
-            st.session_state.pop("fb_last_sentiment", None)
+            st.session_state.pop("fb_sentiment", None)
         except Exception as _fb_err:
             st.error(f"Couldn't save feedback right now. Try again in a moment. ({_fb_err})")
-
-    if _fb_sentiment:
-        st.session_state["fb_last_sentiment"] = _fb_sentiment
