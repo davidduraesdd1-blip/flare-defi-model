@@ -2223,6 +2223,180 @@ with _tab_pos:
             unsafe_allow_html=True,
         )
 
+    # ─── Phase 2A: One-Click Portfolio Deploy ─────────────────────────────────
+    # Build a fresh plan from the active model profile's top picks, run each
+    # through RiskGuard, and offer dry-run preview + execute in a single modal.
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    render_section_header(
+        "One-Click Portfolio Deploy",
+        "Execute the active model's top picks as a single plan — dry-run first",
+    )
+
+    _od_prof_key = ctx.get("profile", "medium")
+    _od_model_picks = (latest.get("models") or {}).get(_od_prof_key) or []
+    _od_has_picks = bool(_od_model_picks)
+
+    _od_col_a, _od_col_b, _od_col_c = st.columns([2, 2, 3])
+    with _od_col_a:
+        _od_wallet_input = st.number_input(
+            "Deploy size (USD)",
+            min_value=100.0, max_value=1_000_000.0,
+            value=float(max(total_value, 1000.0)),
+            step=100.0,
+            help="Total capital to allocate across the plan. Each leg is sized per Kelly fraction.",
+            key="od_wallet_input",
+        )
+    with _od_col_b:
+        _od_slip = st.slider(
+            "Slippage cap (%)",
+            min_value=0.1, max_value=3.0, value=0.5, step=0.1,
+            help="Per-leg max slippage. Legs estimated above this will show a warning in dry-run.",
+            key="od_slip_pct",
+        )
+    with _od_col_c:
+        st.markdown(
+            f"<div style='color:#94a3b8; font-size:0.82rem; padding-top:22px;'>"
+            f"Active profile: <span style='color:#00d4aa; font-weight:700;'>"
+            f"{RISK_PROFILES[_od_prof_key]['label']}</span> "
+            f"· {len(_od_model_picks)} picks available</div>",
+            unsafe_allow_html=True,
+        )
+
+    # Dialog — dry-run preview and execute
+    @st.dialog("Portfolio Deploy — Dry Run Preview", width="large")
+    def _od_dialog(_picks, _wallet, _slip_pct, _profile):
+        from agents.portfolio_executor import (
+            build_plan_from_picks, execute_plan,
+            AUTO_EXECUTE_CAP_USD, STEP_THROUGH_CAP_USD,
+        )
+        try:
+            from agents.config import OPERATING_MODE as _OPMODE
+        except Exception:
+            _OPMODE = "PAPER"
+
+        with st.spinner("Building plan…"):
+            _plan = build_plan_from_picks(
+                picks=_picks,
+                profile=_profile,
+                wallet_balance_usd=float(_wallet),
+                operating_mode=_OPMODE,
+                slippage_pct_cap=float(_slip_pct) / 100.0,
+            )
+
+        # Header summary
+        _mode_color = "#00d4aa" if _OPMODE == "PAPER" else "#f59e0b"
+        _mode_label = "Paper mode (simulated)" if _OPMODE == "PAPER" else f"LIVE — {_OPMODE}"
+        st.markdown(
+            f"<div style='color:{_mode_color}; font-weight:700; font-size:0.9rem; margin-bottom:8px;'>"
+            f"● {_mode_label}</div>",
+            unsafe_allow_html=True,
+        )
+
+        _tier_color = {
+            "auto": "#22c55e",
+            "step_through": "#f59e0b",
+            "requires_approval": "#ef4444",
+        }.get(_plan.authorization_tier, "#64748b")
+        _tier_label = {
+            "auto": "AUTO — single approval",
+            "step_through": "STEP-THROUGH — per-leg confirmation",
+            "requires_approval": "REQUIRES APPROVAL — exceeds $250K auto-cap",
+        }.get(_plan.authorization_tier, "unknown")
+
+        _hc1, _hc2, _hc3 = st.columns(3)
+        with _hc1:
+            st.metric("Total notional", f"${_plan.total_notional_usd:,.0f}")
+        with _hc2:
+            st.metric("Approved legs", f"{_plan.approved_count} / {len(_plan.legs)}")
+        with _hc3:
+            st.markdown(
+                f"<div style='color:#94a3b8; font-size:0.7rem; letter-spacing:1.3px; "
+                f"text-transform:uppercase; margin-bottom:2px;'>Authorization</div>"
+                f"<div style='color:{_tier_color}; font-weight:700; font-size:0.88rem;'>"
+                f"{_tier_label}</div>",
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
+        # Leg table
+        _rows = []
+        for lg in _plan.legs:
+            _status_emoji = "✓" if lg.approved else "✗"
+            _status_color = "#22c55e" if lg.approved else "#ef4444"
+            _rows.append({
+                "": _status_emoji,
+                "Protocol": lg.protocol.capitalize(),
+                "Pool": lg.pool,
+                "Size ($)": f"${lg.adjusted_size_usd:,.0f}" if lg.approved else f"~${lg.size_usd:,.0f}",
+                "APY": f"{lg.expected_apy*100:.1f}%",
+                "Slippage": f"{lg.estimated_slippage_pct*100:.2f}%",
+                "Gas ($)": f"${lg.estimated_gas_usd:.3f}",
+                "Status": "Approved" if lg.approved else (lg.reject_reason[:40] + "…" if len(lg.reject_reason) > 40 else lg.reject_reason),
+            })
+        import pandas as _pd
+        st.dataframe(_pd.DataFrame(_rows), width='stretch', hide_index=True)
+
+        # Execute or block
+        if _plan.authorization_tier == "requires_approval":
+            st.error(
+                f"Plan total ${_plan.total_notional_usd:,.0f} exceeds the "
+                f"${STEP_THROUGH_CAP_USD:,.0f} auto-cap. Out-of-band approval "
+                f"required (phone/2FA). Split the plan or reduce deploy size."
+            )
+        elif _plan.approved_count == 0:
+            st.warning("No legs passed RiskGuard — adjust deploy size or profile.")
+        else:
+            _exec_btn_label = (
+                "▶ Execute in paper mode" if _OPMODE == "PAPER"
+                else "▶ Execute LIVE (signs on-chain)"
+            )
+            if st.button(_exec_btn_label, type="primary", width='stretch', key="od_exec_go"):
+                _pw = st.session_state.get("_od_pw", "")
+                if _OPMODE != "PAPER" and not _pw:
+                    st.error("Live mode requires wallet password — enter it in the field below and click again.")
+                else:
+                    with st.spinner(f"Executing {_plan.approved_count} legs…"):
+                        _plan = execute_plan(_plan, private_key=_pw if _OPMODE != "PAPER" else None)
+                    _ok_color = "#22c55e" if _plan.failed_count == 0 else "#f59e0b"
+                    st.markdown(
+                        f"<div style='background:rgba(15,23,42,0.5); border:1px solid rgba(148,163,184,0.15); "
+                        f"border-left:3px solid {_ok_color}; border-radius:8px; padding:14px; margin-top:10px; "
+                        f"font-size:0.9rem; color:#e2e8f0;'>"
+                        f"<b>Execution complete.</b> Success: {_plan.success_count} · "
+                        f"Failed: {_plan.failed_count} · Skipped: {_plan.skipped_count}"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                    # Show failures inline
+                    for _lg in _plan.legs:
+                        if _lg.exec_status == "failed":
+                            st.error(f"{_lg.protocol}/{_lg.pool}: {_lg.exec_message}")
+                        elif _lg.exec_status == "skipped":
+                            st.caption(f"Skipped {_lg.protocol}/{_lg.pool}: {_lg.exec_message}")
+            if _OPMODE != "PAPER":
+                st.text_input(
+                    "Wallet password (required for live signing)",
+                    type="password", key="_od_pw",
+                    help="Decrypts the Flare wallet private key for the duration of this execute action.",
+                )
+
+    # Deploy button — disabled when no picks available
+    _od_btn_disabled = not _od_has_picks
+    _od_btn_help = (
+        "Run a scan first to generate model picks."
+        if _od_btn_disabled else
+        "Build a fresh dry-run plan and review before executing."
+    )
+    if st.button(
+        "▶ Deploy Portfolio",
+        type="primary", width='stretch',
+        disabled=_od_btn_disabled, help=_od_btn_help,
+        key="od_deploy_btn",
+    ):
+        _od_dialog(_od_model_picks, _od_wallet_input, _od_slip, _od_prof_key)
+
 
 with _tab_wallet:
     # ── AgentKit Wallet ───────────────────────────────────────────────────────────
