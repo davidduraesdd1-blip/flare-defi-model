@@ -36,43 +36,59 @@ st.caption("Sentiment · Macro · On-Chain · Ecosystem — all signals in one p
 # their charts for contextual side panels. Streamlit doesn't support rotated
 # text; st.popover gives the same "always one click away, zero screen cost
 # when closed" UX. Place at top-right of page header.
+#
+# Perf note: st.popover DOES execute its body on render (not lazy), so we wrap
+# the heavier file reads in @st.cache_data (60s TTL) to dedupe across reruns.
+
+@st.cache_data(ttl=60, max_entries=1, show_spinner=False)
+def _qa_recent_alerts() -> list:
+    """Read last 5 entries of data/alert_history.jsonl. Cached 60s."""
+    try:
+        from pathlib import Path as _QP
+        import json as _jq
+        _alerts_file = _QP("data") / "alert_history.jsonl"
+        if not _alerts_file.exists():
+            return []
+        out = []
+        for line in _alerts_file.read_text(encoding="utf-8").strip().split("\n")[-5:]:
+            try:
+                out.append(_jq.loads(line))
+            except Exception:
+                continue
+        return out
+    except Exception:
+        return []
+
+@st.cache_data(ttl=60, max_entries=1, show_spinner=False)
+def _qa_last_scan_ts() -> str:
+    """Return last scan timestamp. Cached 60s."""
+    try:
+        _r = load_monitor_digest() or {}
+        return (_r.get("timestamp") or "")[:16]
+    except Exception:
+        return ""
+
 _qa_spacer, _qa_agent, _qa_alerts, _qa_log, _qa_glos = st.columns([10, 1, 1, 1, 1])
 with _qa_agent:
     with st.popover("🤖", help="Agent status"):
         st.markdown("**Agent Status**")
-        try:
-            _agent_running = st.session_state.get("agent_running", False)
-            st.markdown(f"Status: {'🟢 Active' if _agent_running else '⚫ Idle'}")
-            st.caption("Full details on the Agent page.")
-        except Exception:
-            st.caption("Agent data not available.")
+        _agent_running = st.session_state.get("agent_running", False)
+        st.markdown(f"Status: {'🟢 Active' if _agent_running else '⚫ Idle'}")
+        st.caption("Full details on the Agent page.")
 with _qa_alerts:
     with st.popover("🔔", help="Recent alerts"):
         st.markdown("**Recent Alerts**")
-        try:
-            from pathlib import Path as _QP
-            _alerts_file = _QP("data") / "alert_history.jsonl"
-            if _alerts_file.exists():
-                import json as _jq
-                _recent = _alerts_file.read_text(encoding="utf-8").strip().split("\n")[-5:]
-                for line in _recent:
-                    try:
-                        _a = _jq.loads(line)
-                        st.markdown(f"• {_a.get('timestamp','—')[:16]} — {_a.get('message','—')[:60]}")
-                    except Exception:
-                        continue
-            else:
-                st.caption("No alerts yet — configure in Settings.")
-        except Exception:
-            st.caption("Alert data not available.")
+        _alerts_recent = _qa_recent_alerts()
+        if _alerts_recent:
+            for _a in _alerts_recent:
+                st.markdown(f"• {_a.get('timestamp','—')[:16]} — {_a.get('message','—')[:60]}")
+        else:
+            st.caption("No alerts yet — configure in Settings.")
 with _qa_log:
     with st.popover("📜", help="Trade log"):
         st.markdown("**Recent Scans**")
-        try:
-            _runs_recent = load_monitor_digest() or {}
-            st.caption(f"Last scan: {_runs_recent.get('timestamp', '—')[:16] if _runs_recent else '—'}")
-        except Exception:
-            st.caption("Scan history not available.")
+        _ts = _qa_last_scan_ts()
+        st.caption(f"Last scan: {_ts or '—'}")
 with _qa_glos:
     with st.popover("📖", help="Glossary"):
         st.markdown("**Quick Glossary**")
