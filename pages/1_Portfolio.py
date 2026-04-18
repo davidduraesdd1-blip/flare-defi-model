@@ -930,7 +930,17 @@ with _tab_pos:
             )
 
             days_str  = f"{days}d" if days > 0 else "—"
-            fees_html = f" · Est. fees earned: <span style='color:#10b981'>${fees_est:,.2f}</span>" if fees_est > 0 else ""
+            _pos_entry_apy = float(pos.get("entry_apy") or 0)
+            _high_apy_flag = _pos_entry_apy > 75.0
+            _fees_warn = (
+                f" <span title='Headline APY {_pos_entry_apy:.0f}% — likely includes emission rewards that may decline. Sustainable yield is usually lower.' "
+                f"style='color:#f59e0b; font-weight:700; cursor:help;'>⚠</span>"
+                if _high_apy_flag and fees_est > 0 else ""
+            )
+            fees_html = (
+                f" · Est. fees earned: <span style='color:#10b981'>${fees_est:,.2f}</span>{_fees_warn}"
+                if fees_est > 0 else ""
+            )
             il_html   = f" · IL est: <span style='color:#f59e0b'>{il_pct:.1f}%</span>" if il_pct > 0.1 else ""
             hodl_html = f" · HODL: <span style='color:#64748b'>${hodl:,.0f}</span>" if hodl > 0 else ""
             # Build balance string — support both new format (token_a/token_b) and legacy (token0_balance/token1_balance)
