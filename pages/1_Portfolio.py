@@ -1018,8 +1018,9 @@ with _tab_pos:
             unsafe_allow_html=True,
         )
 
-    # ── Add Position ──────────────────────────────────────────────────────────────
-    with st.expander("➕ Track a New Position"):
+    # ── Add Position (ToS #2 slideover pattern via st.dialog) ───────────────────
+    @st.dialog("Track a New Position", width="large")
+    def _add_position_dialog():
         with st.form("add_position_form", clear_on_submit=True, enter_to_submit=False):
             c1, c2 = st.columns(2)
             with c1:
@@ -1075,6 +1076,9 @@ with _tab_pos:
                     save_positions(positions)
                     st.success(f"Added: {pool_name}")
                     st.rerun()
+
+    if st.button("➕ Track a New Position", use_container_width=False, key="open_add_position_dialog"):
+        _add_position_dialog()
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
