@@ -1270,8 +1270,25 @@ with _tab_pos:
                 "ETH prices from Yahoo Finance — requires internet."
             )
         else:
+            _skeleton_rows = [
+                {"Position": "—", "Deposit": "$ —", "LP+Fees": "$ —", "vs USD (0%)": "—", "vs HODL tokens": "—", "vs ETH": "—"},
+                {"Position": "—", "Deposit": "$ —", "LP+Fees": "$ —", "vs USD (0%)": "—", "vs HODL tokens": "—", "vs ETH": "—"},
+            ]
             st.markdown(
-                "<div style='color:#334155; font-size:0.85rem;'>Add LP positions with token amounts to see benchmarks.</div>",
+                "<div style='opacity:0.45; pointer-events:none;'>",
+                unsafe_allow_html=True,
+            )
+            st.dataframe(pd.DataFrame(_skeleton_rows), width='stretch', hide_index=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='background:rgba(15,23,42,0.5); border:1px solid rgba(148,163,184,0.15); "
+                "border-left:3px solid #00d4aa; border-radius:8px; padding:10px 14px; margin-top:8px; "
+                "font-size:0.85rem; color:#94a3b8;'>"
+                "<span style='color:#00d4aa; font-weight:700;'>▸ Preview</span>"
+                "<span style='color:#475569; margin:0 6px;'>·</span>"
+                "Add an LP position with entry token amounts and entry date in the Positions tab "
+                "to see live benchmarks vs USD baseline, HODL, and ETH."
+                "</div>",
                 unsafe_allow_html=True,
             )
 
