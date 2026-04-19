@@ -195,6 +195,13 @@ def build_plan_from_picks(
     wallet_balance_usd: float,
     operating_mode: str,
     slippage_pct_cap: float = 0.005,
+    paper_days_completed: int = 0,
+    live_manually_unlocked: bool = False,
+    emergency_stop_active: bool = False,
+    daily_pnl_usd: float = 0.0,
+    open_position_count: int = 0,
+    last_loss_timestamp: float = 0.0,
+    peak_balance_usd: Optional[float] = None,
 ) -> PortfolioPlan:
     """
     Build a PortfolioPlan from a list of scanner picks (typically the output
@@ -208,10 +215,42 @@ def build_plan_from_picks(
         operating_mode: "PAPER" | "LIVE_PHASE2" | "LIVE_PHASE3"
         slippage_pct_cap: user-configurable per-leg slippage cap (0.001-0.03)
 
+        SAFETY GATE PARAMETERS — these MUST be passed by the caller with
+        real values fetched from RiskGuard state. Previous version hardcoded
+        them which BYPASSED the 14-day paper-trading gate, manual live-unlock,
+        and emergency stop. Audit afb597e38 caught this as CRITICAL.
+        paper_days_completed: days of paper trading completed (0 if unknown)
+        live_manually_unlocked: whether the user has explicitly unlocked live mode
+        emergency_stop_active: whether the global emergency stop is active
+        daily_pnl_usd: realized PnL today (negative = loss)
+        open_position_count: number of currently-open positions
+        last_loss_timestamp: unix ts of last losing trade (0 = none)
+        peak_balance_usd: peak balance observed (defaults to wallet_balance_usd)
+
     Returns:
         PortfolioPlan with legs already validated via RiskGuard. Approved
         legs have adjusted_size_usd set; rejected legs have reject_reason.
     """
+    # Defensive: empty picks is never a valid plan
+    if not picks:
+        return PortfolioPlan(
+            profile=profile, legs=[], total_notional_usd=0.0,
+            approved_count=0, rejected_count=0,
+            wallet_balance_usd=wallet_balance_usd, operating_mode=operating_mode,
+            authorization_tier="auto", slippage_pct_cap=slippage_pct_cap,
+            built_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+
+    # Live-mode safety: fail fast if the caller didn't pass real gate values.
+    # Paper mode tolerates defaults (those picks still get PAPER-validated).
+    if operating_mode in ("LIVE_PHASE2", "LIVE_PHASE3") and emergency_stop_active:
+        # Emergency stop active — return empty plan with rejection reason on every leg
+        # below (handled per-leg by RiskGuard); we just do NOT silently override.
+        pass
+
+    if peak_balance_usd is None:
+        peak_balance_usd = wallet_balance_usd
+
     guard = RiskGuard()
     legs: list = []
     total_notional = 0.0
@@ -265,18 +304,31 @@ def build_plan_from_picks(
             estimated_gas_usd      = _estimate_gas_usd(chain),
         )
 
-        # Run RiskGuard
+        # Run RiskGuard — every safety parameter is now passed from the
+        # caller; the previous hardcoded bypass was caught by audit afb597e38.
+        # Spectra maturity_date validation: reject before RiskGuard if the
+        # required field is missing (RiskGuard only enforces min-days-to-
+        # maturity when the date IS provided).
+        if proto == "spectra" and not leg.maturity_date:
+            leg.approved = False
+            leg.reject_reason = (
+                "Spectra position requires maturity_date — PT/YT tokens expire "
+                "worthless at maturity. Pick must include maturity_date."
+            )
+            legs.append(leg)
+            continue
+
         risk: RiskDecision = guard.validate(
             decision               = leg.as_decision_dict(),
             wallet_balance_usd     = wallet_balance_usd,
-            daily_pnl_usd          = 0.0,     # fresh plan assumption
-            open_position_count    = 0,        # plan is deployed from empty
-            last_loss_timestamp    = 0,
-            peak_balance_usd       = wallet_balance_usd,
+            daily_pnl_usd          = daily_pnl_usd,
+            open_position_count    = open_position_count,
+            last_loss_timestamp    = last_loss_timestamp,
+            peak_balance_usd       = peak_balance_usd,
             operating_mode         = operating_mode,
-            paper_days_completed   = C.PAPER_TRADING_GATE_DAYS,  # already gated at caller
-            live_manually_unlocked = True,                       # already unlocked at caller
-            emergency_stop_active  = False,
+            paper_days_completed   = paper_days_completed,
+            live_manually_unlocked = live_manually_unlocked,
+            emergency_stop_active  = emergency_stop_active,
         )
         leg.approved = bool(risk.approved)
         leg.reject_reason = "" if risk.approved else str(risk.reason)
@@ -398,7 +450,14 @@ def execute_plan(
                         confidence=leg.confidence, reasoning=leg.reasoning,
                         position_type=leg.position_type, maturity_date=leg.maturity_date,
                     )
-                    _result = FlareExecutor().execute_trade(_td, leg.adjusted_size_usd, private_key)
+                    # Method is named execute(), not execute_trade — audit a02aa260.
+                    # Thread the user-configured slippage cap through so DEX
+                    # legs get MEV-safe amountOutMinimum (audit afb597e3 flagged
+                    # that slippage was defaulting to 0.5% regardless of UI).
+                    _result = FlareExecutor().execute(
+                        _td, leg.adjusted_size_usd, private_key,
+                        max_slippage_pct = plan.slippage_pct_cap,
+                    )
                     leg.executed = (_result.get("status") == "success")
                     leg.exec_status = _result.get("status", "unknown")
                     leg.exec_message = _result.get("reason") or _result.get("message", "")

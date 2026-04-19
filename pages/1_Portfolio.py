@@ -2265,7 +2265,7 @@ with _tab_pos:
 
     # Dialog — dry-run preview and execute
     @st.dialog("Portfolio Deploy — Dry Run Preview", width="large")
-    def _od_dialog(_picks, _wallet, _slip_pct, _profile):
+    def _od_dialog(_wallet, _slip_pct):
         from agents.portfolio_executor import (
             build_plan_from_picks, execute_plan,
             AUTO_EXECUTE_CAP_USD, STEP_THROUGH_CAP_USD,
@@ -2275,13 +2275,52 @@ with _tab_pos:
         except Exception:
             _OPMODE = "PAPER"
 
+        # Re-read profile + picks INSIDE the dialog so a mid-plan profile
+        # switch in the sidebar doesn't execute stale picks (audit a02aa260).
+        _profile = ctx.get("profile", "medium")
+        _picks_fresh = (latest.get("models") or {}).get(_profile) or []
+
+        # Fetch REAL RiskGuard gate state from the agent state file instead
+        # of hardcoding "gates passed" (audit afb597e3 flagged this as a
+        # CRITICAL live-mode safety bypass).
+        _gate = {
+            "paper_days_completed":   0,
+            "live_manually_unlocked": False,
+            "emergency_stop_active":  False,
+            "daily_pnl_usd":          0.0,
+            "open_position_count":    0,
+            "last_loss_timestamp":    0.0,
+        }
+        try:
+            from agents.agent_runner import get_state as _agent_state
+            from agents.audit_log import AuditLog as _AL
+            from agents.position_monitor import PositionMonitor as _PM
+            from agents import config as _AC
+            _st_state = _agent_state() or {}
+            _al = _AL()
+            _pm = _PM()
+            _gate["paper_days_completed"]   = int(_al.get_paper_trade_days())
+            _gate["live_manually_unlocked"] = bool(_st_state.get(_AC.LIVE_UNLOCK_KEY, False))
+            _gate["emergency_stop_active"]  = bool(_st_state.get(_AC.EMERGENCY_STOP_KEY, False))
+            _gate["daily_pnl_usd"]          = float(_al.get_daily_pnl_usd() or 0.0)
+            _gate["last_loss_timestamp"]    = float(_pm.get_last_loss_timestamp() or 0)
+            _gate["open_position_count"]    = len(_pm.get_open_positions() or [])
+        except Exception as _gate_err:
+            logger.debug("[Portfolio] gate-state lookup failed (using safe defaults): %s", _gate_err)
+
         with st.spinner("Building plan…"):
             _plan = build_plan_from_picks(
-                picks=_picks,
+                picks=_picks_fresh,
                 profile=_profile,
                 wallet_balance_usd=float(_wallet),
                 operating_mode=_OPMODE,
                 slippage_pct_cap=float(_slip_pct) / 100.0,
+                paper_days_completed   = _gate["paper_days_completed"],
+                live_manually_unlocked = _gate["live_manually_unlocked"],
+                emergency_stop_active  = _gate["emergency_stop_active"],
+                daily_pnl_usd          = _gate["daily_pnl_usd"],
+                open_position_count    = _gate["open_position_count"],
+                last_loss_timestamp    = _gate["last_loss_timestamp"],
             )
 
         # Header summary
@@ -2352,13 +2391,43 @@ with _tab_pos:
                 "▶ Execute in paper mode" if _OPMODE == "PAPER"
                 else "▶ Execute LIVE (signs on-chain)"
             )
+            # Password input FIRST (above execute button) so live-mode users
+            # don't get a rejected-then-retry cycle. Paper mode skips this.
+            if _OPMODE != "PAPER":
+                st.text_input(
+                    "Wallet password (required for live signing)",
+                    type="password", key="_od_pw",
+                    help=(
+                        "Decrypts the Flare wallet private key for the duration "
+                        "of this execute action. Cleared from memory immediately "
+                        "after execution."
+                    ),
+                )
             if st.button(_exec_btn_label, type="primary", width='stretch', key="od_exec_go"):
                 _pw = st.session_state.get("_od_pw", "")
                 if _OPMODE != "PAPER" and not _pw:
-                    st.error("Live mode requires wallet password — enter it in the field below and click again.")
+                    st.error("Live mode requires wallet password — enter it in the field above and click again.")
                 else:
-                    with st.spinner(f"Executing {_plan.approved_count} legs…"):
-                        _plan = execute_plan(_plan, private_key=_pw if _OPMODE != "PAPER" else None)
+                    try:
+                        with st.spinner(f"Executing {_plan.approved_count} legs…"):
+                            # Derive the private key from the password ONCE here,
+                            # inside the try/finally so it's always wiped.
+                            _priv_key = None
+                            if _OPMODE != "PAPER" and _pw:
+                                from agents.wallet_manager import WalletManager as _WM
+                                _priv_key = _WM().load_flare_private_key(_pw)
+                            _plan = execute_plan(_plan, private_key=_priv_key)
+                    finally:
+                        # SECURITY: wipe password from session_state immediately
+                        # after execute (audit afb597e3). Also scrub the local
+                        # variable references before they fall out of scope.
+                        try:
+                            if "_od_pw" in st.session_state:
+                                del st.session_state["_od_pw"]
+                        except Exception:
+                            pass
+                        _priv_key = None
+                        _pw = None
                     _ok_color = "#22c55e" if _plan.failed_count == 0 else "#f59e0b"
                     st.markdown(
                         f"<div style='background:rgba(15,23,42,0.5); border:1px solid rgba(148,163,184,0.15); "
@@ -2375,12 +2444,6 @@ with _tab_pos:
                             st.error(f"{_lg.protocol}/{_lg.pool}: {_lg.exec_message}")
                         elif _lg.exec_status == "skipped":
                             st.caption(f"Skipped {_lg.protocol}/{_lg.pool}: {_lg.exec_message}")
-            if _OPMODE != "PAPER":
-                st.text_input(
-                    "Wallet password (required for live signing)",
-                    type="password", key="_od_pw",
-                    help="Decrypts the Flare wallet private key for the duration of this execute action.",
-                )
 
     # Deploy button — disabled when no picks available
     _od_btn_disabled = not _od_has_picks
@@ -2395,7 +2458,7 @@ with _tab_pos:
         disabled=_od_btn_disabled, help=_od_btn_help,
         key="od_deploy_btn",
     ):
-        _od_dialog(_od_model_picks, _od_wallet_input, _od_slip, _od_prof_key)
+        _od_dialog(_od_wallet_input, _od_slip)
 
 
 with _tab_wallet:

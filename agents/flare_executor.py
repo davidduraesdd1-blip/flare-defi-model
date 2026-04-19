@@ -389,7 +389,12 @@ class FlareExecutor:
             _sh = w3.eth.send_raw_transaction(_ss.raw_transaction)
             receipt = w3.eth.wait_for_transaction_receipt(_sh, timeout=120)
             if receipt.status != 1:
-                return {"status": "error", "reason": "Swap tx reverted", "tx_hash": _sh.hex()}
+                # Security: swap reverted, but we still have an active approval
+                # on token_in → router. Revoke it so an attacker (or a future
+                # bug) can't drain the approved balance.
+                self._revoke_approval(w3, token_in, router_addr, address,
+                                      private_key, nonce + 2, gas_price)
+                return {"status": "error", "reason": "Swap tx reverted; approval revoked", "tx_hash": _sh.hex()}
 
             trade_id = _monitor.open_position(
                 chain=decision.chain, protocol=decision.protocol, pool=decision.pool,
@@ -412,6 +417,26 @@ class FlareExecutor:
                              {"decision": decision.to_dict()})
             return {"status": "error", "reason": str(e)}
 
+    # ── Shared helper: best-effort approval revoke on swap failure ──────────
+    def _revoke_approval(self, w3, token_contract, router_addr: str,
+                         address: str, private_key: str, nonce: int,
+                         gas_price: int) -> None:
+        """Approve(router, 0) — revoke a lingering allowance after a failed swap.
+        Best-effort: logs failure but does not raise (the parent error path
+        already handles the user-facing response).
+        """
+        try:
+            _revoke_tx = token_contract.functions.approve(
+                Web3.to_checksum_address(router_addr), 0
+            ).build_transaction({
+                "chainId": FLARE_CHAIN_ID, "from": address, "nonce": nonce,
+                "gas": 60_000, "gasPrice": gas_price,
+            })
+            _sr = w3.eth.account.sign_transaction(_revoke_tx, private_key)
+            w3.eth.send_raw_transaction(_sr.raw_transaction)
+        except Exception as _re:
+            _audit.log_error(f"FlareExecutor._revoke_approval failed: {_re}", {})
+
     # ── SparkDEX V3 swap ────────────────────────────────────────────────────
     def execute_sparkdex_swap(
         self,
@@ -422,11 +447,20 @@ class FlareExecutor:
         token_out_address: str,
         fee_tier: int = 3000,                # 0.3% default; common V3 tiers: 500/3000/10000
         token_in_usd_price: float = 1.0,
+        token_out_usd_price: float = 1.0,
         max_slippage_pct: float = 0.005,
     ) -> dict:
         """
         Execute a SparkDEX V3-style swap (exactInputSingle).
         Expects the router address in FLARE_CONTRACTS['sparkdex_router'].
+
+        SECURITY: V1 required on-chain Quoter for safe amountOutMinimum.
+        V2 (this): derives amountOutMinimum from off-chain price inputs
+        (token_in_usd_price / token_out_usd_price) with max_slippage_pct
+        applied. If callers can't provide reliable prices for BOTH tokens,
+        they MUST not call this method — we reject with a clear reason
+        instead of signing amountOutMinimum=0 (which would be an open
+        invitation to MEV sandwich attacks).
         """
         if not self._ensure_connected():
             return {"status": "error", "reason": "No RPC connection"}
@@ -438,29 +472,44 @@ class FlareExecutor:
                 "reason": "SPARKDEX_ROUTER_ADDRESS not configured — set env var before live.",
             }
 
+        # Security gate: require BOTH prices for slippage-protected minOut
+        if token_in_usd_price <= 0 or token_out_usd_price <= 0:
+            return {
+                "status": "blocked",
+                "reason": (
+                    "SparkDEX V3 swap requires token_in_usd_price AND "
+                    "token_out_usd_price for MEV-safe minimum-out. Caller "
+                    "must pass both; pass max_slippage_pct as a tight cap. "
+                    "Refusing to sign with amountOutMinimum=0."
+                ),
+            }
+
         w3 = self._w3
         account = w3.eth.account.from_key(private_key)
         address = account.address
 
         try:
             token_in_dec = self._token_decimals(token_in_address)
-            _px = max(float(token_in_usd_price), 1e-8)
-            amount_in_raw = int(adjusted_size_usd / _px * (10 ** token_in_dec))
+            token_out_dec = self._token_decimals(token_out_address)
+            _px_in = max(float(token_in_usd_price), 1e-8)
+            _px_out = max(float(token_out_usd_price), 1e-8)
+            amount_in_raw = int(adjusted_size_usd / _px_in * (10 ** token_in_dec))
             if amount_in_raw <= 0:
                 return {"status": "rejected", "reason": "Computed amountIn is 0"}
+
+            # Off-chain quote: expected_out = (adjusted_size_usd / token_out_price) * 10^out_dec
+            # Apply fee_tier + max_slippage_pct to build a safe minOut.
+            _fee_frac = float(fee_tier) / 1_000_000.0   # fee_tier is bps * 100 (e.g. 3000 = 0.3%)
+            _expected_out_usd = adjusted_size_usd * (1.0 - _fee_frac)
+            _min_out_usd = _expected_out_usd * (1.0 - max(max_slippage_pct, 0.0))
+            amount_out_minimum = int(_min_out_usd / _px_out * (10 ** token_out_dec))
+            if amount_out_minimum <= 0:
+                return {"status": "rejected", "reason": "Computed amountOutMinimum is 0 — check prices/slippage"}
 
             token_in = w3.eth.contract(address=Web3.to_checksum_address(token_in_address), abi=_ERC20_ABI)
             router   = w3.eth.contract(address=Web3.to_checksum_address(router_addr), abi=_UNISWAP_V3_ROUTER_ABI)
             deadline = int(time.time()) + 600
 
-            # V3 doesn't have getAmountsOut on the router; we conservatively
-            # accept up to max_slippage_pct by setting amountOutMinimum = 0
-            # only when we have no quote. Safer pattern: caller passes a
-            # pre-quoted expected_out via decision.expected_out if available.
-            # For now we set amountOutMinimum = 0 and rely on the router's
-            # revert-on-revert semantics + the caller's slippage cap filter.
-            # In a future commit we'll call the V3 Quoter contract for an
-            # on-chain quote.
             params = (
                 Web3.to_checksum_address(token_in_address),
                 Web3.to_checksum_address(token_out_address),
@@ -468,8 +517,8 @@ class FlareExecutor:
                 address,
                 deadline,
                 amount_in_raw,
-                0,                  # amountOutMinimum — TODO: wire V3 Quoter
-                0,                  # sqrtPriceLimitX96 = no limit
+                amount_out_minimum,     # MEV-safe: computed from off-chain prices + slippage cap
+                0,                      # sqrtPriceLimitX96 = no limit
             )
 
             approve_gas = token_in.functions.approve(Web3.to_checksum_address(router_addr), amount_in_raw).estimate_gas({"from": address})
@@ -498,7 +547,10 @@ class FlareExecutor:
             _sh = w3.eth.send_raw_transaction(_ss.raw_transaction)
             receipt = w3.eth.wait_for_transaction_receipt(_sh, timeout=120)
             if receipt.status != 1:
-                return {"status": "error", "reason": "Swap tx reverted", "tx_hash": _sh.hex()}
+                # Revoke lingering approval to router on swap failure.
+                self._revoke_approval(w3, token_in, router_addr, address,
+                                      private_key, nonce + 2, gas_price)
+                return {"status": "error", "reason": "Swap tx reverted; approval revoked", "tx_hash": _sh.hex()}
 
             trade_id = _monitor.open_position(
                 chain=decision.chain, protocol=decision.protocol, pool=decision.pool,
@@ -513,6 +565,7 @@ class FlareExecutor:
                 "size_usd": adjusted_size_usd, "gas_usd": round(total_gas_usd, 6),
                 "protocol": "sparkdex", "fee_tier": fee_tier,
                 "amount_in_raw": amount_in_raw,
+                "amount_out_minimum": amount_out_minimum,
             }
         except Exception as e:
             _audit.log_error(f"FlareExecutor.execute_sparkdex_swap error: {e}",
@@ -524,10 +577,19 @@ class FlareExecutor:
         decision: TradeDecision,
         adjusted_size_usd: float,
         private_key: str,
+        max_slippage_pct: float = 0.005,
+        token_in_usd_price: float = 1.0,
+        token_out_usd_price: float = 1.0,
     ) -> dict:
         """
         Route to the correct execution method based on protocol.
-        Primary entry point called by agent_runner.
+        Primary entry point called by agent_runner and portfolio_executor.
+
+        max_slippage_pct: user-configured cap (threaded from UI slider);
+                         swap methods use this to compute amountOutMinimum
+                         for MEV protection.
+        token_in_usd_price / token_out_usd_price: required for SparkDEX V3
+                         (no on-chain quoter wired yet).
         """
         if OPERATING_MODE not in ("LIVE_PHASE2", "LIVE_PHASE3"):
             return {"status": "blocked", "reason": f"Mode is {OPERATING_MODE}, not LIVE"}
@@ -582,11 +644,16 @@ class FlareExecutor:
                 return self.execute_blazeswap_swap(
                     decision, adjusted_size_usd, private_key,
                     token_in_address=_tin_addr, token_out_address=_tout_addr,
+                    token_in_usd_price=token_in_usd_price,
+                    max_slippage_pct=max_slippage_pct,
                 )
             else:  # sparkdex
                 return self.execute_sparkdex_swap(
                     decision, adjusted_size_usd, private_key,
                     token_in_address=_tin_addr, token_out_address=_tout_addr,
+                    token_in_usd_price=token_in_usd_price,
+                    token_out_usd_price=token_out_usd_price,
+                    max_slippage_pct=max_slippage_pct,
                 )
         else:
             # Other protocols not yet wired (Sceptre, Spectra, Enosys, ...)
