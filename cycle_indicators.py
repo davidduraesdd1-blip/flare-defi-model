@@ -152,6 +152,9 @@ def fetch_stablecoin_supply_delta() -> dict[str, Any] | None:
     def _fetch() -> dict[str, Any] | None:
         try:
             import requests
+            # Import the shared CoinGecko rate limiter so parallel fetches can't
+            # burst the free-tier 10-30 req/min cap — audit a3305f7 caught this.
+            from utils.http import coingecko_limiter as _cg_lim
         except ImportError:
             return None
 
@@ -159,9 +162,11 @@ def fetch_stablecoin_supply_delta() -> dict[str, Any] | None:
         # 3 × 10s = 30s if all requests hit their full timeout (e.g. CoinGecko
         # rate-limit on Streamlit Cloud shared IP). Parallel worst-case is
         # the single longest fetch, ~10s. Normal-case goes from ~300-600ms
-        # sequential to ~100-300ms parallel.
+        # sequential to ~100-300ms parallel. The rate limiter serializes the
+        # 3 acquires so actual per-coin request starts are spaced ~2.5s apart.
         def _fetch_one(coin_id: str):
             try:
+                _cg_lim.acquire()
                 url = (f"https://api.coingecko.com/api/v3/coins/{coin_id}/"
                        f"market_chart?vs_currency=usd&days=7&interval=daily")
                 r = requests.get(url, timeout=10,

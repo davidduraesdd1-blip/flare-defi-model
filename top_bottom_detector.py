@@ -948,7 +948,7 @@ def detect_wyckoff_spring_upthrust(df: pd.DataFrame, lookback: int = 60,
 
     current = float(close.iloc[-1])
     recent_low  = float(low.iloc[-3:].min())
-    recent_high = float(high.iloc[-3:].min())
+    recent_high = float(high.iloc[-3:].max())   # WAS .min() — copy-paste bug caught by audit af9b4042
 
     # Spring: recent low broke below range_low, but current close back inside range
     if recent_low < range_low - 0.002 * range_low and current > range_low:

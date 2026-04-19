@@ -175,7 +175,7 @@ with _ctrl_tab_alerts:
             cal_html = ""
             if cal_at and samples:
                 from ui.common import _ts_fmt
-                _p75_str = f"p75 APY = {p75:.1f}%" if p75 is not None else "p75 APY = N/A"
+                _p75_str = f"p75 APY = {p75:.1f}%" if p75 is not None else "p75 APY = —"
                 cal_html = (
                     f"<span style='color:#22c55e; font-weight:600;'>Active</span> · "
                     f"Last calibrated: {_ts_fmt(cal_at)} · "

@@ -2226,6 +2226,13 @@ with _tab_pos:
     # ─── Phase 2A: One-Click Portfolio Deploy ─────────────────────────────────
     # Build a fresh plan from the active model profile's top picks, run each
     # through RiskGuard, and offer dry-run preview + execute in a single modal.
+    #
+    # Per CLAUDE.md §7 tiered UX: execution features are gated behind
+    # Intermediate or Advanced user level. Beginners see a teaser + link to
+    # upgrade their level in Settings. This was flagged by audit acb47d62.
+
+    _od_user_level = st.session_state.get("user_level", "beginner")
+    _od_gate_ok = _od_user_level in ("intermediate", "advanced")
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     render_section_header(
@@ -2233,9 +2240,22 @@ with _tab_pos:
         "Execute the active model's top picks as a single plan — dry-run first",
     )
 
+    if not _od_gate_ok:
+        st.markdown(
+            "<div style='background:rgba(15,23,42,0.5); border:1px solid rgba(148,163,184,0.15); "
+            "border-left:3px solid #f59e0b; border-radius:8px; padding:14px; "
+            "font-size:0.88rem; color:#e2e8f0;'>"
+            "🔒 <b>Intermediate / Advanced feature.</b> One-click portfolio deploy "
+            "runs multi-leg execution with size caps, slippage guards, and live or "
+            "paper-mode fills. Switch to Intermediate or Advanced in the sidebar "
+            "to enable it."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
     _od_prof_key = ctx.get("profile", "medium")
     _od_model_picks = (latest.get("models") or {}).get(_od_prof_key) or []
-    _od_has_picks = bool(_od_model_picks)
+    _od_has_picks = bool(_od_model_picks) and _od_gate_ok
 
     _od_col_a, _od_col_b, _od_col_c = st.columns([2, 2, 3])
     with _od_col_a:
@@ -2372,10 +2392,17 @@ with _tab_pos:
                 "APY": f"{lg.expected_apy*100:.1f}%",
                 "Slippage": f"{lg.estimated_slippage_pct*100:.2f}%",
                 "Gas ($)": f"${lg.estimated_gas_usd:.3f}",
-                "Status": "Approved" if lg.approved else (lg.reject_reason[:40] + "…" if len(lg.reject_reason) > 40 else lg.reject_reason),
+                "Status": "Approved" if lg.approved else lg.reject_reason,
             })
         import pandas as _pd
-        st.dataframe(_pd.DataFrame(_rows), width='stretch', hide_index=True)
+        # Stretch Status column so full reject_reason is visible — audit ab9c7cdc
+        # flagged 40-char truncation as making rejections undebuggable.
+        st.dataframe(
+            _pd.DataFrame(_rows), width='stretch', hide_index=True,
+            column_config={
+                "Status": st.column_config.TextColumn("Status", width="large"),
+            },
+        )
 
         # Execute or block
         if _plan.authorization_tier == "requires_approval":
@@ -2403,11 +2430,19 @@ with _tab_pos:
                         "after execution."
                     ),
                 )
-            if st.button(_exec_btn_label, type="primary", width='stretch', key="od_exec_go"):
+            # Double-click guard — audit ab9c7cdc flagged rapid-click re-execute
+            _exec_in_progress = st.session_state.get("_od_executing", False)
+            if st.button(
+                _exec_btn_label, type="primary", width='stretch',
+                key="od_exec_go", disabled=_exec_in_progress,
+            ):
                 _pw = st.session_state.get("_od_pw", "")
                 if _OPMODE != "PAPER" and not _pw:
                     st.error("Live mode requires wallet password — enter it in the field above and click again.")
                 else:
+                    # Set the lock BEFORE any real work so a rapid second click
+                    # finds the button disabled.
+                    st.session_state["_od_executing"] = True
                     try:
                         with st.spinner(f"Executing {_plan.approved_count} legs…"):
                             # Derive the private key from the password ONCE here,
@@ -2421,11 +2456,13 @@ with _tab_pos:
                         # SECURITY: wipe password from session_state immediately
                         # after execute (audit afb597e3). Also scrub the local
                         # variable references before they fall out of scope.
+                        # Also release the double-click lock.
                         try:
                             if "_od_pw" in st.session_state:
                                 del st.session_state["_od_pw"]
                         except Exception:
                             pass
+                        st.session_state["_od_executing"] = False
                         _priv_key = None
                         _pw = None
                     _ok_color = "#22c55e" if _plan.failed_count == 0 else "#f59e0b"
@@ -2445,20 +2482,24 @@ with _tab_pos:
                         elif _lg.exec_status == "skipped":
                             st.caption(f"Skipped {_lg.protocol}/{_lg.pool}: {_lg.exec_message}")
 
-    # Deploy button — disabled when no picks available
-    _od_btn_disabled = not _od_has_picks
-    _od_btn_help = (
-        "Run a scan first to generate model picks."
-        if _od_btn_disabled else
-        "Build a fresh dry-run plan and review before executing."
-    )
-    if st.button(
-        "▶ Deploy Portfolio",
-        type="primary", width='stretch',
-        disabled=_od_btn_disabled, help=_od_btn_help,
-        key="od_deploy_btn",
-    ):
-        _od_dialog(_od_wallet_input, _od_slip)
+    # Deploy button — only render for gated-ok users with real picks, so
+    # Beginners see only the amber "Intermediate/Advanced only" banner and
+    # scan-less users see nothing accidental.
+    if _od_gate_ok:
+        _od_btn_disabled = not _od_has_picks or bool(st.session_state.get("_od_executing", False))
+        _od_btn_help = (
+            "Run a scan first to generate model picks."
+            if not _od_has_picks else
+            "Executing — please wait…" if st.session_state.get("_od_executing", False) else
+            "Build a fresh dry-run plan and review before executing."
+        )
+        if st.button(
+            "▶ Deploy Portfolio",
+            type="primary", width='stretch',
+            disabled=_od_btn_disabled, help=_od_btn_help,
+            key="od_deploy_btn",
+        ):
+            _od_dialog(_od_wallet_input, _od_slip)
 
 
 with _tab_wallet:

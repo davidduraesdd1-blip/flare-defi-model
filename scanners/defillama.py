@@ -298,7 +298,11 @@ def get_protocol_tvl_confidence_boost(protocol_key: str, slug_map: dict) -> floa
 
         boost = round(tvl_score + trend_score, 1)
         return max(-5.0, min(5.0, boost))
-    except Exception:
+    except Exception as _e:
+        # Audit a9e366c9: bare-except was silently dropping TVL-boost on API
+        # changes; log at DEBUG so schema drift shows up in logs without
+        # polluting the user console.
+        logger.debug("[TVLBoost] compute failed — returning 0 boost: %s", _e)
         return 0.0
 
 
