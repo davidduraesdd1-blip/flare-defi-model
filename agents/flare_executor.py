@@ -319,18 +319,47 @@ class FlareExecutor:
     # ── Token decimals lookup (cached per instance) ──────────────────────────
     _DECIMALS_CACHE: dict = {}
 
+    # Audit R1d: known Flare-mainnet token decimals — checked BEFORE on-chain
+    # RPC so a USDT0 (6-dec) trade never falls back to 18 if RPC blips, which
+    # would oversize amount_raw by 10^12 and either revert with a confusing
+    # error or (worst case) attempt to spend orders of magnitude too much.
+    _STATIC_DECIMALS = {
+        "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d": 18,  # WFLR
+        "0x1502FA4be69d526124D453619276FacCab275d3D": 18,  # FXRP
+        "0x4A771CA9f10fEf2F73f5dC99339e01FEE1dAF09e":  6,  # USDT0 (USD0 alias)
+        "0x12e605bc104e93B45e1aD99F9e555f659051c2BB": 18,  # sFLR
+        "0x1a77D13B87B8e5F58cf9bCDaCae6d3CDdA4f4344": 18,  # stFLR
+        "0xFcB23FA1d5b4652D0A0B48F0E42697D7Bca07A0c": 18,  # stXRP
+        "0x7D3c9C6566375d6F11D9B00b06A14eaF5a2f4e75": 18,  # HLN
+    }
+
     def _token_decimals(self, token_address: str) -> int:
-        """Return ERC20 decimals for a token, cached. Falls back to 18 on failure."""
+        """
+        Return ERC20 decimals for a token, cached. Checks the static
+        known-tokens registry first (safe fast-path), then falls back to
+        on-chain `decimals()`. Raises RuntimeError if both fail — the
+        caller's try/except converts it to a clean error dict. We refuse
+        to silently assume 18 because a 6-decimal stablecoin oversized
+        by 10^12 is a live-fund catastrophe (audit R1d).
+        """
         _addr = Web3.to_checksum_address(token_address)
         if _addr in self._DECIMALS_CACHE:
             return self._DECIMALS_CACHE[_addr]
+        _static = self._STATIC_DECIMALS.get(_addr)
+        if _static is not None:
+            self._DECIMALS_CACHE[_addr] = _static
+            return _static
         try:
             c = self._w3.eth.contract(address=_addr, abi=_ERC20_ABI)
             d = int(c.functions.decimals().call())
             self._DECIMALS_CACHE[_addr] = d
             return d
-        except Exception:
-            return 18
+        except Exception as e:
+            raise RuntimeError(
+                f"Could not fetch decimals for {_addr}: {e}. "
+                f"Refusing to assume 18 for live sizing. Add the token "
+                f"to FlareExecutor._STATIC_DECIMALS if it is a known asset."
+            )
 
     # ── BlazeSwap V2 swap ────────────────────────────────────────────────────
     def execute_blazeswap_swap(
