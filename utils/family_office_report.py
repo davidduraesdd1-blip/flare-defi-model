@@ -33,11 +33,27 @@ APP_DIRS = {
 
 
 def _find_sibling_app_dir(app_key: str) -> Optional[Path]:
-    """Return the sibling app's directory path, or None if not found."""
-    here = Path(__file__).resolve().parent.parent   # module is in utils/ of one app
-    siblings = here.parent
-    candidate = siblings / APP_DIRS.get(app_key, "")
-    return candidate if candidate.exists() else None
+    """Return the sibling app's directory path, or None if not found.
+
+    Robust to both file layouts this module ships in:
+      - DeFi:      Defi Model/utils/family_office_report.py   (subfolder)
+      - SuperGrok: SuperGrok Mathematically Model/utils_family_office_report.py  (root)
+      - RWA:       RWA Model/utils_family_office_report.py   (root)
+
+    Walks up the directory chain from __file__ and returns the first
+    parent that contains the target app directory. This is layout-
+    agnostic: the same function works whether the module is nested
+    inside utils/ or at the app root.
+    """
+    target = APP_DIRS.get(app_key, "")
+    if not target:
+        return None
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidate = parent / target
+        if candidate.exists() and candidate.is_dir():
+            return candidate
+    return None
 
 
 # ── Per-app snapshot readers (best-effort, read-only) ───────────────────────
