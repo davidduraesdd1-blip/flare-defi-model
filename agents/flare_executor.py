@@ -10,12 +10,15 @@ SAFETY: This module NEVER handles raw private keys in memory longer than
 needed for signing. Keys are loaded, used, and immediately discarded.
 """
 
+import logging
 import sys
 import time
 from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+logger = logging.getLogger(__name__)
 
 from agents.config import (
     FLARE_RPC_URLS, FLARE_CHAIN_ID, FLARE_CONTRACTS,
@@ -543,11 +546,16 @@ class FlareExecutor:
                         0,   # sqrtPriceLimitX96
                     )
                     _q_res = _quoter.functions.quoteExactInputSingle(_q_params).call()
-                    expected_out_raw = int(_q_res[0])
-                    _audit.log_error(
-                        f"FlareExecutor.sparkdex quoter ok → expected_out_raw={expected_out_raw}",
-                        {"decision": decision.to_dict()}
-                    )
+                    _q_out = int(_q_res[0])
+                    # Audit aba91f63: quoter returning 0 means no liquidity / no
+                    # pool at this fee tier — treat as "no quote" so fallback
+                    # path can try off-chain prices or give a clearer reject.
+                    if _q_out > 0:
+                        expected_out_raw = _q_out
+                    else:
+                        logger.debug("[FlareExecutor] V3 quoter returned 0 — "
+                                     "no pool at fee_tier=%s; falling back", fee_tier)
+                        expected_out_raw = None
                 except Exception as _q_err:
                     logger.debug("[FlareExecutor] V3 quoter call failed, falling back: %s", _q_err)
                     expected_out_raw = None

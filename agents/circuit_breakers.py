@@ -237,8 +237,11 @@ def check_all(context: dict, cfg: Optional[dict] = None) -> tuple[bool, str, str
             try:
                 _trip = gate_fn(context, cfg)
             except Exception as e:
-                logger.warning("[CircuitBreakers] gate %s raised: %s", gate_name, e)
-                _trip = None
+                # Audit aabf0e41: FAIL-SAFE — a crashed gate must HALT the
+                # circuit, not proceed. Previously we logged + set _trip=None
+                # which allowed execution to continue despite a broken gate.
+                logger.warning("[CircuitBreakers] gate %s raised (failing safe): %s", gate_name, e)
+                _trip = f"Gate {gate_name} crashed: {type(e).__name__}: {str(e)[:200]}"
             if _trip:
                 state.halted        = True
                 state.halted_reason = _trip

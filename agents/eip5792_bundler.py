@@ -109,6 +109,9 @@ def serialize_bundle(bundle: dict) -> str:
 
 # ── Helpers for common approve+call pattern ─────────────────────────────────
 
+_UINT256_MAX = (1 << 256) - 1
+
+
 def build_approve_call(
     token_address: str, spender: str, amount_raw: int,
     chain_id_hex: Optional[str] = None,
@@ -117,10 +120,19 @@ def build_approve_call(
     Build an ERC20 approve(spender, amount) call using the standard
     4-byte selector + abi-encoded args.
     approve(address,uint256) = 0x095ea7b3
+
+    Rejects amounts that overflow uint256 — audit aba91f63 caught that
+    amount_raw >= 2^256 would produce 65 hex chars (invalid calldata).
     """
+    _amount_int = int(amount_raw)
+    if _amount_int < 0 or _amount_int > _UINT256_MAX:
+        raise ValueError(
+            f"amount_raw={_amount_int} is out of uint256 range "
+            f"[0, 2^256 - 1] — cannot encode as ERC20 approve calldata"
+        )
     _selector = "0x095ea7b3"
     _spender_padded = str(spender).lower().replace("0x", "").rjust(64, "0")
-    _amount_padded  = f"{int(amount_raw):064x}"
+    _amount_padded  = f"{_amount_int:064x}"
     _data = _selector + _spender_padded + _amount_padded
     return build_call(to=token_address, value_wei=0, data=_data, chain_id_hex=chain_id_hex)
 

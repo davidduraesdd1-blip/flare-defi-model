@@ -55,12 +55,17 @@ def format_usd(value, decimals: int = 2, compact: bool = False) -> str:
         v = float(value)
     except (TypeError, ValueError):
         return _EM_DASH
+    # Audit aba91f63: guard against negative `decimals` which would raise
+    # ValueError in the f-string. Clamp to 0..6.
+    decimals = max(0, min(6, int(decimals)))
     sign = "-" if v < 0 else ""
     av = abs(v)
     if compact:
         if av >= 1_000_000_000:
             return f"{sign}${av / 1_000_000_000:.{decimals}f}B"
-        if av >= 1_000_000:
+        # Audit aba91f63: avoid confusing "$1000.00K" output for values in
+        # the 950K..1M range — transition to M at 950K for cleaner display.
+        if av >= 950_000:
             return f"{sign}${av / 1_000_000:.{decimals}f}M"
         if av >= 10_000:
             return f"{sign}${av / 1_000:.{decimals}f}K"
