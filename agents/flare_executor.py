@@ -420,6 +420,7 @@ class FlareExecutor:
 
             nonce     = w3.eth.get_transaction_count(address)
             gas_price = w3.eth.gas_price
+            _approval_sent = False    # audit R2a: track so except-block can revoke
 
             # Send approve
             approve_tx = token_in.functions.approve(
@@ -429,9 +430,15 @@ class FlareExecutor:
                 "gas": int(approve_gas * 1.2), "gasPrice": gas_price,
             })
             _sa = w3.eth.account.sign_transaction(approve_tx, private_key)
-            w3.eth.wait_for_transaction_receipt(
-                w3.eth.send_raw_transaction(_sa.raw_transaction), timeout=60
-            )
+            _approve_hash = w3.eth.send_raw_transaction(_sa.raw_transaction)
+            _approve_rcpt = w3.eth.wait_for_transaction_receipt(_approve_hash, timeout=60)
+            _approval_sent = True
+            # Audit R2g: approve must succeed before we send the swap — otherwise
+            # the swap tx will revert and burn the user's gas with no outcome.
+            if _approve_rcpt.status != 1:
+                return {"status": "error",
+                        "reason": "Approve tx reverted — aborting before swap",
+                        "tx_hash": _approve_hash.hex()}
 
             # Send swap
             swap_tx = router.functions.swapExactTokensForTokens(
@@ -468,9 +475,22 @@ class FlareExecutor:
                 "expected_out":    expected_out,
             }
         except Exception as e:
-            _audit.log_error(f"FlareExecutor.execute_blazeswap_swap error: {e}",
-                             {"decision": decision.to_dict()})
-            return {"status": "error", "reason": str(e)}
+            # Audit R2a: if we already sent the approval but the swap side
+            # crashed before a successful receipt, revoke the lingering
+            # allowance so the router can't be drained later. Best-effort —
+            # revoke itself swallows its own errors.
+            if locals().get("_approval_sent") and "token_in" in locals() and "router_addr" in locals():
+                try:
+                    _next_nonce = w3.eth.get_transaction_count(address)
+                    self._revoke_approval(w3, token_in, router_addr, address,
+                                          private_key, _next_nonce, w3.eth.gas_price)
+                except Exception:
+                    pass
+            _audit.log_error(
+                f"FlareExecutor.execute_blazeswap_swap error: {str(e)[:200]}",
+                {"decision": decision.to_dict()},
+            )
+            return {"status": "error", "reason": str(e)[:200]}
 
     # ── Shared helper: best-effort approval revoke on swap failure ──────────
     def _revoke_approval(self, w3, token_contract, router_addr: str,
@@ -627,6 +647,7 @@ class FlareExecutor:
 
             nonce     = w3.eth.get_transaction_count(address)
             gas_price = w3.eth.gas_price
+            _approval_sent = False    # audit R2a: track for except-block revoke
 
             approve_tx = token_in.functions.approve(
                 Web3.to_checksum_address(router_addr), amount_in_raw
@@ -635,9 +656,14 @@ class FlareExecutor:
                 "gas": int(approve_gas * 1.2), "gasPrice": gas_price,
             })
             _sa = w3.eth.account.sign_transaction(approve_tx, private_key)
-            w3.eth.wait_for_transaction_receipt(
-                w3.eth.send_raw_transaction(_sa.raw_transaction), timeout=60
-            )
+            _approve_hash = w3.eth.send_raw_transaction(_sa.raw_transaction)
+            _approve_rcpt = w3.eth.wait_for_transaction_receipt(_approve_hash, timeout=60)
+            _approval_sent = True
+            # Audit R2g: approve must succeed before we send the swap.
+            if _approve_rcpt.status != 1:
+                return {"status": "error",
+                        "reason": "Approve tx reverted — aborting before swap",
+                        "tx_hash": _approve_hash.hex()}
 
             swap_tx = router.functions.exactInputSingle(params).build_transaction({
                 "chainId": FLARE_CHAIN_ID, "from": address, "nonce": nonce + 1,
@@ -668,9 +694,19 @@ class FlareExecutor:
                 "amount_out_minimum": amount_out_minimum,
             }
         except Exception as e:
-            _audit.log_error(f"FlareExecutor.execute_sparkdex_swap error: {e}",
-                             {"decision": decision.to_dict()})
-            return {"status": "error", "reason": str(e)}
+            # Audit R2a: revoke any lingering approval on crash.
+            if locals().get("_approval_sent") and "token_in" in locals() and "router_addr" in locals():
+                try:
+                    _next_nonce = w3.eth.get_transaction_count(address)
+                    self._revoke_approval(w3, token_in, router_addr, address,
+                                          private_key, _next_nonce, w3.eth.gas_price)
+                except Exception:
+                    pass
+            _audit.log_error(
+                f"FlareExecutor.execute_sparkdex_swap error: {str(e)[:200]}",
+                {"decision": decision.to_dict()},
+            )
+            return {"status": "error", "reason": str(e)[:200]}
 
     def execute(
         self,
