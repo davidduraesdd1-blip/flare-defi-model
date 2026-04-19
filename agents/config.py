@@ -19,11 +19,19 @@ _logger = logging.getLogger(__name__)
 # LIVE_PHASE2  → real execution, hard $1,000 cap, requires 14-day paper gate
 # LIVE_PHASE3  → real execution at scale, limits scale proportionally
 #
-# To change: set env var AGENT_MODE=LIVE_PHASE2 (never commit live keys to git)
-# The UI also manages this; env var takes precedence.
-OPERATING_MODE: str = os.environ.get("AGENT_MODE", "PAPER").upper()
+# To change: set env var OPERATING_MODE=LIVE_PHASE2 (or AGENT_MODE as a legacy
+# alias) — never commit live keys to git. The UI also manages this; env var
+# takes precedence. Audit R7g D1: .env.example documents OPERATING_MODE, so
+# accept both names with OPERATING_MODE winning if both are set.
+OPERATING_MODE: str = (
+    os.environ.get("OPERATING_MODE")
+    or os.environ.get("AGENT_MODE")
+    or "PAPER"
+).upper()
 if OPERATING_MODE not in ("PAPER", "LIVE_PHASE2", "LIVE_PHASE3"):
-    raise ValueError(f"Invalid AGENT_MODE: {OPERATING_MODE!r} — must be PAPER, LIVE_PHASE2, or LIVE_PHASE3")
+    raise ValueError(
+        f"Invalid OPERATING_MODE: {OPERATING_MODE!r} — must be PAPER, LIVE_PHASE2, or LIVE_PHASE3"
+    )
 
 # ─── Paper Trading Settings ───────────────────────────────────────────────────
 PAPER_STARTING_BALANCE_USD: float = 100_000.0   # virtual paper balance
