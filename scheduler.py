@@ -131,14 +131,24 @@ def run_quick_check() -> None:
     - Any major token price moved > 8% since last check (position risk)
     - Hyperliquid funding rate > 15% annualised (funding arb opportunity)
     """
+    # Audit R3g-3: previously this released the lock immediately, which meant
+    # quick_check could run concurrently with a full scan and double-write to
+    # the same data/ JSON caches. Hold the lock for the whole body so mutual
+    # exclusion is real; full scan and quick check now serialize correctly.
     if not _scan_lock.acquire(blocking=False):
         logger.debug("Quick check skipped — full scan in progress.")
         return
-    _scan_lock.release()  # quick_check doesn't hold the lock — just checks availability
+    try:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        logger.info("─" * 40)
+        logger.info("QUICK CHECK — %s", now.strftime('%Y-%m-%d %H:%M UTC'))
+        return _run_quick_check_body(now)
+    finally:
+        _scan_lock.release()
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    logger.info("─" * 40)
-    logger.info("QUICK CHECK — %s", now.strftime('%Y-%m-%d %H:%M UTC'))
+
+def _run_quick_check_body(now):
+    """Original quick_check body — extracted so the lock wraps it."""
 
     thresholds = SCHEDULER.get("quick_check_thresholds", {})
     util_limit      = float(thresholds.get("kinetic_utilization_spike", 0.90))
@@ -676,7 +686,17 @@ def start_scheduler() -> None:
     tz = SCHEDULER["timezone"]
     run_times = SCHEDULER["run_times"]   # ["06:00", "18:00"]
 
-    scheduler = BlockingScheduler(timezone=tz)
+    # Audit R3g-1: job_defaults coalesce pending fires after sleep/wake,
+    # cap each job to a single instance (prevents overlapping runs when the
+    # laptop catches up on missed triggers), and grace 30 min for misfires.
+    scheduler = BlockingScheduler(
+        timezone=tz,
+        job_defaults={
+            "coalesce": True,
+            "max_instances": 1,
+            "misfire_grace_time": 1800,
+        },
+    )
 
     for t in run_times:
         parts = t.split(":")
@@ -735,6 +755,18 @@ def start_scheduler() -> None:
         misfire_grace_time=3600,
     )
     logger.info("Scheduled daily web monitor at %02d:00 %s", monitor_hour, tz)
+
+    # Audit R3g-2: wire the Level-C agent decision loop into the scheduler.
+    # schedule_agent_loop() was defined in agents/agent_runner.py:324 but
+    # never called anywhere, meaning the autonomous agent never fired unless
+    # the user clicked "Run One Cycle Now" in the UI. This is the 24/7
+    # autonomous operation promised by CLAUDE.md §11 Level-C.
+    try:
+        from agents.agent_runner import schedule_agent_loop
+        schedule_agent_loop(scheduler)
+        logger.info("Scheduled Level-C agent decision loop.")
+    except Exception as _agent_err:
+        logger.warning("Agent loop scheduler wiring failed: %s", _agent_err)
 
     logger.info("Scheduler running. Press Ctrl+C to stop.")
     logger.info("Next scans: %s %s", ', '.join(run_times), tz)
