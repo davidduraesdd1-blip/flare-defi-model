@@ -20,6 +20,7 @@ from ui.common import (
     page_setup, render_sidebar, load_latest, load_history_runs,
     render_opportunity_card, render_section_header, risk_score_to_grade,
     render_what_this_means, get_user_level, get_composite_signal_cached,
+    render_past_performance_disclaimer,
 )
 # config imports consolidated below in models.risk_models import block
 from scanners.defillama import (
@@ -3233,3 +3234,7 @@ with _tab_intel:
             intermediate_message="Treasury: stablecoin mix indicates runway quality. <20% stables = sell-off risk.",
         )
         st.caption("Source: DeFiLlama /treasury/{slug} · refreshed hourly.")
+
+# ── Page footer: past-performance disclaimer (R3h Tier-1) ─────────────────────
+st.markdown("---")
+render_past_performance_disclaimer()

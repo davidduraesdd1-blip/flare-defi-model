@@ -1545,6 +1545,12 @@ button[kind="secondary"] {
             unsafe_allow_html=True,
         )
 
+    # R3h Tier-1: Terms + Privacy expander (internal-beta stub) in sidebar footer
+    try:
+        render_legal_footer()
+    except Exception:
+        pass
+
     # Model weights (outside sidebar context)
     # OPT-41: use module-level TTL cache to avoid re-reading history.json every render
     try:
@@ -2469,6 +2475,72 @@ def render_fear_greed_trend(user_level: str = "beginner") -> None:
             f"Contrarian tip: extreme fear is historically a buying opportunity; "
             f"extreme greed signals caution."
         )
+
+
+# ── Legal / Compliance Copy (R3h Tier-1 ship for April 20) ────────────────────
+
+_PAST_PERF_DISCLAIMER = (
+    "Past performance does not guarantee future results. Backtest and "
+    "simulation results are hypothetical, assume a static market, and do not "
+    "reflect actual trading. Real-world results may differ materially due to "
+    "slippage, gas costs, liquidity, protocol risk, and market volatility. "
+    "Not investment advice."
+)
+
+_LEGAL_TOS = """\
+**Terms of Service — Internal Beta**
+
+This application is an internal beta tool operated by David for evaluation
+purposes. It is not a production service and is not available to the public.
+
+- No formal Terms of Service have been established yet.
+- Use is at the operator's sole discretion and risk.
+- All features are subject to change without notice.
+- No warranty of any kind, express or implied.
+
+Effective: April 2026.
+"""
+
+_LEGAL_PRIVACY = """\
+**Privacy Policy — Internal Beta**
+
+This application is an internal beta tool. It does not collect personally
+identifiable information beyond what the operator voluntarily configures
+(API keys, wallet addresses, portfolio settings) for the purpose of
+operating the tool.
+
+- Credentials are stored locally (encrypted where applicable; see
+  `wallets.enc` for encrypted private keys). Nothing is transmitted to
+  third parties except via explicit, user-configured API calls (CoinGecko,
+  Anthropic, Coinbase CDP, etc.) governed by those providers' own
+  privacy policies.
+- No marketing, no analytics, no tracking pixels.
+- Audit logs remain on the operator's local disk.
+
+Effective: April 2026.
+"""
+
+
+def render_past_performance_disclaimer(context: str = "") -> None:
+    """Render a compact past-performance disclaimer under backtest / simulation
+    / yield-projection panels.
+
+    Args:
+        context: optional short prefix, e.g. "Backtest:" or "Yield projection:".
+                 Leave blank for the standalone disclaimer.
+    """
+    _prefix = (context + " ") if context else ""
+    st.caption(f"{_prefix}{_PAST_PERF_DISCLAIMER}")
+
+
+def render_legal_footer() -> None:
+    """Render the Terms + Privacy expander in the sidebar (internal-beta stub).
+    Safe to call multiple times — Streamlit dedupes same-key widgets within a
+    render cycle via the expander component."""
+    with st.sidebar.expander("📜 Legal (Internal Beta)", expanded=False):
+        st.markdown(_LEGAL_TOS)
+        st.markdown("---")
+        st.markdown(_LEGAL_PRIVACY)
 
 
 # ── Welcome Banner (Phase 2, item 6) ──────────────────────────────────────────

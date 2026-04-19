@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-from ui.common import page_setup, render_sidebar, render_section_header, render_what_this_means, get_user_level
+from ui.common import page_setup, render_sidebar, render_section_header, render_what_this_means, get_user_level, render_past_performance_disclaimer
 from config import FALLBACK_PRICES
 from scanners.defillama import fetch_yields_pools
 from scanners.flare_scanner import fetch_ftso_providers
@@ -1530,3 +1530,7 @@ with tab7:
 - A green ✅ means the pool was profitable even with price movement
 - A red ❌ means IL erased more than your yield — you'd have done better holding
         """)
+
+# ── Page footer: past-performance disclaimer (R3h Tier-1) ─────────────────────
+st.markdown("---")
+render_past_performance_disclaimer()

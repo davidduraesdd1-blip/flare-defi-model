@@ -23,6 +23,7 @@ from ui.common import (
     compute_position_pnl, render_section_header,
     _ts_fmt, load_live_prices, risk_score_to_grade, render_ftso_il_calculator,
     render_what_this_means, get_user_level,
+    render_past_performance_disclaimer,
 )
 
 
@@ -3007,4 +3008,8 @@ with _tab_fassets:
         except Exception as _fa_e:
             logger.warning("[Portfolio] FAsset arb detection failed: %s", _fa_e)
             st.caption("Arb detection temporarily unavailable — try refreshing.")
+
+# ── Page footer: past-performance disclaimer (R3h Tier-1) ─────────────────────
+st.markdown("---")
+render_past_performance_disclaimer()
 
