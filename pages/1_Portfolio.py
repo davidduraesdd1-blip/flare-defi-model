@@ -2289,10 +2289,15 @@ with _tab_pos:
 
     _od_col_a, _od_col_b, _od_col_c = st.columns([2, 2, 3])
     with _od_col_a:
+        # Audit R3a: `total_value` is only defined inside `if positions:`
+        # (line 867). A user with no positions reaching this section hit
+        # NameError. Use _hero["total_value"] which _build_hero_metrics
+        # always sets (line 278).
+        _od_default_deploy = float(max(_hero.get("total_value", 0) or 0, 1000.0))
         _od_wallet_input = st.number_input(
             "Deploy size (USD)",
             min_value=100.0, max_value=1_000_000.0,
-            value=float(max(total_value, 1000.0)),
+            value=_od_default_deploy,
             step=100.0,
             help="Total capital to allocate across the plan. Each leg is sized per Kelly fraction.",
             key="od_wallet_input",
