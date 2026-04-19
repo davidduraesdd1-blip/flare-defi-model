@@ -2,10 +2,6 @@
 AI Alerts — Email notifications + generic HTTPS webhook for APY threshold events.
 Called by the scheduler after each scan completes.
 Configure settings via the Streamlit dashboard → Alert Settings.
-
-Telegram + Discord channels were removed 2026-04-18 after repeated bot-token /
-webhook-URL leaks in git history. If demand resurfaces, reintroduce them with
-env-var-only config (never persisted to disk, never shipped via UI).
 """
 
 import json
@@ -71,10 +67,6 @@ def load_alerts_config() -> dict:
     else:
         cfg.setdefault("webhook",     {"enabled": False, "url": "", "secret": ""})
         cfg.setdefault("thresholds",  {"min_apy_alert": 150.0, "new_arb_alert": True})
-        # Drop any legacy telegram/discord sections on load so stale creds
-        # from an older install can't sit in memory and accidentally fire.
-        cfg.pop("telegram", None)
-        cfg.pop("discord",  None)
 
     return cfg
 
@@ -113,10 +105,8 @@ def send_email_alert(subject: str, body: str, config: dict) -> bool:
         logger.info("Email alert sent: %s", subject)
         return True
     except smtplib.SMTPAuthenticationError:
-        # Audit R1f: SMTP auth exceptions on Gmail echo the submitted
-        # username back verbatim. Narrow-catch so the raw str(e) never
-        # hits logs — same class of credential-persistence bug we just
-        # killed with Telegram/Discord.
+        # Gmail SMTP auth exceptions echo the submitted username back verbatim.
+        # Narrow-catch so the raw str(e) never hits logs.
         logger.warning("Email alert failed: SMTP authentication rejected — check the app password.")
         return False
     except Exception as e:

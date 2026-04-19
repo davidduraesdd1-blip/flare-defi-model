@@ -820,7 +820,6 @@ CLAUDE_HAIKU_MODEL: str = "claude-haiku-4-5-20251001"
 COINGECKO_API_KEY: str | None = os.environ.get("DEFI_COINGECKO_API_KEY")
 COINMETRICS_API_KEY: str | None = os.environ.get("DEFI_COINMETRICS_API_KEY")  # coinmetrics.io free community key
 COINMARKETCAP_API_KEY: str | None = os.environ.get("DEFI_COINMARKETCAP_API_KEY")  # coinmarketcap.com — primary price source
-# Telegram + Discord env vars removed 2026-04-18 (see ai/alerts.py header).
 
 FEATURES: dict = {
     # Legacy keys — kept for backward compatibility
@@ -881,7 +880,6 @@ ALLOWED_DOMAINS: frozenset = frozenset({
     "app.renzoprotocol.com",        # Renzo protocol points API (#71)
     "bridges.llama.fi",             # DeFiLlama bridge flows API (#85)
     "api.zerion.io",                # Zerion wallet portfolio API (#111)
-    # api.telegram.org + discord.com removed 2026-04-18 along with their senders
     "pro-api.coinmarketcap.com",    # CoinMarketCap — primary price source (4-tier fallback chain)
     "api.kraken.com",               # Kraken REST   — Tier 3 price fallback (no auth required)
     "www.okx.com",                  # OKX REST      — Tier 4 price fallback (no auth required)
