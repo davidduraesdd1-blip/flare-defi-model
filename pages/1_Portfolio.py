@@ -902,28 +902,49 @@ with _tab_pos:
         # Compute P&L once for all positions — reused in cards and exit timeline below
         pnl_results = [compute_position_pnl(pos, prices) for pos in positions]
 
-        # ── Export — compact secondary buttons (was full-width primary) ──────
-        _exp_csv, _exp_pdf, _exp_spacer = st.columns([2, 2, 3])
+        # ── Export row — CSV + PDF side-by-side ─────────────────────────────
+        # Layout rewrite 2026-04-19: was [2, 2, 3] with a spacer column that
+        # pushed the buttons left but left weird empty gutter artifacts in
+        # between on some renders. Now a tight 2-column layout with explicit
+        # container, defensive PDF fallback, and kelly-named download
+        # file names. Both buttons always render — no Nones, no gaps.
+        _build_ts = datetime.now(timezone.utc).strftime("%Y%m%d")
+        _csv_bytes = _build_csv_export(positions, pnl_results) or b""
+        _pdf_bytes = _build_pdf_export(positions, pnl_results) or b""
+        _exp_csv, _exp_pdf = st.columns(2, gap="small")
         with _exp_csv:
-            _csv_bytes = _build_csv_export(positions, pnl_results)
             st.download_button(
                 "⬇ CSV",
                 data=_csv_bytes,
-                file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv",
+                file_name=f"flare_portfolio_{_build_ts}.csv",
                 mime="text/csv",
                 width='stretch',
                 help="Export positions table as CSV",
+                key="portfolio_dl_csv",
+                disabled=(len(_csv_bytes) == 0),
             )
         with _exp_pdf:
-            _pdf_bytes = _build_pdf_export(positions, pnl_results)
             if _pdf_bytes:
                 st.download_button(
                     "⬇ PDF",
                     data=_pdf_bytes,
-                    file_name=f"flare_portfolio_{datetime.now(timezone.utc).strftime('%Y%m%d')}.pdf",
+                    file_name=f"flare_portfolio_{_build_ts}.pdf",
                     mime="application/pdf",
                     width='stretch',
                     help="Export portfolio report as PDF",
+                    key="portfolio_dl_pdf",
+                )
+            else:
+                # Render a disabled button in the PDF column so the two
+                # column heights match and the row stays visually clean
+                # even when fpdf2 isn't importable (Streamlit Cloud edge
+                # case with stripped wheels).
+                st.button(
+                    "⬇ PDF unavailable",
+                    width='stretch',
+                    disabled=True,
+                    help="PDF export requires fpdf2 — not installed in this environment",
+                    key="portfolio_dl_pdf_disabled",
                 )
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
