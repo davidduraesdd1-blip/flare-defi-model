@@ -81,8 +81,19 @@ with _ctrl_tab_alerts:
                 _port_val = 587
             smtp_port = st.number_input("SMTP port", value=_port_val,
                                         min_value=1, max_value=65535, key="smtp_port")
-            smtp_pass = st.text_input("SMTP password", value=config["email"].get("password", ""),
-                                       key="smtp_pass", type="password")
+            # Audit R2f: never pre-fill a password into a text_input — even
+            # type="password" ships the live value in the rendered DOM on
+            # every rerun. Leave blank; on save, empty input means "keep
+            # the stored value" (see save handler below).
+            _smtp_pass_has_value = bool(config["email"].get("password"))
+            smtp_pass = st.text_input(
+                "SMTP password",
+                value="",
+                key="smtp_pass",
+                type="password",
+                placeholder="●●●● (saved)" if _smtp_pass_has_value else "",
+                help="Leave blank to keep the currently saved password.",
+            )
         st.markdown(
             "<div class='warn-box' style='font-size:0.85rem;'>"
             "Credentials stored in <code>data/alerts_config.json</code> — never commit this file to git.</div>",
@@ -94,9 +105,17 @@ with _ctrl_tab_alerts:
         webhook_enabled = st.toggle("Enable webhook alerts", value=config.get("webhook", {}).get("enabled", False), key="webhook_enabled")
         webhook_url     = st.text_input("Webhook URL (HTTPS)", value=config.get("webhook", {}).get("url", ""),
                                          key="webhook_url", placeholder="https://hooks.zapier.com/…")
-        webhook_secret  = st.text_input("Signing secret (optional)", value=config.get("webhook", {}).get("secret", ""),
-                                         key="webhook_secret", type="password",
-                                         help="If set, adds X-Flare-Signature HMAC-SHA256 header to each request")
+        # Audit R2f: don't re-emit the secret in the rendered DOM every
+        # rerun. Blank field on load; empty submit keeps the stored value.
+        _webhook_secret_has_value = bool(config.get("webhook", {}).get("secret"))
+        webhook_secret  = st.text_input(
+            "Signing secret (optional)",
+            value="",
+            key="webhook_secret",
+            type="password",
+            placeholder="●●●● (saved)" if _webhook_secret_has_value else "",
+            help="Leave blank to keep the stored secret. If set, adds X-Flare-Signature HMAC-SHA256 header to each request.",
+        )
         st.markdown(
             "<div class='warn-box' style='font-size:0.85rem;'>"
             "Secret stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
@@ -163,10 +182,15 @@ with _ctrl_tab_alerts:
     with col_save:
         if st.button("Save Settings", key="save_alerts",
                          width='stretch'):
+            # Audit R2f: preserve stored secrets when their input is blank.
+            # Inputs are seeded empty to avoid DOM re-emission, so an empty
+            # submit means "don't change" — NOT "clear the stored value".
+            _new_pw     = smtp_pass if smtp_pass else config["email"].get("password", "")
+            _new_secret = webhook_secret if webhook_secret else config.get("webhook", {}).get("secret", "")
             new_config = {
                 "email":    {"enabled": enabled, "address": email_addr, "smtp_server": smtp_srv,
-                             "smtp_port": int(smtp_port), "username": smtp_user, "password": smtp_pass},
-                "webhook":  {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret},
+                             "smtp_port": int(smtp_port), "username": smtp_user, "password": _new_pw},
+                "webhook":  {"enabled": webhook_enabled, "url": webhook_url, "secret": _new_secret},
                 "thresholds": {"min_apy_alert": min_apy, "new_arb_alert": arb_alert},
             }
             save_alerts_config(new_config)
@@ -175,16 +199,20 @@ with _ctrl_tab_alerts:
     with col_test_e:
         if st.button("Send Test Email", key="test_email_btn",
                          width='stretch'):
+            # Same blank-preserve rule for the test path.
+            _test_pw = smtp_pass if smtp_pass else config["email"].get("password", "")
             _test_cfg = {"email": {"enabled": enabled, "address": email_addr,
                                    "smtp_server": smtp_srv, "smtp_port": int(smtp_port),
-                                   "username": smtp_user, "password": smtp_pass}}
+                                   "username": smtp_user, "password": _test_pw}}
             ok, msg = test_email(_test_cfg)
             st.success(msg) if ok else st.error(msg)
 
     with col_test_w:
         if st.button("Test Webhook", key="test_webhook_btn",
                          width='stretch'):
-            _test_cfg = {"webhook": {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret}}
+            # Audit R2f: blank-preserve for the signing secret.
+            _test_secret = webhook_secret if webhook_secret else config.get("webhook", {}).get("secret", "")
+            _test_cfg = {"webhook": {"enabled": webhook_enabled, "url": webhook_url, "secret": _test_secret}}
             ok, msg = test_webhook(_test_cfg)
             st.success(msg) if ok else st.error(msg)
 
