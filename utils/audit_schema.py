@@ -83,8 +83,25 @@ def make_event(
         logger.debug("[AuditSchema] unknown app=%r; accepting anyway", app)
     if event_type not in EVENT_TYPES:
         logger.debug("[AuditSchema] unknown event_type=%r; accepting anyway", event_type)
+    # Audit R6a: enforce canonical_risk_level range (1-5) at the schema
+    # boundary. Silent acceptance of 0 or 7 would pollute the unified
+    # event stream with nonsense levels that downstream consumers cannot
+    # reason about.
+    if canonical_risk_level is not None and canonical_risk_level not in (1, 2, 3, 4, 5):
+        raise ValueError(
+            f"canonical_risk_level must be 1-5 or None, got {canonical_risk_level!r}"
+        )
+    # Audit R6a: size_usd is a notional USD amount — it should never be
+    # negative. A negative value here would corrupt cross-app reconciliation.
+    _size = float(size_usd or 0.0)
+    if _size < 0:
+        raise ValueError(f"size_usd must be >= 0, got {_size}")
 
     return {
+        # schema_version: bump this when the dict shape changes so
+        # downstream consumers can branch on it. v1 is the initial
+        # release of the cross-app unified audit schema (2026-04-18).
+        "schema_version":       1,
         "event_id":             str(uuid.uuid4()),
         "timestamp":            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "app":                  str(app),
@@ -92,7 +109,7 @@ def make_event(
         "canonical_risk_level": canonical_risk_level,
         "user_level":           str(user_level),
         "mode":                 str(mode),
-        "size_usd":             float(size_usd or 0.0),
+        "size_usd":             _size,
         "approved":             bool(approved),
         "reason":               str(reason)[:500],
         "correlation_id":       correlation_id,
