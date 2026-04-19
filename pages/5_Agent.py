@@ -57,7 +57,7 @@ st.markdown("""
 # ─── Page header ──────────────────────────────────────────────────────────────
 render_section_header(
     "Autonomous Trading Agent",
-    "AI-powered yield optimizer · Paper → Live progression · All limits enforced",
+    "AI-assisted yield optimizer (rules-based fallback when AI unavailable) · Paper → Live progression · All limits enforced",
 )
 render_what_this_means(
     "This agent automatically analyzes DeFi opportunities and decides whether to enter, "

@@ -182,11 +182,16 @@ def _run_one_cycle(force: bool = False) -> None:
         if not _cb_ok:
             logger.warning("[Agent] Circuit breaker HALT (%s): %s", _cb_gate, _cb_reason)
             return  # skip this cycle entirely; manual resume required
-    except Exception as _cb_err:
-        # Fail-open on circuit_breakers module errors so a broken import
-        # doesn't wedge the agent. The module itself fails-safe on gate
-        # exceptions; this outer try only catches import/attribute errors.
-        logger.debug("[Agent] circuit_breakers check skipped: %s", _cb_err)
+    except ImportError as _cb_imp_err:
+        # Only swallow ImportError — the module genuinely not being installed
+        # is a degraded-environment case worth logging at WARNING but not
+        # halting. Any OTHER exception (AttributeError, TypeError from a
+        # signature change, runtime crash inside check_all) is NOT caught
+        # here — it propagates so the agent cycle dies loudly rather than
+        # silently skipping safety checks. Audit R9a: previous code caught
+        # bare Exception here, which contradicted the module's fail-safe
+        # design — a broken gate function would silently become a no-op.
+        logger.warning("[Agent] circuit_breakers not available — proceeding without CB: %s", _cb_imp_err)
 
     # Collect context for Claude
     ctx = get_agent_context(

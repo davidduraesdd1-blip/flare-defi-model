@@ -293,7 +293,7 @@ latest     = load_latest()   # uses _load_history_file cache — no duplicate di
 runs       = load_history_runs()
 
 st.title("🎯 Opportunities")
-st.caption("Real-time yield opportunities across Flare + DeFiLlama protocols • Auto-refreshed every 15 minutes")
+st.caption("Fresh yield opportunities across Flare + DeFiLlama protocols • Auto-refreshed every 60 minutes")
 st.markdown(
     "<div style='color:#475569; font-size:0.87rem; margin-bottom:16px;'>"
     "Starter portfolios · APY trends · options strategies</div>",
