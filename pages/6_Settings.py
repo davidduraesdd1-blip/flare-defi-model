@@ -576,8 +576,9 @@ with _ctrl_tab_api:
     st.markdown("### API Key Management")
     st.markdown(
         "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
-        "Set API keys below. Keys entered here are saved to session state only — they override "
-        "environment variables for this session. To persist permanently, set them as environment variables.</div>",
+        "Set API keys below. Keys entered here apply for the lifetime of this running process "
+        "(cleared on restart) and propagate to all downstream code paths. To persist permanently "
+        "across restarts, set them as environment variables or in a <code>.env</code> file.</div>",
         unsafe_allow_html=True,
     )
     _api_keys = [

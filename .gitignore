@@ -3,6 +3,7 @@
 
 # ── Secrets & credentials (NEVER commit these) ────────────────────────────────
 .env
+.env.*
 *.env
 ANTHROPIC_API_KEY*
 .streamlit/secrets.toml
@@ -10,6 +11,11 @@ ANTHROPIC_API_KEY*
 # (Telegram + Discord senders were removed 2026-04-18 for this reason)
 data/alerts_config.json
 data/feedback_checkpoint.json
+# AgentKit CDP wallet seed — written by agents/agentkit_wallet.py on first use.
+# Contains the CDP wallet seed (recovery equivalent) — same sensitivity as
+# wallets.enc. Gitignored defensively so first-run files can't slip into
+# a git add . session. Audit R1b CRITICAL F2.
+data/agentkit_wallet.json
 
 # ── Database & runtime state ──────────────────────────────────────────────────
 *.db

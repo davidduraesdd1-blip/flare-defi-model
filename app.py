@@ -52,8 +52,13 @@ def _scrub_sentry_event(event, hint):
     if "request" in event:
         event["request"].pop("cookies", None)
         event["request"].pop("headers", None)
+    # Audit R1c/R1f: broaden token list to catch PASSPHRASE (OKX), AUTH,
+    # BEARER, CREDENTIAL, PRIVATE, MNEMONIC — anything a dict key with
+    # that substring would commonly carry.
+    _SENSITIVE = ("KEY", "SECRET", "TOKEN", "PASSWORD", "PASSPHRASE",
+                  "DSN", "AUTH", "BEARER", "CREDENTIAL", "PRIVATE", "MNEMONIC")
     for key in list(event.get("extra", {}).keys()):
-        if any(x in key.upper() for x in ["KEY", "SECRET", "TOKEN", "PASSWORD", "DSN"]):
+        if any(x in key.upper() for x in _SENSITIVE):
             event["extra"][key] = "[REDACTED]"
     return event
 

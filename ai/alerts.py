@@ -112,8 +112,15 @@ def send_email_alert(subject: str, body: str, config: dict) -> bool:
             server.sendmail(msg["From"], msg["To"], msg.as_string())
         logger.info("Email alert sent: %s", subject)
         return True
+    except smtplib.SMTPAuthenticationError:
+        # Audit R1f: SMTP auth exceptions on Gmail echo the submitted
+        # username back verbatim. Narrow-catch so the raw str(e) never
+        # hits logs — same class of credential-persistence bug we just
+        # killed with Telegram/Discord.
+        logger.warning("Email alert failed: SMTP authentication rejected — check the app password.")
+        return False
     except Exception as e:
-        logger.warning("Email alert failed: %s", e)
+        logger.warning("Email alert failed: %s", type(e).__name__)
         return False
 
 
@@ -130,6 +137,15 @@ def send_webhook_alert(subject: str, message: str, config: dict) -> bool:
     if not url.startswith("https://"):
         logger.warning("Webhook alert skipped — URL must use HTTPS.")
         return False
+    # Audit R1h M#4: block SSRF to localhost / link-local / RFC-1918.
+    # We reuse utils.http.is_safe_url which also checks the SSRF allowlist.
+    try:
+        from utils.http import is_safe_url
+        if not is_safe_url(url):
+            logger.warning("Webhook alert skipped — URL blocked by SSRF allowlist.")
+            return False
+    except ImportError:
+        pass  # allowlist unavailable in this env; fall through
     try:
         payload = {
             "source":    "flare_defi_model",
@@ -151,10 +167,14 @@ def send_webhook_alert(subject: str, message: str, config: dict) -> bool:
         if r.ok:
             logger.info("Webhook alert sent.")
             return True
-        logger.warning("Webhook alert failed: %s — %s", r.status_code, r.text[:200])
+        # Audit R1f: never log r.text — some providers echo the signed
+        # webhook URL (containing the token) in the body. Status code only.
+        logger.warning("Webhook alert failed: HTTP %s", r.status_code)
         return False
     except Exception as e:
-        logger.warning("Webhook alert failed: %s", e)
+        # Audit R1f: requests exceptions embed the full failing URL
+        # (including query-string tokens). type(e).__name__ only.
+        logger.warning("Webhook alert failed: %s", type(e).__name__)
         return False
 
 
