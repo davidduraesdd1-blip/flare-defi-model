@@ -156,6 +156,38 @@ def _run_one_cycle(force: bool = False) -> None:
     daily_pnl = _audit.get_daily_pnl_usd()
     peak_usd  = _monitor.get_peak_balance(C.PAPER_STARTING_BALANCE_USD)
 
+    # ── Phase 4A-3: Level-C circuit breakers (7 safety gates) ────────────
+    # Runs BEFORE any decision/execution. If any gate trips, the circuit
+    # halts and must be manually resumed from the Settings UI. Halted
+    # state persists to data/circuit_state.json.
+    try:
+        from agents.circuit_breakers import check_all as _cb_check
+        _recent_trade_pnls = _audit.get_recent_trade_pnls(n=10) if hasattr(_audit, "get_recent_trade_pnls") else []
+        _recent_trade_ts   = _audit.get_recent_trade_timestamps(n=20) if hasattr(_audit, "get_recent_trade_timestamps") else []
+        _cb_context = {
+            "peak_balance_usd":         peak_usd,
+            "current_balance_usd":      wallet_usd,
+            "daily_pnl_usd":            daily_pnl,
+            "recent_trade_pnls":        _recent_trade_pnls,
+            "recent_trade_timestamps":  _recent_trade_ts,
+            "last_scan_unix":           _audit.get_last_scan_unix() if hasattr(_audit, "get_last_scan_unix") else None,
+            "consecutive_api_failures": state.get("api_failure_count", 0),
+            "emergency_stop_active":    emergency_stop,
+            # realized_vol_24h + baseline_vol_30d are optional — gate
+            # short-circuits when either is None. Will be wired in 4B.
+            "realized_vol_24h":         None,
+            "baseline_vol_30d":         None,
+        }
+        _cb_ok, _cb_reason, _cb_gate = _cb_check(_cb_context)
+        if not _cb_ok:
+            logger.warning("[Agent] Circuit breaker HALT (%s): %s", _cb_gate, _cb_reason)
+            return  # skip this cycle entirely; manual resume required
+    except Exception as _cb_err:
+        # Fail-open on circuit_breakers module errors so a broken import
+        # doesn't wedge the agent. The module itself fails-safe on gate
+        # exceptions; this outer try only catches import/attribute errors.
+        logger.debug("[Agent] circuit_breakers check skipped: %s", _cb_err)
+
     # Collect context for Claude
     ctx = get_agent_context(
         wallet_balance_usd = wallet_usd,
