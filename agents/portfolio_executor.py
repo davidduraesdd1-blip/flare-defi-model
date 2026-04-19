@@ -359,6 +359,7 @@ def execute_plan(
     plan: PortfolioPlan,
     private_key: Optional[str] = None,
     continue_on_fail: bool = True,
+    wallet_address: Optional[str] = None,
 ) -> PortfolioPlan:
     """
     Execute every approved leg of a plan.
@@ -370,11 +371,39 @@ def execute_plan(
         continue_on_fail: if True (default, per Q8), skip failed legs and
                           continue with the remaining ones; if False, halt
                           the entire plan on first failure
+        wallet_address: EVM address for cross-app reservation ledger (Phase
+                        4A-1 wiring). When provided, prevents double-alloc
+                        between DeFi + RWA + SuperGrok. Skipped when None.
 
     Returns:
         The same PortfolioPlan mutated with exec_* fields filled on each
         leg and aggregate counters (success/failed/skipped) set.
     """
+    # Phase 4A-1: cross-app wallet capacity gate. Only enforces when caller
+    # passes wallet_address — paper-mode test flows can omit it.
+    _reservation_id = None
+    if wallet_address:
+        try:
+            from utils.wallet_state import has_capacity, reserve, release
+            _ok, _reason = has_capacity(
+                wallet_address, plan.wallet_balance_usd, plan.total_notional_usd
+            )
+            if not _ok:
+                for _lg in plan.legs:
+                    if _lg.approved:
+                        _lg.executed = False
+                        _lg.exec_status = "blocked"
+                        _lg.exec_message = _reason
+                        plan.skipped_count += 1
+                return plan
+            # Reserve before signing so a parallel app can't race us
+            _reservation_id = reserve(
+                wallet_address, "defi", plan.total_notional_usd,
+                note=f"portfolio_plan_{plan.profile}",
+            )
+        except Exception as _ws_err:
+            logger.debug("[PortfolioExec] wallet_state gate skipped: %s", _ws_err)
+
     audit = AuditLog()
     audit.log_decision(
         {
@@ -509,4 +538,15 @@ def execute_plan(
         daily_pnl_usd = 0.0,
         config_snapshot = {"mode": plan.operating_mode, "tier": plan.authorization_tier},
     )
+
+    # Phase 4A-1: release the cross-app reservation so other apps can use
+    # the capital. Done regardless of success/failure — the plan attempted
+    # and finished (for better or worse); the reservation served its purpose.
+    if _reservation_id and wallet_address:
+        try:
+            from utils.wallet_state import release
+            release(wallet_address, _reservation_id)
+        except Exception as _rel_err:
+            logger.debug("[PortfolioExec] wallet_state release failed: %s", _rel_err)
+
     return plan
