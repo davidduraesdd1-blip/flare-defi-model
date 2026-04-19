@@ -96,6 +96,29 @@ _UNISWAP_V3_ROUTER_ABI = [
     ], "outputs": [{"name": "amountOut", "type": "uint256"}]},
 ]
 
+# ─── Uniswap V3 Quoter ──────────────────────────────────────────────────────
+# Official Uniswap V3 QuoterV2 interface — staticcall returns expected
+# amountOut WITHOUT executing a swap. Removes the off-chain-price dependency
+# from execute_sparkdex_swap so MEV-safe amountOutMinimum can be computed
+# without trusting a CoinGecko feed.
+# Address comes from FLARE_CONTRACTS['sparkdex_quoter'] env var.
+_UNISWAP_V3_QUOTER_V2_ABI = [
+    {"name": "quoteExactInputSingle", "type": "function", "inputs": [
+        {"name": "params", "type": "tuple", "components": [
+            {"name": "tokenIn",            "type": "address"},
+            {"name": "tokenOut",           "type": "address"},
+            {"name": "amountIn",           "type": "uint256"},
+            {"name": "fee",                "type": "uint24"},
+            {"name": "sqrtPriceLimitX96",  "type": "uint160"},
+        ]},
+    ], "outputs": [
+        {"name": "amountOut",             "type": "uint256"},
+        {"name": "sqrtPriceX96After",     "type": "uint160"},
+        {"name": "initializedTicksCrossed", "type": "uint32"},
+        {"name": "gasEstimate",           "type": "uint256"},
+    ], "stateMutability": "view"},
+]
+
 try:
     from web3 import Web3
     from web3.middleware import ExtraDataToPOAMiddleware
@@ -472,14 +495,18 @@ class FlareExecutor:
                 "reason": "SPARKDEX_ROUTER_ADDRESS not configured — set env var before live.",
             }
 
-        # Security gate: require BOTH prices for slippage-protected minOut
-        if token_in_usd_price <= 0 or token_out_usd_price <= 0:
+        # MEV-safe amountOutMinimum: PREFER on-chain V3 Quoter (3D-12), FALL
+        # BACK to off-chain token prices only if Quoter address not configured.
+        # Ensures we never sign with amountOutMinimum=0 regardless of config.
+        _quoter_addr = FLARE_CONTRACTS.get("sparkdex_quoter", "")
+        _have_quoter = bool(_quoter_addr) and len(_quoter_addr) == 42
+        if not _have_quoter and (token_in_usd_price <= 0 or token_out_usd_price <= 0):
             return {
                 "status": "blocked",
                 "reason": (
-                    "SparkDEX V3 swap requires token_in_usd_price AND "
-                    "token_out_usd_price for MEV-safe minimum-out. Caller "
-                    "must pass both; pass max_slippage_pct as a tight cap. "
+                    "SparkDEX V3 swap needs either an on-chain Quoter "
+                    "(set SPARKDEX_QUOTER_ADDRESS env var) OR both "
+                    "token_in_usd_price AND token_out_usd_price from the caller. "
                     "Refusing to sign with amountOutMinimum=0."
                 ),
             }
@@ -491,20 +518,56 @@ class FlareExecutor:
         try:
             token_in_dec = self._token_decimals(token_in_address)
             token_out_dec = self._token_decimals(token_out_address)
+
+            # Compute amountIn — prefer off-chain price when available, else
+            # assume stablecoin parity (caller should set token_in_usd_price=1
+            # for USD stables even when Quoter provides amountOut).
             _px_in = max(float(token_in_usd_price), 1e-8)
-            _px_out = max(float(token_out_usd_price), 1e-8)
             amount_in_raw = int(adjusted_size_usd / _px_in * (10 ** token_in_dec))
             if amount_in_raw <= 0:
                 return {"status": "rejected", "reason": "Computed amountIn is 0"}
 
-            # Off-chain quote: expected_out = (adjusted_size_usd / token_out_price) * 10^out_dec
-            # Apply fee_tier + max_slippage_pct to build a safe minOut.
-            _fee_frac = float(fee_tier) / 1_000_000.0   # fee_tier is bps * 100 (e.g. 3000 = 0.3%)
-            _expected_out_usd = adjusted_size_usd * (1.0 - _fee_frac)
-            _min_out_usd = _expected_out_usd * (1.0 - max(max_slippage_pct, 0.0))
-            amount_out_minimum = int(_min_out_usd / _px_out * (10 ** token_out_dec))
+            # ── Primary: on-chain Quoter (MEV-safer because no off-chain dep) ──
+            expected_out_raw = None
+            if _have_quoter:
+                try:
+                    _quoter = w3.eth.contract(
+                        address=Web3.to_checksum_address(_quoter_addr),
+                        abi=_UNISWAP_V3_QUOTER_V2_ABI,
+                    )
+                    _q_params = (
+                        Web3.to_checksum_address(token_in_address),
+                        Web3.to_checksum_address(token_out_address),
+                        amount_in_raw,
+                        int(fee_tier),
+                        0,   # sqrtPriceLimitX96
+                    )
+                    _q_res = _quoter.functions.quoteExactInputSingle(_q_params).call()
+                    expected_out_raw = int(_q_res[0])
+                    _audit.log_error(
+                        f"FlareExecutor.sparkdex quoter ok → expected_out_raw={expected_out_raw}",
+                        {"decision": decision.to_dict()}
+                    )
+                except Exception as _q_err:
+                    logger.debug("[FlareExecutor] V3 quoter call failed, falling back: %s", _q_err)
+                    expected_out_raw = None
+
+            # ── Fallback: off-chain prices (legacy path) ──
+            if expected_out_raw is None:
+                if token_out_usd_price <= 0:
+                    return {
+                        "status": "blocked",
+                        "reason": "Quoter unavailable and no token_out_usd_price — can't compute MEV-safe minOut",
+                    }
+                _px_out = max(float(token_out_usd_price), 1e-8)
+                _fee_frac = float(fee_tier) / 1_000_000.0
+                _expected_out_usd = adjusted_size_usd * (1.0 - _fee_frac)
+                expected_out_raw = int(_expected_out_usd / _px_out * (10 ** token_out_dec))
+
+            # Apply user slippage cap to get amountOutMinimum
+            amount_out_minimum = int(expected_out_raw * (1.0 - max(max_slippage_pct, 0.0)))
             if amount_out_minimum <= 0:
-                return {"status": "rejected", "reason": "Computed amountOutMinimum is 0 — check prices/slippage"}
+                return {"status": "rejected", "reason": "Computed amountOutMinimum is 0 — check quoter/prices/slippage"}
 
             token_in = w3.eth.contract(address=Web3.to_checksum_address(token_in_address), abi=_ERC20_ABI)
             router   = w3.eth.contract(address=Web3.to_checksum_address(router_addr), abi=_UNISWAP_V3_ROUTER_ABI)

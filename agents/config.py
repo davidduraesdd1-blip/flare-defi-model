@@ -118,6 +118,13 @@ FLARE_CONTRACTS: dict = {
         "SPARKDEX_ROUTER_ADDRESS",
         "",  # TODO: set SPARKDEX_ROUTER_ADDRESS env var before Phase 2
     ),
+    # SparkDEX V3 Quoter (3D-12) — staticcall returns expected amountOut
+    # without executing a swap. Enables MEV-safe amountOutMinimum in
+    # execute_sparkdex_swap without depending on off-chain price feeds.
+    "sparkdex_quoter": os.environ.get(
+        "SPARKDEX_QUOTER_ADDRESS",
+        "",  # TODO: set SPARKDEX_QUOTER_ADDRESS env var from sparkdex docs
+    ),
     # Kinetic Finance — Compound V2 fork on Flare mainnet
     # From official docs.kinetic.market — verified
     "kinetic_comptroller": "0xeC7e541375D70c37262f619162502dB9131d6db5",
