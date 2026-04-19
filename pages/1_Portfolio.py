@@ -2465,14 +2465,26 @@ with _tab_pos:
                         st.session_state["_od_executing"] = False
                         _priv_key = None
                         _pw = None
+                    # Break down failed/skipped legs by root cause so the user
+                    # knows whether to retry (exchange error), adjust sizing
+                    # (tier blocked), or review config (RiskGuard).
+                    _blocked_n = sum(1 for lg in _plan.legs if lg.exec_status == "blocked")
+                    _rejected_n = sum(1 for lg in _plan.legs if lg.exec_status == "skipped" and lg.reject_reason)
+                    _exch_fail_n = sum(1 for lg in _plan.legs if lg.exec_status == "failed")
                     _ok_color = "#22c55e" if _plan.failed_count == 0 else "#f59e0b"
+                    _breakdown_parts = [f"<b>Success:</b> {_plan.success_count}"]
+                    if _exch_fail_n > 0:
+                        _breakdown_parts.append(f"<span style='color:#ef4444;'>Exchange-failed: {_exch_fail_n}</span>")
+                    if _blocked_n > 0:
+                        _breakdown_parts.append(f"<span style='color:#ef4444;'>Tier-blocked: {_blocked_n}</span>")
+                    if _rejected_n > 0:
+                        _breakdown_parts.append(f"<span style='color:#f59e0b;'>RiskGuard-rejected: {_rejected_n}</span>")
                     st.markdown(
                         f"<div style='background:rgba(15,23,42,0.5); border:1px solid rgba(148,163,184,0.15); "
                         f"border-left:3px solid {_ok_color}; border-radius:8px; padding:14px; margin-top:10px; "
                         f"font-size:0.9rem; color:#e2e8f0;'>"
-                        f"<b>Execution complete.</b> Success: {_plan.success_count} · "
-                        f"Failed: {_plan.failed_count} · Skipped: {_plan.skipped_count}"
-                        f"</div>",
+                        f"<b>Execution complete.</b> " + " · ".join(_breakdown_parts) +
+                        "</div>",
                         unsafe_allow_html=True,
                     )
                     # Show failures inline
