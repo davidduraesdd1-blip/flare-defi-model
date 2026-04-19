@@ -51,9 +51,13 @@ def _load_state() -> dict:
 
 
 def _save_state(state: dict) -> None:
+    """Atomic write: tmp + os.replace to survive crash-during-write (4B-10)."""
     try:
+        import os as _os
         _RESERVATION_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _RESERVATION_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        _tmp = _RESERVATION_FILE.with_suffix(".tmp")
+        _tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        _os.replace(_tmp, _RESERVATION_FILE)
     except Exception as e:
         logger.warning("[WalletState] save failed: %s", e)
 
@@ -63,18 +67,53 @@ def _now() -> float:
 
 
 def _prune_expired(state: dict) -> dict:
-    """Remove reservations older than TTL."""
+    """Remove reservations older than TTL. 4B-9: track expired entries in
+    a separate '_expired' list so a UI widget can surface them as alerts
+    for a short window (auto-aged out 10 minutes after expiry)."""
     now = _now()
+    _expired_alerts = state.setdefault("_expired", [])
+    # Age out old alert entries (keep for 10 min so UI has time to show them)
+    _expired_alerts = [
+        e for e in _expired_alerts
+        if isinstance(e, dict) and (now - float(e.get("expired_at", 0) or 0)) < 600
+    ]
+    state["_expired"] = _expired_alerts
     for addr, _reservations in list(state.items()):
-        if not isinstance(_reservations, list):
+        if addr == "_expired" or not isinstance(_reservations, list):
             continue
-        kept = [r for r in _reservations
-                if isinstance(r, dict) and (now - float(r.get("created_at", 0))) < _RESERVATION_TTL_SECONDS]
+        kept = []
+        for r in _reservations:
+            if not isinstance(r, dict):
+                continue
+            _age = now - float(r.get("created_at", 0))
+            if _age < _RESERVATION_TTL_SECONDS:
+                kept.append(r)
+            else:
+                _expired_alerts.append({
+                    "reservation_id": r.get("reservation_id", ""),
+                    "app":            r.get("app", ""),
+                    "amount_usd":     float(r.get("amount_usd", 0)),
+                    "note":           r.get("note", ""),
+                    "address":        addr,
+                    "expired_at":     now,
+                })
         if kept:
             state[addr] = kept
         else:
             state.pop(addr, None)
     return state
+
+
+def recent_expired_alerts(address: str) -> list:
+    """Return reservations that auto-expired in the last 10 minutes, scoped
+    to `address`. Used by the sidebar to surface 'your RWA plan timed out'
+    type warnings to the user (4B-9)."""
+    if not address:
+        return []
+    _addr_lower = address.lower()
+    with _LOCK:
+        state = _prune_expired(_load_state())
+        return [e for e in state.get("_expired", []) if e.get("address") == _addr_lower]
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
@@ -168,5 +207,5 @@ def has_capacity(address: str, total_wallet_usd: float, amount_usd: float) -> tu
 
 __all__ = [
     "reserve", "release", "available_usd", "active_reservations_usd",
-    "list_reservations", "has_capacity",
+    "list_reservations", "has_capacity", "recent_expired_alerts",
 ]

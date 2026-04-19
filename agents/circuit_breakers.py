@@ -95,9 +95,13 @@ def _load_state() -> CircuitState:
 
 
 def _save_state(state: CircuitState) -> None:
+    """Atomic write: write to .tmp + os.replace. Survives crash-during-write."""
     try:
+        import os as _os
         _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _STATE_FILE.write_text(json.dumps(state.to_dict(), indent=2), encoding="utf-8")
+        _tmp = _STATE_FILE.with_suffix(".tmp")
+        _tmp.write_text(json.dumps(state.to_dict(), indent=2), encoding="utf-8")
+        _os.replace(_tmp, _STATE_FILE)
     except Exception as e:
         logger.warning("[CircuitBreakers] save failed: %s", e)
 

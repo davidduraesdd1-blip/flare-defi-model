@@ -42,6 +42,8 @@ logger = logging.getLogger(__name__)
 MULTISIG_THRESHOLD_USD   = 100_000.0   # positions above this require multi-sig
 MULTISIG_REQUIRED_SIGS   = 2           # 2 of 3: agent + owner + advisor
 MULTISIG_EXPIRY_SECONDS  = 24 * 3600   # 24-hour pending window
+MULTISIG_TIMELOCK_SECONDS = 3600       # 1hr delay between last-sig and execute (4B-7)
+MULTISIG_VOTE_COOLDOWN_SECONDS = 300   # 5-min per-role vote cooldown (4B-8)
 _OVERLAP_FILE = Path(__file__).resolve().parent.parent / "data" / "cross_app_positions.json"
 _MULTISIG_FILE = Path(__file__).resolve().parent.parent / "data" / "pending_multisig.json"
 _LOCK = threading.Lock()
@@ -61,9 +63,13 @@ def _load(path: Path) -> dict:
 
 
 def _save(path: Path, data: dict) -> None:
+    """Atomic write: tmp + os.replace to survive crash-during-write (4B-10)."""
     try:
+        import os as _os
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        _tmp = path.with_suffix(".tmp")
+        _tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        _os.replace(_tmp, path)
     except Exception as e:
         logger.warning("[CrossApp] save %s failed: %s", path.name, e)
 
@@ -166,6 +172,9 @@ def sign_multisig(approval_id: str, role: str) -> tuple[bool, str]:
     """
     Add a signature to a pending multi-sig proposal. role should be one
     of 'agent', 'owner', 'advisor'. Returns (approved_now, reason).
+
+    4B-8: enforces per-role vote cooldown (MULTISIG_VOTE_COOLDOWN_SECONDS)
+    to prevent an actor from spamming votes across multiple proposals.
     """
     role = str(role).lower().strip()
     if role not in ("agent", "owner", "advisor"):
@@ -179,11 +188,21 @@ def sign_multisig(approval_id: str, role: str) -> tuple[bool, str]:
             state.pop(approval_id, None)
             _save(_MULTISIG_FILE, state)
             return False, "Proposal expired (24h window)"
+        # 4B-8: per-role vote cooldown across ALL proposals — prevents rapid
+        # mass-approval if a session is compromised or a button is held.
+        _global_role_ts = state.get("_last_vote_by_role", {}) or {}
+        _last = float(_global_role_ts.get(role, 0) or 0)
+        _elapsed = _now() - _last
+        if _last > 0 and _elapsed < MULTISIG_VOTE_COOLDOWN_SECONDS:
+            _wait = int(MULTISIG_VOTE_COOLDOWN_SECONDS - _elapsed)
+            return False, f"Vote cooldown: {role} must wait {_wait}s before next approval"
         sigs = entry.setdefault("signatures", [])
         # De-dupe by role so one user can't sign twice
         if any(s.get("role") == role for s in sigs):
             return False, f"Already signed by {role}"
         sigs.append({"role": role, "signed_at": _now()})
+        _global_role_ts[role] = _now()
+        state["_last_vote_by_role"] = _global_role_ts
         _save(_MULTISIG_FILE, state)
         approved = len(sigs) >= MULTISIG_REQUIRED_SIGS
         return approved, (
@@ -194,7 +213,10 @@ def sign_multisig(approval_id: str, role: str) -> tuple[bool, str]:
 
 
 def is_approved(approval_id: str) -> bool:
-    """Check if a proposal has enough signatures + hasn't expired."""
+    """Check if a proposal has enough signatures, hasn't expired, AND has
+    completed the MULTISIG_TIMELOCK_SECONDS (4B-7) window since the last
+    signature. The time-lock gives the human owner/advisor a 1hr window
+    to review + veto before the plan becomes executable."""
     with _LOCK:
         state = _load(_MULTISIG_FILE)
         entry = state.get(approval_id)
@@ -202,7 +224,33 @@ def is_approved(approval_id: str) -> bool:
             return False
         if _now() - float(entry.get("created_at", 0)) > MULTISIG_EXPIRY_SECONDS:
             return False
-        return len(entry.get("signatures", [])) >= MULTISIG_REQUIRED_SIGS
+        sigs = entry.get("signatures", [])
+        if len(sigs) < MULTISIG_REQUIRED_SIGS:
+            return False
+        # 4B-7: time-lock — last signature must be older than TIMELOCK_SECONDS
+        _last_sig_ts = max(float(s.get("signed_at", 0) or 0) for s in sigs)
+        if _now() - _last_sig_ts < MULTISIG_TIMELOCK_SECONDS:
+            return False
+        return True
+
+
+def approval_time_remaining(approval_id: str) -> tuple[bool, int]:
+    """Return (is_fully_approved_and_unlocked, seconds_remaining_until_unlock).
+    When the 2nd sig was just placed, seconds_remaining will be close to
+    MULTISIG_TIMELOCK_SECONDS. UI can use this to show a countdown."""
+    with _LOCK:
+        state = _load(_MULTISIG_FILE)
+        entry = state.get(approval_id)
+        if not entry:
+            return False, 0
+        sigs = entry.get("signatures", [])
+        if len(sigs) < MULTISIG_REQUIRED_SIGS:
+            return False, 0
+        _last = max(float(s.get("signed_at", 0) or 0) for s in sigs)
+        _remaining = int(MULTISIG_TIMELOCK_SECONDS - (_now() - _last))
+        if _remaining <= 0:
+            return True, 0
+        return False, _remaining
 
 
 def list_pending() -> list:
