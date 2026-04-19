@@ -462,7 +462,7 @@ _CSS_LIGHT = """
     .card-red    { border-left-color: #ef4444; }
     .card-violet { border-left-color: #8b5cf6; }
     .big-number { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; color: #0f172a; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
-    .label { font-size: clamp(0.58rem, 0.65vw, 0.65rem); color: #475569; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
+    .label { font-size: clamp(0.7rem, 0.75vw, 0.8rem); color: #475569; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
 
     /* ── Opportunity Cards ────────────────────────────────────────────── */
     .opp-card {
@@ -765,7 +765,7 @@ _CSS_DARK = """
     .card-red    { border-left-color: #ef4444; }
     .card-violet { border-left-color: #8b5cf6; }
     .big-number { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; color: #f1f5f9; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
-    .label { font-size: clamp(0.58rem, 0.65vw, 0.65rem); color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
+    .label { font-size: clamp(0.7rem, 0.75vw, 0.8rem); color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
 
     /* ── Opportunity Cards ────────────────────────────────────────────── */
     .opp-card {
