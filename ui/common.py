@@ -2021,10 +2021,28 @@ def render_yield_hero_cards(positions: list, opps: list, portfolio_size: float) 
     total_value = sum(p.get("current_value", 0) for p in positions) or portfolio_size
     if opps:
         top3 = opps[:3]
-        # Net APY: subtract expected IL so LP positions don't overstate projected returns.
-        # For lending/staking (il_estimate_pct=0) this is identical to gross APY.
+        # Net APY: subtract expected IL so LP positions don't overstate projected
+        # returns. For lending/staking (il_estimate_pct=0) this is identical to
+        # gross APY.
         net_apys = [max(0.0, o.get("estimated_apy", 0) - o.get("il_estimate_pct", 0)) for o in top3]
-        avg_apy  = sum(net_apys) / len(net_apys)
+        # 2026-04-19 fix: weight by kelly_fraction (the model's recommended
+        # allocation %) rather than simple average. Before: Balanced and
+        # Aggressive picked the same top-3 → simple avg produced identical
+        # numbers across profiles even though the allocator assigns different
+        # weights per profile (Aggressive concentrates more on high-APY picks,
+        # Conservative diversifies more). Weighted avg now reflects the
+        # profile-specific allocation → the Estimated Yield card genuinely
+        # differs across risk profiles.
+        weights = [float(o.get("kelly_fraction", 0) or 0) for o in top3]
+        wsum = sum(weights)
+        if wsum > 0:
+            # Normalize so top-3 weights sum to 1 (remaining capital goes to
+            # opps 4-6; for the hero estimate we scope to the top 3 users see).
+            weights = [w / wsum for w in weights]
+            avg_apy = sum(w * a for w, a in zip(weights, net_apys))
+        else:
+            # Fallback to simple avg when kelly_fraction unavailable (legacy data)
+            avg_apy = sum(net_apys) / len(net_apys)
     else:
         avg_apy = 0.0
 

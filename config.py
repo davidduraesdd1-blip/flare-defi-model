@@ -566,7 +566,11 @@ RISK_PROFILES = {
             "Capital protection first. Uses only lending, staking, and fixed-rate vaults. "
             "Near-zero impermanent loss. Best for first-time DeFi users."
         ),
-        "max_single_position_pct": 30,
+        # Concentration cap: Conservative = most diversified (force spread).
+        # Previously 30% which was higher than High's 20% — user-reported bug
+        # 2026-04-19 because it inverted the normal investor intuition that
+        # aggressive investors are allowed to concentrate on best picks.
+        "max_single_position_pct": 25,
     },
     "medium": {
         "label":           "Medium Risk",
@@ -591,7 +595,10 @@ RISK_PROFILES = {
             "Balanced growth. Adds LP pools and delta-neutral perpetual strategies. "
             "Moderate impermanent loss risk. Best for investors with some DeFi experience."
         ),
-        "max_single_position_pct": 25,
+        # Concentration cap: moderate — allow meaningful position sizes without
+        # going full-conviction. Sits between Conservative (25%) and
+        # Aggressive (40%). Reordered 2026-04-19 alongside the other two.
+        "max_single_position_pct": 30,
     },
     "high": {
         "label":           "High Risk",
@@ -622,7 +629,12 @@ RISK_PROFILES = {
             "Maximum yield potential. Uses high-APR LP pools, leveraged positions, "
             "and advanced arbitrage. High impermanent loss risk. For experienced users only."
         ),
-        "max_single_position_pct": 20,
+        # Concentration cap: Aggressive = allow genuine conviction bets. Was
+        # previously 20% (tighter than Conservative's 30%), which inverted
+        # investor intuition and caused the Estimated Yield card to show
+        # LOWER projected return for Aggressive than Balanced — reported
+        # 2026-04-19. New order: Conservative 25 < Medium 30 < High 40.
+        "max_single_position_pct": 40,
     },
 }
 

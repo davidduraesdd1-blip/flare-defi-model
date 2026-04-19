@@ -575,12 +575,32 @@ def optimise_portfolio(candidates: list, risk_profile: str) -> list:
     il_allowed = il_ok.get(profile["max_il_risk"], ["none", "low"])
     filtered   = [o for o in allowed if o.il_risk in il_allowed]
 
-    # Sort by Sharpe ratio for ranking display (highest risk-adjusted first).
-    # High profile also includes APY-only sort as tiebreaker to surface high-APY exclusives.
-    if risk_profile == "high":
-        ranked = sorted(filtered, key=lambda x: (x.sharpe_ratio, x.estimated_apy), reverse=True)
-    else:
-        ranked = sorted(filtered, key=lambda x: x.sharpe_ratio, reverse=True)
+    # Sort candidates using a profile-adjusted net-APY score, NOT just Sharpe.
+    #
+    # Pre-fix: both Medium (il_mult=2.0) and High (il_mult=1.5) sorted by
+    # x.sharpe_ratio — which is computed once before profile differentiation
+    # and is therefore identical across profiles. Result: Medium and High
+    # always returned the SAME top-3 whenever their allowed_protocols pools
+    # overlapped (which is almost always — High is a superset of Medium in
+    # practice). The Estimated Yield card then showed identical $/week,
+    # $/month, $/year numbers between Balanced and Aggressive — reported
+    # 2026-04-19.
+    #
+    # Fix: rank by the same formula the allocator uses to weight capital:
+    #   profile_score = net_apy_per_profile / (1 + risk_score/10)
+    # where net_apy_per_profile = base_apy - il_estimate_pct × il_multiplier.
+    # Aggressive (il_mult=1.5) now genuinely ranks high-IL pools higher
+    # than Balanced (il_mult=2.0) and Conservative (il_mult=3.0). Sharpe
+    # ratio becomes the secondary tiebreaker, preserving the previous
+    # risk-adjusted intent when two pools score identically under the
+    # primary key.
+    def _profile_score(o) -> float:
+        _b = o.fee_apy if (o.fee_apy and o.fee_apy > 0) else o.estimated_apy
+        _net = max(0.0, (_b or 0) - (o.il_estimate_pct or 0) * il_mult)
+        _rd  = 1.0 + (o.risk_score or 0) / 10.0
+        return _net / _rd
+
+    ranked = sorted(filtered, key=lambda x: (_profile_score(x), x.sharpe_ratio), reverse=True)
 
     # Protocol concentration cap: max 2 picks from the same protocol
     proto_counts: dict = {}
