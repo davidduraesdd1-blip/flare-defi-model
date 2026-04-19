@@ -541,6 +541,10 @@ RISK_PROFILE_NAMES = ("conservative", "medium", "high")
 RISK_PROFILES = {
     "conservative": {
         "label":           "Ultra Conservative",
+        # Cross-app canonical risk level (1-5 scale, unified with RWA
+        # PORTFOLIO_TIERS). Used by family-office reporting to aggregate
+        # positions from DeFi + RWA + SuperGrok under a single risk rubric.
+        "canonical_risk_level": 1,
         "color":           "#2ECC71",   # green
         "emoji":           "SAFE",
         # Realistic post-decay Monte Carlo P15/P85 targets (updated 2026-04-04)
@@ -566,6 +570,7 @@ RISK_PROFILES = {
     },
     "medium": {
         "label":           "Medium Risk",
+        "canonical_risk_level": 3,   # Moderate/Balance on the RWA 1-5 scale
         "color":           "#F39C12",   # orange
         "emoji":           "BALANCED",
         # Realistic post-decay Monte Carlo P15/P85 targets (updated 2026-04-04)
@@ -590,6 +595,7 @@ RISK_PROFILES = {
     },
     "high": {
         "label":           "High Risk",
+        "canonical_risk_level": 4,   # Aggressive/Alpha on the RWA 1-5 scale
         "color":           "#E74C3C",   # red
         "emoji":           "AGGRESSIVE",
         # Realistic post-decay Monte Carlo P15/P85 targets (updated 2026-04-04)
