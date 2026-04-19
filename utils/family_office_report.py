@@ -22,8 +22,18 @@ logger = logging.getLogger(__name__)
 
 
 # ── App directory discovery ─────────────────────────────────────────────────
-# All 3 apps sit under a common parent folder ("Crypto App/"). From any one
-# app, the other two are siblings.
+# LOCAL deployment: all 3 apps sit under a common parent folder
+# ("Crypto App/") so they can see each other as siblings.
+#
+# STREAMLIT CLOUD deployment: each app is cloned from its own GitHub repo
+# into its own isolated container (e.g. /mount/src/flare-defi-model/). The
+# other apps DO NOT exist on disk from this container's perspective.
+#
+# The resolver below handles both: the CURRENT app's data is always
+# reachable via __file__-relative paths (works identically in both
+# deployments); sibling lookups via APP_DIRS only succeed in the local
+# layout (with a graceful fall-through to "running on Cloud — isolated
+# deployment" messaging in the PDF).
 
 APP_DIRS = {
     "defi":      "Defi Model",
@@ -32,19 +42,65 @@ APP_DIRS = {
 }
 
 
-def _find_sibling_app_dir(app_key: str) -> Optional[Path]:
-    """Return the sibling app's directory path, or None if not found.
+def _current_app_dir() -> Path:
+    """Return the directory of the app that imported this module.
 
-    Robust to both file layouts this module ships in:
-      - DeFi:      Defi Model/utils/family_office_report.py   (subfolder)
-      - SuperGrok: SuperGrok Mathematically Model/utils_family_office_report.py  (root)
-      - RWA:       RWA Model/utils_family_office_report.py   (root)
+    Works regardless of deployment layout:
+      - DeFi: module at Defi Model/utils/family_office_report.py
+              → return Defi Model/
+      - SuperGrok / RWA: module at .../utils_family_office_report.py (root)
+              → return the app root
 
-    Walks up the directory chain from __file__ and returns the first
-    parent that contains the target app directory. This is layout-
-    agnostic: the same function works whether the module is nested
-    inside utils/ or at the app root.
+    Crucially this also works on Streamlit Cloud where the repo is
+    checked out under an unrelated name (e.g. flare-defi-model/).
     """
+    here = Path(__file__).resolve()
+    # DeFi variant lives in a utils/ subfolder; the other two live at root.
+    if here.parent.name == "utils":
+        return here.parent.parent
+    return here.parent
+
+
+def _current_app_key() -> str:
+    """Identify which of the 3 apps is hosting this module.
+
+    Uses file-layout hints rather than directory names so it works on
+    both the local Crypto App/ tree and Streamlit Cloud checkouts.
+    """
+    here = Path(__file__).resolve()
+    path_str = str(here).replace("\\", "/").lower()
+    # DeFi is the only variant with the module inside utils/
+    if "/utils/family_office_report.py" in path_str:
+        return "defi"
+    # SuperGrok + RWA distinguish by the app root directory name — works
+    # for "SuperGrok Mathematically Model" locally and "crypto-signal-app"
+    # on Cloud, etc.
+    parent_name = here.parent.name.lower()
+    if any(tok in parent_name for tok in ("supergrok", "crypto-signal", "crypto_signal", "grok")):
+        return "supergrok"
+    if any(tok in parent_name for tok in ("rwa", "real-world", "real_world")):
+        return "rwa"
+    # Last-resort fallback: look for distinguishing file markers
+    root = _current_app_dir()
+    if (root / "flare_scanner.py").exists() or (root / "scanners" / "flare_scanner.py").exists():
+        return "defi"
+    if (root / "crypto_model_core.py").exists():
+        return "supergrok"
+    if (root / "portfolio.py").exists() and (root / "kyc_status.py").exists():
+        return "rwa"
+    return "unknown"
+
+
+def _find_app_dir(app_key: str) -> Optional[Path]:
+    """Return the requested app's directory.
+
+    If `app_key` matches the currently-hosting app, returns _current_app_dir()
+    (always accessible). Otherwise walks up the filesystem looking for a
+    sibling directory matching APP_DIRS[app_key] (works only in the local
+    Crypto App/ layout — returns None on isolated Cloud deploys).
+    """
+    if app_key == _current_app_key():
+        return _current_app_dir()
     target = APP_DIRS.get(app_key, "")
     if not target:
         return None
@@ -56,11 +112,15 @@ def _find_sibling_app_dir(app_key: str) -> Optional[Path]:
     return None
 
 
+# Back-compat alias for any external caller that imported this name.
+_find_sibling_app_dir = _find_app_dir
+
+
 # ── Per-app snapshot readers (best-effort, read-only) ───────────────────────
 
 def _read_defi_snapshot() -> dict:
     """Read positions + latest scan + P&L from the DeFi app's data dir."""
-    _dir = _find_sibling_app_dir("defi")
+    _dir = _find_app_dir("defi")
     out = {"app": "defi", "available": False, "positions": [], "latest_scan": None, "total_usd": 0.0}
     if not _dir:
         return out
@@ -82,7 +142,7 @@ def _read_defi_snapshot() -> dict:
 
 def _read_supergrok_snapshot() -> dict:
     """Read execution log + paper balance from SuperGrok's SQLite DB."""
-    _dir = _find_sibling_app_dir("supergrok")
+    _dir = _find_app_dir("supergrok")
     out = {"app": "supergrok", "available": False, "signals": [], "last_scan_ts": None}
     if not _dir:
         return out
@@ -111,7 +171,7 @@ def _read_supergrok_snapshot() -> dict:
 
 def _read_rwa_snapshot() -> dict:
     """Read holdings + KYC status from RWA app."""
-    _dir = _find_sibling_app_dir("rwa")
+    _dir = _find_app_dir("rwa")
     out = {"app": "rwa", "available": False, "holdings": [], "total_usd": 0.0, "kyc": {}}
     if not _dir:
         return out
@@ -148,10 +208,20 @@ def build_summary_context() -> dict:
     sgk  = _read_supergrok_snapshot()
     rwa  = _read_rwa_snapshot()
     total_aum = float(defi.get("total_usd") or 0) + float(rwa.get("total_usd") or 0)
+    # Detect deployment mode: if only the hosting app is accessible, we're
+    # almost certainly running on Streamlit Cloud (each app isolated to its
+    # own container) rather than on the local Crypto App/ tree where all 3
+    # apps are siblings. The PDF renderer uses this to show context-
+    # appropriate messaging instead of a bare "(app not accessible)".
+    _availabilities = [defi.get("available"), sgk.get("available"), rwa.get("available")]
+    _hosting_key = _current_app_key()
+    _deployment = "local" if sum(bool(a) for a in _availabilities) > 1 else "cloud_isolated"
     # SuperGrok is signal-only (no persistent positions), so its AUM
     # contribution depends on actual open OKX positions - we surface signal
     # count instead.
     return {
+        "hosting_app":   _hosting_key,
+        "deployment":    _deployment,
         "generated_at":  datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "defi":          defi,
         "supergrok":     sgk,
@@ -189,11 +259,34 @@ def render_pdf(context: Optional[dict] = None) -> bytes:
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(4)
 
+    # Deployment notice (Cloud-isolated → each app in its own container)
+    _deployment = context.get("deployment", "local")
+    _hosting    = context.get("hosting_app", "this app")
+    if _deployment == "cloud_isolated":
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(100, 116, 139)
+        pdf.multi_cell(0, 4,
+            f"Cloud-isolated deployment detected. This report was generated from the "
+            f"{_hosting.upper()} app container, which has no filesystem access to the "
+            f"other two apps. Only {_hosting.upper()}'s own data is included below. "
+            f"Run on the local Crypto App/ tree for a fully-aggregated report, or "
+            f"generate per-app reports separately on the other Streamlit Cloud apps.",
+        )
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(3)
+
     # Total AUM
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(0, 8, f"Total AUM across apps: ${context.get('total_aum_usd', 0):,.2f}",
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(3)
+
+    def _isolated_line(app_key: str) -> str:
+        """Return the right 'not-accessible' copy depending on whether we're
+        in cloud-isolated mode (expected) or local (genuine config issue)."""
+        if _deployment == "cloud_isolated" and app_key != _hosting:
+            return "  (isolated Cloud deployment - this app lives in a separate container)"
+        return "  (app not accessible)"
 
     # Per-app sections
     pdf.set_font("Helvetica", "B", 11)
@@ -204,7 +297,7 @@ def render_pdf(context: Optional[dict] = None) -> bytes:
         pdf.cell(0, 5, f"  Positions: {len(_d.get('positions', []))}  |  Total: ${_d.get('total_usd', 0):,.2f}",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     else:
-        pdf.cell(0, 5, "  (app not accessible from this context)",
+        pdf.cell(0, 5, _isolated_line("defi"),
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
 
@@ -216,7 +309,7 @@ def render_pdf(context: Optional[dict] = None) -> bytes:
         pdf.cell(0, 5, f"  Recent signals: {len(_s.get('signals', []))}  |  Last scan: {_s.get('last_scan_ts', '-')}",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     else:
-        pdf.cell(0, 5, "  (app not accessible)",
+        pdf.cell(0, 5, _isolated_line("supergrok"),
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
 
@@ -229,7 +322,7 @@ def render_pdf(context: Optional[dict] = None) -> bytes:
         pdf.cell(0, 5, f"  KYC verified platforms: {kyc_n}  |  Holdings: {len(_r.get('holdings', []))}",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     else:
-        pdf.cell(0, 5, "  (app not accessible)",
+        pdf.cell(0, 5, _isolated_line("rwa"),
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(6)
 
@@ -245,26 +338,42 @@ def render_pdf(context: Optional[dict] = None) -> bytes:
 
 def _render_plain_text(context: dict) -> str:
     """Fallback rendering when fpdf2 is not installed."""
+    _deployment = context.get("deployment", "local")
+    _hosting    = context.get("hosting_app", "this app")
+
+    def _isolated_line(app_key: str) -> str:
+        if _deployment == "cloud_isolated" and app_key != _hosting:
+            return "  (isolated Cloud deployment - this app lives in a separate container)"
+        return "  (not accessible)"
+
     lines = [
         "Family Office - Unified Summary",
         f"Generated {context.get('generated_at', '')}",
         "",
+    ]
+    if _deployment == "cloud_isolated":
+        lines.extend([
+            f"Cloud-isolated deployment: showing {_hosting.upper()} data only.",
+            "Run locally for a fully aggregated report across all 3 apps.",
+            "",
+        ])
+    lines.extend([
         f"Total AUM across apps: ${context.get('total_aum_usd', 0):,.2f}",
         "",
         "DeFi Model",
-    ]
+    ])
     _d = context.get("defi", {})
     if _d.get("available"):
         lines.append(f"  Positions: {len(_d.get('positions', []))}  Total: ${_d.get('total_usd', 0):,.2f}")
     else:
-        lines.append("  (not accessible)")
+        lines.append(_isolated_line("defi"))
     lines.append("")
     lines.append("SuperGrok Model")
     _s = context.get("supergrok", {})
     if _s.get("available"):
         lines.append(f"  Recent signals: {len(_s.get('signals', []))}  Last scan: {_s.get('last_scan_ts', '-')}")
     else:
-        lines.append("  (not accessible)")
+        lines.append(_isolated_line("supergrok"))
     lines.append("")
     lines.append("RWA Model")
     _r = context.get("rwa", {})
@@ -272,11 +381,12 @@ def _render_plain_text(context: dict) -> str:
         kyc_n = sum(1 for v in _r.get("kyc", {}).values() if isinstance(v, dict) and v.get("verified"))
         lines.append(f"  KYC verified platforms: {kyc_n}")
     else:
-        lines.append("  (not accessible)")
+        lines.append(_isolated_line("rwa"))
     return "\n".join(lines)
 
 
 __all__ = [
     "APP_DIRS", "build_summary_context", "render_pdf",
     "_read_defi_snapshot", "_read_supergrok_snapshot", "_read_rwa_snapshot",
+    "_current_app_dir", "_current_app_key", "_find_app_dir",
 ]
