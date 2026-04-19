@@ -14,6 +14,15 @@ data/feedback_checkpoint.json
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite3
+# Audit R8h: catch any wallet file that lands outside data/agent/
+wallets.enc
+# Cross-app state files (Phase 3/4 safety + reservation ledgers)
+data/pending_multisig.json
+data/circuit_state.json
+data/wallet_reservations.json
+data/cross_app_positions.json
 
 # ── Agent wallet files (NEVER commit — contain encrypted private keys) ────────
 data/agent/wallets.enc
