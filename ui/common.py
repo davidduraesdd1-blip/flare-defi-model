@@ -369,6 +369,17 @@ def _inject_css() -> None:
     # ── Compact Sidebar overlay (ToS #1) ───────────────────────────────────
     # Per Q2 tiered default: Beginner = off (labels on), Intermediate = off,
     # Advanced = default on. Explicit user preference overrides.
+    #
+    # NOTE: the original "compact mode" also forced the sidebar to a
+    # 90–110px strip (icon-only nav strip) via min-width/max-width. That
+    # made sense when the sidebar only contained the auto-nav — but the
+    # sidebar has since grown Portfolio Size preview, 3 labeled action
+    # buttons (Reload/Scan/Refresh All), Risk Profile radio, and the
+    # live scan-progress indicator. At 110px those labels wrap
+    # character-by-character and the UI becomes unreadable (reported
+    # 2026-04-19). Compact mode now hides only the *nav labels*, which
+    # is the real vertical-space win, and leaves the sidebar at its
+    # Streamlit-default width so our own widgets render cleanly.
     _compact = st.session_state.get("compact_sidebar", _ul_default)
     if _compact:
         st.markdown("""
@@ -376,9 +387,8 @@ def _inject_css() -> None:
     /* Icon-only sidebar nav — compact mode (ToS #1) */
     [data-testid="stSidebarNav"] a span:not(:first-child) { display: none !important; }
     [data-testid="stSidebarNav"] a { padding: 8px 10px !important; justify-content: center; }
-    [data-testid="stSidebar"] { min-width: 90px !important; max-width: 110px !important; }
-    [data-testid="stSidebar"] button, [data-testid="stSidebar"] .stTextInput,
-    [data-testid="stSidebar"] label { font-size: 0.72rem !important; }
+    /* Hover tooltip reveals the hidden nav label so icon-only is still discoverable */
+    [data-testid="stSidebarNav"] a { position: relative; }
     [data-testid="stSidebarNav"] a:hover::after {
         content: attr(aria-label);
         position: absolute; left: 100%; margin-left: 8px;
@@ -386,7 +396,7 @@ def _inject_css() -> None:
         padding: 4px 10px; border-radius: 6px;
         font-size: 0.8rem; white-space: nowrap;
         box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        pointer-events: none;
+        pointer-events: none; z-index: 100;
     }
 </style>""", unsafe_allow_html=True)
 
