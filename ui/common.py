@@ -1606,7 +1606,8 @@ def _load_history_file(_mtime: float = 0.0) -> dict:
         with open(HISTORY_FILE, encoding="utf-8") as f:
             return json.load(f)
     except json.JSONDecodeError:
-        st.warning("⚠️ history.json is corrupted — re-run the scheduler.")
+        # Audit R5f: don't leak internal filename or "scheduler" jargon.
+        st.warning("⚠️ Scan history couldn't be read. Click Refresh All Data to rebuild it.")
         return {}
     except Exception as e:
         logger.warning("[History] load error: %s", e)
@@ -1630,7 +1631,8 @@ def load_positions() -> list:
         with open(POSITIONS_FILE, encoding="utf-8") as f:
             return json.load(f)
     except json.JSONDecodeError:
-        st.warning("⚠️ positions.json is corrupted.")
+        # Audit R5f: plain-English, no filename leak.
+        st.warning("⚠️ Saved positions couldn't be read. Click Refresh All Data to rebuild.")
         return []
     except Exception:
         return []
@@ -1638,7 +1640,8 @@ def load_positions() -> list:
 
 def save_positions(positions: list) -> None:
     if not atomic_json_write(POSITIONS_FILE, positions):
-        st.error("Could not save positions — check logs.")
+        # Audit R5f: user-actionable wording; data is not lost if save failed.
+        st.error("Couldn't save your positions right now. Try again in a moment — your data is not lost.")
     load_positions.clear()
 
 
@@ -1655,7 +1658,8 @@ def load_wallets() -> list:
 
 def save_wallets(wallets: list) -> None:
     if not atomic_json_write(WALLETS_FILE, wallets):
-        st.error("Could not save wallets — check logs.")
+        # Audit R5f: user-actionable wording, no "check logs".
+        st.error("Couldn't save your wallet list right now. Try again in a moment.")
     load_wallets.clear()
 
 
