@@ -63,13 +63,27 @@ def _load(path: Path) -> dict:
 
 
 def _save(path: Path, data: dict) -> None:
-    """Atomic write: tmp + os.replace to survive crash-during-write (4B-10)."""
+    """Atomic write: tmp + os.replace to survive crash-during-write (4B-10).
+
+    Retries os.replace briefly to defeat transient file-locks from OneDrive
+    /Dropbox sync or Windows Defender AM scan (PermissionError / WinError 5).
+    """
     try:
         import os as _os
         path.parent.mkdir(parents=True, exist_ok=True)
         _tmp = path.with_suffix(".tmp")
         _tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        _os.replace(_tmp, path)
+        _last_exc = None
+        for _i in range(5):
+            try:
+                _os.replace(_tmp, path)
+                _last_exc = None
+                break
+            except PermissionError as e:
+                _last_exc = e
+                time.sleep(0.1 * (_i + 1))
+        if _last_exc is not None:
+            raise _last_exc
     except Exception as e:
         logger.warning("[CrossApp] save %s failed: %s", path.name, e)
 

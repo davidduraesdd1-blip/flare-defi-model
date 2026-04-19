@@ -51,13 +51,27 @@ def _load_state() -> dict:
 
 
 def _save_state(state: dict) -> None:
-    """Atomic write: tmp + os.replace to survive crash-during-write (4B-10)."""
+    """Atomic write: tmp + os.replace to survive crash-during-write (4B-10).
+
+    Retries os.replace briefly to defeat transient file-locks from OneDrive
+    /Dropbox sync or Windows Defender AM scan (PermissionError / WinError 5).
+    """
     try:
         import os as _os
         _RESERVATION_FILE.parent.mkdir(parents=True, exist_ok=True)
         _tmp = _RESERVATION_FILE.with_suffix(".tmp")
         _tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
-        _os.replace(_tmp, _RESERVATION_FILE)
+        _last_exc = None
+        for _i in range(5):
+            try:
+                _os.replace(_tmp, _RESERVATION_FILE)
+                _last_exc = None
+                break
+            except PermissionError as e:
+                _last_exc = e
+                time.sleep(0.1 * (_i + 1))
+        if _last_exc is not None:
+            raise _last_exc
     except Exception as e:
         logger.warning("[WalletState] save failed: %s", e)
 
