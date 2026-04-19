@@ -243,60 +243,35 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
     )
     _inject_css()
     # Rename Streamlit's auto-generated "app" root nav item to "Dashboard".
-    # Streamlit derives the label from app.py filename. Newer Streamlit versions
-    # wrap the label in different DOM variants (<span>, <div>, data-testid
-    # nodes, or raw text), so we target all of them aggressively. Also inject
-    # JS as a fallback for any variant the CSS misses.
+    # Streamlit derives the label from app.py filename. JS-only: the earlier
+    # CSS ::before pseudo-element approach triggered duplicate text rendering
+    # when Streamlit's DOM had multiple matching wrapper elements (the
+    # "Dashboard Dashboard Dashboard" stacking bug).
     st.markdown("""
-<style>
-/* Hide any rendering of the "app" label in the first nav item */
-section[data-testid="stSidebarNav"] ul li:first-child a,
-section[data-testid="stSidebarNav"] ul li:first-child a span,
-section[data-testid="stSidebarNav"] ul li:first-child a div,
-section[data-testid="stSidebarNav"] ul li:first-child a p,
-[data-testid="stSidebarNav"] li:first-child a,
-[data-testid="stSidebarNavLink"]:first-of-type {
-    font-size: 0 !important;
-    color: transparent !important;
-    position: relative !important;
-}
-section[data-testid="stSidebarNav"] ul li:first-child a *,
-[data-testid="stSidebarNav"] li:first-child a *,
-[data-testid="stSidebarNavLink"]:first-of-type * {
-    font-size: 0 !important;
-    visibility: hidden !important;
-    color: transparent !important;
-}
-section[data-testid="stSidebarNav"] ul li:first-child a::before,
-[data-testid="stSidebarNav"] li:first-child a::before,
-[data-testid="stSidebarNavLink"]:first-of-type::before {
-    content: "Dashboard" !important;
-    font-size: 0.9rem !important;
-    visibility: visible !important;
-    color: #f1f5f9 !important;
-    font-weight: 500 !important;
-    display: inline-block !important;
-    position: absolute !important;
-    left: 1rem !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-}
-</style>
 <script>
-/* JS fallback — rewrite text content directly for DOM variants CSS can't reach. */
 (function renameAppLabel() {
-    try {
-        const nav = window.parent.document.querySelector('[data-testid="stSidebarNav"]');
-        if (!nav) return;
-        const firstLink = nav.querySelector('li:first-child a');
-        if (!firstLink) return;
-        const textNodes = firstLink.querySelectorAll('span, div, p');
-        textNodes.forEach(n => {
-            if (n.textContent && n.textContent.trim().toLowerCase() === 'app') {
-                n.textContent = 'Dashboard';
-            }
-        });
-    } catch (e) { /* cross-origin or DOM not ready — ignore */ }
+    function doRename() {
+        try {
+            const doc = window.parent.document;
+            const nav = doc.querySelector('[data-testid="stSidebarNav"]');
+            if (!nav) return false;
+            const firstLink = nav.querySelector('li:first-child a');
+            if (!firstLink) return false;
+            const textNodes = firstLink.querySelectorAll('span, div, p');
+            let renamed = false;
+            textNodes.forEach(n => {
+                const txt = (n.textContent || '').trim().toLowerCase();
+                if (txt === 'app') { n.textContent = 'Dashboard'; renamed = true; }
+            });
+            return renamed;
+        } catch (e) { return false; }
+    }
+    // Run a few times — Streamlit re-renders nav on session start and reruns.
+    doRename();
+    let tries = 0;
+    const iv = setInterval(() => {
+        if (doRename() || ++tries > 10) clearInterval(iv);
+    }, 150);
 })();
 </script>""", unsafe_allow_html=True)
     if _embed:
@@ -1155,7 +1130,7 @@ button[kind="secondary"] {
 </style>""", unsafe_allow_html=True)
         col_r, col_s, col_all = st.columns(3)
         with col_r:
-            if st.button("↺", key="sidebar_refresh",
+            if st.button("↺ Reload", key="sidebar_refresh",
                          width='stretch',
                          help="Reload — load the latest saved scan data from disk"):
                 # OPT-44: targeted clear — reload scan data and live prices only
@@ -1164,7 +1139,7 @@ button[kind="secondary"] {
                 load_live_prices.clear()
                 st.rerun()
         with col_all:
-            if st.button("⟳", key="sidebar_refresh_all",
+            if st.button("⟳ Refresh All", key="sidebar_refresh_all",
                          width='stretch',
                          help="Refresh All — clears every cache and fetches fresh data from all sources"):
                 # Nuclear clear: invalidate EVERY st.cache_data in this module
@@ -1191,7 +1166,7 @@ button[kind="secondary"] {
                 st.success("All caches cleared — fetching fresh data…")
                 st.rerun()
         with col_s:
-            if st.button("▶", key="sidebar_scan_now",
+            if st.button("▶ Scan", key="sidebar_scan_now",
                          width='stretch',
                          help="Scan — run a fresh scan now (~30 seconds). Auto-reloads when done."):
                 try:
