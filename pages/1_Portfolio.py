@@ -2236,7 +2236,7 @@ with _tab_pos:
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     render_section_header(
-        "One-Click Portfolio Deploy",
+        "One-Click Portfolio Execute",
         "Execute the active model's top picks as a single plan — dry-run first",
     )
 
@@ -2284,7 +2284,7 @@ with _tab_pos:
         )
 
     # Dialog — dry-run preview and execute
-    @st.dialog("Portfolio Deploy — Dry Run Preview", width="large")
+    @st.dialog("Portfolio Execute — Dry Run Preview", width="large")
     def _od_dialog(_wallet, _slip_pct):
         from agents.portfolio_executor import (
             build_plan_from_picks, execute_plan,
@@ -2494,7 +2494,7 @@ with _tab_pos:
             "Build a fresh dry-run plan and review before executing."
         )
         if st.button(
-            "▶ Deploy Portfolio",
+            "▶ Execute Portfolio",
             type="primary", width='stretch',
             disabled=_od_btn_disabled, help=_od_btn_help,
             key="od_deploy_btn",
