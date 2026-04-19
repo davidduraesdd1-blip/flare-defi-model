@@ -909,20 +909,30 @@ def _scan_progress_fragment() -> None:
 
     This fragment is ALWAYS rendered in the sidebar (not gated on _scanning) so
     its DOM element always exists and Streamlit never logs "fragment does not exist"
-    warnings after a full app rerun.  The guard below makes it a cheap no-op when
-    no scan is running.
+    warnings after a full app rerun.
 
-    When the scan finishes: clears the history cache and triggers a full rerun
-    so all pages see fresh data.  When the deadline expires, marks scan as done.
+    While a scan is in progress (detected via session_state OR the scheduler's
+    scan_progress.json — so cron-triggered scans are covered too), this renders
+    the compact sidebar progress block. When the scan finishes, it clears the
+    history cache and triggers a full rerun so every page sees fresh data.
     """
-    if not st.session_state.get("_scanning"):
+    # Detect scan activity from either source so manually-triggered AND
+    # cron-triggered scheduler runs both surface progress in the sidebar.
+    try:
+        from utils import scan_progress as _scp
+        _scan_state = _scp.read() or {}
+    except Exception:
+        _scan_state = {}
+    _progress_running = bool(_scan_state.get("running"))
+    _session_running  = bool(st.session_state.get("_scanning"))
+    if not (_progress_running or _session_running):
         return  # no-op — fragment DOM element stays alive, no polling work done
     try:
         with open(HISTORY_FILE, encoding="utf-8") as _ff:
             _hist_ts = (json.load(_ff).get("latest") or {}).get("completed_at") or ""
     except Exception:
         _hist_ts = ""
-    if _hist_ts and _hist_ts != st.session_state.get("_scan_baseline", ""):
+    if _hist_ts and _session_running and _hist_ts != st.session_state.get("_scan_baseline", ""):
         st.session_state._scanning = False
         # Clear ALL scan-derived caches so every calculation refreshes from the new data:
         # 1. history file cache (opportunity APYs, model results, arbitrage)
@@ -935,8 +945,14 @@ def _scan_progress_fragment() -> None:
         except Exception:
             pass
         st.rerun()
-    elif time.time() < st.session_state.get("_scan_deadline", 0):
-        st.caption("⏳ Scanning… auto-reloading when done.")
+    elif _progress_running or time.time() < st.session_state.get("_scan_deadline", 0):
+        # Render the live progress block — updates every 2 s as the scheduler
+        # writes new step names / ETA / partial results to data/scan_progress.json.
+        try:
+            from ui.progress import render_sidebar_progress
+            render_sidebar_progress()
+        except Exception as _pe:
+            logger.debug("[common] sidebar progress render failed: %s", _pe)
     else:
         st.session_state._scanning = False
         st.caption("Scan timed out — click ↺ Reload.")
@@ -1208,6 +1224,43 @@ button[kind="secondary"] {
             key="_portfolio_size",
             label_visibility="collapsed",
         )
+
+        # Live income projection — uses the current best opportunity's APY when
+        # the last scan has loaded results, or a conservative placeholder until
+        # the first scan completes. Keeps the input feeling responsive to input
+        # before users have a scan to anchor numbers to.
+        try:
+            _best_apy_pct = None
+            try:
+                _latest = load_latest() or {}
+                _opps = _latest.get("opportunities") or []
+                if _opps:
+                    _apys = [float(o.get("apy_net", o.get("apy", 0)) or 0) for o in _opps]
+                    _apys = [a for a in _apys if a > 0]
+                    if _apys:
+                        _blend = sum(sorted(_apys, reverse=True)[:5]) / min(5, len(_apys))
+                        _best_apy_pct = _blend
+            except Exception:
+                pass
+            _proj_suffix = ""
+            if _best_apy_pct is None:
+                _apy_hint = 6.0
+                _proj_suffix = " <span style='opacity:0.55'>(typical DeFi, will sharpen after scan)</span>"
+            else:
+                _apy_hint = _best_apy_pct
+            _yr  = portfolio_size * (_apy_hint / 100.0)
+            _mo  = _yr / 12.0
+            st.markdown(
+                f"<div style='font-size:0.72rem; color:#64748b; margin:4px 0 0; "
+                f"line-height:1.35;'>"
+                f"At ~{_apy_hint:.1f}% blended APY ≈ "
+                f"<span style='color:#00d4aa; font-weight:700'>${_mo:,.0f}/mo</span> · "
+                f"<span style='color:#94a3b8'>${_yr:,.0f}/yr</span>{_proj_suffix}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 

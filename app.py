@@ -224,6 +224,16 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── Scan Progress (rich) — only renders during an active scan ─────────────────
+# SVG ring + partial results + rotating DeFi fun facts. Fragment-wrapped so it
+# re-renders every 2 s as the scheduler advances through its 9 pipeline steps.
+try:
+    from ui.progress import main_progress_fragment as _dfi_main_prog
+    _dfi_main_prog()
+except Exception as _dfi_prog_err:
+    import logging as _dfi_prog_lg
+    _dfi_prog_lg.getLogger(__name__).debug("[Dashboard] progress render failed: %s", _dfi_prog_err)
+
 # ── Market Cycle Position Gauge (CoinsKid-style 1-100 + 5 zones) ─────────────
 # Renders INDEPENDENTLY of the full composite signal — even during macro feed
 # warm-up. Uses Google Trends + stablecoin supply delta + composite score when

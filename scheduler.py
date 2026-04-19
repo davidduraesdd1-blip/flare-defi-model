@@ -49,6 +49,7 @@ except ImportError:
     _FEEDBACK_AVAILABLE = False
 from ai.alerts                import check_and_send_alerts
 from utils.file_io            import atomic_json_write
+from utils                    import scan_progress as _progress
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 if sys.platform == "win32":
@@ -404,9 +405,11 @@ def run_full_scan() -> None:
     logger.info("=" * 60)
     logger.info("SCAN STARTED — %s", run_start.strftime('%Y-%m-%d %H:%M UTC'))
     logger.info("=" * 60)
+    _progress.start()
 
     try:
         # ── Steps 1+2+5a: Independent data fetches — run in parallel ─────
+        _progress.step(1, detail="Flare protocols")
         logger.info("Steps 1-2 — Scanning Flare network + multi-platform + volatility + FAssets in parallel...")
         with ThreadPoolExecutor(max_workers=4) as _data_pool:
             _f_flare  = _data_pool.submit(run_flare_scan)
@@ -423,6 +426,7 @@ def run_full_scan() -> None:
             fasset_data = _f_fasset.result(timeout=300)
 
         # ── Steps 3+4+5: Independent — run in parallel ───────────────────
+        _progress.step(2, detail="Multi-chain + volatility + FAssets")
         logger.info("Steps 3-5 — Running models, arbitrage, and options in parallel...")
         # Guard: asdict() requires a dataclass instance; fall back to dict() if not
         import dataclasses as _dc
@@ -439,25 +443,49 @@ def run_full_scan() -> None:
             _f_opts   = _model_pool.submit(
                 lambda: {p: run_options_analysis(vol_data, p) for p in RISK_PROFILE_NAMES}
             )
+            _progress.step(3, detail="Risk models")
             model_results   = _f_models.result(timeout=300)
+            _progress.step(4, detail="Arbitrage detection")
             arb_results     = _f_arb.result(timeout=300)
+            _progress.step(5, detail="Options analysis")
             options_results = _f_opts.result(timeout=120)
 
+        # ── Publish partial results early so the UI can preview top opps ──
+        try:
+            _partial_preview: list = []
+            for _pname in RISK_PROFILE_NAMES:
+                _top = (model_results.get(_pname) or [])[:3]
+                for _o in _top:
+                    _apy = _o.get("estimated_apy") or _o.get("apy_net") or _o.get("apy") or 0
+                    _partial_preview.append({
+                        "label":   _o.get("asset_or_pool") or _o.get("symbol") or "—",
+                        "profile": _pname,
+                        "apy":     float(_apy) if isinstance(_apy, (int, float)) else 0.0,
+                    })
+            _partial_preview.sort(key=lambda r: r["apy"], reverse=True)
+            _progress.step(5, detail="Options analysis", partial=_partial_preview[:5])
+        except Exception:
+            pass
+
         # ── Step 6: Record predictions ────────────────────────────────────
+        _progress.step(6, detail="AI feedback loop")
         logger.info("Step 6/9 — Recording predictions for AI feedback loop...")
         if _FEEDBACK_AVAILABLE:
             record_prediction(model_results)
 
         # ── Step 7: Evaluate yesterday's predictions ──────────────────────
+        _progress.step(7, detail="Prior predictions")
         logger.info("Step 7/9 — Evaluating previous predictions...")
         if _FEEDBACK_AVAILABLE:
             record_actuals(scan_dict)
 
         # ── Step 8: Update model weights ──────────────────────────────────
+        _progress.step(8, detail="Model weights")
         logger.info("Step 8/9 — Updating AI model weights...")
         weights = update_model_weights() if _FEEDBACK_AVAILABLE else {}
 
         # ── Step 9: Send alerts + smart threshold calibration ────────────
+        _progress.step(9, detail="Alert thresholds")
         logger.info("Step 9/9 — Checking alert thresholds...")
         try:
             check_and_send_alerts(model_results, arb_results)
@@ -528,11 +556,13 @@ def run_full_scan() -> None:
         logger.info("SCAN COMPLETE")
         logger.info(summary)
         logger.info("=" * 60)
+        _progress.finish(ok=True, summary=summary)
 
         _notify("Flare DeFi Scan Complete", summary)
 
     except Exception as e:
         logger.exception("Scan failed: %s", e)
+        _progress.finish(ok=False, summary=f"Scan failed: {type(e).__name__}")
         _notify(
             "Flare DeFi Scan ERROR",
             f"Scan failed: {str(e)[:100]}. Check scheduler.log for details."
