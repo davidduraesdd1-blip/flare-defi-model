@@ -272,6 +272,67 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
     pointer-events: none !important;
 }
 </style>""", unsafe_allow_html=True)
+
+    # ── Runtime "None" text eraser (ToS #N — 2026-04-19) ─────────────────────
+    # Some widget on the Portfolio page renders two pill-shaped badges whose
+    # text content is literally "None". Exhaustive static search across every
+    # .py file in the tree (st.markdown, st.write, st.caption, st.info,
+    # st.success, st.warning, f-strings, .get() without defaults, every
+    # multiselect/pills/segmented_control call) found no source — the
+    # badges persisted after the CSV/PDF export row was fully rewritten.
+    #
+    # Nuclear fix: MutationObserver-based DOM sweep that hides any Streamlit-
+    # emitted element whose trimmed text content is exactly "None". Runs via
+    # components.v1.html (which actually executes <script> tags — st.markdown
+    # silently strips them). Zero-height iframe so no visual footprint of
+    # its own. Cross-origin safe inside Streamlit Cloud (same origin).
+    try:
+        from streamlit.components.v1 import html as _stlit_html
+        _stlit_html("""
+<script>
+(function eraseStrayNoneBadges() {
+    function sweep() {
+        try {
+            const doc = window.parent.document;
+            // Any element whose own text content (no children, or only text node children)
+            // is exactly "None" — that's the literal string leak we're hunting. We walk
+            // every descendant of the Streamlit main block so we don't touch legit UI
+            // elsewhere.
+            const root = doc.querySelector('[data-testid="stMain"]') || doc.body;
+            if (!root) return;
+            const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
+            let node;
+            const toHide = [];
+            while ((node = walker.nextNode())) {
+                // Skip elements with meaningful children (would prune nav etc)
+                if (node.children.length > 0) continue;
+                const txt = (node.textContent || '').trim();
+                if (txt === 'None') toHide.push(node);
+            }
+            toHide.forEach(el => {
+                // Hide the closest sensible container so the layout doesn't
+                // leave a gap. Streamlit widgets wrap content in an element
+                // carrying a data-testid; target that if available.
+                const container = el.closest('[data-testid]') || el;
+                container.style.display = 'none';
+            });
+        } catch (e) { /* cross-origin or transient — ignore */ }
+    }
+    // Initial sweep + periodic catch for widgets that render after first paint
+    sweep();
+    const obs = new MutationObserver(() => sweep());
+    try {
+        const doc = window.parent.document;
+        const root = doc.querySelector('[data-testid="stMain"]') || doc.body;
+        if (root) obs.observe(root, { childList: true, subtree: true, characterData: true });
+    } catch(e) {}
+    // Stop observing after 2 minutes to avoid perpetual CPU use on idle tabs
+    setTimeout(() => obs.disconnect(), 120000);
+})();
+</script>""", height=0)
+    except Exception as _erase_err:
+        logger.debug("[common] None-badge eraser injection failed: %s", _erase_err)
+
     if _embed:
         # Embed mode: hide sidebar, navigation arrows, top toolbar, and Streamlit chrome.
         # This gives a clean iframe-embeddable surface for advisor platforms.
