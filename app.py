@@ -163,7 +163,11 @@ DEFI_CSS = """
 .protocol-badge { background: #0d47a1; color: #bbdefb; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; }
 </style>
 """
-st.markdown(DEFI_CSS, unsafe_allow_html=True)
+# Audit R4g: gate CSS injection behind a session-state flag so it ships
+# once per session instead of on every rerun (autorefresh, widget click).
+if not st.session_state.get("_defi_css_injected"):
+    st.session_state["_defi_css_injected"] = True
+    st.markdown(DEFI_CSS, unsafe_allow_html=True)
 
 try:
     ctx = render_sidebar()

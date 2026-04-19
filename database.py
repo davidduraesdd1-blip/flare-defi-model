@@ -346,8 +346,10 @@ def save_arb_opportunities(arb_results: dict):
                 "DELETE FROM arb_opportunities "
                 "WHERE is_active = 0 AND timestamp < datetime('now', '-7 days')"
             )
-            # Mark previous arbs inactive
-            conn.execute("UPDATE arb_opportunities SET is_active=0")
+            # Mark previous arbs inactive. Audit R4f: WHERE is_active=1
+            # narrows the write to only currently-active rows instead of
+            # O(N) over the full table — sargable via idx_arb_active.
+            conn.execute("UPDATE arb_opportunities SET is_active=0 WHERE is_active=1")
             conn.executemany("""
                 INSERT INTO arb_opportunities
                 (timestamp, profile, strategy_label, leg_a_protocol, leg_b_protocol,
