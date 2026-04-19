@@ -379,6 +379,50 @@ def execute_plan(
         The same PortfolioPlan mutated with exec_* fields filled on each
         leg and aggregate counters (success/failed/skipped) set.
     """
+    # Phase 4A-2: multi-sig gate for plans > $100K. When the total notional
+    # exceeds the multi-sig threshold AND no approval_id has been supplied,
+    # create a pending proposal and block execution. Caller must surface
+    # the approval_id to the UI for owner + advisor sign-off; once 2-of-3
+    # signatures are present, the re-call will unblock.
+    try:
+        from utils.cross_app_safety import (
+            requires_multisig, propose_multisig, is_approved as _ms_is_approved,
+        )
+        if requires_multisig(plan.total_notional_usd):
+            _pending_id = getattr(plan, "multisig_approval_id", None)
+            if not _pending_id:
+                _new_id = propose_multisig(
+                    app="defi", symbol="portfolio",
+                    action="EXECUTE_PLAN", size_usd=plan.total_notional_usd,
+                    proposer="agent",
+                    notes=f"profile={plan.profile} legs={plan.approved_count}",
+                )
+                for _lg in plan.legs:
+                    if _lg.approved:
+                        _lg.executed = False
+                        _lg.exec_status = "pending_multisig"
+                        _lg.exec_message = (
+                            f"Multi-sig proposal {_new_id[:8]}… created. "
+                            "Owner + advisor must sign from the Settings UI "
+                            "before this plan can execute."
+                        )
+                        plan.skipped_count += 1
+                # Stash for the caller to surface; not part of the dataclass
+                # schema but readable post-return.
+                plan.__dict__["multisig_approval_id"] = _new_id
+                return plan
+            elif not _ms_is_approved(_pending_id):
+                for _lg in plan.legs:
+                    if _lg.approved:
+                        _lg.executed = False
+                        _lg.exec_status = "pending_multisig"
+                        _lg.exec_message = f"Proposal {_pending_id[:8]}… still awaiting signatures."
+                        plan.skipped_count += 1
+                return plan
+            # else: approval_id is valid and 2-of-3 present → proceed
+    except Exception as _ms_err:
+        logger.debug("[PortfolioExec] multi-sig gate skipped: %s", _ms_err)
+
     # Phase 4A-1: cross-app wallet capacity gate. Only enforces when caller
     # passes wallet_address — paper-mode test flows can omit it.
     _reservation_id = None

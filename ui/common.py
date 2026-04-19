@@ -1446,6 +1446,39 @@ button[kind="secondary"] {
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+        # ── Multi-Sig Approvals (4A-2) ─────────────────────────────────────
+        try:
+            from utils.cross_app_safety import (
+                list_pending as _ms_list, sign_multisig as _ms_sign,
+                MULTISIG_REQUIRED_SIGS as _ms_req,
+            )
+            _pending = _ms_list()
+            if _pending:
+                with st.expander(f"🔏 Multi-Sig ({len(_pending)} pending)", expanded=True):
+                    for _entry in _pending[:3]:   # cap at 3 to avoid sidebar bloat
+                        _aid = _entry.get("approval_id", "")
+                        _sigs = len(_entry.get("signatures") or [])
+                        st.markdown(
+                            f"**{_entry.get('action', '?')} · ${float(_entry.get('size_usd', 0)):,.0f}**  \n"
+                            f"<span style='color:#94a3b8;font-size:0.78rem;'>{_entry.get('notes', '')[:80]}</span>  \n"
+                            f"<span style='color:#f59e0b;'>{_sigs}/{_ms_req} sigs</span>",
+                            unsafe_allow_html=True,
+                        )
+                        _rc1, _rc2 = st.columns(2)
+                        with _rc1:
+                            if st.button("Sign: Owner", key=f"ms_owner_{_aid}", width='stretch'):
+                                _ok, _msg = _ms_sign(_aid, "owner")
+                                st.success(_msg) if _ok else st.info(_msg)
+                                st.rerun()
+                        with _rc2:
+                            if st.button("Sign: Advisor", key=f"ms_adv_{_aid}", width='stretch'):
+                                _ok, _msg = _ms_sign(_aid, "advisor")
+                                st.success(_msg) if _ok else st.info(_msg)
+                                st.rerun()
+                        st.markdown("<hr style='margin:6px 0; border-color:#1e293b;'>", unsafe_allow_html=True)
+        except Exception as _ms_ui_err:
+            logger.debug("[Sidebar] multi-sig UI load failed: %s", _ms_ui_err)
+
         # ── Circuit Breakers (4A-5) ────────────────────────────────────────
         try:
             from agents.circuit_breakers import get_state as _cb_state, resume as _cb_resume
