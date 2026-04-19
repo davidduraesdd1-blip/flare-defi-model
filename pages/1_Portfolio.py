@@ -2223,6 +2223,35 @@ with _tab_pos:
             unsafe_allow_html=True,
         )
 
+    # ─── Phase 4A-4: Family-Office Unified Summary PDF ─────────────────────
+    # One-click export that aggregates DeFi + SuperGrok + RWA state into a
+    # single PDF — per Phase 3 cross-app unified reporting.
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    _fo_c1, _fo_c2 = st.columns([3, 2])
+    with _fo_c1:
+        render_section_header(
+            "Family-Office Unified Summary",
+            "One-click PDF aggregating positions + P&L + audit across all 3 apps",
+        )
+    with _fo_c2:
+        st.markdown("<div style='height:18px;'></div>", unsafe_allow_html=True)
+        try:
+            from utils.family_office_report import render_pdf as _fo_render
+            _fo_bytes = _fo_render()
+            st.download_button(
+                "⬇ Download Family-Office PDF",
+                data=_fo_bytes,
+                file_name=f"family_office_summary_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.pdf",
+                mime="application/pdf",
+                width='stretch',
+                help="Aggregates DeFi + SuperGrok + RWA state into a single report.",
+                key="btn_family_office_pdf",
+            )
+        except Exception as _fo_err:
+            logger.debug("[Portfolio] family-office PDF render failed: %s", _fo_err)
+            st.caption("Family-office report temporarily unavailable.")
+
+
     # ─── Phase 2A: One-Click Portfolio Deploy ─────────────────────────────────
     # Build a fresh plan from the active model profile's top picks, run each
     # through RiskGuard, and offer dry-run preview + execute in a single modal.
