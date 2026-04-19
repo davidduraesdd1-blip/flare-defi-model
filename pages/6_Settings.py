@@ -1,5 +1,5 @@
 """
-Settings — Alert configuration (email & Telegram) and PDF/HTML report export.
+Settings — Alert configuration (email + generic webhook) and PDF/HTML report export.
 """
 
 import sys
@@ -45,7 +45,7 @@ with _ctrl_tab_alerts:
     st.markdown("### Alert Notifications")
     st.markdown(
         "<div style='color:#475569; font-size:0.85rem; margin-bottom:16px;'>"
-        "Get notified by email or Telegram when high-APY opportunities appear.</div>",
+        "Get notified by email or generic HTTPS webhook when high-APY opportunities appear.</div>",
         unsafe_allow_html=True,
     )
 
@@ -54,16 +54,16 @@ with _ctrl_tab_alerts:
     try:
         from ai.alerts import (
             load_alerts_config, save_alerts_config,
-            test_email, test_telegram, test_discord, test_webhook,
+            test_email, test_webhook,
         )
     except ImportError:
-        st.error("ai/alerts.py not found. Check your installation.")
+        st.error("Alert settings are currently unavailable — please contact support.")
         st.stop()
 
     config = load_alerts_config()
 
-    tab_email, tab_tg, tab_discord, tab_webhook, tab_thresh = st.tabs([
-        "📧  Email", "📱  Telegram", "💬  Discord", "🔗  Webhook", "⚙️  Thresholds",
+    tab_email, tab_webhook, tab_thresh = st.tabs([
+        "📧  Email", "🔗  Webhook", "⚙️  Thresholds",
     ])
 
     with tab_email:
@@ -89,24 +89,6 @@ with _ctrl_tab_alerts:
             unsafe_allow_html=True,
         )
 
-    with tab_tg:
-        st.markdown("<div style='color:#475569; font-size:0.85rem; margin-bottom:12px;'>Create a bot via @BotFather · Get your Chat ID via @userinfobot.</div>", unsafe_allow_html=True)
-        tg_enabled = st.toggle("Enable Telegram alerts", value=config["telegram"].get("enabled", False), key="tg_enabled")
-        bot_token  = st.text_input("Bot token", value=config["telegram"].get("bot_token", ""),
-                                    key="bot_token", type="password")
-        chat_id    = st.text_input("Chat ID",   value=config["telegram"].get("chat_id", ""), key="chat_id")
-
-    with tab_discord:
-        st.markdown("<div style='color:#475569; font-size:0.85rem; margin-bottom:12px;'>Create a Discord webhook: Server Settings → Integrations → Webhooks → New Webhook → Copy URL.</div>", unsafe_allow_html=True)
-        discord_enabled = st.toggle("Enable Discord alerts", value=config.get("discord", {}).get("enabled", False), key="discord_enabled")
-        discord_url     = st.text_input("Discord Webhook URL", value=config.get("discord", {}).get("webhook_url", ""),
-                                         key="discord_url", placeholder="https://discord.com/api/webhooks/…")
-        st.markdown(
-            "<div class='warn-box' style='font-size:0.85rem;'>"
-            "Webhook URL is stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
-            unsafe_allow_html=True,
-        )
-
     with tab_webhook:
         st.markdown("<div style='color:#475569; font-size:0.85rem; margin-bottom:12px;'>Send JSON payloads to any HTTPS endpoint (Zapier, Make, n8n, Slack, custom API). Optionally sign with HMAC-SHA256.</div>", unsafe_allow_html=True)
         webhook_enabled = st.toggle("Enable webhook alerts", value=config.get("webhook", {}).get("enabled", False), key="webhook_enabled")
@@ -120,34 +102,6 @@ with _ctrl_tab_alerts:
             "Secret stored in <code>data/alerts_config.json</code> — never commit this file.</div>",
             unsafe_allow_html=True,
         )
-        # Batch 9: Quick direct-URL webhook test (Discord / Telegram / generic)
-        st.markdown("---")
-        st.markdown(
-            "<div style='color:#475569; font-size:0.85rem; margin-bottom:6px;'>"
-            "<b>Quick URL Test</b> — paste a Discord/Telegram/generic webhook URL below to send a test message directly. "
-            "Uses the DEFI_WEBHOOK_URL env var if left blank.</div>",
-            unsafe_allow_html=True,
-        )
-        _quick_url = st.text_input(
-            "Webhook URL for quick test",
-            placeholder="https://discord.com/api/webhooks/… or leave blank for env var",
-            key="batch9_quick_webhook_url",
-        )
-        if st.button("Send Quick Test", key="batch9_quick_webhook_btn"):
-            try:
-                from ai.alerts import send_url_webhook_alert
-                _ok = send_url_webhook_alert(
-                    f"DeFi Model — Quick webhook test sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.",
-                    webhook_url=_quick_url or None,
-                )
-                if _ok:
-                    st.success("Quick test message sent!")
-                else:
-                    st.error("Quick test failed — check URL and DEFI_WEBHOOK_URL env var.")
-            except Exception as _qe:
-                logger.warning("[Settings] webhook test error: %s", _qe)
-                st.error("Webhook test failed — check the URL is correct and your network is connected.")
-
     with tab_thresh:
         st.markdown(
             "<div style='color:#475569; font-size:0.85rem; margin-bottom:12px;'>"
@@ -204,7 +158,7 @@ with _ctrl_tab_alerts:
             st.caption(f"Smart tuning status unavailable: {_cex}")
 
     st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
-    col_save, col_test_e, col_test_t = st.columns(3)
+    col_save, col_test_e, col_test_w = st.columns(3)
 
     with col_save:
         if st.button("Save Settings", key="save_alerts",
@@ -212,8 +166,6 @@ with _ctrl_tab_alerts:
             new_config = {
                 "email":    {"enabled": enabled, "address": email_addr, "smtp_server": smtp_srv,
                              "smtp_port": int(smtp_port), "username": smtp_user, "password": smtp_pass},
-                "telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id},
-                "discord":  {"enabled": discord_enabled, "webhook_url": discord_url},
                 "webhook":  {"enabled": webhook_enabled, "url": webhook_url, "secret": webhook_secret},
                 "thresholds": {"min_apy_alert": min_apy, "new_arb_alert": arb_alert},
             }
@@ -229,20 +181,6 @@ with _ctrl_tab_alerts:
             ok, msg = test_email(_test_cfg)
             st.success(msg) if ok else st.error(msg)
 
-    with col_test_t:
-        if st.button("Send Test Telegram", key="test_tg_btn",
-                         width='stretch'):
-            _test_cfg = {"telegram": {"enabled": tg_enabled, "bot_token": bot_token, "chat_id": chat_id}}
-            ok, msg = test_telegram(_test_cfg)
-            st.success(msg) if ok else st.error(msg)
-
-    col_test_d, col_test_w, _ = st.columns(3)
-    with col_test_d:
-        if st.button("Test Discord", key="test_discord_btn",
-                         width='stretch'):
-            _test_cfg = {"discord": {"enabled": discord_enabled, "webhook_url": discord_url}}
-            ok, msg = test_discord(_test_cfg)
-            st.success(msg) if ok else st.error(msg)
     with col_test_w:
         if st.button("Test Webhook", key="test_webhook_btn",
                          width='stretch'):
@@ -648,7 +586,6 @@ with _ctrl_tab_api:
         ("FRED_API_KEY",         "FRED (Macro Data)",                    "DXY, VIX, CPI, yield curve — optional, falls back to cached values"),
         ("ZERION_API_KEY",       "Zerion (Multi-Chain Wallet Data)",    "Required for Zerion wallet positions in Portfolio tab"),
         ("CG_PRO_API_KEY",       "CoinGecko Pro",                       "Optional — removes rate limits on price feeds"),
-        ("DEFI_WEBHOOK_URL",     "Webhook Alert URL",                   "Optional — Discord/Slack webhook for quick alerts"),
     ]
     import os
     for _key, _label, _desc in _api_keys:

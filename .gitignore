@@ -6,7 +6,8 @@
 *.env
 ANTHROPIC_API_KEY*
 .streamlit/secrets.toml
-# contains SMTP/Telegram/Discord credentials — NEVER commit
+# contains SMTP credentials + generic webhook URL — NEVER commit
+# (Telegram + Discord senders were removed 2026-04-18 for this reason)
 data/alerts_config.json
 data/feedback_checkpoint.json
 

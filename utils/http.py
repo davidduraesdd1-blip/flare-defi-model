@@ -180,8 +180,7 @@ _ALLOWED_HOSTS: frozenset = frozenset({
     "indexer.dydx.trade",         # dYdX v4 perpetuals (defi_protocols.py)
     "api-v2.pendle.finance",      # Pendle pools (defi_protocols.py)
     "fred.stlouisfed.org",        # FRED CSV download (macro_feeds.py)
-    "discord.com",                # Discord webhook alerts (ai/alerts.py)
-    "api.telegram.org",           # Telegram bot API (ai/alerts.py)
+    # discord.com + api.telegram.org removed 2026-04-18 along with their senders
     "ethena.fi",                  # Ethena sUSDe yield (#76)
     "www.ether.fi",               # ether.fi direct APY API (#71)
     "app.renzoprotocol.com",      # Renzo protocol points API (#71)

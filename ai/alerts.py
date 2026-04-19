@@ -1,7 +1,11 @@
 """
-AI Alerts — Email and Telegram notifications for APY threshold events.
+AI Alerts — Email notifications + generic HTTPS webhook for APY threshold events.
 Called by the scheduler after each scan completes.
 Configure settings via the Streamlit dashboard → Alert Settings.
+
+Telegram + Discord channels were removed 2026-04-18 after repeated bot-token /
+webhook-URL leaks in git history. If demand resurfaces, reintroduce them with
+env-var-only config (never persisted to disk, never shipped via UI).
 """
 
 import json
@@ -33,11 +37,6 @@ def _is_valid_email(addr: str) -> bool:
     return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", addr.strip()))
 
 
-def _is_valid_telegram_token(token: str) -> bool:
-    # Format: <digits>:<35+ alphanumeric/underscore/hyphen chars>
-    return bool(re.match(r"^\d+:[A-Za-z0-9_-]{35,}$", token.strip()))
-
-
 # ─── Config I/O ───────────────────────────────────────────────────────────────
 
 def load_alerts_config() -> dict:
@@ -49,13 +48,6 @@ def load_alerts_config() -> dict:
         except Exception as e:
             logger.warning("Could not load alerts config: %s", e)
 
-    # Seed from environment variables when sections are missing or tokens are empty.
-    # This allows Streamlit Cloud / .env-based deployments to send alerts without
-    # requiring the user to manually fill in the Settings page first.
-    _tg_token  = os.environ.get("DEFI_TELEGRAM_BOT_TOKEN", "")
-    _tg_chat   = os.environ.get("DEFI_TELEGRAM_CHAT_ID", "")
-    _dc_webhook = os.environ.get("DEFI_WEBHOOK_URL", "")
-
     if not cfg:
         cfg = {
             "email": {
@@ -65,15 +57,6 @@ def load_alerts_config() -> dict:
                 "smtp_port":   587,
                 "username":    "",
                 "password":    "",
-            },
-            "telegram": {
-                "enabled":   bool(_tg_token and _tg_chat),
-                "bot_token": _tg_token,
-                "chat_id":   _tg_chat,
-            },
-            "discord": {
-                "enabled":     bool(_dc_webhook),
-                "webhook_url": _dc_webhook,
             },
             "webhook": {
                 "enabled":     False,
@@ -86,18 +69,12 @@ def load_alerts_config() -> dict:
             },
         }
     else:
-        # Back-fill missing sections from env vars without overwriting user settings
-        tg = cfg.setdefault("telegram", {})
-        if not tg.get("bot_token") and _tg_token:
-            tg["bot_token"] = _tg_token
-            tg["chat_id"]   = _tg_chat
-            tg.setdefault("enabled", bool(_tg_token and _tg_chat))
-        dc = cfg.setdefault("discord", {})
-        if not dc.get("webhook_url") and _dc_webhook:
-            dc["webhook_url"] = _dc_webhook
-            dc.setdefault("enabled", bool(_dc_webhook))
         cfg.setdefault("webhook",     {"enabled": False, "url": "", "secret": ""})
         cfg.setdefault("thresholds",  {"min_apy_alert": 150.0, "new_arb_alert": True})
+        # Drop any legacy telegram/discord sections on load so stale creds
+        # from an older install can't sit in memory and accidentally fire.
+        cfg.pop("telegram", None)
+        cfg.pop("discord",  None)
 
     return cfg
 
@@ -137,57 +114,6 @@ def send_email_alert(subject: str, body: str, config: dict) -> bool:
         return True
     except Exception as e:
         logger.warning("Email alert failed: %s", e)
-        return False
-
-
-def send_telegram_alert(message: str, config: dict) -> bool:
-    """Send a Telegram message via bot. Returns True on success."""
-    cfg = config.get("telegram", {})
-    if not cfg.get("enabled") or not cfg.get("bot_token") or not cfg.get("chat_id"):
-        return False
-    if not _is_valid_telegram_token(cfg["bot_token"]):
-        logger.warning("Telegram alert skipped — bot_token format is invalid (expected digits:35+chars)")
-        return False
-    try:
-        url = f"https://api.telegram.org/bot{cfg['bot_token']}/sendMessage"
-        r = _SESSION.post(
-            url,
-            json={"chat_id": cfg["chat_id"], "text": message, "parse_mode": "HTML"},
-            timeout=10,
-        )
-        if r.ok:
-            logger.info("Telegram alert sent.")
-            return True
-        logger.warning("Telegram alert failed: %s — %s", r.status_code, r.text[:200])
-        return False
-    except Exception as e:
-        logger.warning("Telegram alert failed: %s", e)
-        return False
-
-
-def send_discord_alert(message: str, config: dict) -> bool:
-    """
-    Feature 9: Send an alert to Discord via incoming webhook.
-    Returns True on success.
-    """
-    cfg = config.get("discord", {})
-    if not cfg.get("enabled") or not cfg.get("webhook_url"):
-        return False
-    url = cfg["webhook_url"].strip()
-    if not url.startswith("https://discord.com/api/webhooks/"):
-        logger.warning("Discord alert skipped — webhook URL format invalid.")
-        return False
-    try:
-        # Discord embeds markdown-ish formatting; wrap in a code block for readability
-        payload = {"content": f"```\n{message[:1990]}\n```"}
-        r = _SESSION.post(url, json=payload, timeout=10)
-        if r.status_code in (200, 204):
-            logger.info("Discord alert sent.")
-            return True
-        logger.warning("Discord alert failed: %s — %s", r.status_code, r.text[:200])
-        return False
-    except Exception as e:
-        logger.warning("Discord alert failed: %s", e)
         return False
 
 
@@ -232,53 +158,6 @@ def send_webhook_alert(subject: str, message: str, config: dict) -> bool:
         return False
 
 
-def send_url_webhook_alert(message: str, webhook_url: str = None) -> bool:
-    """
-    Send an alert to a Discord or Telegram webhook URL directly (#18 / Batch 9).
-    ``webhook_url`` falls back to the DEFI_WEBHOOK_URL env var.
-    Returns True on success.
-    """
-    if not webhook_url:
-        webhook_url = os.environ.get("DEFI_WEBHOOK_URL", "")
-    if not webhook_url:
-        return False
-    if not webhook_url.startswith("https://"):
-        logger.warning("send_url_webhook_alert: URL must use HTTPS — skipping")
-        return False
-
-    try:
-        from utils.http import is_safe_url
-        if not is_safe_url(webhook_url):
-            logger.warning("send_url_webhook_alert: URL not in SSRF allowlist — skipping")
-            return False
-
-        # Detect Discord vs Telegram by URL pattern
-        if "discord.com/api/webhooks" in webhook_url:
-            payload = {"content": message, "username": "DeFi Model"}
-        elif "api.telegram.org" in webhook_url:
-            chat_id = os.environ.get("DEFI_TELEGRAM_CHAT_ID", "")
-            payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
-        else:
-            payload = {"text": message}
-
-        r = _SESSION.post(webhook_url, json=payload, timeout=5)
-        return r.status_code in (200, 204)
-    except Exception as e:
-        logger.warning("URL webhook alert failed: %s", e)
-        return False
-
-
-def test_discord(config: dict) -> tuple:
-    """Send a test Discord message. Returns (success: bool, message: str)."""
-    ok = send_discord_alert(
-        f"⚡ Flare DeFi Model — Test Alert\n"
-        f"Sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.\n"
-        f"Discord alerts are working correctly.",
-        config,
-    )
-    return (ok, "Test Discord message sent!" if ok else "Discord failed — check webhook URL.")
-
-
 def test_webhook(config: dict) -> tuple:
     """Send a test webhook. Returns (success: bool, message: str)."""
     cfg = config.get("webhook", {})
@@ -302,17 +181,6 @@ def test_email(config: dict) -> tuple:
         config,
     )
     return (ok, "Test email sent successfully!" if ok else "Email failed — check SMTP settings and logs.")
-
-
-def test_telegram(config: dict) -> tuple:
-    """Send a test Telegram message. Returns (success: bool, message: str)."""
-    ok = send_telegram_alert(
-        f"⚡ <b>Flare DeFi Model — Test Alert</b>\n"
-        f"Sent at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.\n"
-        f"Telegram alerts are working correctly.",
-        config,
-    )
-    return (ok, "Test message sent!" if ok else "Telegram failed — check bot token and chat ID.")
 
 
 # ─── CL Out-of-Range Alert Checker (Feature 12) ───────────────────────────────
@@ -374,7 +242,7 @@ def check_cl_range_alerts(prices: list) -> list:
 def check_and_send_alerts(model_results: dict, arb_results: dict = None) -> None:
     """
     Called by the scheduler after each scan.
-    Checks results against user thresholds and sends email/Telegram alerts.
+    Checks results against user thresholds and sends email / webhook alerts.
     Also checks for TVL change alerts (#79).
     """
     config     = load_alerts_config()
@@ -443,9 +311,7 @@ def check_and_send_alerts(model_results: dict, arb_results: dict = None) -> None
     subject = "⚡ Flare DeFi Alert — New Opportunity Detected"
 
     send_email_alert(subject, message, config)
-    send_telegram_alert(message, config)
-    send_discord_alert(message, config)       # Feature 9
-    send_webhook_alert(subject, message, config)  # Feature 9
+    send_webhook_alert(subject, message, config)  # generic HTTPS webhook (Zapier/Make/Slack etc.)
 
 
 # ─── Smart Alert Tuning (Upgrade #6) ─────────────────────────────────────────

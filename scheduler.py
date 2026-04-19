@@ -363,13 +363,10 @@ def _run_quick_check_body(now):
                 logger.info("  → %s", a)
             try:
                 from ai.alerts import (
-                    load_alerts_config, send_email_alert, send_telegram_alert,
-                    send_discord_alert, send_webhook_alert,
+                    load_alerts_config, send_email_alert, send_webhook_alert,
                 )
                 cfg = load_alerts_config()
                 send_email_alert(subject, message, cfg)
-                send_telegram_alert(message, cfg)
-                send_discord_alert(message, cfg)
                 send_webhook_alert(subject, message, cfg)
             except Exception as _ae:
                 logger.debug("Quick check alert delivery failed (non-critical): %s", _ae)
