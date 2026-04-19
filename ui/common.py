@@ -243,37 +243,35 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
     )
     _inject_css()
     # Rename Streamlit's auto-generated "app" root nav item to "Dashboard".
-    # Streamlit derives the label from app.py filename. JS-only: the earlier
-    # CSS ::before pseudo-element approach triggered duplicate text rendering
-    # when Streamlit's DOM had multiple matching wrapper elements (the
-    # "Dashboard Dashboard Dashboard" stacking bug).
+    # Streamlit derives the label from app.py filename. The earlier JS-only
+    # approach silently failed — st.markdown strips <script> tags for
+    # security. This CSS-only rewrite uses EXACTLY ONE selector for the
+    # ::before pseudo-element so the "Dashboard Dashboard Dashboard"
+    # stacking bug can't recur: children of the <a> are hidden with
+    # visibility:hidden (keeps layout/height), and a single ::before on
+    # the <a> itself renders "📊 Dashboard" once. color:inherit keeps the
+    # label visible in both light and dark Streamlit themes.
     st.markdown("""
-<script>
-(function renameAppLabel() {
-    function doRename() {
-        try {
-            const doc = window.parent.document;
-            const nav = doc.querySelector('[data-testid="stSidebarNav"]');
-            if (!nav) return false;
-            const firstLink = nav.querySelector('li:first-child a');
-            if (!firstLink) return false;
-            const textNodes = firstLink.querySelectorAll('span, div, p');
-            let renamed = false;
-            textNodes.forEach(n => {
-                const txt = (n.textContent || '').trim().toLowerCase();
-                if (txt === 'app') { n.textContent = 'Dashboard'; renamed = true; }
-            });
-            return renamed;
-        } catch (e) { return false; }
-    }
-    // Run a few times — Streamlit re-renders nav on session start and reruns.
-    doRename();
-    let tries = 0;
-    const iv = setInterval(() => {
-        if (doRename() || ++tries > 10) clearInterval(iv);
-    }, 150);
-})();
-</script>""", unsafe_allow_html=True)
+<style>
+[data-testid="stSidebarNav"] ul li:first-child a {
+    position: relative !important;
+}
+[data-testid="stSidebarNav"] ul li:first-child a > * {
+    visibility: hidden !important;
+}
+[data-testid="stSidebarNav"] ul li:first-child a::before {
+    content: "📊 Dashboard" !important;
+    visibility: visible !important;
+    position: absolute !important;
+    left: 1rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+    color: inherit !important;
+    pointer-events: none !important;
+}
+</style>""", unsafe_allow_html=True)
     if _embed:
         # Embed mode: hide sidebar, navigation arrows, top toolbar, and Streamlit chrome.
         # This gives a clean iframe-embeddable surface for advisor platforms.
