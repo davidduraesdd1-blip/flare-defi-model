@@ -1446,6 +1446,33 @@ button[kind="secondary"] {
 
         st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
+        # ── Circuit Breakers (4A-5) ────────────────────────────────────────
+        try:
+            from agents.circuit_breakers import get_state as _cb_state, resume as _cb_resume
+            _cb = _cb_state()
+            with st.expander(
+                "🛑 Circuit Breakers" if _cb.get("halted") else "✅ Circuit Breakers",
+                expanded=bool(_cb.get("halted")),
+            ):
+                if _cb.get("halted"):
+                    st.error(
+                        f"**HALTED** by {_cb.get('halted_gate', '—')}\n\n"
+                        f"{_cb.get('halted_reason', '')}"
+                    )
+                    st.caption(f"Halted at: {_cb.get('halted_at', '—')}")
+                    if st.button("▶ Resume agent", key="cb_resume_btn", type="primary", width='stretch'):
+                        _cb_resume("manual UI resume")
+                        st.success("Circuit cleared — agent resumes on next cycle")
+                        st.rerun()
+                else:
+                    st.success("All 7 gates operational")
+                    st.caption(f"Last check: {_cb.get('last_check_at', '—')}")
+                    st.caption(f"Resume count (lifetime): {_cb.get('resume_count', 0)}")
+        except Exception as _cb_err:
+            logger.debug("[Sidebar] circuit breaker UI load failed: %s", _cb_err)
+
+        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
         # ── Per-User API Keys (#18) ────────────────────────────────────────────
         with st.expander("🔑 API Keys (Session Only)", expanded=False):
             st.caption("Keys stored in session only — cleared on page refresh.")
