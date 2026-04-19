@@ -131,32 +131,32 @@ col_start, col_stop, col_cycle, col_estop = st.columns([2, 2, 2, 2])
 
 with col_start:
     if not running and not e_stop:
-        if st.button("▶ Start Agent", width='stretch', type="primary"):
+        if st.button("▶ Start Agent", key="agent_btn_start", width='stretch', type="primary"):
             _runner.start()
             st.success("Agent started.")
             st.rerun()
     elif running:
-        if st.button("⏸ Pause Agent", width='stretch'):
+        if st.button("⏸ Pause Agent", key="agent_btn_pause", width='stretch'):
             _runner.stop()
             st.info("Agent paused.")
             st.rerun()
 
 with col_stop:
     if e_stop:
-        if st.button("🔄 Reset Emergency Stop", width='stretch'):
+        if st.button("🔄 Reset Emergency Stop", key="agent_btn_reset_estop", width='stretch'):
             _runner.reset_emergency_stop()
             st.success("Emergency stop cleared.")
             st.rerun()
 
 with col_cycle:
-    if st.button("⚡ Run One Cycle Now", width='stretch'):
+    if st.button("⚡ Run One Cycle Now", key="agent_btn_run_cycle", width='stretch'):
         with st.spinner("Running agent cycle..."):
             _runner.run_cycle_now()
         st.success("Cycle complete.")
         st.rerun()
 
 with col_estop:
-    if st.button("🛑 EMERGENCY STOP", width='stretch', type="secondary"):
+    if st.button("🛑 EMERGENCY STOP", key="agent_btn_emergency_stop", width='stretch', type="secondary"):
         _runner.emergency_stop("User triggered emergency stop from UI")
         st.error("Emergency stop activated. All activity halted.")
         st.rerun()
@@ -444,7 +444,7 @@ if gate_pct >= 100 and not live_unlocked:
         placeholder="UNLOCK LIVE",
         key="live_unlock_confirm",
     )
-    if st.button("🔓 Unlock Live Mode", type="primary"):
+    if st.button("🔓 Unlock Live Mode", key="agent_btn_unlock_live", type="primary"):
         if confirm.strip() == "UNLOCK LIVE":
             try:
                 _runner.unlock_live()

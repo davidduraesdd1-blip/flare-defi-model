@@ -657,6 +657,7 @@ with _ctrl_tab_cache:
                      help="Clears all @st.cache_data caches across all pages"):
             st.cache_data.clear()
             st.success("All Streamlit caches cleared — data will refresh on next load.")
+            st.rerun()
         if st.button("🔄 Force Macro Data Refresh", key="clear_macro_cache",
                          width='stretch',
                      help="Forces fresh fetch of DXY, VIX, CPI, yield curve data"):
@@ -667,17 +668,20 @@ with _ctrl_tab_cache:
                 pass
             st.cache_data.clear()
             st.success("Macro data cache cleared.")
+            st.rerun()
     with _cc2:
         if st.button("🔄 Force Scan Data Refresh", key="clear_scan_cache",
                          width='stretch',
                      help="Forces the next scan to re-fetch all DeFiLlama and scanner data"):
             st.cache_data.clear()
             st.success("Scan cache cleared — next scan will fetch fresh data.")
+            st.rerun()
         if st.button("🔄 Force Price Data Refresh", key="clear_price_cache",
                          width='stretch',
                      help="Forces fresh CoinGecko price fetch"):
             st.cache_data.clear()
             st.success("Price cache cleared.")
+            st.rerun()
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     st.markdown("**Cache Status**")
     _cache_info = [
