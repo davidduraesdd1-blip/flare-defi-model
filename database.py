@@ -341,10 +341,19 @@ def save_arb_opportunities(arb_results: dict):
     with _write_lock:
         conn = _get_conn_and_init()
         try:
-            # Prune stale inactive records older than 7 days to prevent unbounded growth
+            # Prune stale inactive records older than 7 days to prevent
+            # unbounded growth. Audit R6e: datetime('now','-7 days') returns
+            # 'YYYY-MM-DD HH:MM:SS' (space separator, no TZ) while our
+            # inserts store ISO-8601 with 'T' and '+00:00'. Lexicographic
+            # comparison of 'T' (0x54) vs ' ' (0x20) meant rows on the
+            # cutoff date slipped through and were only pruned the next
+            # day. strftime('%Y-%m-%dT%H:%M:%S+00:00') produces the same
+            # format our inserts use, so the comparison is now correct
+            # at the hour level.
             conn.execute(
                 "DELETE FROM arb_opportunities "
-                "WHERE is_active = 0 AND timestamp < datetime('now', '-7 days')"
+                "WHERE is_active = 0 AND timestamp < "
+                "strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now', '-7 days')"
             )
             # Mark previous arbs inactive. Audit R4f: WHERE is_active=1
             # narrows the write to only currently-active rows instead of
