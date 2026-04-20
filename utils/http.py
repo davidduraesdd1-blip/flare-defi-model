@@ -175,6 +175,7 @@ _ALLOWED_HOSTS: frozenset = frozenset({
     "api.clearpool.finance",      # Clearpool pool data (flare_scanner.py)
     "api.geckoterminal.com",      # GeckoTerminal DEX pools (flare_scanner.py)
     "community-api.coinmetrics.io",  # CoinMetrics on-chain data (macro_feeds.py)
+    "api.blockchain.info",           # Blockchain.com charts fallback (macro_feeds.py) — cloud-accessible when CoinMetrics 403s
     "api.curve.fi",               # Curve pool data (defi_protocols.py)
     "eth-api.lido.fi",            # Lido stETH APR (defi_protocols.py)
     "indexer.dydx.trade",         # dYdX v4 perpetuals (defi_protocols.py)

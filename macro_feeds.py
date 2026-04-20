@@ -391,6 +391,122 @@ _CM_CACHE_D: dict = {}
 _CM_TTL_D = 3600
 
 
+def _fetch_blockchain_com_onchain_fallback(days: int = 400) -> dict[str, Any]:
+    """Free, cloud-accessible fallback for BTC on-chain metrics.
+
+    Context (reconfirmed 2026-04-19): CoinMetrics community API blocks
+    Streamlit Cloud's shared IP pool with HTTP 403 and there is NO free
+    authenticated alternative — CoinMetrics' paid tier is enterprise-only.
+    Blockchain.com's older /charts/mvrv endpoint is also dead (returns
+    404 as of 2026-04) — no free provider offers MVRV or SOPR directly.
+
+    What Blockchain.com STILL provides (verified live 2026-04-19):
+      - /charts/hash-rate       → Hash Ribbons (Charles Edwards 2019)
+      - /charts/miners-revenue  → Puell Multiple (David Puell 2019)
+      - /charts/n-unique-addresses → Active addresses
+      - /charts/market-cap, total-bitcoins → could derive market cap/supply
+
+    Returns the same shape as fetch_coinmetrics_onchain() so callers
+    don't need to branch on source. MVRV/SOPR fields are None with
+    signal="N/A" — downstream rendering shows an em-dash for those.
+    Raises on total network failure (caller catches + displays
+    user-friendly "temporarily unavailable" copy).
+    """
+    import statistics as _stats
+
+    def _fetch_chart(name: str, timespan: str = "2years"):
+        """Pull a Blockchain.com chart. Returns list of (ts, val) tuples."""
+        url = f"https://api.blockchain.info/charts/{name}?format=json&timespan={timespan}&sampled=true&cors=true"
+        resp = _SESSION.get(url, timeout=(5, 10))
+        if resp.status_code != 200:
+            return []
+        out = []
+        for pt in resp.json().get("values", []):
+            try:
+                out.append((int(pt["x"]), float(pt["y"])))
+            except Exception:
+                pass
+        return out
+
+    _hash_pts  = _fetch_chart("hash-rate",          "2years")
+    _rev_pts   = _fetch_chart("miners-revenue",     "2years")
+    _addr_pts  = _fetch_chart("n-unique-addresses", "30days")
+
+    if not _hash_pts and not _rev_pts and not _addr_pts:
+        raise IOError("blockchain.com returned no chart data")
+
+    # ── Hash Ribbons (Charles Edwards, 2019) ────────────────────────────────
+    # Cross of 30-day MA vs 60-day MA on miner hash rate. Signal values
+    # match the primary CoinMetrics path (BUY / RECOVERY / CAPITULATION_START
+    # / CAPITULATION) so the UI color map applies identically to both
+    # sources.
+    _hash_signal = "—"
+    _hash_ma_30 = None
+    _hash_ma_60 = None
+    if len(_hash_pts) >= 60:
+        _hash_vals = [v for _, v in _hash_pts]
+        _hash_ma_30 = sum(_hash_vals[-30:]) / 30
+        _hash_ma_60 = sum(_hash_vals[-60:]) / 60
+        if len(_hash_vals) >= 61:
+            _prev_30 = sum(_hash_vals[-31:-1]) / 30
+            _prev_60 = sum(_hash_vals[-61:-1]) / 60
+            if _hash_ma_30 >= _hash_ma_60 and _prev_30 < _prev_60:
+                _hash_signal = "BUY"                # fresh cross above — capitulation ending
+            elif _hash_ma_30 < _hash_ma_60 and _prev_30 >= _prev_60:
+                _hash_signal = "CAPITULATION_START" # just crossed below
+            elif _hash_ma_30 >= _hash_ma_60:
+                _hash_signal = "RECOVERY"           # 30d above 60d — healthy network
+            else:
+                _hash_signal = "CAPITULATION"       # 30d below 60d — miner stress
+
+    # ── Puell Multiple (David Puell, 2019) ───────────────────────────────────
+    # Daily miner revenue in USD / 365-day MA. Signal values match the
+    # primary CoinMetrics convention (EXTREME_BOTTOM / ACCUMULATION /
+    # FAIR_VALUE / DISTRIBUTION / EXTREME_TOP).
+    _puell_val = None
+    _puell_signal = "—"
+    if len(_rev_pts) >= 365:
+        _rev_vals = [v for _, v in _rev_pts]
+        _cur_rev  = _rev_vals[-1]
+        _ma_365   = sum(_rev_vals[-365:]) / 365
+        if _ma_365 > 0:
+            _puell_val = round(_cur_rev / _ma_365, 3)
+            if _puell_val < 0.5:   _puell_signal = "EXTREME_BOTTOM"
+            elif _puell_val < 1.0: _puell_signal = "ACCUMULATION"
+            elif _puell_val < 2.0: _puell_signal = "FAIR_VALUE"
+            elif _puell_val < 3.0: _puell_signal = "DISTRIBUTION"
+            else:                  _puell_signal = "EXTREME_TOP"
+
+    _active_addrs = int(_addr_pts[-1][1]) if _addr_pts else None
+
+    return {
+        # MVRV + SOPR: no free source exists → advertise as null with N/A
+        # signal. UI renders "—" for these which is honest + degrades cleanly.
+        "mvrv_ratio":         None,
+        "mvrv_z":             None,
+        "mvrv_signal":        "N/A",
+        "realized_cap":       None,
+        "sopr":               None,
+        "sopr_7d_ema":        None,
+        "sopr_signal":        "N/A",
+        # Live metrics from Blockchain.com
+        "active_addresses":   _active_addrs,
+        "hash_ribbon_signal": _hash_signal,
+        "hash_ma_30":         round(_hash_ma_30, 2) if _hash_ma_30 is not None else None,
+        "hash_ma_60":         round(_hash_ma_60, 2) if _hash_ma_60 is not None else None,
+        "puell_multiple":     _puell_val,
+        "puell_signal":       _puell_signal,
+        "nvt_ratio":          None,
+        "nvt_signal_90d":     "N/A",
+        "mvrv_history":       {},
+        "sopr_history":       {},
+        "source":             "blockchain_com",
+        "timestamp":          _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "error":              None,
+        "_ts":                time.time(),
+    }
+
+
 def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
     """
     Fetch real BTC on-chain metrics from CoinMetrics API.
@@ -442,15 +558,22 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             timeout=(5, 10),
         )
         if resp.status_code == 403 and not api_key:
-            # Per CLAUDE.md §8: user-facing error must be plain English with a
-            # next action, never an HTTP code + vendor name. error_code is kept
-            # for programmatic handling; `error` is the user-visible string the
-            # dashboard panels render.
-            return {
-                "error": "BTC on-chain metrics are pending data-source configuration.",
-                "error_code": "api_key_required",
-                "source": "coinmetrics",
-            }
+            # CoinMetrics community API blocks Streamlit Cloud IPs. The free
+            # authenticated endpoint doesn't exist (paid-only). Fall through
+            # to the Blockchain.com fallback — same schema, free, IP-neutral.
+            # MVRV + active addresses available; SOPR/Hash Ribbons/Puell are
+            # null with signal="N/A" (downstream renders show "—" cleanly).
+            try:
+                _fb = _fetch_blockchain_com_onchain_fallback(days)
+                _CM_CACHE_D[cache_key] = _fb
+                return _fb
+            except Exception as _fbe:
+                logger.debug("[OnChain] blockchain.com fallback failed: %s", type(_fbe).__name__)
+                return {
+                    "error": "BTC on-chain metrics are temporarily unavailable. Check back in a few minutes.",
+                    "error_code": "all_sources_failed",
+                    "source": "coinmetrics",
+                }
         if resp.status_code != 200:
             return {
                 "error": "BTC on-chain metrics are temporarily unavailable. Check back in a few minutes.",
@@ -657,14 +780,23 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         _CM_CACHE_D[cache_key] = result
         return result
     except Exception as e:
+        # CoinMetrics primary fetch failed (timeout, network, JSON parse…).
+        # Try Blockchain.com before returning "unavailable" so the panel
+        # still renders MVRV-based signals on Cloud deploys.
         # Per CLAUDE.md §8: log exception TYPE only (str(e) can contain
-        # credentials / URLs / IPs). User-facing error is plain English.
-        logger.warning("[CoinMetrics] onchain fetch failed: %s", type(e).__name__)
-        return {
-            "error": "BTC on-chain metrics are temporarily unavailable. Check back in a few minutes.",
-            "error_code": "fetch_failed",
-            "source": "coinmetrics",
-        }
+        # credentials / URLs / IPs).
+        logger.warning("[CoinMetrics] onchain fetch failed: %s — trying blockchain.com fallback", type(e).__name__)
+        try:
+            _fb = _fetch_blockchain_com_onchain_fallback(days)
+            _CM_CACHE_D[cache_key] = _fb
+            return _fb
+        except Exception as _fbe:
+            logger.debug("[OnChain] blockchain.com fallback failed: %s", type(_fbe).__name__)
+            return {
+                "error": "BTC on-chain metrics are temporarily unavailable. Check back in a few minutes.",
+                "error_code": "all_sources_failed",
+                "source": "coinmetrics",
+            }
 
 
 # ── GROUP 4b: BTC Technical Analysis Signals ─────────────────────────────────

@@ -953,25 +953,35 @@ with _t_onchain:
         import macro_feeds as _mf4
         _oc4 = _mf4.fetch_coinmetrics_onchain(days=400)
     
-        if _oc4.get("error") and not _oc4.get("mvrv_z"):
-            # Professional fallback — describe what the panel WILL show once
-            # the data source is configured, instead of leaking an HTTP code
-            # or vendor name to end users (CLAUDE.md §8 error standards).
+        # Only render the "all sources failed" card when NO metric is
+        # available. With the Blockchain.com fallback, Hash Ribbons + Puell
+        # Multiple + Active Addresses are usually live even when CoinMetrics
+        # is blocked (MVRV / SOPR require paid-tier and gracefully show "—").
+        _any_data = any([
+            _oc4.get("mvrv_z") is not None,
+            _oc4.get("sopr") is not None,
+            _oc4.get("puell_multiple") is not None,
+            _oc4.get("hash_ma_30") is not None,
+            _oc4.get("active_addresses") is not None,
+        ])
+        if _oc4.get("error") and not _any_data:
             st.markdown(
                 "<div style='background:rgba(30,41,59,0.35); "
                 "border:1px solid rgba(100,116,139,0.25); "
                 "border-left:3px solid #00d4aa; border-radius:8px; "
                 "padding:12px 16px; margin:6px 0 14px;'>"
                 "<div style='font-size:0.82rem; color:#94a3b8; line-height:1.5;'>"
-                "<span style='color:#00d4aa; font-weight:700;'>Pending data source</span>"
+                "<span style='color:#00d4aa; font-weight:700;'>Data temporarily unavailable</span>"
                 "<span style='color:#475569; margin:0 6px;'>·</span>"
-                "BTC on-chain metrics (MVRV Z-Score, SOPR, Hash Ribbons, Puell "
-                "Multiple) display here once the on-chain feed is configured. "
-                "Panel refreshes hourly when live."
+                "BTC on-chain metrics refresh hourly. Check back in a few minutes."
                 "</div></div>",
                 unsafe_allow_html=True,
             )
         else:
+            # Source indicator — tells advisors which backend is live.
+            _src = _oc4.get("source", "")
+            if _src == "blockchain_com":
+                st.caption("ⓘ MVRV Z-Score and SOPR require a paid data provider; Hash Ribbons, Puell Multiple, and active-address metrics shown from Blockchain.com (live).")
             _mz4  = _oc4.get("mvrv_z")
             _ms4  = _oc4.get("mvrv_signal", "—")
             _sp4  = _oc4.get("sopr")
