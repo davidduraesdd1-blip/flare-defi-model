@@ -442,12 +442,28 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
             timeout=(5, 10),
         )
         if resp.status_code == 403 and not api_key:
-            return {"error": "HTTP 403 — CoinMetrics community endpoint blocked from this IP. Data temporarily unavailable.", "source": "coinmetrics"}
+            # Per CLAUDE.md §8: user-facing error must be plain English with a
+            # next action, never an HTTP code + vendor name. error_code is kept
+            # for programmatic handling; `error` is the user-visible string the
+            # dashboard panels render.
+            return {
+                "error": "BTC on-chain metrics are pending data-source configuration.",
+                "error_code": "api_key_required",
+                "source": "coinmetrics",
+            }
         if resp.status_code != 200:
-            return {"error": f"HTTP {resp.status_code}", "source": "coinmetrics"}
+            return {
+                "error": "BTC on-chain metrics are temporarily unavailable. Check back in a few minutes.",
+                "error_code": f"http_{resp.status_code}",
+                "source": "coinmetrics",
+            }
         rows = resp.json().get("data", [])
         if not rows:
-            return {"error": "empty response", "source": "coinmetrics"}
+            return {
+                "error": "BTC on-chain metrics are temporarily unavailable. Check back in a few minutes.",
+                "error_code": "empty_response",
+                "source": "coinmetrics",
+            }
 
         mvrv_vals, mvrv_dates, real_caps = [], [], []
         sopr_vals, sopr_dates, active_addrs = [], [], []
@@ -509,7 +525,11 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
                     pass
 
         if not mvrv_vals:
-            return {"error": "no MVRV data", "source": "coinmetrics"}
+            return {
+                "error": "BTC on-chain metrics are temporarily unavailable. Check back in a few minutes.",
+                "error_code": "no_mvrv_data",
+                "source": "coinmetrics",
+            }
 
         # ── MVRV Z-Score (Mahmudov & Puell, 2018) ────────────────────────────────
         # All-time normalization: std dev computed over full BTC history from 2010.
@@ -637,8 +657,14 @@ def fetch_coinmetrics_onchain(days: int = 400) -> dict[str, Any]:
         _CM_CACHE_D[cache_key] = result
         return result
     except Exception as e:
-        logger.warning("[CoinMetrics] onchain fetch failed: %s", e)
-        return {"error": str(e), "source": "coinmetrics"}
+        # Per CLAUDE.md §8: log exception TYPE only (str(e) can contain
+        # credentials / URLs / IPs). User-facing error is plain English.
+        logger.warning("[CoinMetrics] onchain fetch failed: %s", type(e).__name__)
+        return {
+            "error": "BTC on-chain metrics are temporarily unavailable. Check back in a few minutes.",
+            "error_code": "fetch_failed",
+            "source": "coinmetrics",
+        }
 
 
 # ── GROUP 4b: BTC Technical Analysis Signals ─────────────────────────────────

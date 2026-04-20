@@ -954,7 +954,23 @@ with _t_onchain:
         _oc4 = _mf4.fetch_coinmetrics_onchain(days=400)
     
         if _oc4.get("error") and not _oc4.get("mvrv_z"):
-            st.info(f"On-chain data unavailable. {_oc4.get('error')}")
+            # Professional fallback — describe what the panel WILL show once
+            # the data source is configured, instead of leaking an HTTP code
+            # or vendor name to end users (CLAUDE.md §8 error standards).
+            st.markdown(
+                "<div style='background:rgba(30,41,59,0.35); "
+                "border:1px solid rgba(100,116,139,0.25); "
+                "border-left:3px solid #00d4aa; border-radius:8px; "
+                "padding:12px 16px; margin:6px 0 14px;'>"
+                "<div style='font-size:0.82rem; color:#94a3b8; line-height:1.5;'>"
+                "<span style='color:#00d4aa; font-weight:700;'>Pending data source</span>"
+                "<span style='color:#475569; margin:0 6px;'>·</span>"
+                "BTC on-chain metrics (MVRV Z-Score, SOPR, Hash Ribbons, Puell "
+                "Multiple) display here once the on-chain feed is configured. "
+                "Panel refreshes hourly when live."
+                "</div></div>",
+                unsafe_allow_html=True,
+            )
         else:
             _mz4  = _oc4.get("mvrv_z")
             _ms4  = _oc4.get("mvrv_signal", "—")
