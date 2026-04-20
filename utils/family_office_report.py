@@ -235,16 +235,22 @@ def build_summary_context() -> dict:
 
 def render_pdf(context: Optional[dict] = None) -> bytes:
     """
-    Render the family-office summary as a PDF (fpdf2). Returns bytes.
-    If fpdf2 is unavailable, returns a plain-text UTF-8 summary.
+    Render the family-office summary as a PDF (fpdf2). Returns bytes
+    starting with %PDF- magic header.
+
+    Raises ImportError if fpdf2 isn't installed — DO NOT return a
+    plain-text fallback, because callers wire the return value into
+    st.download_button(mime="application/pdf", file_name="*.pdf") and
+    serving UTF-8 text bytes with a .pdf filename produces files Adobe
+    refuses to open ("not a supported file type" — reproduced on
+    SuperGrok Cloud 2026-04-20 when fpdf2 was missing from its
+    requirements.txt). Each caller's try/except already handles
+    ImportError by hiding the download button cleanly.
     """
     if context is None:
         context = build_summary_context()
-    try:
-        from fpdf import FPDF
-        from fpdf.enums import XPos, YPos
-    except ImportError:
-        return _render_plain_text(context).encode("utf-8")
+    from fpdf import FPDF   # fpdf2 required; raise cleanly if absent
+    from fpdf.enums import XPos, YPos
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=14)
