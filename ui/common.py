@@ -286,9 +286,19 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
     # components.v1.html (which actually executes <script> tags — st.markdown
     # silently strips them). Zero-height iframe so no visual footprint of
     # its own. Cross-origin safe inside Streamlit Cloud (same origin).
-    try:
-        from streamlit.components.v1 import html as _stlit_html
-        _stlit_html("""
+    #
+    # GATE (2026-04-19): Streamlit 1.56 started emitting a deprecation warning
+    # on every st.components.v1.html call. This function runs on every page
+    # rerun (called from render_sidebar), so in a long-lived session we were
+    # getting 500+ identical warnings in the Cloud logs. Gate on session
+    # state so the eraser only injects once per session — MutationObserver
+    # keeps running in the browser even after the gate blocks subsequent
+    # injections. Net: one deprecation line per session instead of hundreds.
+    if not st.session_state.get("_defi_none_eraser_injected"):
+        st.session_state["_defi_none_eraser_injected"] = True
+        try:
+            from streamlit.components.v1 import html as _stlit_html
+            _stlit_html("""
 <script>
 (function eraseStrayNoneBadges() {
     function sweep() {
@@ -330,8 +340,8 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
     setTimeout(() => obs.disconnect(), 120000);
 })();
 </script>""", height=0)
-    except Exception as _erase_err:
-        logger.debug("[common] None-badge eraser injection failed: %s", _erase_err)
+        except Exception as _erase_err:
+            logger.debug("[common] None-badge eraser injection failed: %s", _erase_err)
 
     if _embed:
         # Embed mode: hide sidebar, navigation arrows, top toolbar, and Streamlit chrome.
