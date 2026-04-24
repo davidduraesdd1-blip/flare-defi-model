@@ -254,6 +254,120 @@ def inject_streamlit_overrides() -> None:
        but keep them functional for fallback callers */
     [data-testid="stSidebar"] [data-testid="stRadio"] > label { display: none; }
 
+    /* ─── Hero signal cards ─── */
+    .ds-hero-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: var(--gap); margin-bottom: 24px;
+    }
+    .ds-signal-hero {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px;
+    }
+    .ds-signal-lhs { display: flex; flex-direction: column; gap: 4px; }
+    .ds-signal-ticker { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
+    .ds-signal-big {
+      font-size: 44px; font-weight: 600; font-family: var(--font-mono);
+      line-height: 1; letter-spacing: -0.02em; color: var(--text-primary);
+    }
+    .ds-signal-change { font-size: 13px; font-family: var(--font-mono); color: var(--text-muted); }
+    .ds-signal-change.up { color: var(--success); }
+    .ds-signal-change.down { color: var(--danger); }
+    .ds-signal-rhs { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .ds-signal-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 999px;
+      font-weight: 600; font-size: 13px; letter-spacing: 0.05em;
+    }
+    .ds-signal-badge.ds-sb-buy  { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+    .ds-signal-badge.ds-sb-hold { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+    .ds-signal-badge.ds-sb-sell { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+    .ds-regime {
+      font-size: 11.5px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .ds-regime .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+    /* ─── Watchlist ─── */
+    .ds-watchlist { display: flex; flex-direction: column; }
+    .ds-wl-row {
+      display: grid; grid-template-columns: 1.2fr 1fr 1fr 90px;
+      gap: 12px; align-items: center;
+      padding: 10px 4px; border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .ds-wl-row:last-child { border-bottom: none; }
+    .ds-wl-row .t { font-weight: 600; color: var(--text-primary); }
+    .ds-wl-row .p { font-family: var(--font-mono); color: var(--text-secondary); }
+    .ds-wl-row .d { font-family: var(--font-mono); }
+    .ds-wl-row .d.up { color: var(--success); }
+    .ds-wl-row .d.down { color: var(--danger); }
+    .ds-spark { height: 22px; width: 100%; }
+
+    /* ─── KPI grid (inside cards) ─── */
+    .ds-kpi-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;
+    }
+    .ds-kpi { display: flex; flex-direction: column; gap: 4px; }
+    .ds-kpi-label { font-size: 11px; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.06em; }
+    .ds-kpi-value { font-size: 22px; font-weight: 600; font-family: var(--font-mono);
+      line-height: 1.1; color: var(--text-primary); }
+    .ds-kpi-delta { font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); }
+    .ds-kpi-delta.up { color: var(--success); }
+    .ds-kpi-delta.down { color: var(--danger); }
+
+    /* ─── Generic grid helpers ─── */
+    .ds-grid { display: grid; gap: var(--gap); }
+    .ds-grid.ds-cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .ds-grid.ds-cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .ds-grid.ds-cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+    /* ─── Regime cards (from REGIMES mockup) ─── */
+    .ds-rgm {
+      padding: 16px; display: flex; flex-direction: column; gap: 6px;
+      position: relative; border-left: 3px solid transparent;
+    }
+    .ds-rgm.bull  { border-left-color: var(--success); }
+    .ds-rgm.bear  { border-left-color: var(--danger); }
+    .ds-rgm.trans { border-left-color: var(--warning); }
+    .ds-rgm.accum { border-left-color: var(--info); }
+    .ds-rgm.dist  { border-left-color: var(--warning); }
+    .ds-rgm .t { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .ds-rgm .state { font-size: 12.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+    .ds-rgm.bull  .state { color: var(--success); }
+    .ds-rgm.bear  .state { color: var(--danger); }
+    .ds-rgm.trans .state { color: var(--warning); }
+    .ds-rgm.accum .state { color: var(--info); }
+    .ds-rgm.dist  .state { color: var(--warning); }
+    .ds-rgm .conf  { font-size: 11.5px; color: var(--text-muted); font-family: var(--font-mono); }
+    .ds-rgm .since { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+    /* ─── Legacy-header suppression ───
+       Kill the old emoji-heavy h1 strings that duplicate the new page_header.
+       We only target the exact legacy markup patterns; real user content untouched. */
+    section.main h1:has(> :where([style*="font-size:26px"])) {
+      /* placeholder — real suppression handled via element-level class toggles */
+    }
+    /* Hide the old "🎯 Crypto Signals — What To Do Today" h1 after our new
+       page_header ships. It's emitted via raw st.markdown with inline style,
+       so we match on the specific large-font h1 style that lives outside our
+       .ds-page-title container. */
+    section.main > div.block-container > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]
+      > [data-testid="stMarkdown"] h1[style*="font-size:26px"] {
+      display: none !important;
+    }
+    section.main > div.block-container > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]
+      > [data-testid="stMarkdown"] h1[style*="clamp(24px, 2.2vw, 32px)"] {
+      display: none !important;
+    }
+
+    /* Responsive hero cards */
+    @media (max-width: 1024px) {
+      .ds-hero-grid { grid-template-columns: 1fr; }
+      .ds-grid.ds-cols-4 { grid-template-columns: repeat(2, 1fr); }
+      .ds-grid.ds-cols-3 { grid-template-columns: repeat(2, 1fr); }
+    }
+
     /* Mobile */
     @media (max-width: 768px) {
       [data-testid="stSidebar"] { min-width: 100% !important; max-width: 100% !important; }
@@ -263,6 +377,9 @@ def inject_streamlit_overrides() -> None:
       .ds-strip > div:last-child { border-bottom: none; }
       .ds-page-hd { flex-direction: column; align-items: flex-start; }
       .ds-level-group { display: none; }
+      .ds-hero-grid { grid-template-columns: 1fr !important; }
+      .ds-grid.ds-cols-2, .ds-grid.ds-cols-3, .ds-grid.ds-cols-4 { grid-template-columns: 1fr !important; }
+      .ds-signal-big { font-size: 32px; }
     }
     """
 
