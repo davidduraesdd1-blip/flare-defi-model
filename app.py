@@ -207,22 +207,35 @@ positions = load_positions()
 # ── Welcome Banner (Phase 2, item 6) — beginner only, once per session ────────
 render_welcome_banner()
 
-# ── Header ────────────────────────────────────────────────────────────────────
-# Typography tightened: heading sized at 28-32px to match rest of UI hierarchy;
-# subtitle contrast bumped to be readable without squinting.
-st.markdown(
-    "<h1 style='margin:0 0 2px; font-size:clamp(24px, 2.2vw, 32px); "
-    "font-weight:800; letter-spacing:-0.5px; line-height:1.1;'>Dashboard</h1>"
-    "<div style='color:#94a3b8; font-size:clamp(12px, 0.85vw, 14px); "
-    "margin-bottom:16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;'>"
-    "<span>Live prices</span>"
-    "<span style='color:#475569;'>·</span>"
-    "<span>Top opportunities</span>"
-    "<span style='color:#475569;'>·</span>"
-    "<span>Arbitrage alerts</span>"
-    "</div>",
-    unsafe_allow_html=True,
-)
+# ── 2026-05 redesign: mockup-style top bar + page header ────────────────
+try:
+    from ui import render_top_bar as _ds_top_bar, page_header as _ds_page_header
+    _ds_level_fl = st.session_state.get("user_level", "beginner")
+    _ds_top_bar(breadcrumb=("Portfolio", "Dashboard"), user_level=_ds_level_fl)
+    _ds_page_header(
+        title="Flare DeFi dashboard",
+        subtitle="Live prices · top opportunities · arbitrage alerts across Flare Network DEXs.",
+        data_sources=[
+            ("DeFiLlama", "live"),
+            ("SparkDEX", "live"),
+            ("BlazeSwap", "live"),
+        ],
+    )
+except Exception:
+    # Fallback to legacy header if ui package import fails
+    st.markdown(
+        "<h1 style='margin:0 0 2px; font-size:clamp(24px, 2.2vw, 32px); "
+        "font-weight:800; letter-spacing:-0.5px; line-height:1.1;'>Dashboard</h1>"
+        "<div style='color:#94a3b8; font-size:clamp(12px, 0.85vw, 14px); "
+        "margin-bottom:16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;'>"
+        "<span>Live prices</span>"
+        "<span style='color:#475569;'>·</span>"
+        "<span>Top opportunities</span>"
+        "<span style='color:#475569;'>·</span>"
+        "<span>Arbitrage alerts</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 # ── Scan Progress (rich) — only renders during an active scan ─────────────────
 # SVG ring + partial results + rotating DeFi fun facts. Fragment-wrapped so it

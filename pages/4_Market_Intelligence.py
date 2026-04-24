@@ -28,8 +28,18 @@ pro_mode   = ctx.get("pro_mode", False)   # #82 Beginner/Pro mode
 demo_mode  = ctx.get("demo_mode", False)  # #67 Demo/Sandbox mode
 user_level = ctx.get("user_level", get_user_level())
 
-st.title("🧠 Market Intelligence")
-st.caption("Sentiment · Macro · On-Chain · Ecosystem — all signals in one place")
+try:
+    from ui import render_top_bar as _ds_top_bar, page_header as _ds_page_header
+    _ds_top_bar(breadcrumb=("Markets", "Market Intelligence"),
+                user_level=user_level)
+    _ds_page_header(
+        title="Market intelligence",
+        subtitle="Sentiment · macro · on-chain · ecosystem — all signals in one place.",
+        data_sources=[("FRED", "cached"), ("On-chain", "live"), ("Sentiment", "cached")],
+    )
+except Exception:
+    st.title("🧠 Market Intelligence")
+    st.caption("Sentiment · Macro · On-Chain · Ecosystem — all signals in one place")
 
 # ─── Contextual Quick-Access Row (ToS #7 edge-tabs equivalent) ──────────────
 # ToS uses rotated 90° edge tabs (Level II / Active Trader / Time & Sales) on

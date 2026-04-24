@@ -293,8 +293,18 @@ model_data = _load_opp_data_cached()
 latest     = load_latest()   # uses _load_history_file cache — no duplicate disk read
 runs       = load_history_runs()
 
-st.title("🎯 Opportunities")
-st.caption("Fresh yield opportunities across Flare + DeFiLlama protocols • Auto-refreshed every 60 minutes")
+try:
+    from ui import render_top_bar as _ds_top_bar, page_header as _ds_page_header
+    _ds_top_bar(breadcrumb=("Portfolio", "Opportunities"),
+                user_level=st.session_state.get("user_level", "beginner"))
+    _ds_page_header(
+        title="Opportunities",
+        subtitle="Fresh yield opportunities across Flare + DeFiLlama protocols · auto-refreshed every 60 minutes.",
+        data_sources=[("DeFiLlama", "live"), ("Flare Scanner", "live")],
+    )
+except Exception:
+    st.title("🎯 Opportunities")
+    st.caption("Fresh yield opportunities across Flare + DeFiLlama protocols • Auto-refreshed every 60 minutes")
 st.markdown(
     "<div style='color:#475569; font-size:0.87rem; margin-bottom:16px;'>"
     "Starter portfolios · APY trends · options strategies</div>",

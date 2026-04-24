@@ -241,6 +241,22 @@ def page_setup(title: str = "Flare DeFi Model") -> None:
         layout="wide",
         initial_sidebar_state="collapsed" if _embed else "expanded",
     )
+    # ── 2026-05 redesign: inject the sibling-family design-system theme
+    #     BEFORE the legacy _inject_css() so the CSS variables from
+    #     ui/design_system.py are the base and the in-file CSS only affects
+    #     components not yet ported. Guarded: any failure falls back to
+    #     pre-redesign behavior.
+    try:
+        from .design_system import inject_theme as _ds_inject_theme
+        from .overrides import inject_streamlit_overrides as _ds_inject_overrides
+        from .sidebar import render_sidebar_brand as _ds_sidebar_brand
+        _ds_theme_pref = st.session_state.get("theme", "dark")
+        _ds_inject_theme("flare-defi-model", theme=_ds_theme_pref)
+        _ds_inject_overrides()
+        _ds_sidebar_brand(app="flare-defi-model", brand_name="Flare",
+                          brand_tld=".defi", brand_glyph="⚡")
+    except Exception:
+        pass
     _inject_css()
     # Rename Streamlit's auto-generated "app" root nav item to "Dashboard".
     # Streamlit derives the label from app.py filename. The earlier JS-only

@@ -72,6 +72,18 @@ render_what_this_means(
     ),
 )
 
+# ─── 2026-05 redesign: top bar + page header ───
+try:
+    from ui import render_top_bar as _ds_top_bar, page_header as _ds_page_header
+    _ds_top_bar(breadcrumb=("Account", "Agent"), user_level=_user_level)
+    _ds_page_header(
+        title="Autonomous agent",
+        subtitle="24/7 DeFi strategy agent — paper-trading gate, hard risk limits, Claude-in-the-loop.",
+        data_sources=[("Flare RPC", "live"), ("Agent runner", "live")],
+    )
+except Exception:
+    pass
+
 # ─── Load state ───────────────────────────────────────────────────────────────
 state        = _runner.get_state()
 mode         = state.get("mode", OPERATING_MODE)

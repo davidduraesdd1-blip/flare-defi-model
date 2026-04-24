@@ -205,8 +205,18 @@ positions = load_positions()
 flare_scan = latest.get("flare_scan") or {}
 prices     = load_live_prices() or flare_scan.get("prices") or []
 
-st.title("💼 Portfolio")
-st.caption("Track your DeFi positions, wallet balances, P&L, and exit strategies across all Flare protocols")
+try:
+    from ui import render_top_bar as _ds_top_bar, page_header as _ds_page_header
+    _ds_top_bar(breadcrumb=("Portfolio", "Holdings"),
+                user_level=st.session_state.get("user_level", "beginner"))
+    _ds_page_header(
+        title="Portfolio",
+        subtitle="Track your DeFi positions, wallet balances, P&L, and exit strategies across all Flare protocols.",
+        data_sources=[("Flare RPC", "live"), ("DeFiLlama", "live")],
+    )
+except Exception:
+    st.title("💼 Portfolio")
+    st.caption("Track your DeFi positions, wallet balances, P&L, and exit strategies across all Flare protocols")
 
 # ── Hero Number (ToS #6) — total portfolio value front-and-center ────────────
 from ui.common import render_hero_number as _render_hero_number
