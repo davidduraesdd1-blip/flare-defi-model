@@ -18,7 +18,7 @@
 
 ```
   Name:          Flare DeFi Model
-  Path:          C:\Users\david\OneDrive\Desktop\Cowork\flare-defi-model
+  Path:          C:\dev\Cowork\flare-defi-model
   Repo:          github.com/davidduraesdd1-blip/flare-defi-model
   Deploy:        https://flare-defi-model-mw8toxbjk5baae9zjbfrli.streamlit.app/
   User role:     builder / designer / reviewer
