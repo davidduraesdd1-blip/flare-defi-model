@@ -1,7 +1,7 @@
 streamlit>=1.40.0
 pandas>=2.2.3
 numpy>=2.1.0
-scipy>=1.14.0
+scipy>=1.17.1
 requests>=2.31.0
 requests-cache>=1.2.0
 apscheduler==3.10.4
